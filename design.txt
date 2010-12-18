@@ -1,0 +1,10 @@
+FileStructureWalker (pass HgFile, HgFolder to callable; which can ask for VCS data from any file)
+External uses: user browses files, selects one and asks for its history 
+Params: tip/revision; 
+Implementation: manifest
+
+Log --rev
+Log <file>
+
+hg cat
+Implementation: logic to find file by name in the repository is the same with Log and other commands 

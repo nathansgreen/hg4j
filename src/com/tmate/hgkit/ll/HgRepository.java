@@ -3,14 +3,24 @@
  */
 package com.tmate.hgkit.ll;
 
+
 /**
  * @author artem
  *
  */
-public class HgRepository {
+public abstract class HgRepository {
 
 	
 	private Changelog changelog;
+	private boolean isInvalid = true;
+	
+	public boolean isInvalid() {
+		return this.isInvalid;
+	}
+	
+	protected void setInvalid(boolean invalid) {
+		isInvalid = invalid;
+	}
 
 	public void log() {
 		Changelog clog = getChangelog();
@@ -28,4 +38,6 @@ public class HgRepository {
 		}
 		return this.changelog;
 	}
+
+	public abstract String getLocation();
 }
