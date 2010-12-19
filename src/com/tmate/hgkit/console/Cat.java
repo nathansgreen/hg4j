@@ -3,7 +3,7 @@
  */
 package com.tmate.hgkit.console;
 
-import com.tmate.hgkit.fs.RepositoryFinder;
+import com.tmate.hgkit.fs.RepositoryLookup;
 import com.tmate.hgkit.ll.HgRepository;
 
 /**
@@ -13,7 +13,7 @@ import com.tmate.hgkit.ll.HgRepository;
 public class Cat {
 
 	public static void main(String[] args) throws Exception {
-		RepositoryFinder repoLookup = new RepositoryFinder();
+		RepositoryLookup repoLookup = new RepositoryLookup();
 		HgRepository hgRepo = repoLookup.detect(args);
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());

@@ -5,6 +5,15 @@ Implementation: manifest
 
 Log --rev
 Log <file>
+HgDataFile.history() or Changelog.history(file)?
+
+
+Changelog.all() to return list with placeholder, not-parsed elements (i.e. read only compressedLen field and skip to next record), so that
+total number of elements in the list is correct
 
 hg cat
-Implementation: logic to find file by name in the repository is the same with Log and other commands 
+Implementation: logic to find file by name in the repository is the same with Log and other commands
+
+
+Revlog
+What happens when big entry is added to a file - when it detects it can't longer fit into .i and needs .d? Inline flag and .i format changes?

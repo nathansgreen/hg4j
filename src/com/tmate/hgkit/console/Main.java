@@ -23,29 +23,6 @@ import com.tmate.hgkit.ll.Changeset;
 public class Main {
 
 	public static void main(String[] args) throws Exception {
-		Deflater zip1 = new Deflater(6, true);
-		final byte[] input = "Abstractions are valueless".getBytes();
-		zip1.setInput(input);
-		zip1.finish();
-		byte[] result1 = new byte[100];
-		int resLen1 = zip1.deflate(result1);
-		System.out.printf("%3d:", resLen1);
-		for (int i = 0; i < resLen1; i++) {
-			System.out.printf("%02X", result1[i]);
-		}
-		System.out.println();
-		//
-		Deflater zip2 = new Deflater(6, false);
-		zip2.setInput(input);
-		zip2.finish();
-		byte[] result2 = new byte[100];
-		int resLen2 = zip2.deflate(result2);
-		System.out.printf("%3d:", resLen2);
-		for (int i = 0; i < resLen2; i++) {
-			System.out.printf("%02X", result2[i]);
-		}
-		System.out.println();
-		//
 		LinkedList<Changeset> changelog = new LinkedList<Changeset>();
 		//
 		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File("/temp/hg/hello/" + ".hg/store/00changelog.i"))));

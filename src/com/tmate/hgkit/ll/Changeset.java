@@ -96,4 +96,10 @@ public class Changeset {
 		}
 		return -1;
 	}
+
+	public interface Callback {
+		// first(), last(), single().
+		// <T>
+		void next(Changeset cset);
+	}
 }

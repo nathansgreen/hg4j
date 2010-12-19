@@ -11,7 +11,7 @@ import com.tmate.hgkit.ll.LocalHgRepo;
 /**
  * @author artem
  */
-public class RepositoryFinder {
+public class RepositoryLookup {
 	
 	public HgRepository detect(String[] commandLineArgs) throws Exception {
 		if (commandLineArgs.length == 0) {
