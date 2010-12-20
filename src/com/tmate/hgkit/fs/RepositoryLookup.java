@@ -4,6 +4,12 @@
 package com.tmate.hgkit.fs;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 
 import com.tmate.hgkit.ll.HgRepository;
 import com.tmate.hgkit.ll.LocalHgRepo;
@@ -12,12 +18,16 @@ import com.tmate.hgkit.ll.LocalHgRepo;
  * @author artem
  */
 public class RepositoryLookup {
-	
-	public HgRepository detect(String[] commandLineArgs) throws Exception {
-		if (commandLineArgs.length == 0) {
-			return detectFromWorkingDir();
+
+	public HgRepository detect(Options opts) throws Exception {
+		if (opts.repoLocation != null) {
+			return detect(opts.repoLocation);
 		}
-		return detect(commandLineArgs[0]);
+		return detectFromWorkingDir();
+	}
+
+	public HgRepository detect(String[] commandLineArgs) throws Exception {
+		return detect(Options.parse(commandLineArgs));
 	}
 
 	public HgRepository detectFromWorkingDir() throws Exception {
@@ -40,5 +50,44 @@ public class RepositoryLookup {
 			return new LocalHgRepo(location);
 		}
 		return new LocalHgRepo(repository);
+	}
+
+	public static class Options {
+	
+		public String repoLocation;
+		public List<String> files;
+
+		public static Options parse(String[] commandLineArgs) {
+			Options rv = new Options();
+			List<String> args = Arrays.asList(commandLineArgs);
+			LinkedList<String> files = new LinkedList<String>();
+			for (Iterator<String> it = args.iterator(); it.hasNext(); ) {
+				String arg = it.next();
+				if (arg.charAt(0) == '-') {
+					// option
+					if (arg.length() == 1) {
+						throw new IllegalArgumentException("Bad option: -");
+					}
+					switch ((int) arg.charAt(1)) {
+						case (int) 'R' : {
+							if (! it.hasNext()) {
+								throw new IllegalArgumentException("Need repo location");
+							}
+							rv.repoLocation = it.next();
+							break;
+						}
+					}
+				} else {
+					// filename
+					files.add(arg);
+				}
+			}
+			if (!files.isEmpty()) {
+				rv.files = new ArrayList<String>(files);
+			} else {
+				rv.files = Collections.emptyList();
+			}
+			return rv;
+		}
 	}
 }

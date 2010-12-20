@@ -15,7 +15,8 @@ public class Log {
 
 	public static void main(String[] args) throws Exception {
 		RepositoryLookup repoLookup = new RepositoryLookup();
-		HgRepository hgRepo = repoLookup.detect(args);
+		RepositoryLookup.Options cmdLineOpts = RepositoryLookup.Options.parse(args);
+		HgRepository hgRepo = repoLookup.detect(cmdLineOpts);
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
@@ -28,13 +29,15 @@ public class Log {
 				cset.dump();
 			}
 		};
-		HgDataFile f1 = hgRepo.getFileNode("hello.c");
-		System.out.println("Complete of a file:");
-		f1.history(callback);
+		for (String fname : cmdLineOpts.files) {
+			HgDataFile f1 = hgRepo.getFileNode(fname);
+			System.out.println("\nComplete of a file: " + fname);
+			f1.history(callback);
 		//
 //		System.out.println("\n\n=========================");
 //		System.out.println("Range 1-3:");
 //		f1.history(1,3, callback);
+		}
 		//
 		System.out.println("\n\n=========================");
 		System.out.println("Complete of a repo:");

@@ -91,7 +91,7 @@ public class RevlogStream {
 			diData = getDataStream();
 		}
 		try {
-			diIndex.skipBytes(inline ? (int) index.get(start).offset : start * 64);
+			int skipped = diIndex.skipBytes(inline ? (int) index.get(start).offset : start * 64);
 			byte[] lastData = null;
 			for (int i = start; i <= end; i++ ) {
 				IndexEntry ie = index.get(i);
@@ -203,10 +203,11 @@ public class RevlogStream {
 //				int parent1Revision = di.readInt();
 //				int parent2Revision = di.readInt();
 //				byte[] nodeid = new byte[32];
-				res.add(new IndexEntry(offset, compressedLen));
 				if (inline) {
+					res.add(new IndexEntry(offset + 64*res.size(), compressedLen));
 					di.skipBytes(5*4 + 32 + compressedLen); // Check: 52 (skip) + 12 (read) = 64 (total RevlogNG record size)
 				} else {
+					res.add(new IndexEntry(offset, compressedLen));
 					di.skipBytes(5*4 + 32);
 				}
 				long l = di.readLong();
@@ -241,7 +242,7 @@ public class RevlogStream {
 
 	// perhaps, package-local or protected, if anyone else from low-level needs them
 	private static class IndexEntry {
-		public final long offset;
+		public final long offset; // for separate .i and .d - copy of index record entry, for inline index - actual offset of the record in the .i file (record entry + revision * record size))
 		public final int length; // data past fixed record (need to decide whether including header size or not), and whether length is of compressed data or not
 
 		public IndexEntry(long o, int l) {

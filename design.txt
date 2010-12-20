@@ -17,3 +17,11 @@ Implementation: logic to find file by name in the repository is the same with Lo
 
 Revlog
 What happens when big entry is added to a file - when it detects it can't longer fit into .i and needs .d? Inline flag and .i format changes?
+
+
+----------
+support patch from baseRev + few deltas
++ command-line samples (-R, filenames) (Log & Cat) to show on any repo
+
+input stream impl + lifecycle
+delta merge
