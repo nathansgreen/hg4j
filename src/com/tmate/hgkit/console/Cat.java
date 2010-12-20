@@ -19,5 +19,7 @@ public class Cat {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
+		byte[] tipContent = hgRepo.getFileNode("hello.c").content();
+		System.out.println(new String(tipContent));
 	}
 }

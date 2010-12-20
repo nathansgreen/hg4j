@@ -23,12 +23,12 @@ import java.util.ArrayList;
  * @author artem
  */
 public class Changeset {
+	// TODO immutable
 	private /*final*/ Nodeid nodeid;
 	private String user;
 	private String comment;
 	private ArrayList<String> files;
 	private String timezone; // FIXME
-	public byte[] rawData; // FIXME
 	
 	public void dump() {
 		System.out.println("User:" + user);
@@ -42,50 +42,50 @@ public class Changeset {
 		}
 	}
 
-	public void read(byte[] buf, int offset, int length) {
-		rawData = new byte[length];
-		System.arraycopy(buf, offset, rawData, 0, length);
+	public static Changeset parse(byte[] data, int offset, int length) {
+		Changeset rv = new Changeset();
 		final int bufferEndIndex = offset + length;
 		final byte lineBreak = (byte) '\n';
-		int breakIndex1 = indexOf(buf, lineBreak, offset, bufferEndIndex);
+		int breakIndex1 = indexOf(data, lineBreak, offset, bufferEndIndex);
 		if (breakIndex1 == -1) {
 			throw new IllegalArgumentException("Bad Changeset data");
 		}
-		nodeid = Nodeid.fromAscii(buf, 0, breakIndex1);
-		int breakIndex2 = indexOf(buf, lineBreak, breakIndex1+1, bufferEndIndex);
+		rv.nodeid = Nodeid.fromAscii(data, 0, breakIndex1);
+		int breakIndex2 = indexOf(data, lineBreak, breakIndex1+1, bufferEndIndex);
 		if (breakIndex2 == -1) {
 			throw new IllegalArgumentException("Bad Changeset data");
 		}
-		user = new String(buf, breakIndex1+1, breakIndex2 - breakIndex1 - 1);
-		int breakIndex3 = indexOf(buf, lineBreak, breakIndex2+1, bufferEndIndex);
+		rv.user = new String(data, breakIndex1+1, breakIndex2 - breakIndex1 - 1);
+		int breakIndex3 = indexOf(data, lineBreak, breakIndex2+1, bufferEndIndex);
 		if (breakIndex3 == -1) {
 			throw new IllegalArgumentException("Bad Changeset data");
 		}
-		timezone = new String(buf, breakIndex2+1, breakIndex3 - breakIndex2 - 1);
+		rv.timezone = new String(data, breakIndex2+1, breakIndex3 - breakIndex2 - 1);
 		
 		//
 		int lastStart = breakIndex3 + 1;
-		int breakIndex4 = indexOf(buf, lineBreak, lastStart, bufferEndIndex);
-		files = new ArrayList<String>(5);
+		int breakIndex4 = indexOf(data, lineBreak, lastStart, bufferEndIndex);
+		rv.files = new ArrayList<String>(5);
 		while (breakIndex4 != -1 && breakIndex4 + 1 < bufferEndIndex) {
-			files.add(new String(buf, lastStart, breakIndex4 - lastStart));
+			rv.files.add(new String(data, lastStart, breakIndex4 - lastStart));
 			lastStart = breakIndex4 + 1;
-			if (buf[breakIndex4 + 1] == lineBreak) {
+			if (data[breakIndex4 + 1] == lineBreak) {
 				// found \n\n
 				break;
 			} else {
-				breakIndex4 = indexOf(buf, lineBreak, lastStart, bufferEndIndex);
+				breakIndex4 = indexOf(data, lineBreak, lastStart, bufferEndIndex);
 			}
 		}
 		if (breakIndex4 == -1 || breakIndex4 >= bufferEndIndex) {
 			throw new IllegalArgumentException("Bad Changeset data");
 		}
 		try {
-			comment = new String(buf, breakIndex4+2, bufferEndIndex - breakIndex4 - 2, "UTF-8");
+			rv.comment = new String(data, breakIndex4+2, bufferEndIndex - breakIndex4 - 2, "UTF-8");
 		} catch (UnsupportedEncodingException ex) {
-			comment = "";
+			rv.comment = "";
 			throw new IllegalStateException("Could hardly happen");
 		}
+		return rv;
 	}
 
 	private static int indexOf(byte[] src, byte what, int startOffset, int endIndex) {
@@ -97,7 +97,7 @@ public class Changeset {
 		return -1;
 	}
 
-	public interface Callback {
+	public interface Inspector {
 		// first(), last(), single().
 		// <T>
 		void next(Changeset cset);

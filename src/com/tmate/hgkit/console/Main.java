@@ -6,12 +6,7 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
-import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
 import com.tmate.hgkit.ll.Changeset;
@@ -23,9 +18,11 @@ import com.tmate.hgkit.ll.Changeset;
 public class Main {
 
 	public static void main(String[] args) throws Exception {
+		//String filename = "store/00changelog.i";
+		String filename = "store/data/hello.c.i";
 		LinkedList<Changeset> changelog = new LinkedList<Changeset>();
 		//
-		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File("/temp/hg/hello/" + ".hg/store/00changelog.i"))));
+		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File("/temp/hg/hello/.hg/" + filename))));
 		DataInput di = dis;
 		dis.mark(10);
 		int versionField = di.readInt();
@@ -51,6 +48,7 @@ public class Main {
 			dis.skip(12);
 			System.out.printf("%14d %6X %10d %10d %10d %10d %8d %8d     %040x\n", offset, flags, compressedLen, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, new BigInteger(buf));
 			if (inlineData) {
+				String resultString;
 				byte[] data = new byte[compressedLen];
 				di.readFully(data);
 				if (data[0] == 0x78 /* 'x' */) {
@@ -59,35 +57,13 @@ public class Main {
 					byte[] result = new byte[actualLen*2];
 					int resultLen = zlib.inflate(result);
 					zlib.end();
-					if (resultLen != actualLen) {
-						System.err.printf("Expected:%d, decomressed to:%d bytes\n", actualLen, resultLen);
-					}
-					String resultString;
-					if (baseRevision != entryCount) {
-						// this is a patch
-						byte[] baseRevContent = changelog.get(baseRevision).rawData;
-						LinkedList<PatchRecord> bins = new LinkedList<PatchRecord>();
-						int p1, p2, len, patchElementIndex = 0;
-						do {
-							final int x = patchElementIndex;
-							p1 = (result[x] << 24) | (result[x+1] << 16) | (result[x+2] << 8) | result[x+3];
-							p2 = (result[x+4] << 24) | (result[x+5] << 16) | (result[x+6] << 8) | result[x+7];
-							len = (result[x+8] << 24) | (result[x+9] << 16) | (result[x+10] << 8) | result[x+11];
-							System.out.printf("%4d %4d %4d\n", p1, p2, len);
-							patchElementIndex += 12 + len;
-							bins.add(new PatchRecord(p1, p2, len, result, x+12));
-						} while (patchElementIndex < resultLen);
-						// 
-						result = apply(baseRevContent, bins);
-						resultLen = result.length;
-					}
 					resultString = new String(result, 0, resultLen, "UTF-8");
-					System.out.println(resultString);
-					entryCount++;
-					Changeset changeset = new Changeset();
-					changeset.read(result, 0, resultLen);
-					changelog.add(changeset);
-				} // TODO else if uncompressed
+				} else if (data[0] == 0x75 /* 'u' */) {
+					resultString = new String(data, 1, data.length - 1, "UTF-8");
+				} else {
+					resultString = new String(data);
+				}
+				System.out.println(resultString);
 			}
 		}
 		dis.close();
@@ -98,38 +74,6 @@ public class Main {
 			System.out.println(">");
 			cset.dump();
 			System.out.println("<");
-		}
-	}
-
-
-	// mpatch.c : apply()
-	private static byte[] apply(byte[] baseRevisionContent, List<PatchRecord> patch) {
-		byte[] tempBuf = new byte[512]; // XXX
-		int last = 0, destIndex = 0;
-		for (PatchRecord pr : patch) {
-			System.arraycopy(baseRevisionContent, last, tempBuf, destIndex, pr.start-last);
-			destIndex += pr.start - last;
-			System.arraycopy(pr.data, 0, tempBuf, destIndex, pr.data.length);
-			destIndex += pr.data.length;
-			last = pr.end;
-		}
-		System.arraycopy(baseRevisionContent, last, tempBuf, destIndex, baseRevisionContent.length - last);
-		destIndex += baseRevisionContent.length - last; // total length
-		byte[] rv = new byte[destIndex];
-		System.arraycopy(tempBuf, 0, rv, 0, destIndex);
-		return rv;
-	}
-
-	static class PatchRecord { // copy of struct frag from mpatch.c
-		int start, end, len;
-		byte[] data;
-
-		public PatchRecord(int p1, int p2, int len, byte[] src, int srcOffset) {
-		start = p1;
-				end = p2;
-				this.len = len;
-				data = new byte[len];
-				System.arraycopy(src, srcOffset, data, 0, len);
 		}
 	}
 }

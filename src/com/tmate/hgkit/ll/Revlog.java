@@ -23,6 +23,7 @@ public abstract class Revlog {
 	}
 
 	public interface Inspector {
-		void next(int compressedLen, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*32*/] nodeid, byte[] data);
+		// XXX boolean retVal to indicate whether to continue?
+		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*32*/] nodeid, byte[] data);
 	}
 }

@@ -37,8 +37,8 @@ public abstract class HgRepository {
 	public final Changelog getChangelog() {
 		if (this.changelog == null) {
 			// might want delegate to protected createChangelog() some day
-			this.changelog = new Changelog(this);
-			// TODO init
+			RevlogStream content = resolve("store/00changelog.i"); // XXX perhaps, knowledge about filenames should be in LocalHgRepo?
+			this.changelog = new Changelog(this, content);
 		}
 		return this.changelog;
 	}
@@ -62,5 +62,5 @@ public abstract class HgRepository {
 	/**
 	 * Perhaps, should be separate interface, like ContentLookup
 	 */
-	public abstract RevlogStream resolve(String string);
+	protected abstract RevlogStream resolve(String string);
 }
