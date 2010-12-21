@@ -3,6 +3,8 @@
  */
 package com.tmate.hgkit.ll;
 
+import static com.tmate.hgkit.ll.HgRepository.TIP;
+
 /**
  * Extends Revlog/uses RevlogStream?
  * ? name:HgFileNode?
@@ -31,14 +33,23 @@ public class HgDataFile extends Revlog {
 		return path; // hgRepo.backresolve(this) -> name?
 	}
 
-	private static final int TIP = -2;
+	public int getRevisionCount() {
+		return content.revisionCount();
+	}
 
 	public byte[] content() {
 		return content(TIP);
 	}
 	
 	public byte[] content(int revision) {
-		throw HgRepository.notImplemented();
+		final byte[][] dataPtr = new byte[1][];
+		Revlog.Inspector insp = new Revlog.Inspector() {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+				dataPtr[0] = data;
+			}
+		};
+		content.iterate(revision, revision, true, insp);
+		return dataPtr[0];
 	}
 
 	public void history(Changeset.Inspector inspector) {

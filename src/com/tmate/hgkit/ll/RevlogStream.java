@@ -3,6 +3,8 @@
  */
 package com.tmate.hgkit.ll;
 
+import static com.tmate.hgkit.ll.HgRepository.TIP;
+
 import java.io.BufferedInputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
@@ -74,8 +76,11 @@ public class RevlogStream {
 		if (indexSize == 0) {
 			return;
 		}
-		if (end == -1 /*FIXME TIP*/) {
+		if (end == TIP) {
 			end = indexSize - 1;
+		}
+		if (start == TIP) {
+			start = indexSize - 1;
 		}
 		if (start < 0 || start >= indexSize) {
 			throw new IllegalArgumentException("Bad left range boundary " + start);
@@ -91,10 +96,17 @@ public class RevlogStream {
 			diData = getDataStream();
 		}
 		try {
-			int skipped = diIndex.skipBytes(inline ? (int) index.get(start).offset : start * 64);
 			byte[] lastData = null;
-			for (int i = start; i <= end; i++ ) {
-				IndexEntry ie = index.get(i);
+			int i;
+			boolean extraReadsToBaseRev = false;
+			if (needData && index.get(start).baseRevision < start) {
+				i = index.get(start).baseRevision;
+				extraReadsToBaseRev = true;
+			} else {
+				i = start;
+			}
+			diIndex.skipBytes(inline ? (int) index.get(i).offset : start * 64);
+			for (; i <= end; i++ ) {
 				long l = diIndex.readLong();
 				long offset = l >>> 16;
 				int flags = (int) (l & 0X0FFFF);
@@ -114,7 +126,7 @@ public class RevlogStream {
 					if (inline) {
 						diIndex.readFully(dataBuf);
 					} else {
-						diData.skipBytes((int) ie.offset); // FIXME not skip but seek!!! (skip would work only for the first time)
+						diData.skipBytes((int) index.get(i).offset); // FIXME not skip but seek!!! (skip would work only for the first time)
 						diData.readFully(dataBuf);
 					}
 					if (dataBuf[0] == 0x78 /* 'x' */) {
@@ -145,23 +157,14 @@ public class RevlogStream {
 						int patchElementIndex = 0;
 						do {
 							final int x = patchElementIndex; // shorthand
-							int p1 = (data[x] << 24) | (data[x+1] << 16) | (data[x+2] << 8) | data[x+3];
-							int p2 = (data[x+4] << 24) | (data[x+5] << 16) | (data[x+6] << 8) | data[x+7];
-							int len = (data[x+8] << 24) | (data[x+9] << 16) | (data[x+10] << 8) | data[x+11];
+							int p1 =  ((data[x] & 0xFF)<< 24)    | ((data[x+1] & 0xFF) << 16) | ((data[x+2] & 0xFF) << 8)  | (data[x+3] & 0xFF);
+							int p2 =  ((data[x+4] & 0xFF) << 24) | ((data[x+5] & 0xFF) << 16) | ((data[x+6] & 0xFF) << 8)  | (data[x+7] & 0xFF);
+							int len = ((data[x+8] & 0xFF) << 24) | ((data[x+9] & 0xFF) << 16) | ((data[x+10] & 0xFF) << 8) | (data[x+11] & 0xFF);
 							patchElementIndex += 12 + len;
 							patches.add(new PatchRecord(p1, p2, len, data, x+12));
 						} while (patchElementIndex < data.length);
 						//
-						byte[] baseRevContent;
-						if (baseRevision == i - 1) {
-							baseRevContent = lastData;
-						} else {
-							// FIXME implement delta collection from few revisions
-							// read baseRevision plus all deltas between this revision and base. Need to do this effectively.
-							throw HgRepository.notImplemented();
-						}
-						
-						// FIXME need to collect all patches between baseRevision and current version 
+						byte[] baseRevContent = lastData;
 						data = apply(baseRevContent, patches);
 					}
 				} else {
@@ -169,7 +172,9 @@ public class RevlogStream {
 						diIndex.skipBytes(compressedLen);
 					}
 				}
-				inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, buf, data);
+				if (!extraReadsToBaseRev || i >= start) {
+					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, buf, data);
+				}
 				lastData = data;
 			}
 		} catch (EOFException ex) {
@@ -196,19 +201,20 @@ public class RevlogStream {
 			long offset = 0; // first offset is always 0, thus Hg uses it for other purposes
 			while(true) { // EOFExcepiton should get us outta here. FIXME Our inputstream should has explicit no-more-data indicator
 				int compressedLen = di.readInt();
-				// 8+4 = 12 bytes total read
-//				int actualLen = di.readInt();
-//				int baseRevision = di.readInt();
+				// 8+4 = 12 bytes total read here
+				int actualLen = di.readInt();
+				int baseRevision = di.readInt();
+				// 12 + 8 = 20 bytes read here
 //				int linkRevision = di.readInt();
 //				int parent1Revision = di.readInt();
 //				int parent2Revision = di.readInt();
 //				byte[] nodeid = new byte[32];
 				if (inline) {
-					res.add(new IndexEntry(offset + 64*res.size(), compressedLen));
-					di.skipBytes(5*4 + 32 + compressedLen); // Check: 52 (skip) + 12 (read) = 64 (total RevlogNG record size)
+					res.add(new IndexEntry(offset + 64*res.size(), baseRevision));
+					di.skipBytes(3*4 + 32 + compressedLen); // Check: 44 (skip) + 20 (read) = 64 (total RevlogNG record size)
 				} else {
-					res.add(new IndexEntry(offset, compressedLen));
-					di.skipBytes(5*4 + 32);
+					res.add(new IndexEntry(offset, baseRevision));
+					di.skipBytes(3*4 + 32);
 				}
 				long l = di.readLong();
 				offset = l >>> 16;
@@ -241,13 +247,15 @@ public class RevlogStream {
 
 
 	// perhaps, package-local or protected, if anyone else from low-level needs them
+	// XXX think over if we should keep offset in case of separate data file - we read the field anyway. Perhaps, distinct entry classes for Inline and non-inline indexes?
 	private static class IndexEntry {
 		public final long offset; // for separate .i and .d - copy of index record entry, for inline index - actual offset of the record in the .i file (record entry + revision * record size))
-		public final int length; // data past fixed record (need to decide whether including header size or not), and whether length is of compressed data or not
+		//public final int length; // data past fixed record (need to decide whether including header size or not), and whether length is of compressed data or not
+		public final int baseRevision;
 
-		public IndexEntry(long o, int l) {
+		public IndexEntry(long o, int baseRev) {
 			offset = o;
-			length = l;
+			baseRevision = baseRev;
 		}
 	}
 

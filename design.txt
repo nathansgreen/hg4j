@@ -25,3 +25,4 @@ support patch from baseRev + few deltas
 
 input stream impl + lifecycle
 delta merge
+Changeset to get index (local revision number)

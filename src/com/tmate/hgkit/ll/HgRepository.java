@@ -9,6 +9,8 @@ package com.tmate.hgkit.ll;
  */
 public abstract class HgRepository {
 
+	public static final int TIP = -1;
+
 	// temp aux marker method
 	public static IllegalStateException notImplemented() {
 		return new IllegalStateException("Not implemented");
