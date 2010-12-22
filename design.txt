@@ -20,9 +20,11 @@ What happens when big entry is added to a file - when it detects it can't longer
 
 
 ----------
-support patch from baseRev + few deltas
++ support patch from baseRev + few deltas (although done in a way patches are applied one by one instead of accumulated)
 + command-line samples (-R, filenames) (Log & Cat) to show on any repo
++buildfile + run samples
 
 input stream impl + lifecycle
 delta merge
 Changeset to get index (local revision number)
+

@@ -29,20 +29,21 @@ public class Log {
 				cset.dump();
 			}
 		};
-		for (String fname : cmdLineOpts.files) {
-			HgDataFile f1 = hgRepo.getFileNode(fname);
-			System.out.println("\nComplete of a file: " + fname);
-			f1.history(callback);
+		if (cmdLineOpts.files.isEmpty()) {
+			System.out.println("Complete history of the repo:");
+			hgRepo.getChangelog().all(callback);
+		} else {
+			for (String fname : cmdLineOpts.files) {
+				HgDataFile f1 = hgRepo.getFileNode(fname);
+				System.out.println("History of the file: " + fname);
+				f1.history(callback);
+			}
+		}
 		//
 //		System.out.println("\n\n=========================");
 //		System.out.println("Range 1-3:");
 //		f1.history(1,3, callback);
-		}
 		//
-		System.out.println("\n\n=========================");
-		System.out.println("Complete of a repo:");
-		hgRepo.getChangelog().all(callback);
 		//new ChangelogWalker().setFile("hello.c").setRevisionRange(1, 4).accept(new Visitor);
 	}
-
 }

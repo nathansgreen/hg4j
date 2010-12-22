@@ -165,7 +165,7 @@ public class RevlogStream {
 						} while (patchElementIndex < data.length);
 						//
 						byte[] baseRevContent = lastData;
-						data = apply(baseRevContent, patches);
+						data = apply(baseRevContent, actualLen, patches);
 					}
 				} else {
 					if (inline) {
@@ -261,8 +261,8 @@ public class RevlogStream {
 
 	// mpatch.c : apply()
 	// FIXME need to implement patch merge (fold, combine, gather and discard from aforementioned mpatch.[c|py]), also see Revlog and Mercurial PDF
-	private static byte[] apply(byte[] baseRevisionContent, List<PatchRecord> patch) {
-		byte[] tempBuf = new byte[512]; // XXX
+	private static byte[] apply(byte[] baseRevisionContent, int outcomeLen, List<PatchRecord> patch) {
+		byte[] tempBuf = new byte[outcomeLen]; // XXX
 		int last = 0, destIndex = 0;
 		for (PatchRecord pr : patch) {
 			System.arraycopy(baseRevisionContent, last, tempBuf, destIndex, pr.start-last);

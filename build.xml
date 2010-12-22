@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="hgkit" default="samples">
+    <description>
+            description
+    </description>
+
+    <target name="samples" depends="build">
+    	
+    	<echo message="History of a specific file"/>
+    	<java classpath="hgkit.jar" classname="com.tmate.hgkit.console.Log">
+    		<arg line="design.txt"/>
+    	</java>
+    	
+    	<echo message="Whole repo log"/>
+    	<java classpath="hgkit.jar" classname="com.tmate.hgkit.console.Log"/>
+    	
+    	<echo message="Content of a file"/>
+    	<java classpath="hgkit.jar" classname="com.tmate.hgkit.console.Cat">
+    		<arg line="design.txt"/>
+    	</java>
+
+    </target>
+
+    <target name="build">
+    	<javac srcdir="src" destdir="bin"/>
+    	<jar destfile="hgkit.jar" basedir="bin"/>
+    </target>
+
+</project>
