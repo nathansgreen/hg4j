@@ -35,7 +35,7 @@ public class Log {
 		} else {
 			for (String fname : cmdLineOpts.files) {
 				HgDataFile f1 = hgRepo.getFileNode(fname);
-				System.out.println("History of the file: " + fname);
+				System.out.println("History of the file: " + f1.getPath());
 				f1.history(callback);
 			}
 		}
