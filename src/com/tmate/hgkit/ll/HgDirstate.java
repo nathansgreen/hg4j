@@ -62,8 +62,8 @@ public class HgDirstate {
 				da.readBytes(name, 0, nameLen);
 				for (int i = 0; i < nameLen; i++) {
 					if (name[i] == 0) {
-						fn1 = new String(name, 0, i);
-						fn2 = new String(name, i+1, nameLen);
+						fn1 = new String(name, 0, i, "UTF-8"); // XXX unclear from documentation what encoding is used there
+						fn2 = new String(name, i+1, nameLen - i - 1, "UTF-8"); // need to check with different system codepages
 						break;
 					}
 				}
