@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2010 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
@@ -13,6 +13,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.TreeSet;
 
+import com.tmate.hgkit.fs.DataAccessProvider;
+
 /**
  * @author artem
  */
@@ -20,10 +22,12 @@ public class LocalHgRepo extends HgRepository {
 
 	private File repoDir; // .hg folder
 	private final String repoLocation;
+	private final DataAccessProvider dataAccess;
 
 	public LocalHgRepo(String repositoryPath) {
 		setInvalid(true);
 		repoLocation = repositoryPath;
+		dataAccess = null;
 	}
 	
 	public LocalHgRepo(File repositoryRoot) throws IOException {
@@ -31,12 +35,23 @@ public class LocalHgRepo extends HgRepository {
 		setInvalid(false);
 		repoDir = repositoryRoot;
 		repoLocation = repositoryRoot.getParentFile().getCanonicalPath();
+		dataAccess = new DataAccessProvider();
 		parseRequires();
 	}
 
 	@Override
 	public String getLocation() {
 		return repoLocation;
+	}
+
+	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
+	public final HgDirstate loadDirstate() {
+		// XXX may cache in SoftReference if creation is expensive
+		return new HgDirstate(this, new File(repoDir, "dirstate"));
+	}
+
+	/*package-local*/ DataAccessProvider getDataAccess() {
+		return dataAccess;
 	}
 
 	private final HashMap<String, SoftReference<RevlogStream>> streamsCache = new HashMap<String, SoftReference<RevlogStream>>();
@@ -53,7 +68,7 @@ public class LocalHgRepo extends HgRepository {
 		}
 		File f = new File(repoDir, path);
 		if (f.exists()) {
-			RevlogStream s = new RevlogStream(f);
+			RevlogStream s = new RevlogStream(dataAccess, f);
 			streamsCache.put(path, new SoftReference<RevlogStream>(s));
 			return s;
 		}

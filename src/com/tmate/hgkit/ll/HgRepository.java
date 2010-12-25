@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2010 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
@@ -44,10 +44,6 @@ public abstract class HgRepository {
 			this.manifest = new HgManifest(this);
 		}
 		return this.manifest;
-	}
-	
-	public final Object/*HgDirstate*/ getDirstate() {
-		throw notImplemented();
 	}
 
 	public abstract HgDataFile getFileNode(String path);

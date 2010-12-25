@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2010 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
@@ -6,17 +6,16 @@ package com.tmate.hgkit.ll;
 import static com.tmate.hgkit.ll.HgRepository.TIP;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
+
+import com.tmate.hgkit.fs.DataAccess;
+import com.tmate.hgkit.fs.DataAccessProvider;
 
 /**
  * ? Single RevlogStream per file per repository with accessor to record access session (e.g. with back/forward operations), 
@@ -30,40 +29,24 @@ public class RevlogStream {
 	private List<IndexEntry> index; // indexed access highly needed
 	private boolean inline = false;
 	private final File indexFile;
+	private final DataAccessProvider dataAccess;
 
-	RevlogStream(File indexFile) {
+	// if we need anything else from HgRepo, might replace DAP parameter with HgRepo and query it for DAP.
+	RevlogStream(DataAccessProvider dap, File indexFile) {
+		this.dataAccess = dap;
 		this.indexFile = indexFile;
 	}
 
 	/*package*/ DataAccess getIndexStream() {
-		return create(indexFile);
+		return dataAccess.create(indexFile);
 	}
 
 	/*package*/ DataAccess getDataStream() {
 		final String indexName = indexFile.getName();
 		File dataFile = new File(indexFile.getParentFile(), indexName.substring(0, indexName.length() - 1) + "d");
-		return create(dataFile);
+		return dataAccess.create(dataFile);
 	}
 	
-	private DataAccess create(File f) {
-		if (!f.exists()) {
-			return new DataAccess();
-		}
-		try {
-			FileChannel fc = new FileInputStream(f).getChannel();
-			final int MAPIO_MAGIC_BOUNDARY = 100 * 1024;
-			if (fc.size() > MAPIO_MAGIC_BOUNDARY) {
-				return new MemoryMapFileAccess(fc, fc.size());
-			} else {
-				return new FileAccess(fc, fc.size());
-			}
-		} catch (IOException ex) {
-			// unlikely to happen, we've made sure file exists.
-			ex.printStackTrace(); // FIXME log error
-		}
-		return new DataAccess(); // non-null, empty.
-	}
-
 	public int revisionCount() {
 		initOutline();
 		return index.size();
@@ -220,13 +203,14 @@ public class RevlogStream {
 					res.add(new IndexEntry(offset, baseRevision));
 					da.skip(3*4 + 32);
 				}
-				if (da.nonEmpty()) {
-					long l = da.readLong();
-					offset = l >>> 16;
-				} else {
+				if (da.isEmpty()) {
 					// fine, done then
 					index = res;
 					break;
+				} else {
+					// start reading next record
+					long l = da.readLong();
+					offset = l >>> 16;
 				}
 			}
 		} catch (IOException ex) {
@@ -282,173 +266,6 @@ public class RevlogStream {
 				this.len = len;
 				data = new byte[len];
 				System.arraycopy(src, srcOffset, data, 0, len);
-		}
-	}
-
-	/*package-local*/ class DataAccess {
-		public boolean nonEmpty() {
-			return false;
-		}
-		// absolute positioning
-		public void seek(long offset) throws IOException {
-			throw new UnsupportedOperationException();
-		}
-		// relative positioning
-		public void skip(int bytes) throws IOException {
-			throw new UnsupportedOperationException();
-		}
-		// shall be called once this object no longer needed
-		public void done() {
-			// no-op in this empty implementation
-		}
-		public int readInt() throws IOException {
-			byte[] b = new byte[4];
-			readBytes(b, 0, 4);
-			return b[0] << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
-		}
-		public long readLong() throws IOException {
-			byte[] b = new byte[8];
-			readBytes(b, 0, 8);
-			int i1 = b[0] << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
-			int i2 = b[4] << 24 | (b[5] & 0xFF) << 16 | (b[6] & 0xFF) << 8 | (b[7] & 0xFF);
-			return ((long) i1) << 32 | ((long) i2 & 0xFFFFFFFF);
-		}
-		public void readBytes(byte[] buf, int offset, int length) throws IOException {
-			throw new UnsupportedOperationException();
-		}
-	}
-
-	// DOESN'T WORK YET 
-	private class MemoryMapFileAccess extends DataAccess {
-		private FileChannel fileChannel;
-		private final long size;
-		private long position = 0;
-
-		public MemoryMapFileAccess(FileChannel fc, long channelSize) {
-			fileChannel = fc;
-			size = channelSize;
-		}
-
-		@Override
-		public void seek(long offset) {
-			position = offset;
-		}
-
-		@Override
-		public void skip(int bytes) throws IOException {
-			position += bytes;
-		}
-
-		private boolean fill() throws IOException {
-			final int BUFFER_SIZE = 8 * 1024;
-			long left = size - position;
-			MappedByteBuffer rv = fileChannel.map(FileChannel.MapMode.READ_ONLY, position, left < BUFFER_SIZE ? left : BUFFER_SIZE);
-			position += rv.capacity();
-			return rv.hasRemaining();
-		}
-
-		@Override
-		public void done() {
-			if (fileChannel != null) {
-				try {
-					fileChannel.close();
-				} catch (IOException ex) {
-					ex.printStackTrace(); // log debug
-				}
-				fileChannel = null;
-			}
-		}
-	}
-
-	private class FileAccess extends DataAccess {
-		private FileChannel fileChannel;
-		private final long size;
-		private ByteBuffer buffer;
-		private long bufferStartInFile = 0; // offset of this.buffer in the file.
-
-		public FileAccess(FileChannel fc, long channelSize) {
-			fileChannel = fc;
-			size = channelSize;
-			final int BUFFER_SIZE = 8 * 1024;
-			// XXX once implementation is more or less stable,
-			// may want to try ByteBuffer.allocateDirect() to see
-			// if there's any performance gain.
-			buffer = ByteBuffer.allocate(size < BUFFER_SIZE ? (int) size : BUFFER_SIZE);
-			buffer.flip(); // or .limit(0) to indicate it's empty
-		}
-		
-		@Override
-		public boolean nonEmpty() {
-			return bufferStartInFile + buffer.position() < size;
-		}
-		
-		@Override
-		public void seek(long offset) throws IOException {
-			if (offset < bufferStartInFile + buffer.limit() && offset >= bufferStartInFile) {
-				buffer.position((int) (offset - bufferStartInFile));
-			} else {
-				// out of current buffer, invalidate it (force re-read) 
-				// XXX or ever re-read it right away?
-				bufferStartInFile = offset;
-				buffer.clear();
-				buffer.limit(0); // or .flip() to indicate we switch to reading
-				fileChannel.position(offset);
-			}
-		}
-
-		@Override
-		public void skip(int bytes) throws IOException {
-			final int newPos = buffer.position() + bytes;
-			if (newPos >= 0 && newPos < buffer.limit()) {
-				// no need to move file pointer, just rewind/seek buffer 
-				buffer.position(newPos);
-			} else {
-				//
-				seek(fileChannel.position()+ bytes);
-			}
-		}
-
-		private boolean fill() throws IOException {
-			if (!buffer.hasRemaining()) {
-				bufferStartInFile += buffer.limit();
-				buffer.clear();
-				if (bufferStartInFile < size) { // just in case there'd be any exception on EOF, not -1 
-					fileChannel.read(buffer);
-					// may return -1 when EOF, but empty will reflect this, hence no explicit support here   
-				}
-				buffer.flip();
-			}
-			return buffer.hasRemaining();
-		}
-
-		@Override
-		public void readBytes(byte[] buf, int offset, int length) throws IOException {
-			final int tail = buffer.remaining();
-			if (tail >= length) {
-				buffer.get(buf, offset, length);
-			} else {
-				buffer.get(buf, offset, tail);
-				if (fill()) {
-					buffer.get(buf, offset + tail, length - tail);
-				} else {
-					throw new IOException(); // shall not happen provided stream contains expected data and no attempts to read past nonEmpty() == false are made. 
-				}
-			}
-		}
-
-		@Override
-		public void done() {
-			if (buffer != null) {
-				buffer = null;
-			}
-			if (fileChannel != null) {
-				try {
-					fileChannel.close();
-				} catch (IOException ex) {
-					ex.printStackTrace(); // log debug
-				}
-				fileChannel = null;
-			}
 		}
 	}
 }
