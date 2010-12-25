@@ -94,8 +94,12 @@ public class LocalHgRepo extends HgRepository {
 		}
 	}
 
+	// FIXME document what path argument is, whether it includes .i or .d, and whether it's 'normalized' (slashes) or not.
+	// since .hg/store keeps both .i files and files without extension (e.g. fncache), guees, for data == false 
+	// we shall assume path has extension
 	// FIXME much more to be done, see store.py:_hybridencode
 	// @see http://mercurial.selenic.com/wiki/CaseFoldingPlan
+	@Override
 	protected String toStoragePath(String path, boolean data) {
 		path = normalize(path);
 		final String STR_STORE = "store/";
@@ -183,11 +187,12 @@ public class LocalHgRepo extends HgRepository {
 	private static char[] toHexByte(int ch, char[] buf) {
 		assert buf.length > 1;
 		final String hexDigits = "0123456789abcdef";
-		buf[0] = hexDigits.charAt((ch & 0x00F0) >> 4);
+		buf[0] = hexDigits.charAt((ch & 0x00F0) >>> 4);
 		buf[1] = hexDigits.charAt(ch & 0x0F);
 		return buf;
 	}
 
+	// TODO handle . and .. (although unlikely to face them from GUI client)
 	private static String normalize(String path) {
 		path = path.replace('\\', '/').replace("//", "/");
 		if (path.startsWith("/")) {

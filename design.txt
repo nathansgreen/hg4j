@@ -23,8 +23,23 @@ What happens when big entry is added to a file - when it detects it can't longer
 + support patch from baseRev + few deltas (although done in a way patches are applied one by one instead of accumulated)
 + command-line samples (-R, filenames) (Log & Cat) to show on any repo
 +buildfile + run samples
+*input stream impl + lifecycle. Step forward with FileChannel and ByteBuffer, although questionable accomplishment (looks bit complicated, cumbersome)
 
-input stream impl + lifecycle
+calculate sha1 digest for file to see I can deal with nodeid
 delta merge
 Changeset to get index (local revision number)
 
+
+
+>>>> Effective file read/data access
+ReadOperation, Revlog does: repo.getFileSystem().run(this.file, new ReadOperation(), long start=0, long end = -1)
+ReadOperation gets buffer (of whatever size, as decided by FS impl), parses it and then  reports if needs more data.
+This helps to ensure streams are closed after reading, allows caching (if the same file (or LRU) is read few times in sequence)
+and allows buffer management (i.e. reuse. Single buffer for all reads). 
+Scheduling multiple operations (in future, to deal with writes - single queue for FS operations - no locks?)
+
+File access:
+* NIO and mapped files - should be fast. Although seems to give less control on mem usage. 
+* Regular InputStreams and  chunked stream on top - allocate List<byte[]>, each (but last) chunk of fixed size (depending on initial file size) 
+
+<<<<<

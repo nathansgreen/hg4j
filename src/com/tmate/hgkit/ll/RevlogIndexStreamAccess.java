@@ -24,7 +24,7 @@ public class RevlogIndexStreamAccess {
 
 	
 	void readRevlogV0Record() throws IOException {
-		DataInput di = stream.getIndexStream();
+		DataInput di = null; //FIXME stream.getIndexStream();
 		int offset = di.readInt();
 		int compressedLen = di.readInt();
 		int baseRevision = di.readInt();
@@ -42,7 +42,7 @@ public class RevlogIndexStreamAccess {
 	
 	// another subclass?
 	void readRevlogNGRecord() throws IOException {
-		DataInput di = stream.getIndexStream();
+		DataInput di = null; //FIXME stream.getIndexStream();
 		long l = di.readLong();
 		long offset = l >>> 16;
 		int flags = (int) (l & 0X0FFFF);

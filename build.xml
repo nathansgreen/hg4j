@@ -6,9 +6,9 @@
 
     <target name="samples" depends="build">
     	
-    	<echo message="History of a specific file"/>
+    	<echo message="History of a specific file(s)"/>
     	<java classpath="hgkit.jar" classname="com.tmate.hgkit.console.Log">
-    		<arg line="design.txt"/>
+    		<arg line="design.txt .classpath src/com/tmate/hgkit/ll/LocalHgRepo.java"/>
     	</java>
     	
     	<echo message="Whole repo log"/>
@@ -16,7 +16,7 @@
     	
     	<echo message="Content of a file"/>
     	<java classpath="hgkit.jar" classname="com.tmate.hgkit.console.Cat">
-    		<arg line="design.txt"/>
+    		<arg line="src/com/tmate/hgkit/ll/Revlog.java"/>
     	</java>
 
     </target>

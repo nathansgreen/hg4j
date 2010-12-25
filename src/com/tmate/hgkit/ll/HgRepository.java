@@ -30,16 +30,10 @@ public abstract class HgRepository {
 		isInvalid = invalid;
 	}
 
-	public void log() {
-		Revlog clog = getChangelog();
-		assert clog != null;
-		// TODO get data to the client
-	}
-
 	public final Changelog getChangelog() {
 		if (this.changelog == null) {
 			// might want delegate to protected createChangelog() some day
-			RevlogStream content = resolve("store/00changelog.i"); // XXX perhaps, knowledge about filenames should be in LocalHgRepo?
+			RevlogStream content = resolve(toStoragePath("00changelog.i", false)); // XXX perhaps, knowledge about filenames should be in LocalHgRepo?
 			this.changelog = new Changelog(this, content);
 		}
 		return this.changelog;
@@ -61,8 +55,10 @@ public abstract class HgRepository {
 	public abstract String getLocation();
 
 
+	protected abstract String toStoragePath(String path, boolean isData);
+
 	/**
 	 * Perhaps, should be separate interface, like ContentLookup
 	 */
-	protected abstract RevlogStream resolve(String string);
+	protected abstract RevlogStream resolve(String repositoryPath);
 }
