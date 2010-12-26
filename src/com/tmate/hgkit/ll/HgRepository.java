@@ -41,7 +41,8 @@ public abstract class HgRepository {
 	
 	public final HgManifest getManifest() {
 		if (this.manifest == null) {
-			this.manifest = new HgManifest(this);
+			RevlogStream content = resolve(toStoragePath("00manifest.i", false));
+			this.manifest = new HgManifest(this, content);
 		}
 		return this.manifest;
 	}

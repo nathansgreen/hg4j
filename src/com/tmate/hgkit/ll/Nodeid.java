@@ -22,7 +22,7 @@ public class Nodeid {
 
 	@Override
 	public String toString() {
-		return new DigestHelper().toHexString(binaryData, 0, 20);
+		return new DigestHelper().toHexString(binaryData, 0, binaryData.length);
 	}
 
 	// binascii.unhexlify()
