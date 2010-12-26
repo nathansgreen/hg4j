@@ -34,6 +34,8 @@ Changeset to get index (local revision number)
 RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or dirstate 
 
 
+??? encodings of fncache, .hgignore, dirstate
+
 >>>> Effective file read/data access
 ReadOperation, Revlog does: repo.getFileSystem().run(this.file, new ReadOperation(), long start=0, long end = -1)
 ReadOperation gets buffer (of whatever size, as decided by FS impl), parses it and then  reports if needs more data.

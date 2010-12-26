@@ -50,8 +50,17 @@ public class LocalHgRepo extends HgRepository {
 		return new HgDirstate(this, new File(repoDir, "dirstate"));
 	}
 
+	// package-local, see comment for loadDirstate
+	public final HgIgnore loadIgnore() {
+		return new HgIgnore(this);
+	}
+
 	/*package-local*/ DataAccessProvider getDataAccess() {
 		return dataAccess;
+	}
+	
+	/*package-local*/ File getRepositoryRoot() {
+		return repoDir;
 	}
 
 	private final HashMap<String, SoftReference<RevlogStream>> streamsCache = new HashMap<String, SoftReference<RevlogStream>>();
