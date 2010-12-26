@@ -96,7 +96,7 @@ public class HgDirstate {
 		char[] x = new char[] {'n', 'a', 'r', 'm' };
 		for (int i = 0; i < all.length; i++) {
 			for (Record r : all[i]) {
-				System.out.printf("%c %3o%6d %30tc\t\t%s", x[i], r.mode, r.size, (long) r.time, r.name1);
+				System.out.printf("%c %3o%6d %30tc\t\t%s", x[i], r.mode, r.size, (long) r.time * 1000, r.name1);
 				if (r.name2 != null) {
 					System.out.printf(" --> %s", r.name2);
 				}

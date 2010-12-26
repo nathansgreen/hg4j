@@ -24,12 +24,14 @@ What happens when big entry is added to a file - when it detects it can't longer
 + command-line samples (-R, filenames) (Log & Cat) to show on any repo
 +buildfile + run samples
 *input stream impl + lifecycle. Step forward with FileChannel and ByteBuffer, although questionable accomplishment (looks bit complicated, cumbersome)
++ dirstate.mtime
 
 calculate sha1 digest for file to see I can deal with nodeid
 DataAccess - collect debug info (buffer misses, file size/total read operations) to find out better strategy to buffer size detection.
 delta merge
 Changeset to get index (local revision number)
-
+.hgignored processing
+RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or dirstate 
 
 
 >>>> Effective file read/data access
