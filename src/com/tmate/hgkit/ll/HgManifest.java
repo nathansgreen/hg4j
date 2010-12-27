@@ -19,7 +19,7 @@ public class HgManifest extends Revlog {
 	public void dump() {
 		Revlog.Inspector insp = new Revlog.Inspector() {
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
-				System.out.println(revisionNumber);
+				System.out.printf("%d : %s\n", revisionNumber, new Nodeid(nodeid));
 				int i;
 				String fname = null;
 				String flags = null;
