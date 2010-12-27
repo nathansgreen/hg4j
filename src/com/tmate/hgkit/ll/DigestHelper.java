@@ -31,8 +31,10 @@ public class DigestHelper {
 	}
 
 	// XXX perhaps, digest functions should throw an exception, as it's caller responsibility to deal with eof, etc
-	public String sha1(byte[] data) {
+	public String sha1(byte[] nodeidParent1, byte[] nodeidParent2, byte[] data) {
 		MessageDigest alg = getSHA1();
+		alg.update(nodeidParent1);
+		alg.update(nodeidParent2);
 		byte[] digest = alg.digest(data);
 		assert digest.length == 20;
 		return toHexString(digest, 0, 20);

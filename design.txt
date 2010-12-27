@@ -32,6 +32,8 @@ delta merge
 Changeset to get index (local revision number)
 .hgignored processing
 RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or dirstate 
+Revlog.Inspector to get nodeid array of meaningful data exact size (nor heading 00 bytes, nor 12 extra bytes from the spec) 
+
 
 
 ??? encodings of fncache, .hgignore, dirstate

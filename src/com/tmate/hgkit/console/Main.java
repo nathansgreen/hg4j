@@ -18,8 +18,8 @@ import com.tmate.hgkit.ll.Changeset;
 public class Main {
 
 	public static void main(String[] args) throws Exception {
-		String filename = "store/00changelog.i";
-		//String filename = "store/data/hello.c.i";
+//		String filename = "store/00changelog.i";
+		String filename = "store/data/hello.c.i";
 //		String filename = "store/data/docs/readme.i";
 		LinkedList<Changeset> changelog = new LinkedList<Changeset>();
 		//
