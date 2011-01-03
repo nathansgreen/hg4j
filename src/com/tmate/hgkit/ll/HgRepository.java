@@ -58,4 +58,17 @@ public abstract class HgRepository {
 	 * Perhaps, should be separate interface, like ContentLookup
 	 */
 	protected abstract RevlogStream resolve(String repositoryPath);
+
+	public abstract void status(int rev1, int rev2 /*WorkingDir - TIP, TIP?*/, StatusInspector inspector);
+
+	public interface StatusInspector {
+		void modified(String fname);
+		void added(String fname);
+		void copied(String fnameOrigin, String fnameAdded); // if copied files of no interest, should delegate to self.added(fnameAdded);
+		void removed(String fname);
+		void clean(String fname);
+		void missing(String fname);
+		void unknown(String fname); // not tracked
+		void ignored(String fname);
+	}
 }

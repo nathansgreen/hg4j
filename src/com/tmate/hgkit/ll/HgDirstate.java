@@ -6,8 +6,9 @@ package com.tmate.hgkit.ll;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.TreeSet;
 
 import com.tmate.hgkit.fs.DataAccess;
 import com.tmate.hgkit.fs.DataAccessProvider;
@@ -21,10 +22,10 @@ public class HgDirstate {
 
 	private final LocalHgRepo repo;
 	private final File dirstateFile;
-	private List<Record> normal;
-	private List<Record> added;
-	private List<Record> removed;
-	private List<Record> merged;
+	private Map<String, Record> normal;
+	private Map<String, Record> added;
+	private Map<String, Record> removed;
+	private Map<String, Record> merged;
 
 	public HgDirstate(LocalHgRepo hgRepo, File dirstate) {
 		this.repo = hgRepo;
@@ -32,7 +33,7 @@ public class HgDirstate {
 	}
 
 	private void read() {
-		normal = added = removed = merged = Collections.emptyList();
+		normal = added = removed = merged = Collections.<String, Record>emptyMap();
 		if (!dirstateFile.exists()) {
 			return;
 		}
@@ -41,10 +42,11 @@ public class HgDirstate {
 		if (da.isEmpty()) {
 			return;
 		}
-		normal = new LinkedList<Record>();
-		added = new LinkedList<Record>();
-		removed = new LinkedList<Record>();
-		merged = new LinkedList<Record>();
+		// not sure linked is really needed here, just for ease of debug
+		normal = new LinkedHashMap<String, Record>();
+		added = new LinkedHashMap<String, Record>();
+		removed = new LinkedHashMap<String, Record>();
+		merged = new LinkedHashMap<String, Record>();
 		try {
 			// XXX skip(40) if we don't need these? 
 			byte[] parents = new byte[40];
@@ -71,13 +73,13 @@ public class HgDirstate {
 				}
 				Record r = new Record(fmode, size, time, fn1, fn2);
 				if (state == 'n') {
-					normal.add(r);
+					normal.put(r.name1, r);
 				} else if (state == 'a') {
-					added.add(r);
+					added.put(r.name1, r);
 				} else if (state == 'r') {
-					removed.add(r);
+					removed.put(r.name1, r);
 				} else if (state == 'm') {
-					merged.add(r);
+					merged.put(r.name1, r);
 				} else {
 					// FIXME log error?
 				}
@@ -89,13 +91,44 @@ public class HgDirstate {
 		}
 	}
 
+	// new, modifiable collection
+	/*package-local*/ TreeSet<String> all() {
+		read();
+		TreeSet<String> rv = new TreeSet<String>();
+		@SuppressWarnings("unchecked")
+		Map<String, Record>[] all = new Map[] { normal, added, removed, merged };
+		for (int i = 0; i < all.length; i++) {
+			for (Record r : all[i].values()) {
+				rv.add(r.name1);
+			}
+		}
+		return rv;
+	}
+	
+	/*package-local*/ Record checkNormal(String fname) {
+		return normal.get(fname);
+	}
+
+	/*package-local*/ Record checkAdded(String fname) {
+		return added.get(fname);
+	}
+	/*package-local*/ Record checkRemoved(String fname) {
+		return removed.get(fname);
+	}
+	/*package-local*/ Record checkMerged(String fname) {
+		return merged.get(fname);
+	}
+
+
+
+
 	public void dump() {
 		read();
 		@SuppressWarnings("unchecked")
-		List<Record>[] all = new List[] { normal, added, removed, merged };
+		Map<String, Record>[] all = new Map[] { normal, added, removed, merged };
 		char[] x = new char[] {'n', 'a', 'r', 'm' };
 		for (int i = 0; i < all.length; i++) {
-			for (Record r : all[i]) {
+			for (Record r : all[i].values()) {
 				System.out.printf("%c %3o%6d %30tc\t\t%s", x[i], r.mode, r.size, (long) r.time * 1000, r.name1);
 				if (r.name2 != null) {
 					System.out.printf(" --> %s", r.name2);
@@ -106,7 +139,7 @@ public class HgDirstate {
 		}
 	}
 	
-	private static class Record {
+	/*package-local*/ static class Record {
 		final int mode;
 		final int size;
 		final int time;

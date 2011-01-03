@@ -11,6 +11,7 @@ import java.io.InputStreamReader;
 import java.lang.ref.SoftReference;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.TreeSet;
 
 import com.tmate.hgkit.fs.DataAccessProvider;
@@ -43,7 +44,66 @@ public class LocalHgRepo extends HgRepository {
 	public String getLocation() {
 		return repoLocation;
 	}
-
+	
+	@Override
+	public void status(int rev1, int rev2, StatusInspector inspector) {
+		throw HgRepository.notImplemented();
+	}
+	
+	public void statusLocal(int rev1, StatusInspector inspector) {
+		LinkedList<File> folders = new LinkedList<File>();
+		final File rootDir = repoDir.getParentFile();
+		folders.add(rootDir);
+		final HgDirstate dirstate = loadDirstate();
+		final HgIgnore hgignore = loadIgnore();
+		TreeSet<String> knownEntries = dirstate.all();
+		do {
+			File d = folders.removeFirst();
+			for (File f : d.listFiles()) {
+				if (f.isDirectory()) {
+					if (!".hg".equals(f.getName())) {
+						folders.addLast(f);
+					}
+				} else {
+					// FIXME path relative to rootDir
+					String fname = normalize(f.getPath().substring(rootDir.getPath().length() + 1));
+					if (hgignore.isIgnored(fname)) {
+						inspector.ignored(fname);
+					} else {
+						if (knownEntries.remove(fname)) {
+							// modified, added, removed, clean
+							HgDirstate.Record r;
+							if ((r = dirstate.checkNormal(fname)) != null) {
+								// either clean or modified
+								if (f.lastModified() / 1000 == r.time && r.size == f.length()) {
+									inspector.clean(fname);
+								} else {
+									// FIXME check actual content to avoid false modified files
+									inspector.modified(fname);
+								}
+							} else if ((r = dirstate.checkAdded(fname)) != null) {
+								if (r.name2 == null) {
+									inspector.added(fname);
+								} else {
+									inspector.copied(fname, r.name2);
+								}
+							} else if ((r = dirstate.checkRemoved(fname)) != null) {
+								inspector.removed(fname);
+							} else if ((r = dirstate.checkMerged(fname)) != null) {
+								inspector.modified(fname);
+							}
+						} else {
+							inspector.unknown(fname);
+						}
+					}
+				}
+			}
+		} while (!folders.isEmpty());
+		for (String m : knownEntries) {
+			inspector.missing(m);
+		}
+	}
+	
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
 	public final HgDirstate loadDirstate() {
 		// XXX may cache in SoftReference if creation is expensive
