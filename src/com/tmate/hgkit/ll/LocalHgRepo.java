@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -46,8 +46,60 @@ public class LocalHgRepo extends HgRepository {
 	}
 	
 	@Override
-	public void status(int rev1, int rev2, StatusInspector inspector) {
-		throw HgRepository.notImplemented();
+	public void status(int rev1, int rev2, final StatusInspector inspector) {
+		final HashMap<String, Nodeid> idsMap = new HashMap<String, Nodeid>();
+		final HashMap<String, String> flagsMap = new HashMap<String, String>();
+		HgManifest.Inspector collect = new HgManifest.Inspector() {
+			
+			
+			public boolean next(Nodeid nid, String fname, String flags) {
+				idsMap.put(fname, nid);
+				flagsMap.put(fname, flags);
+				return true;
+			}
+			
+			public boolean end(int revision) {
+				return false;
+			}
+			
+			public boolean begin(int revision, Nodeid nid) {
+				return true;
+			}
+		};
+		getManifest().walk(rev1, rev1, collect);
+		
+		HgManifest.Inspector compare = new HgManifest.Inspector() {
+
+			public boolean begin(int revision, Nodeid nid) {
+				return true;
+			}
+
+			public boolean next(Nodeid nid, String fname, String flags) {
+				Nodeid nidR1 = idsMap.remove(fname);
+				String flagsR1 = flagsMap.remove(fname);
+				if (nidR1 == null) {
+					inspector.added(fname);
+				} else {
+					if (nidR1.compareTo(nid) == 0 && ((flags == null && flagsR1 == null) || flags.equals(flagsR1))) {
+						inspector.clean(fname);
+					} else {
+						inspector.modified(fname);
+					}
+				}
+				return true;
+			}
+
+			public boolean end(int revision) {
+				for (String fname : idsMap.keySet()) {
+					inspector.removed(fname);
+				}
+				if (idsMap.size() != flagsMap.size()) {
+					throw new IllegalStateException();
+				}
+				return false;
+			}
+		};
+		getManifest().walk(rev2, rev2, compare);
 	}
 	
 	public void statusLocal(int rev1, StatusInspector inspector) {

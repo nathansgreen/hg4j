@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -67,7 +67,7 @@ public abstract class HgRepository {
 		void copied(String fnameOrigin, String fnameAdded); // if copied files of no interest, should delegate to self.added(fnameAdded);
 		void removed(String fname);
 		void clean(String fname);
-		void missing(String fname);
+		void missing(String fname); // aka deleted (tracked by Hg, but not available in FS any more
 		void unknown(String fname); // not tracked
 		void ignored(String fname);
 	}

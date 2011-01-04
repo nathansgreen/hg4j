@@ -1,15 +1,20 @@
-/**
- * Copyright (c) 2010 Artem Tikhomirov 
+/*
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
+import java.util.Arrays;
+
 
 /**
- * @see mercurial/node.py
+ * Whether to store fixed size array (20 bytes) - ease of manipulation (e.g. hashcode/equals), or 
+ * memory effective - reuse supplied array, keep significant bits only?
+ * Fixed size array looks most appealing to me now - I doubt one can save any significant amount of memory. 
+ * There'd always 20 non-zero bytes, the difference is only for any extra bytes one may pass to constructor  
  * @author artem
  *
  */
-public class Nodeid {
+public final class Nodeid implements Comparable<Nodeid> {
 	
 	public static int NULLREV = -1;
 	private final byte[] binaryData; 
@@ -20,11 +25,30 @@ public class Nodeid {
 		this.binaryData = binaryRepresentation;
 	}
 
+	// instead of hashCode/equals
+	public int compareTo(Nodeid o) {
+		byte[] a1, a2;
+		if (this.binaryData.length != 20) {
+			a1 = new byte[20];
+			System.arraycopy(binaryData, 0, a1, 20 - binaryData.length, binaryData.length);
+		} else {
+			a1 = this.binaryData;
+		}
+		
+		if (o.binaryData.length != 20) {
+			a2 = new byte[20];
+			System.arraycopy(o.binaryData, 0, a2, 20 - o.binaryData.length, o.binaryData.length);
+		} else {
+			a2 = o.binaryData;
+		}
+		return Arrays.equals(a1, a2) ? 0 : -1;
+	}
+
 	@Override
 	public String toString() {
 		return new DigestHelper().toHexString(binaryData, 0, binaryData.length);
 	}
-
+	
 	// binascii.unhexlify()
 	public static Nodeid fromAscii(byte[] asciiRepresentation, int offset, int length) {
 		assert length % 2 == 0; // Python's binascii.hexlify convert each byte into 2 digits
@@ -36,6 +60,4 @@ public class Nodeid {
 		}
 		return new Nodeid(data);
 	}
-	
-	
 }

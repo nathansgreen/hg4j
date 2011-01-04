@@ -48,7 +48,6 @@ public class HgManifest extends Revlog {
 							flags = new String(data, x + nodeidLen, i-x-nodeidLen);
 						}
 						gtg = gtg && inspector.next(nid, fname, flags);
-						
 					}
 					nid = null;
 					fname = flags = null;

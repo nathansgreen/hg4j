@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.console;
 
@@ -25,10 +25,13 @@ public class Status {
 		}
 		System.out.println(hgRepo.getLocation());
 		((LocalHgRepo) hgRepo).loadDirstate().dump();
-		//hgRepo.status(TIP, TIP, new StatusDump());
 		final StatusDump dump = new StatusDump();
 		dump.showIgnored = false;
 		dump.showClean = false;
+		final int r1 = 0, r2 = 11;
+		System.out.printf("Status for changes between revision %d and %d:\n", r1, r2);
+		hgRepo.status(r1, r2, dump);
+		System.out.println("\nStatus against working dir:");
 		((LocalHgRepo) hgRepo).statusLocal(TIP, dump);
 	}
 
