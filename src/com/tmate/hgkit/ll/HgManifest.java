@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -16,15 +16,21 @@ public class HgManifest extends Revlog {
 		this.content = content;
 	}
 
-	public void dump() {
+	public void walk(int start, int end, final Inspector inspector) {
 		Revlog.Inspector insp = new Revlog.Inspector() {
+
+			private boolean gtg = true; // good to go
+
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
-				System.out.printf("%d : %s\n", revisionNumber, new Nodeid(nodeid));
+				if (!gtg) {
+					return;
+				}
+				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid));
 				int i;
 				String fname = null;
 				String flags = null;
 				Nodeid nid = null;
-				for (i = 0; i < actualLen; i++) {
+				for (i = 0; gtg && i < actualLen; i++) {
 					int x = i;
 					for( ; data[i] != '\n' && i < actualLen; i++) {
 						if (fname == null && data[i] == 0) {
@@ -41,14 +47,21 @@ public class HgManifest extends Revlog {
 							// hg --debug manifest shows 644 for each regular file in my repo
 							flags = new String(data, x + nodeidLen, i-x-nodeidLen);
 						}
-						System.out.println(nid + "\t" + fname + "\t\t" + flags);
+						gtg = gtg && inspector.next(nid, fname, flags);
+						
 					}
 					nid = null;
 					fname = flags = null;
 				}
-				System.out.println();
+				gtg = gtg && inspector.end(revisionNumber);
 			}
 		};
-		content.iterate(0, -1, true, insp);
+		content.iterate(start, end, true, insp);
+	}
+
+	public interface Inspector {
+		boolean begin(int revision, Nodeid nid);
+		boolean next(Nodeid nid, String fname, String flags);
+		boolean end(int revision);
 	}
 }

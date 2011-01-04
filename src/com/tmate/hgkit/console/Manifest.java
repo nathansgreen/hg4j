@@ -1,10 +1,14 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.console;
 
+import static com.tmate.hgkit.ll.HgRepository.TIP;
+
 import com.tmate.hgkit.fs.RepositoryLookup;
+import com.tmate.hgkit.ll.HgManifest;
 import com.tmate.hgkit.ll.HgRepository;
+import com.tmate.hgkit.ll.Nodeid;
 
 /**
  *
@@ -21,6 +25,22 @@ public class Manifest {
 			return;
 		}
 		System.out.println(hgRepo.getLocation());
-		hgRepo.getManifest().dump();
+		HgManifest.Inspector insp = new HgManifest.Inspector() {
+			public boolean begin(int revision, Nodeid nid) {
+				System.out.printf("%d : %s\n", revision, nid);
+				return true;
+			}
+
+			public boolean next(Nodeid nid, String fname, String flags) {
+				System.out.println(nid + "\t" + fname + "\t\t" + flags);
+				return true;
+			}
+
+			public boolean end(int revision) {
+				System.out.println();
+				return true;
+			}
+		};
+		hgRepo.getManifest().walk(0, TIP, insp);
 	}
 }
