@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -14,17 +14,14 @@ import java.util.Arrays;
  */
 public class HgDataFile extends Revlog {
 
-	private final RevlogStream content; // XXX move up to Revlog?
-
 	// absolute from repo root?
 	// slashes, unix-style?
 	// repo location agnostic, just to give info to user, not to access real storage
 	private final String path;
 	
 	/*package-local*/HgDataFile(HgRepository hgRepo, String path, RevlogStream content) {
-		super(hgRepo);
+		super(hgRepo, content);
 		this.path = path;
-		this.content = content;
 	}
 	
 	public boolean exists() {
@@ -33,10 +30,6 @@ public class HgDataFile extends Revlog {
 
 	public String getPath() {
 		return path; // hgRepo.backresolve(this) -> name?
-	}
-
-	public int getRevisionCount() {
-		return content.revisionCount();
 	}
 
 	public byte[] content() {

@@ -9,11 +9,8 @@ package com.tmate.hgkit.ll;
  */
 public class HgManifest extends Revlog {
 
-	private final RevlogStream content;
-
 	/*package-local*/ HgManifest(HgRepository hgRepo, RevlogStream content) {
-		super(hgRepo);
-		this.content = content;
+		super(hgRepo, content);
 	}
 
 	public void walk(int start, int end, final Inspector inspector) {

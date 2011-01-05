@@ -47,25 +47,7 @@ public class LocalHgRepo extends HgRepository {
 	
 	@Override
 	public void status(int rev1, int rev2, final StatusInspector inspector) {
-		final HashMap<String, Nodeid> idsMap = new HashMap<String, Nodeid>();
-		final HashMap<String, String> flagsMap = new HashMap<String, String>();
-		HgManifest.Inspector collect = new HgManifest.Inspector() {
-			
-			
-			public boolean next(Nodeid nid, String fname, String flags) {
-				idsMap.put(fname, nid);
-				flagsMap.put(fname, flags);
-				return true;
-			}
-			
-			public boolean end(int revision) {
-				return false;
-			}
-			
-			public boolean begin(int revision, Nodeid nid) {
-				return true;
-			}
-		};
+		final ManifestRevisionCollector collect = new ManifestRevisionCollector();
 		getManifest().walk(rev1, rev1, collect);
 		
 		HgManifest.Inspector compare = new HgManifest.Inspector() {
@@ -75,8 +57,8 @@ public class LocalHgRepo extends HgRepository {
 			}
 
 			public boolean next(Nodeid nid, String fname, String flags) {
-				Nodeid nidR1 = idsMap.remove(fname);
-				String flagsR1 = flagsMap.remove(fname);
+				Nodeid nidR1 = collect.idsMap.remove(fname);
+				String flagsR1 = collect.flagsMap.remove(fname);
 				if (nidR1 == null) {
 					inspector.added(fname);
 				} else {
@@ -90,10 +72,10 @@ public class LocalHgRepo extends HgRepository {
 			}
 
 			public boolean end(int revision) {
-				for (String fname : idsMap.keySet()) {
+				for (String fname : collect.idsMap.keySet()) {
 					inspector.removed(fname);
 				}
-				if (idsMap.size() != flagsMap.size()) {
+				if (collect.idsMap.size() != collect.flagsMap.size()) {
 					throw new IllegalStateException();
 				}
 				return false;
@@ -102,13 +84,18 @@ public class LocalHgRepo extends HgRepository {
 		getManifest().walk(rev2, rev2, compare);
 	}
 	
-	public void statusLocal(int rev1, StatusInspector inspector) {
+	public void statusLocal(int baseRevision, StatusInspector inspector) {
 		LinkedList<File> folders = new LinkedList<File>();
 		final File rootDir = repoDir.getParentFile();
 		folders.add(rootDir);
 		final HgDirstate dirstate = loadDirstate();
 		final HgIgnore hgignore = loadIgnore();
 		TreeSet<String> knownEntries = dirstate.all();
+		final boolean isTipBase = baseRevision == TIP || baseRevision == getManifest().revisionCount();
+		final ManifestRevisionCollector collect = isTipBase ? null : new ManifestRevisionCollector();
+		if (!isTipBase) {
+			getManifest().walk(baseRevision, baseRevision, collect);
+		}
 		do {
 			File d = folders.removeFirst();
 			for (File f : d.listFiles()) {
@@ -335,5 +322,24 @@ public class LocalHgRepo extends HgRepository {
 			path = path.substring(1);
 		}
 		return path;
+	}
+
+	private final class ManifestRevisionCollector implements HgManifest.Inspector {
+		final HashMap<String, Nodeid> idsMap = new HashMap<String, Nodeid>();
+		final HashMap<String, String> flagsMap = new HashMap<String, String>();
+
+		public boolean next(Nodeid nid, String fname, String flags) {
+			idsMap.put(fname, nid);
+			flagsMap.put(fname, flags);
+			return true;
+		}
+
+		public boolean end(int revision) {
+			return false;
+		}
+
+		public boolean begin(int revision, Nodeid nid) {
+			return true;
+		}
 	}
 }

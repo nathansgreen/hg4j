@@ -10,16 +10,22 @@ package com.tmate.hgkit.ll;
 public abstract class Revlog {
 
 	private final HgRepository hgRepo;
+	protected final RevlogStream content;
 
-	protected Revlog(HgRepository hgRepo) {
+	protected Revlog(HgRepository hgRepo, RevlogStream content) {
 		if (hgRepo == null) {
 			throw new NullPointerException();
 		}
 		this.hgRepo = hgRepo;
+		this.content = content;
 	}
 
 	public final HgRepository getRepo() {
 		return hgRepo;
+	}
+
+	public int getRevisionCount() {
+		return content.revisionCount();
 	}
 
 	public interface Inspector {

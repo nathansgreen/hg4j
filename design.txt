@@ -29,6 +29,7 @@ What happens when big entry is added to a file - when it detects it can't longer
 *.hgignored processing
 
 DataAccess - collect debug info (buffer misses, file size/total read operations) to find out better strategy to buffer size detection.
+DataAccess - implement memory mapped files, compare performance.
 delta merge
 Changeset to get index (local revision number)
 RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or dirstate 
@@ -52,6 +53,6 @@ Scheduling multiple operations (in future, to deal with writes - single queue fo
 
 File access:
 * NIO and mapped files - should be fast. Although seems to give less control on mem usage. 
-* Regular InputStreams and  chunked stream on top - allocate List<byte[]>, each (but last) chunk of fixed size (depending on initial file size) 
+* Regular InputStreams and chunked stream on top - allocate List<byte[]>, each (but last) chunk of fixed size (depending on initial file size) 
 
 <<<<<

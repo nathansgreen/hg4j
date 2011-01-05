@@ -1,5 +1,5 @@
-/**
- * Copyright (c) 2010 Artem Tikhomirov
+/*
+ * Copyright (c) 2010, 2011 Artem Tikhomirov
  */
 package com.tmate.hgkit.ll;
 
@@ -13,11 +13,8 @@ import java.util.List;
  */
 public class Changelog extends Revlog {
 
-	private final RevlogStream content;
-
 	/*package-local*/ Changelog(HgRepository hgRepo, RevlogStream content) {
-		super(hgRepo);
-		this.content = content;
+		super(hgRepo, content);
 	}
 
 	public void all(final Changeset.Inspector inspector) {
