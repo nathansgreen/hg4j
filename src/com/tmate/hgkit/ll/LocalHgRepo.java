@@ -63,7 +63,7 @@ public class LocalHgRepo extends HgRepository {
 				if (nidR1 == null) {
 					inspector.added(fname);
 				} else {
-					if (nidR1.compareTo(nid) == 0 && ((flags == null && flagsR1 == null) || flags.equals(flagsR1))) {
+					if (nidR1.equals(nid) && ((flags == null && flagsR1 == null) || flags.equals(flagsR1))) {
 						inspector.clean(fname);
 					} else {
 						inspector.modified(fname);

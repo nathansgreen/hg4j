@@ -32,6 +32,7 @@ public abstract class Revlog {
 	// instantly - e.g. calculate hash, or comparing two revisions
 	public interface Inspector {
 		// XXX boolean retVal to indicate whether to continue?
-		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*32*/] nodeid, byte[] data);
+		// TODO specify nodeid and data length, and reuse policy (i.e. if revlog stream doesn't reuse nodeid[] for each call) 
+		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, byte[] data);
 	}
 }

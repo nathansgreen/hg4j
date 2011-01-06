@@ -78,13 +78,13 @@ public class RevlogStream {
 		final int indexSize = revisionCount();
 		DataAccess daIndex = getIndexStream();
 		try {
+			byte[] nodeidBuf = new byte[20];
 			for (int i = 0; i < indexSize; i++) {
 				daIndex.skip(8);
 				int compressedLen = daIndex.readInt();
 				daIndex.skip(20);
-				byte[] buf = new byte[20];
-				daIndex.readBytes(buf, 0, 20);
-				if (nodeid.equalsTo(buf)) {
+				daIndex.readBytes(nodeidBuf, 0, 20);
+				if (nodeid.equalsTo(nodeidBuf)) {
 					return i;
 				}
 				daIndex.skip(inline ? 12 + compressedLen : 12);
@@ -129,6 +129,7 @@ public class RevlogStream {
 			daData = getDataStream();
 		}
 		try {
+			byte[] nodeidBuf = new byte[20];
 			byte[] lastData = null;
 			int i;
 			boolean extraReadsToBaseRev = false;
@@ -150,9 +151,8 @@ public class RevlogStream {
 				int linkRevision = daIndex.readInt();
 				int parent1Revision = daIndex.readInt();
 				int parent2Revision = daIndex.readInt();
-				byte[] buf = new byte[32];
-				// XXX Hg keeps 12 last bytes empty, we move them into front here
-				daIndex.readBytes(buf, 12, 20);
+				// Hg has 32 bytes here, uses 20 for nodeid, and keeps 12 last bytes empty
+				daIndex.readBytes(nodeidBuf, 0, 20);
 				daIndex.skip(12);
 				byte[] data = null;
 				if (needData) {
@@ -207,7 +207,7 @@ public class RevlogStream {
 					}
 				}
 				if (!extraReadsToBaseRev || i >= start) {
-					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, buf, data);
+					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, data);
 				}
 				lastData = data;
 			}
