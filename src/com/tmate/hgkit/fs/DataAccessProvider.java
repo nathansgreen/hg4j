@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.fs;
 
@@ -110,6 +110,9 @@ public class DataAccessProvider {
 		
 		@Override
 		public void seek(long offset) throws IOException {
+			if (offset > size) {
+				throw new IllegalArgumentException();
+			}
 			if (offset < bufferStartInFile + buffer.limit() && offset >= bufferStartInFile) {
 				buffer.position((int) (offset - bufferStartInFile));
 			} else {
@@ -130,7 +133,7 @@ public class DataAccessProvider {
 				buffer.position(newPos);
 			} else {
 				//
-				seek(fileChannel.position()+ bytes);
+				seek(bufferStartInFile + newPos);
 			}
 		}
 
