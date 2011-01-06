@@ -25,22 +25,24 @@ public class Manifest {
 			return;
 		}
 		System.out.println(hgRepo.getLocation());
-		HgManifest.Inspector insp = new HgManifest.Inspector() {
-			public boolean begin(int revision, Nodeid nid) {
-				System.out.printf("%d : %s\n", revision, nid);
-				return true;
-			}
-
-			public boolean next(Nodeid nid, String fname, String flags) {
-				System.out.println(nid + "\t" + fname + "\t\t" + flags);
-				return true;
-			}
-
-			public boolean end(int revision) {
-				System.out.println();
-				return true;
-			}
-		};
+		HgManifest.Inspector insp = new Dump();
 		hgRepo.getManifest().walk(0, TIP, insp);
+	}
+
+	public static final class Dump implements HgManifest.Inspector {
+		public boolean begin(int revision, Nodeid nid) {
+			System.out.printf("%d : %s\n", revision, nid);
+			return true;
+		}
+
+		public boolean next(Nodeid nid, String fname, String flags) {
+			System.out.println(nid + "\t" + fname + "\t\t" + flags);
+			return true;
+		}
+
+		public boolean end(int revision) {
+			System.out.println();
+			return true;
+		}
 	}
 }

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) 2010 Artem Tikhomirov 
+/*
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -28,6 +28,8 @@ public abstract class Revlog {
 		return content.revisionCount();
 	}
 
+	// FIXME byte[] data might be too expensive, for few usecases it may be better to have intermediate Access object (when we don't need full data 
+	// instantly - e.g. calculate hash, or comparing two revisions
 	public interface Inspector {
 		// XXX boolean retVal to indicate whether to continue?
 		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*32*/] nodeid, byte[] data);

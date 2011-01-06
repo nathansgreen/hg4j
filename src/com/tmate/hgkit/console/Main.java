@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
+ */
 package com.tmate.hgkit.console;
 
 import java.io.BufferedInputStream;
@@ -18,12 +21,17 @@ import com.tmate.hgkit.ll.Changeset;
 public class Main {
 
 	public static void main(String[] args) throws Exception {
+//		String repo = "/temp/hg/hello/.hg/";
 //		String filename = "store/00changelog.i";
-		String filename = "store/data/hello.c.i";
+//		String filename = "store/data/hello.c.i";
 //		String filename = "store/data/docs/readme.i";
+		String repo = "/eclipse-3.7/ws.hg/com.tmate.hgkit/.hg/";
+//		String filename = "store/data/design.txt.i";
+		String filename = "store/data/src/com/tmate/hgkit/ll/_revlog_stream.java.i";
+		//
 		LinkedList<Changeset> changelog = new LinkedList<Changeset>();
 		//
-		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File("/temp/hg/hello/.hg/" + filename))));
+		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(repo + filename))));
 		DataInput di = dis;
 		dis.mark(10);
 		int versionField = di.readInt();

@@ -3,7 +3,6 @@
  */
 package com.tmate.hgkit.ll;
 
-import java.util.Arrays;
 
 
 /**
@@ -27,21 +26,25 @@ public final class Nodeid implements Comparable<Nodeid> {
 
 	// instead of hashCode/equals
 	public int compareTo(Nodeid o) {
-		byte[] a1, a2;
-		if (this.binaryData.length != 20) {
-			a1 = new byte[20];
-			System.arraycopy(binaryData, 0, a1, 20 - binaryData.length, binaryData.length);
-		} else {
-			a1 = this.binaryData;
+		return equals(this.binaryData, o.binaryData) ? 0 : -1;
+	}
+
+	public boolean equalsTo(byte[] buf) {
+		return equals(this.binaryData, buf);
+	}
+	
+	private static boolean equals(byte[] a1, byte[] a2) {
+		if (a1 == null || a1.length < 20 || a2 == null || a2.length < 20) {
+			throw new IllegalArgumentException();
 		}
-		
-		if (o.binaryData.length != 20) {
-			a2 = new byte[20];
-			System.arraycopy(o.binaryData, 0, a2, 20 - o.binaryData.length, o.binaryData.length);
-		} else {
-			a2 = o.binaryData;
+		// assume significant bits are at the end of the array
+		final int s1 = a1.length - 20, s2 = a2.length - 20;
+		for (int i = 0; i < 20; i++) {
+			if (a1[s1+i] != a2[s2+i]) {
+				return false;
+			}
 		}
-		return Arrays.equals(a1, a2) ? 0 : -1;
+		return true;
 	}
 
 	@Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -51,6 +51,53 @@ public class RevlogStream {
 		initOutline();
 		return index.size();
 	}
+	
+	public int dataLength(int revision) {
+		// XXX in fact, use of iterate() instead of this implementation may be quite reasonable.
+		//
+		final int indexSize = revisionCount();
+		DataAccess daIndex = getIndexStream(); // XXX may supply a hint that I'll need really few bytes of data (although at some offset)
+		if (revision == TIP) {
+			revision = indexSize - 1;
+		}
+		try {
+			int recordOffset = inline ? (int) index.get(revision).offset : revision * REVLOGV1_RECORD_SIZE;
+			daIndex.seek(recordOffset + 12); // 6+2+4
+			int actualLen = daIndex.readInt();
+			return actualLen; 
+		} catch (IOException ex) {
+			ex.printStackTrace(); // log error. FIXME better handling
+			throw new IllegalStateException(ex);
+		} finally {
+			daIndex.done();
+		}
+	}
+	
+	public int findLocalRevisionNumber(Nodeid nodeid) {
+		// XXX this one may be implemented with iterate() once there's mechanism to stop iterations
+		final int indexSize = revisionCount();
+		DataAccess daIndex = getIndexStream();
+		try {
+			for (int i = 0; i < indexSize; i++) {
+				daIndex.skip(8);
+				int compressedLen = daIndex.readInt();
+				daIndex.skip(20);
+				byte[] buf = new byte[20];
+				daIndex.readBytes(buf, 0, 20);
+				if (nodeid.equalsTo(buf)) {
+					return i;
+				}
+				daIndex.skip(inline ? 12 + compressedLen : 12);
+			}
+		} catch (IOException ex) {
+			ex.printStackTrace(); // log error. FIXME better handling
+			throw new IllegalStateException(ex);
+		} finally {
+			daIndex.done();
+		}
+		throw new IllegalArgumentException(String.format("%s doesn't represent a revision of %s", nodeid.toString(), indexFile.getName() /*XXX HgDataFile.getPath might be more suitable here*/));
+	}
+
 
 	private final int REVLOGV1_RECORD_SIZE = 64;
 
@@ -92,7 +139,7 @@ public class RevlogStream {
 				i = start;
 			}
 			
-			daIndex.seek(inline ? (int) index.get(i).offset : start * REVLOGV1_RECORD_SIZE);
+			daIndex.seek(inline ? (int) index.get(i).offset : i * REVLOGV1_RECORD_SIZE);
 			for (; i <= end; i++ ) {
 				long l = daIndex.readLong();
 				long offset = l >>> 16;
@@ -205,6 +252,7 @@ public class RevlogStream {
 				}
 				if (da.isEmpty()) {
 					// fine, done then
+					res.trimToSize();
 					index = res;
 					break;
 				} else {

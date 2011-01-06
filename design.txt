@@ -18,6 +18,8 @@ Implementation: logic to find file by name in the repository is the same with Lo
 Revlog
 What happens when big entry is added to a file - when it detects it can't longer fit into .i and needs .d? Inline flag and .i format changes?
 
+What's hg natural way to see nodeids of specific files (i.e. when I do 'hg --debug manifest -r 11' and see nodeid of some file, and 
+then would like to see what changeset this file came from)?
 
 ----------
 + support patch from baseRev + few deltas (although done in a way patches are applied one by one instead of accumulated)

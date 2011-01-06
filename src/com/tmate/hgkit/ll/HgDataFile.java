@@ -32,10 +32,23 @@ public class HgDataFile extends Revlog {
 		return path; // hgRepo.backresolve(this) -> name?
 	}
 
+	public int length(Nodeid nodeid) {
+		int revision = content.findLocalRevisionNumber(nodeid);
+		return content.dataLength(revision);
+	}
+
 	public byte[] content() {
 		return content(TIP);
 	}
+
+	public byte[] content(Nodeid nodeid) {
+		int revision = content.findLocalRevisionNumber(nodeid);
+		return content(revision);
+	}
 	
+	/**
+	 * @param revision - repo-local index of this file change (not a changelog revision number!)
+	 */
 	public byte[] content(int revision) {
 		final byte[][] dataPtr = new byte[1][];
 		Revlog.Inspector insp = new Revlog.Inspector() {
