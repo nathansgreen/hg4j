@@ -20,8 +20,12 @@ public class DataAccessProvider {
 	private final int bufferSize;
 
 	public DataAccessProvider() {
-		mapioMagicBoundary = 100 * 1024;
-		bufferSize = 8 * 1024;
+		this(100 * 1024, 8 * 1024);
+	}
+
+	public DataAccessProvider(int mapioBoundary, int regularBufferSize) {
+		mapioMagicBoundary = mapioBoundary;
+		bufferSize = regularBufferSize;
 	}
 
 	public DataAccess create(File f) {
