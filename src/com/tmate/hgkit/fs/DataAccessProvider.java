@@ -31,12 +31,14 @@ public class DataAccessProvider {
 		try {
 			FileChannel fc = new FileInputStream(f).getChannel();
 			if (fc.size() > mapioMagicBoundary) {
-				return new MemoryMapFileAccess(fc, fc.size());
+				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
+				return new MemoryMapFileAccess(fc, fc.size(), mapioMagicBoundary);
 			} else {
 				// XXX once implementation is more or less stable,
 				// may want to try ByteBuffer.allocateDirect() to see
 				// if there's any performance gain. 
 				boolean useDirectBuffer = false;
+				// TESTS: bufferSize of 100 was used to check buffer underflow states when readBytes reads chunks bigger than bufSize 
 				return new FileAccess(fc, fc.size(), bufferSize, useDirectBuffer);
 			}
 		} catch (IOException ex) {
@@ -50,33 +52,92 @@ public class DataAccessProvider {
 	private static class MemoryMapFileAccess extends DataAccess {
 		private FileChannel fileChannel;
 		private final long size;
-		private long position = 0;
+		private long position = 0; // always points to buffer's absolute position in the file
+		private final int memBufferSize;
+		private MappedByteBuffer buffer;
 
-		public MemoryMapFileAccess(FileChannel fc, long channelSize) {
+		public MemoryMapFileAccess(FileChannel fc, long channelSize, int /*long?*/ bufferSize) {
 			fileChannel = fc;
 			size = channelSize;
+			memBufferSize = bufferSize;
 		}
 
 		@Override
+		public boolean isEmpty() {
+			return position + (buffer == null ? 0 : buffer.position()) >= size;
+		}
+		
+		@Override
 		public void seek(long offset) {
-			position = offset;
+			assert offset >= 0;
+			// offset may not necessarily be further than current position in the file (e.g. rewind) 
+			if (buffer != null && /*offset is within buffer*/ offset >= position && (offset - position) < buffer.limit()) {
+				buffer.position((int) (offset - position));
+			} else {
+				position = offset;
+				buffer = null;
+			}
 		}
 
 		@Override
 		public void skip(int bytes) throws IOException {
-			position += bytes;
+			assert bytes >= 0;
+			if (buffer == null) {
+				position += bytes;
+				return;
+			}
+			if (buffer.remaining() > bytes) {
+				buffer.position(buffer.position() + bytes);
+			} else {
+				position += buffer.position() + bytes;
+				buffer = null;
+			}
 		}
 
-		private boolean fill() throws IOException {
-			final int BUFFER_SIZE = 8 * 1024;
+		private void fill() throws IOException {
+			if (buffer != null) {
+				position += buffer.position(); 
+			}
 			long left = size - position;
-			MappedByteBuffer rv = fileChannel.map(FileChannel.MapMode.READ_ONLY, position, left < BUFFER_SIZE ? left : BUFFER_SIZE);
-			position += rv.capacity();
-			return rv.hasRemaining();
+			buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, position, left < memBufferSize ? left : memBufferSize);
+		}
+
+		@Override
+		public void readBytes(byte[] buf, int offset, int length) throws IOException {
+			if (buffer == null || !buffer.hasRemaining()) {
+				fill();
+			}
+			// XXX in fact, we may try to create a MappedByteBuffer of exactly length size here, and read right away
+			while (length > 0) {
+				int tail = buffer.remaining();
+				if (tail == 0) {
+					throw new IOException();
+				}
+				if (tail >= length) {
+					buffer.get(buf, offset, length);
+				} else {
+					buffer.get(buf, offset, tail);
+					fill();
+				}
+				offset += tail;
+				length -= tail;
+			}
+		}
+
+		@Override
+		public byte readByte() throws IOException {
+			if (buffer == null || !buffer.hasRemaining()) {
+				fill();
+			}
+			if (buffer.hasRemaining()) {
+				return buffer.get();
+			}
+			throw new IOException();
 		}
 
 		@Override
 		public void done() {
+			buffer = null;
 			if (fileChannel != null) {
 				try {
 					fileChannel.close();
@@ -152,16 +213,22 @@ public class DataAccessProvider {
 
 		@Override
 		public void readBytes(byte[] buf, int offset, int length) throws IOException {
-			final int tail = buffer.remaining();
-			if (tail >= length) {
-				buffer.get(buf, offset, length);
-			} else {
-				buffer.get(buf, offset, tail);
-				if (fill()) {
-					buffer.get(buf, offset + tail, length - tail);
-				} else {
-					throw new IOException(); // shall not happen provided stream contains expected data and no attempts to read past nonEmpty() == false are made. 
+			if (!buffer.hasRemaining()) {
+				fill();
+			}
+			while (length > 0) {
+				int tail = buffer.remaining();
+				if (tail == 0) {
+					throw new IOException(); // shall not happen provided stream contains expected data and no attempts to read past isEmpty() == true are made.
 				}
+				if (tail >= length) {
+					buffer.get(buf, offset, length);
+				} else {
+					buffer.get(buf, offset, tail);
+					fill();
+				}
+				offset += tail;
+				length -= tail;
 			}
 		}
 
