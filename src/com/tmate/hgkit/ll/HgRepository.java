@@ -10,6 +10,7 @@ package com.tmate.hgkit.ll;
 public abstract class HgRepository {
 
 	public static final int TIP = -1;
+	// TODO NULLNODEID
 
 	// temp aux marker method
 	public static IllegalStateException notImplemented() {
