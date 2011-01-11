@@ -22,7 +22,7 @@ public class HgManifest extends Revlog {
 				if (!gtg) {
 					return;
 				}
-				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid.clone()));
+				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true));
 				int i;
 				String fname = null;
 				String flags = null;

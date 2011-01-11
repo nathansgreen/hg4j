@@ -21,15 +21,16 @@ public final class Nodeid {
 	private final byte[] binaryData; 
 
 	/**
-	 * @param binaryRepresentation - byte[20], kept by reference. Use {@link #clone()} if original array may get changed. 
+	 * @param binaryRepresentation - byte[20], kept by reference
+	 * @param shallClone - true if array is subject to future modification and shall be copied, not referenced 
 	 */
-	public Nodeid(byte[] binaryRepresentation) {
+	public Nodeid(byte[] binaryRepresentation, boolean shallClone) {
 		// 5 int fields => 32 bytes
 		// byte[20] => 48 bytes
 		if (binaryRepresentation == null || binaryRepresentation.length != 20) {
 			throw new IllegalArgumentException();
 		}
-		this.binaryData = binaryRepresentation;
+		this.binaryData = shallClone ? binaryRepresentation.clone() : binaryRepresentation;
 	}
 
 	@Override
@@ -66,6 +67,6 @@ public final class Nodeid {
 			int lowNibble = Character.digit(asciiRepresentation[j++], 16);
 			data[i] = (byte) (((hiNibble << 4) | lowNibble) & 0xFF);
 		}
-		return new Nodeid(data);
+		return new Nodeid(data, false);
 	}
 }
