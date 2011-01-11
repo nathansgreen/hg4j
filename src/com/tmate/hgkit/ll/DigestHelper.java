@@ -1,5 +1,5 @@
-/**
- * Copyright (c) 2010 Artem Tikhomirov 
+/*
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -51,7 +51,7 @@ public class DigestHelper {
 		return digest;
 	}
 
-	public String toHexString(byte[] data, final int offset, final int count) {
+	public static String toHexString(byte[] data, final int offset, final int count) {
 		char[] result = new char[count << 1];
 		final String hexDigits = "0123456789abcdef";
 		final int end = offset+count;

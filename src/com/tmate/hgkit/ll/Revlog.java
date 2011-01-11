@@ -97,6 +97,11 @@ public abstract class Revlog {
 		public Set<Nodeid> allNodes() {
 			return Collections.unmodifiableSet(allNodes);
 		}
+		
+		// FIXME need to decide whether Nodeid(00 * 20) is always known or not
+		public boolean knownNode(Nodeid nid) {
+			return allNodes.contains(nid);
+		}
 
 		// null if none
 		public Nodeid firstParent(Nodeid nid) {

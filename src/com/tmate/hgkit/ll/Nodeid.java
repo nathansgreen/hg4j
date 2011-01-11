@@ -3,6 +3,8 @@
  */
 package com.tmate.hgkit.ll;
 
+import static com.tmate.hgkit.ll.DigestHelper.toHexString;
+
 import java.util.Arrays;
 
 
@@ -17,7 +19,7 @@ import java.util.Arrays;
  */
 public final class Nodeid {
 	
-	public static int NULLREV = -1;
+	public static final Nodeid NULL = new Nodeid(new byte[20], false);
 	private final byte[] binaryData; 
 
 	/**
@@ -53,19 +55,29 @@ public final class Nodeid {
 	
 	@Override
 	public String toString() {
-		return new DigestHelper().toHexString(binaryData, 0, binaryData.length);
+		return toHexString(binaryData, 0, binaryData.length);
 	}
-	
+
+	public String shortNotation() {
+		return toHexString(binaryData, 0, 6);
+	}
+
 	// binascii.unhexlify()
 	public static Nodeid fromAscii(byte[] asciiRepresentation, int offset, int length) {
 		if (length != 40) {
 			throw new IllegalArgumentException();
 		}
 		byte[] data = new byte[20];
+		boolean zeroBytes = true;
 		for (int i = 0, j = offset; i < data.length; i++) {
 			int hiNibble = Character.digit(asciiRepresentation[j++], 16);
 			int lowNibble = Character.digit(asciiRepresentation[j++], 16);
-			data[i] = (byte) (((hiNibble << 4) | lowNibble) & 0xFF);
+			byte b = (byte) (((hiNibble << 4) | lowNibble) & 0xFF);
+			data[i] = b;
+			zeroBytes = zeroBytes && b == 0;
+		}
+		if (zeroBytes) {
+			return NULL;
 		}
 		return new Nodeid(data, false);
 	}
