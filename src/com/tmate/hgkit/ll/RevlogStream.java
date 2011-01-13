@@ -304,6 +304,7 @@ public class RevlogStream {
 		return rv;
 	}
 
+	// @see http://mercurial.selenic.com/wiki/BundleFormat, in Changelog group description
 	static class PatchRecord { // copy of struct frag from mpatch.c
 		int start, end, len;
 		byte[] data;
