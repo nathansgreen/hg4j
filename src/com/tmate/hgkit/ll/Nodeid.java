@@ -55,11 +55,43 @@ public final class Nodeid {
 	
 	@Override
 	public String toString() {
+		// XXX may want to output just single 0 for the NULL id?
 		return toHexString(binaryData, 0, binaryData.length);
 	}
 
 	public String shortNotation() {
 		return toHexString(binaryData, 0, 6);
+	}
+	
+	public boolean isNull() {
+		if (this == NULL) {
+			return true;
+		}
+		for (int i = 0; i < 20; i++) {
+			if (this.binaryData[i] != 0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// primary difference with cons is handling of NULL id (this method returns constant)
+	// always makes a copy of an array passed
+	public static Nodeid fromBinary(byte[] binaryRepresentation, int offset) {
+		if (binaryRepresentation == null || binaryRepresentation.length - offset < 20) {
+			throw new IllegalArgumentException();
+		}
+		int i = 0;
+		while (i < 20 && binaryRepresentation[offset+i] == 0) i++;
+		if (i == 20) {
+			return NULL;
+		}
+		if (offset == 0 && binaryRepresentation.length == 20) {
+			return new Nodeid(binaryRepresentation, true);
+		}
+		byte[] b = new byte[20]; // create new instance if no other reasonable guesses possible
+		System.arraycopy(binaryRepresentation, offset, b, 0, 20);
+		return new Nodeid(b, false);
 	}
 
 	// binascii.unhexlify()
