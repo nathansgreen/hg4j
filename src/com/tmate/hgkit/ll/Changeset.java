@@ -1,5 +1,5 @@
-/**
- * Copyright (c) 2010 Artem Tikhomirov 
+/*
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -24,7 +24,7 @@ import java.util.ArrayList;
  */
 public class Changeset {
 	// TODO immutable
-	private /*final*/ Nodeid nodeid;
+	private /*final*/ Nodeid manifest;
 	private String user;
 	private String comment;
 	private ArrayList<String> files;
@@ -33,7 +33,7 @@ public class Changeset {
 	public void dump() {
 		System.out.println("User:" + user);
 		System.out.println("Comment:" + comment);
-		System.out.println("Nodeid:" + nodeid);
+		System.out.println("Manifest:" + manifest);
 		System.out.println("Date:" + timezone);
 		System.out.println("Files: " + files.size());
 		for (String s : files) {
@@ -92,7 +92,7 @@ public class Changeset {
 			throw new IllegalStateException("Could hardly happen");
 		}
 		// change this instance at once, don't leave it partially changes in case of error
-		this.nodeid = _nodeid;
+		this.manifest = _nodeid;
 		this.user = _user;
 		this.timezone = _timezone;
 		this.files = _files;
