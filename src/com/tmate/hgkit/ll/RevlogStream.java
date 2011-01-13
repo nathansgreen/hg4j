@@ -165,7 +165,7 @@ public class RevlogStream {
 					}
 					if (dataBuf[0] == 0x78 /* 'x' */) {
 						try {
-							Inflater zlib = new Inflater();
+							Inflater zlib = new Inflater(); // XXX Consider reuse of Inflater, and/or stream alternative
 							zlib.setInput(dataBuf, 0, compressedLen);
 							byte[] result = new byte[actualLen*2]; // FIXME need to use zlib.finished() instead 
 							int resultLen = zlib.inflate(result);
