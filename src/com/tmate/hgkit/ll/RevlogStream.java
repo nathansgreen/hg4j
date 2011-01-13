@@ -190,12 +190,9 @@ public class RevlogStream {
 						LinkedList<PatchRecord> patches = new LinkedList<PatchRecord>();
 						int patchElementIndex = 0;
 						do {
-							final int x = patchElementIndex; // shorthand
-							int p1 =  ((data[x] & 0xFF)<< 24)    | ((data[x+1] & 0xFF) << 16) | ((data[x+2] & 0xFF) << 8)  | (data[x+3] & 0xFF);
-							int p2 =  ((data[x+4] & 0xFF) << 24) | ((data[x+5] & 0xFF) << 16) | ((data[x+6] & 0xFF) << 8)  | (data[x+7] & 0xFF);
-							int len = ((data[x+8] & 0xFF) << 24) | ((data[x+9] & 0xFF) << 16) | ((data[x+10] & 0xFF) << 8) | (data[x+11] & 0xFF);
-							patchElementIndex += 12 + len;
-							patches.add(new PatchRecord(p1, p2, len, data, x+12));
+							PatchRecord pr = PatchRecord.read(data, patchElementIndex);
+							patches.add(pr);
+							patchElementIndex += 12 + pr.len;
 						} while (patchElementIndex < data.length);
 						//
 						byte[] baseRevContent = lastData;
@@ -305,16 +302,37 @@ public class RevlogStream {
 	}
 
 	// @see http://mercurial.selenic.com/wiki/BundleFormat, in Changelog group description
-	static class PatchRecord { // copy of struct frag from mpatch.c
+	/*package-local*/ static class PatchRecord { // copy of struct frag from mpatch.c
 		int start, end, len;
 		byte[] data;
 
-		public PatchRecord(int p1, int p2, int len, byte[] src, int srcOffset) {
-		start = p1;
-				end = p2;
-				this.len = len;
-				data = new byte[len];
-				System.arraycopy(src, srcOffset, data, 0, len);
+		// TODO consider PatchRecord that only records data position (absolute in data source), and acquires data as needed 
+		private PatchRecord(int p1, int p2, int length, byte[] src) {
+			start = p1;
+			end = p2;
+			len = length;
+			data = src;
 		}
+
+		/*package-local*/ static PatchRecord read(byte[] data, int offset) {
+			final int x = offset; // shorthand
+			int p1 =  ((data[x] & 0xFF)<< 24)    | ((data[x+1] & 0xFF) << 16) | ((data[x+2] & 0xFF) << 8)  | (data[x+3] & 0xFF);
+			int p2 =  ((data[x+4] & 0xFF) << 24) | ((data[x+5] & 0xFF) << 16) | ((data[x+6] & 0xFF) << 8)  | (data[x+7] & 0xFF);
+			int len = ((data[x+8] & 0xFF) << 24) | ((data[x+9] & 0xFF) << 16) | ((data[x+10] & 0xFF) << 8) | (data[x+11] & 0xFF);
+			byte[] dataCopy = new byte[len];
+			System.arraycopy(data, x+12, dataCopy, 0, len);
+			return new PatchRecord(p1, p2, len, dataCopy);
+		}
+
+		/*package-local*/ static PatchRecord read(DataAccess da) throws IOException {
+			int p1 = da.readInt();
+			int p2 = da.readInt();
+			int len = da.readInt();
+			byte[] src = new byte[len];
+			da.readBytes(src, 0, len);
+			return new PatchRecord(p1, p2, len, src);
+		}
+		
+		
 	}
 }
