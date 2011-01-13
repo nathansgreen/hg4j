@@ -26,7 +26,29 @@ public class HgBundle {
 		bundleFile = bundle;
 	}
 
-	public void read() throws IOException {
+	public void changes(HgRepository hgRepo) throws IOException {
+		DataAccess da = accessProvider.create(bundleFile);
+		try {
+			List<GroupElement> changelogGroup = readGroup(da);
+			byte[] baseRevContent = null;
+			for (GroupElement ge : changelogGroup) {
+				if (baseRevContent == null) {
+					// first parent is base revision, see bundlerepo.py
+					// if not prev: prev = p1 in bundlerevlog cons
+					baseRevContent = hgRepo.getChangelog().content(ge.firstParent());
+				}
+				int resultLen = 10000; // XXX calculate based on baseRevContent.length and ge.patches
+				byte[] csetContent = RevlogStream.apply(baseRevContent, resultLen, ge.patches);
+				Changeset cs = Changeset.parse(csetContent, 0, csetContent.length);
+				cs.dump();
+				baseRevContent = csetContent;
+			}
+		} finally {
+			da.done();
+		}
+	}
+
+	public void dump() throws IOException {
 		DataAccess da = accessProvider.create(bundleFile);
 		try {
 			LinkedList<String> names = new LinkedList<String>();
@@ -34,12 +56,12 @@ public class HgBundle {
 				System.out.println("Changelog group");
 				List<GroupElement> changelogGroup = readGroup(da);
 				for (GroupElement ge : changelogGroup) {
-					System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cs(), ge.patches.size());
+					System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cset(), ge.patches.size());
 				}
 				System.out.println("Manifest group");
 				List<GroupElement> manifestGroup = readGroup(da);
 				for (GroupElement ge : manifestGroup) {
-					System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cs(), ge.patches.size());
+					System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cset(), ge.patches.size());
 				}
 				while (!da.isEmpty()) {
 					int fnameLen = da.readInt();
@@ -52,7 +74,7 @@ public class HgBundle {
 					List<GroupElement> fileGroup = readGroup(da);
 					System.out.println(names.getLast());
 					for (GroupElement ge : fileGroup) {
-						System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cs(), ge.patches.size());
+						System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cset(), ge.patches.size());
 					}
 				}
 			}
@@ -103,9 +125,8 @@ public class HgBundle {
 		public Nodeid secondParent() {
 			return Nodeid.fromBinary(header, 40);
 		}
-		public Nodeid cs() {
+		public Nodeid cset() { // cs seems to be changeset
 			return Nodeid.fromBinary(header, 60);
 		}
-
 	}
 }

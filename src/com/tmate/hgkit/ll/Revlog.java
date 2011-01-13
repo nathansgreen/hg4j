@@ -34,7 +34,30 @@ public abstract class Revlog {
 	public int getRevisionCount() {
 		return content.revisionCount();
 	}
+
+	/**
+	 * Access to revision data as is (decompressed, but otherwise unprocessed, i.e. not parsed for e.g. changeset or manifest entries) 
+	 * @param nodeid
+	 */
+	public byte[] content(Nodeid nodeid) {
+		int revision = content.findLocalRevisionNumber(nodeid);
+		return content(revision);
+	}
 	
+	/**
+	 * @param revision - repo-local index of this file change (not a changelog revision number!)
+	 */
+	public byte[] content(int revision) {
+		final byte[][] dataPtr = new byte[1][];
+		Revlog.Inspector insp = new Revlog.Inspector() {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+				dataPtr[0] = data;
+			}
+		};
+		content.iterate(revision, revision, true, insp);
+		return dataPtr[0];
+	}
+
 	// FIXME byte[] data might be too expensive, for few usecases it may be better to have intermediate Access object (when we don't need full data 
 	// instantly - e.g. calculate hash, or comparing two revisions
 	// XXX seems that RevlogStream is better place for this class. 

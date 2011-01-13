@@ -284,7 +284,8 @@ public class RevlogStream {
 
 	// mpatch.c : apply()
 	// FIXME need to implement patch merge (fold, combine, gather and discard from aforementioned mpatch.[c|py]), also see Revlog and Mercurial PDF
-	private static byte[] apply(byte[] baseRevisionContent, int outcomeLen, List<PatchRecord> patch) {
+	// FIXME why 2 arrays (rv and tempBuf)???. Think over in-place merging (perhaps some sparse byte chunk list?) - to minimize mem use.
+	/*package-local for HgBundle; until moved to better place*/static byte[] apply(byte[] baseRevisionContent, int outcomeLen, List<PatchRecord> patch) {
 		byte[] tempBuf = new byte[outcomeLen]; // XXX
 		int last = 0, destIndex = 0;
 		for (PatchRecord pr : patch) {

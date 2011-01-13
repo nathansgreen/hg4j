@@ -41,25 +41,6 @@ public class HgDataFile extends Revlog {
 		return content(TIP);
 	}
 
-	public byte[] content(Nodeid nodeid) {
-		int revision = content.findLocalRevisionNumber(nodeid);
-		return content(revision);
-	}
-	
-	/**
-	 * @param revision - repo-local index of this file change (not a changelog revision number!)
-	 */
-	public byte[] content(int revision) {
-		final byte[][] dataPtr = new byte[1][];
-		Revlog.Inspector insp = new Revlog.Inspector() {
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
-				dataPtr[0] = data;
-			}
-		};
-		content.iterate(revision, revision, true, insp);
-		return dataPtr[0];
-	}
-
 	public void history(Changeset.Inspector inspector) {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
