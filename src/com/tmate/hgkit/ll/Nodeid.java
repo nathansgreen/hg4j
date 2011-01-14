@@ -75,6 +75,12 @@ public final class Nodeid {
 		return true;
 	}
 
+	// primary purpose is to give DigestHelper access to internal structure. Despite it's friends-only (package visibility), it's still makes sense to 
+	// return a copy, to avoid any accidental modification (same reason field is not made visible, nor any callback, e.g. Output.write(byte[]) was introduced)
+	/*package-local*/byte[] cloneData() {
+		return binaryData.clone();
+	}
+
 	// primary difference with cons is handling of NULL id (this method returns constant)
 	// always makes a copy of an array passed
 	public static Nodeid fromBinary(byte[] binaryRepresentation, int offset) {

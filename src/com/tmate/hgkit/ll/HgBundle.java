@@ -28,6 +28,7 @@ public class HgBundle {
 
 	public void changes(HgRepository hgRepo) throws IOException {
 		DataAccess da = accessProvider.create(bundleFile);
+		DigestHelper dh = new DigestHelper();
 		try {
 			List<GroupElement> changelogGroup = readGroup(da);
 			if (changelogGroup.isEmpty()) {
@@ -46,6 +47,9 @@ public class HgBundle {
 			for (GroupElement ge : changelogGroup) {
 				int resultLen = 10000; // XXX calculate based on baseRevContent.length and ge.patches
 				byte[] csetContent = RevlogStream.apply(baseRevContent, resultLen, ge.patches);
+				// wiki suggests sha1_digest(min(p1,p2) ++ max(p1,p2) ++ final_text),
+				String digest = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
+				System.out.println("Node: " + ge.node() + ", digest: " + digest);
 				Changeset cs = Changeset.parse(csetContent, 0, csetContent.length);
 				cs.dump();
 				baseRevContent = csetContent;

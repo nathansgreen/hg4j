@@ -37,6 +37,9 @@ delta merge
 Changeset to get index (local revision number)
 RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or dirstate 
 RevlogStream - Inflater. Perhaps, InflaterStream instead?
+Implement use of fncache (use names from it - perhaps, would help for Mac issues Alex mentioned) along with 'digest'-ing long file names
+
+ 
  
 Status operation from GUI - guess, usually on a file/subfolder, hence API should allow for starting path (unlike cmdline, seems useless to implement include/exclide patterns - GUI users hardly enter them, ever)
 

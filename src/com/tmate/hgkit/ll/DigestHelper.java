@@ -9,6 +9,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
+ * TODO sha1_binary to give array for Nodeid.equalsTo 
  *
  * @author artem
  */
@@ -30,16 +31,27 @@ public class DigestHelper {
 		return sha1;
 	}
 
-	// XXX perhaps, digest functions should throw an exception, as it's caller responsibility to deal with eof, etc
+
+	public String sha1(Nodeid nodeid1, Nodeid nodeid2, byte[] data) {
+		return sha1(nodeid1.cloneData(), nodeid2.cloneData(), data);
+	}
+
+	//  sha1_digest(min(p1,p2) ++ max(p1,p2) ++ final_text)
 	public String sha1(byte[] nodeidParent1, byte[] nodeidParent2, byte[] data) {
 		MessageDigest alg = getSHA1();
-		alg.update(nodeidParent1);
-		alg.update(nodeidParent2);
+		if ((nodeidParent1[0] & 0x00FF) < (nodeidParent2[0] & 0x00FF)) { 
+			alg.update(nodeidParent1);
+			alg.update(nodeidParent2);
+		} else {
+			alg.update(nodeidParent2);
+			alg.update(nodeidParent1);
+		}
 		byte[] digest = alg.digest(data);
 		assert digest.length == 20;
 		return toHexString(digest, 0, 20);
 	}
 
+	// XXX perhaps, digest functions should throw an exception, as it's caller responsibility to deal with eof, etc
 	public byte[] sha1(InputStream is /*ByteBuffer*/) throws IOException {
 		MessageDigest alg = getSHA1();
 		byte[] buf = new byte[1024];
