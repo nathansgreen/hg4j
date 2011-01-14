@@ -5,8 +5,12 @@ package com.tmate.hgkit.ll;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.Formatter;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * @see mercurial/changelog.py:read()
@@ -24,28 +28,67 @@ import java.util.Locale;
  * </pre>
  * @author artem
  */
-public class Changeset {
+public class Changeset implements Cloneable /*for those that would like to keep a copy*/ {
 	// TODO immutable
 	private /*final*/ Nodeid manifest;
 	private String user;
 	private String comment;
-	private ArrayList<String> files;
+	private List<String> files; // unmodifiable collection (otherwise #files() and implicit #clone() shall be revised)
 	private Date time;
+	private int timezone; // not sure it's of any use
 	private String extras; // TODO branch, etc.
 	
-	public void dump() {
-		System.out.println("User: " + user);
-		System.out.println("Comment: " + comment);
-		System.out.println("Manifest: " + manifest);
-		System.out.printf(Locale.US, "Date: %ta %<tb %<td %<tH:%<tM:%<tS %<tY %<tz\n", time);
-		System.out.println("Files: " + files.size());
-		if (extras != null) {
-			System.out.println("Extra: " + extras);
-		}
+	private Changeset() {
+	}
+	
+	public Nodeid manifest() {
+		return manifest;
+	}
+	
+	public String user() {
+		return user;
+	}
+	
+	public String comment() {
+		return comment;
+	}
+	
+	public List<String> files() {
+		return files;
+	}
+
+	public Date date() {
+		return time;
+	}
+	
+	public String dateString() {
+		StringBuilder sb = new StringBuilder(30);
+		Formatter f = new Formatter(sb, Locale.US);
+		f.format("%ta %<tb %<td %<tH:%<tM:%<tS %<tY %<tz", time);
+		return sb.toString();
+	}
+
+	public Map<String, String> extras() {
+		return null; // TODO
+	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("Changeset {");
+		sb.append("User: ").append(user).append(", ");
+		sb.append("Comment: ").append(comment).append(", ");
+		sb.append("Manifest: ").append(manifest).append(", ");
+		sb.append("Date: ").append(time).append(", ");
+		sb.append("Files: ").append(files.size());
 		for (String s : files) {
-			System.out.print('\t');
-			System.out.println(s);
+			sb.append(", ").append(s);
 		}
+		if (extras != null) {
+			sb.append(", Extra: ").append(extras);
+		}
+		sb.append("}");
+		return sb.toString();
 	}
 
 	public static Changeset parse(byte[] data, int offset, int length) {
@@ -81,10 +124,10 @@ public class Changeset {
 			space2 = _timeString.length();
 		}
 		long unixTime = Long.parseLong(_timeString.substring(0, space1)); // XXX Float, perhaps
-		int timezone = Integer.parseInt(_timeString.substring(space1+1, space2));
+		int _timezone = Integer.parseInt(_timeString.substring(space1+1, space2));
 		// XXX not sure need to add timezone here - I can't figure out whether Hg keeps GMT time, and records timezone just for info, or unixTime is taken local
 		// on commit and timezone is recorded to adjust it to UTC.
-		Date _time = new Date((unixTime + timezone) * 1000);
+		Date _time = new Date(unixTime * 1000);
 		String _extras = space2 < _timeString.length() ? _timeString.substring(space2+1) : null;
 		
 		//
@@ -115,7 +158,8 @@ public class Changeset {
 		this.manifest = _nodeid;
 		this.user = _user;
 		this.time = _time;
-		this.files = _files;
+		this.timezone = _timezone;
+		this.files = Collections.unmodifiableList(_files);
 		this.comment = _comment;
 		this.extras = _extras;
 	}
@@ -132,6 +176,7 @@ public class Changeset {
 	public interface Inspector {
 		// first(), last(), single().
 		// <T>
-		void next(Changeset cset);
+		// TODO describe whether cset is new instance each time
+		void next(int revisionNumber, Nodeid nodeid, Changeset cset);
 	}
 }

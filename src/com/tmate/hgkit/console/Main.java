@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.math.BigInteger;
 import java.util.LinkedList;
+import java.util.Locale;
 import java.util.zip.Inflater;
 
 import com.tmate.hgkit.ll.Changeset;
@@ -81,7 +82,18 @@ public class Main {
 		System.out.println("====================>");
 		for (Changeset cset : changelog) {
 			System.out.println(">");
-			cset.dump();
+			System.out.println("User: " + cset.user());
+			System.out.println("Comment: " + cset.comment());
+			System.out.println("Manifest: " + cset.manifest());
+			System.out.printf(Locale.US, "Date: %ta %<tb %<td %<tH:%<tM:%<tS %<tY %<tz\n", cset.date());
+			System.out.println("Files: " + cset.files().size());
+			if (cset.extras() != null) {
+				System.out.println("Extra: " + cset.extras());
+			}
+			for (String s : cset.files()) {
+				System.out.print('\t');
+					System.out.println(s);
+			}
 			System.out.println("<");
 		}
 	}

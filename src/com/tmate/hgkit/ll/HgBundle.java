@@ -51,7 +51,7 @@ public class HgBundle {
 					throw new IllegalStateException("Integrity check failed on " + bundleFile + ", node:" + ge.node());
 				}
 				Changeset cs = Changeset.parse(csetContent, 0, csetContent.length);
-				cs.dump();
+				System.out.println(cs.toString());
 				baseRevContent = csetContent;
 			}
 		} finally {

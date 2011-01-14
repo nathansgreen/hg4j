@@ -1,12 +1,17 @@
-/**
- * Copyright (c) 2010 Artem Tikhomirov 
+/*
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.console;
+
+import java.util.Formatter;
+import java.util.LinkedList;
+import java.util.List;
 
 import com.tmate.hgkit.fs.RepositoryLookup;
 import com.tmate.hgkit.ll.Changeset;
 import com.tmate.hgkit.ll.HgDataFile;
 import com.tmate.hgkit.ll.HgRepository;
+import com.tmate.hgkit.ll.Nodeid;
 
 /**
  * @author artem
@@ -22,21 +27,19 @@ public class Log {
 			return;
 		}
 		System.out.println(hgRepo.getLocation());
-		final Changeset.Inspector callback = new Changeset.Inspector() {
-			
-			public void next(Changeset cset) {
-				System.out.println("==>");
-				cset.dump();
-			}
-		};
+		final Dump dump = new Dump(hgRepo);
+		dump.complete = false; //cmdLineOpts;
+		dump.reverseOrder = true;
 		if (cmdLineOpts.files.isEmpty()) {
-			System.out.println("Complete history of the repo:");
-			hgRepo.getChangelog().all(callback);
+			// no revisions and no limit
+			hgRepo.getChangelog().all(dump);
+			dump.complete();
 		} else {
 			for (String fname : cmdLineOpts.files) {
 				HgDataFile f1 = hgRepo.getFileNode(fname);
 				System.out.println("History of the file: " + f1.getPath());
-				f1.history(callback);
+				f1.history(dump);
+				dump.complete();
 			}
 		}
 		//
@@ -45,5 +48,62 @@ public class Log {
 //		f1.history(1,3, callback);
 		//
 		//new ChangelogWalker().setFile("hello.c").setRevisionRange(1, 4).accept(new Visitor);
+	}
+
+	private static final class Dump implements Changeset.Inspector {
+		// params
+		boolean complete = false;
+		boolean reverseOrder = false;
+		// own
+		private LinkedList<String> l = new LinkedList<String>();
+		private final HgRepository repo;
+
+		public Dump(HgRepository hgRepo) {
+			this.repo = hgRepo;
+		}
+
+		public void next(int revisionNumber, Nodeid nodeid, Changeset cset) {
+			final String s = print(revisionNumber, nodeid, cset);
+			if (reverseOrder) {
+				l.addFirst(s);
+			} else {
+				System.out.print(s);
+			}
+		}
+		
+		public void complete() {
+			if (!reverseOrder) {
+				return;
+			}
+			for (String s : l) {
+				System.out.print(s);
+			}
+			l.clear();
+		}
+
+		private String print(int revNumber, Nodeid csetNodeid, Changeset cset) {
+			StringBuilder sb = new StringBuilder();
+			Formatter f = new Formatter(sb);
+			f.format("changeset:   %d:%s\n", revNumber, complete ? csetNodeid : csetNodeid.shortNotation());
+			if (complete) {
+				f.format("parent:        %s\nparent:        %s\nmanifest:     %s", "-1", "-1", cset.manifest());
+			}
+			f.format("user:        %s\ndate:        %s\n", cset.user(), cset.dateString());
+			if (complete) {
+				final List<String> files = cset.files();
+				sb.append("files:    ");
+				for (String s : files) {
+					sb.append(' ');
+					sb.append(s);
+				}
+				f.format("description:\n%s\n\n", cset.comment());
+			} else {
+				f.format("summary:     %s\n\n", cset.comment());
+			}
+			if (cset.extras() != null) {
+				f.format("extra:    " + cset.extras()); // TODO
+			}
+			return sb.toString();
+		}
 	}
 }

@@ -23,7 +23,7 @@ public class Changelog extends Revlog {
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
 				Changeset cset = Changeset.parse(data, 0, data.length);
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
-				inspector.next(cset);
+				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 			}
 		};
 		content.iterate(0, content.revisionCount() - 1, true, i);
@@ -51,7 +51,7 @@ public class Changelog extends Revlog {
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
 				if (Arrays.binarySearch(revisions, revisionNumber) >= 0) {
 					Changeset cset = Changeset.parse(data, 0, data.length);
-					inspector.next(cset);
+					inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 				}
 			}
 		};
