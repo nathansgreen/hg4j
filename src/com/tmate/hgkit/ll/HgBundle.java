@@ -45,8 +45,7 @@ public class HgBundle {
 			// (the previous, or parent patch of a given patch p is the patch that has a node equal to p's p1 field)
 			byte[] baseRevContent = hgRepo.getChangelog().content(base);
 			for (GroupElement ge : changelogGroup) {
-				int resultLen = 10000; // XXX calculate based on baseRevContent.length and ge.patches
-				byte[] csetContent = RevlogStream.apply(baseRevContent, resultLen, ge.patches);
+				byte[] csetContent = RevlogStream.apply(baseRevContent, -1, ge.patches);
 				// wiki suggests sha1_digest(min(p1,p2) ++ max(p1,p2) ++ final_text),
 				dh = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
 				if (!ge.node().equalsTo(dh.asBinary())) {

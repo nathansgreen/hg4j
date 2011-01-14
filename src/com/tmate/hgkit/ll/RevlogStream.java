@@ -286,19 +286,25 @@ public class RevlogStream {
 	// FIXME need to implement patch merge (fold, combine, gather and discard from aforementioned mpatch.[c|py]), also see Revlog and Mercurial PDF
 	// FIXME why 2 arrays (rv and tempBuf)???. Think over in-place merging (perhaps some sparse byte chunk list?) - to minimize mem use.
 	/*package-local for HgBundle; until moved to better place*/static byte[] apply(byte[] baseRevisionContent, int outcomeLen, List<PatchRecord> patch) {
-		byte[] tempBuf = new byte[outcomeLen]; // XXX
 		int last = 0, destIndex = 0;
+		if (outcomeLen == -1) {
+			outcomeLen = baseRevisionContent.length;
+			for (PatchRecord pr : patch) {
+				outcomeLen += pr.start - last + pr.len;
+				last = pr.end;
+			}
+			outcomeLen -= last;
+			last = 0;
+		}
+		byte[] rv = new byte[outcomeLen];
 		for (PatchRecord pr : patch) {
-			System.arraycopy(baseRevisionContent, last, tempBuf, destIndex, pr.start-last);
+			System.arraycopy(baseRevisionContent, last, rv, destIndex, pr.start-last);
 			destIndex += pr.start - last;
-			System.arraycopy(pr.data, 0, tempBuf, destIndex, pr.data.length);
+			System.arraycopy(pr.data, 0, rv, destIndex, pr.data.length);
 			destIndex += pr.data.length;
 			last = pr.end;
 		}
-		System.arraycopy(baseRevisionContent, last, tempBuf, destIndex, baseRevisionContent.length - last);
-		destIndex += baseRevisionContent.length - last; // total length
-		byte[] rv = new byte[destIndex];
-		System.arraycopy(tempBuf, 0, rv, 0, destIndex);
+		System.arraycopy(baseRevisionContent, last, rv, destIndex, baseRevisionContent.length - last);
 		return rv;
 	}
 

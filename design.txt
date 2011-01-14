@@ -27,7 +27,7 @@ then would like to see what changeset this file came from)?
 +buildfile + run samples
 *input stream impl + lifecycle. Step forward with FileChannel and ByteBuffer, although questionable accomplishment (looks bit complicated, cumbersome)
 + dirstate.mtime
-+calculate sha1 digest for file to see I can deal with nodeid
++calculate sha1 digest for file to see I can deal with nodeid. +Do this correctly (smaller nodeid - first)
 *.hgignored processing
 +Nodeid to keep 20 bytes always, Revlog.Inspector to get nodeid array of meaningful data exact size (nor heading 00 bytes, nor 12 extra bytes from the spec)
 +DataAccess - implement memory mapped files, 
