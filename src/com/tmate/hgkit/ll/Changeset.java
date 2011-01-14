@@ -5,6 +5,8 @@ package com.tmate.hgkit.ll;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
 
 /**
  * @see mercurial/changelog.py:read()
@@ -28,14 +30,18 @@ public class Changeset {
 	private String user;
 	private String comment;
 	private ArrayList<String> files;
-	private String timezone; // FIXME
+	private Date time;
+	private String extras; // TODO branch, etc.
 	
 	public void dump() {
-		System.out.println("User:" + user);
-		System.out.println("Comment:" + comment);
-		System.out.println("Manifest:" + manifest);
-		System.out.println("Date:" + timezone);
+		System.out.println("User: " + user);
+		System.out.println("Comment: " + comment);
+		System.out.println("Manifest: " + manifest);
+		System.out.printf(Locale.US, "Date: %ta %<tb %<td %<tH:%<tM:%<tS %<tY %<tz\n", time);
 		System.out.println("Files: " + files.size());
+		if (extras != null) {
+			System.out.println("Extra: " + extras);
+		}
 		for (String s : files) {
 			System.out.print('\t');
 			System.out.println(s);
@@ -65,7 +71,21 @@ public class Changeset {
 		if (breakIndex3 == -1) {
 			throw new IllegalArgumentException("Bad Changeset data");
 		}
-		String _timezone = new String(data, breakIndex2+1, breakIndex3 - breakIndex2 - 1);
+		String _timeString = new String(data, breakIndex2+1, breakIndex3 - breakIndex2 - 1);
+		int space1 = _timeString.indexOf(' ');
+		if (space1 == -1) {
+			throw new IllegalArgumentException("Bad Changeset data");
+		}
+		int space2 = _timeString.indexOf(' ', space1+1);
+		if (space2 == -1) {
+			space2 = _timeString.length();
+		}
+		long unixTime = Long.parseLong(_timeString.substring(0, space1)); // XXX Float, perhaps
+		int timezone = Integer.parseInt(_timeString.substring(space1+1, space2));
+		// XXX not sure need to add timezone here - I can't figure out whether Hg keeps GMT time, and records timezone just for info, or unixTime is taken local
+		// on commit and timezone is recorded to adjust it to UTC.
+		Date _time = new Date((unixTime + timezone) * 1000);
+		String _extras = space2 < _timeString.length() ? _timeString.substring(space2+1) : null;
 		
 		//
 		int lastStart = breakIndex3 + 1;
@@ -94,9 +114,10 @@ public class Changeset {
 		// change this instance at once, don't leave it partially changes in case of error
 		this.manifest = _nodeid;
 		this.user = _user;
-		this.timezone = _timezone;
+		this.time = _time;
 		this.files = _files;
 		this.comment = _comment;
+		this.extras = _extras;
 	}
 
 	private static int indexOf(byte[] src, byte what, int startOffset, int endIndex) {
