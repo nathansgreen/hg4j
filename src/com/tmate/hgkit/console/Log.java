@@ -32,13 +32,31 @@ public class Log {
 		dump.reverseOrder = true;
 		if (cmdLineOpts.files.isEmpty()) {
 			// no revisions and no limit
-			hgRepo.getChangelog().all(dump);
+			if (cmdLineOpts.limit == -1) {
+				hgRepo.getChangelog().all(dump);
+			} else {
+				int[] r = new int[] { 0, hgRepo.getChangelog().getRevisionCount() };
+				if (fixRange(r, dump.reverseOrder, cmdLineOpts.limit) == 0) {
+					System.out.println("No changes");
+					return;
+				}
+				hgRepo.getChangelog().range(r[0], r[1], dump);
+			}
 			dump.complete();
 		} else {
 			for (String fname : cmdLineOpts.files) {
 				HgDataFile f1 = hgRepo.getFileNode(fname);
 				System.out.println("History of the file: " + f1.getPath());
-				f1.history(dump);
+				if (cmdLineOpts.limit == -1) {
+					f1.history(dump);
+				} else {
+					int[] r = new int[] { 0, f1.getRevisionCount() };
+					if (fixRange(r, dump.reverseOrder, cmdLineOpts.limit) == 0) {
+						System.out.println("No changes");
+						continue;
+					}
+					f1.history(r[0], r[1], dump);
+				}
 				dump.complete();
 			}
 		}
@@ -48,6 +66,21 @@ public class Log {
 //		f1.history(1,3, callback);
 		//
 		//new ChangelogWalker().setFile("hello.c").setRevisionRange(1, 4).accept(new Visitor);
+	}
+	
+	private static int fixRange(int[] start_end, boolean reverse, int limit) {
+		assert start_end.length == 2;
+		if (limit < start_end[1]) {
+			if (reverse) {
+				// adjust left boundary of the range
+				start_end[0] = start_end[1] - limit;
+			} else {
+				start_end[1] = limit; // adjust right boundary
+			}
+		}
+		int rv = start_end[1] - start_end[0];
+		start_end[1]--; // range needs index, not length
+		return rv;
 	}
 
 	private static final class Dump implements Changeset.Inspector {
@@ -86,17 +119,17 @@ public class Log {
 			Formatter f = new Formatter(sb);
 			f.format("changeset:   %d:%s\n", revNumber, complete ? csetNodeid : csetNodeid.shortNotation());
 			if (complete) {
-				f.format("parent:        %s\nparent:        %s\nmanifest:     %s", "-1", "-1", cset.manifest());
+				f.format("parent:      %s\nparent:      %s\nmanifest:    %s\n", "-1", "-1", cset.manifest());
 			}
 			f.format("user:        %s\ndate:        %s\n", cset.user(), cset.dateString());
 			if (complete) {
 				final List<String> files = cset.files();
-				sb.append("files:    ");
+				sb.append("files:      ");
 				for (String s : files) {
 					sb.append(' ');
 					sb.append(s);
 				}
-				f.format("description:\n%s\n\n", cset.comment());
+				f.format("\ndescription:\n%s\n\n", cset.comment());
 			} else {
 				f.format("summary:     %s\n\n", cset.comment());
 			}

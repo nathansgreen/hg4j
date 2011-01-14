@@ -18,6 +18,10 @@ public class Changelog extends Revlog {
 	}
 
 	public void all(final Changeset.Inspector inspector) {
+		range(0, content.revisionCount() - 1, inspector);
+	}
+
+	public void range(int start, int end, final Changeset.Inspector inspector) {
 		Revlog.Inspector i = new Revlog.Inspector() {
 			
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
@@ -26,7 +30,7 @@ public class Changelog extends Revlog {
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 			}
 		};
-		content.iterate(0, content.revisionCount() - 1, true, i);
+		content.iterate(start, end, true, i);
 	}
 
 	public List<Changeset> range(int start, int end) {

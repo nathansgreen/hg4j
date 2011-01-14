@@ -56,6 +56,7 @@ public class RepositoryLookup {
 	
 		public String repoLocation;
 		public List<String> files;
+		public int limit = -1;
 
 		public static Options parse(String[] commandLineArgs) {
 			Options rv = new Options();
@@ -74,6 +75,13 @@ public class RepositoryLookup {
 								throw new IllegalArgumentException("Need repo location");
 							}
 							rv.repoLocation = it.next();
+							break;
+						}
+						case (int) 'l' : {
+							if (!it.hasNext()) {
+								throw new IllegalArgumentException();
+							}
+							rv.limit = Integer.parseInt(it.next());
 							break;
 						}
 					}

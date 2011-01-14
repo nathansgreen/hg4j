@@ -42,10 +42,14 @@ public class HgDataFile extends Revlog {
 	}
 
 	public void history(Changeset.Inspector inspector) {
+		history(0, content.revisionCount() - 1, inspector);
+	}
+
+	public void history(int start, int end, Changeset.Inspector inspector) {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
 		}
-		final int[] commitRevisions = new int[content.revisionCount()];
+		final int[] commitRevisions = new int[end - start + 1];
 		Revlog.Inspector insp = new Revlog.Inspector() {
 			int count = 0;
 			
@@ -53,12 +57,8 @@ public class HgDataFile extends Revlog {
 				commitRevisions[count++] = linkRevision;
 			}
 		};
-		content.iterate(0, -1, false, insp);
+		content.iterate(start, end, false, insp);
 		getRepo().getChangelog().range(inspector, commitRevisions);
-	}
-
-	public void history(int start, int end, Changeset.Inspector i) {
-		throw HgRepository.notImplemented();
 	}
 
 	/**
