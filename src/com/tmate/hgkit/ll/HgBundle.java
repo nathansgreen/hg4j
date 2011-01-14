@@ -46,7 +46,6 @@ public class HgBundle {
 			byte[] baseRevContent = hgRepo.getChangelog().content(base);
 			for (GroupElement ge : changelogGroup) {
 				byte[] csetContent = RevlogStream.apply(baseRevContent, -1, ge.patches);
-				// wiki suggests sha1_digest(min(p1,p2) ++ max(p1,p2) ++ final_text),
 				dh = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
 				if (!ge.node().equalsTo(dh.asBinary())) {
 					throw new IllegalStateException("Integrity check failed on " + bundleFile + ", node:" + ge.node());
