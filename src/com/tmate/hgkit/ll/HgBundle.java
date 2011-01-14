@@ -48,8 +48,10 @@ public class HgBundle {
 				int resultLen = 10000; // XXX calculate based on baseRevContent.length and ge.patches
 				byte[] csetContent = RevlogStream.apply(baseRevContent, resultLen, ge.patches);
 				// wiki suggests sha1_digest(min(p1,p2) ++ max(p1,p2) ++ final_text),
-				String digest = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
-				System.out.println("Node: " + ge.node() + ", digest: " + digest);
+				dh = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
+				if (!ge.node().equalsTo(dh.asBinary())) {
+					throw new IllegalStateException("Integrity check failed on " + bundleFile + ", node:" + ge.node());
+				}
 				Changeset cs = Changeset.parse(csetContent, 0, csetContent.length);
 				cs.dump();
 				baseRevContent = csetContent;

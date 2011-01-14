@@ -43,7 +43,7 @@ public class Cat {
 					byte[] parent1 = new byte[20];
 					byte[] parent2 = new byte[20];
 					fn.parents(i, parentRevisions, parent1, parent2);
-					System.out.println(dh.sha1(parent1, parent2, content));
+					System.out.println(dh.sha1(parent1, parent2, content).asHexString());
 				}
 			} else {
 				System.out.println(">>>Not found!");

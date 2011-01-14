@@ -9,12 +9,18 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * TODO sha1_binary to give array for Nodeid.equalsTo 
- *
+ * <pre>
+ * DigestHelper dh;
+ * dh.sha1(...).asHexString();
+ *  or 
+ * dh = dh.sha1(...);
+ * nodeid.equalsTo(dh.asBinary());
+ * </pre>
  * @author artem
  */
 public class DigestHelper {
 	private MessageDigest sha1;
+	private byte[] digest;
 
 	public DigestHelper() {
 	}
@@ -32,12 +38,12 @@ public class DigestHelper {
 	}
 
 
-	public String sha1(Nodeid nodeid1, Nodeid nodeid2, byte[] data) {
+	public DigestHelper sha1(Nodeid nodeid1, Nodeid nodeid2, byte[] data) {
 		return sha1(nodeid1.cloneData(), nodeid2.cloneData(), data);
 	}
 
 	//  sha1_digest(min(p1,p2) ++ max(p1,p2) ++ final_text)
-	public String sha1(byte[] nodeidParent1, byte[] nodeidParent2, byte[] data) {
+	public DigestHelper sha1(byte[] nodeidParent1, byte[] nodeidParent2, byte[] data) {
 		MessageDigest alg = getSHA1();
 		if ((nodeidParent1[0] & 0x00FF) < (nodeidParent2[0] & 0x00FF)) { 
 			alg.update(nodeidParent1);
@@ -46,21 +52,36 @@ public class DigestHelper {
 			alg.update(nodeidParent2);
 			alg.update(nodeidParent1);
 		}
-		byte[] digest = alg.digest(data);
+		digest = alg.digest(data);
 		assert digest.length == 20;
-		return toHexString(digest, 0, 20);
+		return this;
+	}
+	
+	public String asHexString() {
+		if (digest == null) {
+			throw new IllegalStateException("Shall init with sha1() call first");
+		}
+		return toHexString(digest, 0, digest.length);
+	}
+	
+	// by reference, be careful not to modify (or #clone() if needed)
+	public byte[] asBinary() {
+		if (digest == null) {
+			throw new IllegalStateException("Shall init with sha1() call first");
+		}
+		return digest; 
 	}
 
 	// XXX perhaps, digest functions should throw an exception, as it's caller responsibility to deal with eof, etc
-	public byte[] sha1(InputStream is /*ByteBuffer*/) throws IOException {
+	public DigestHelper sha1(InputStream is /*ByteBuffer*/) throws IOException {
 		MessageDigest alg = getSHA1();
 		byte[] buf = new byte[1024];
 		int c;
 		while ((c = is.read(buf)) != -1) {
 			alg.update(buf, 0, c);
 		}
-		byte[] digest = alg.digest();
-		return digest;
+		digest = alg.digest();
+		return this;
 	}
 
 	public static String toHexString(byte[] data, final int offset, final int count) {
