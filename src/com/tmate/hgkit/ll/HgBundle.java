@@ -30,13 +30,20 @@ public class HgBundle {
 		DataAccess da = accessProvider.create(bundleFile);
 		try {
 			List<GroupElement> changelogGroup = readGroup(da);
-			byte[] baseRevContent = null;
+			if (changelogGroup.isEmpty()) {
+				throw new IllegalStateException("No changelog group in the bundle"); // XXX perhaps, just be silent and/or log?
+			}
+			// XXX in fact, bundle not necessarily starts with the first revision missing in hgRepo
+			// need to 'scroll' till the last one common.
+			final Nodeid base = changelogGroup.get(0).firstParent();
+			if (!hgRepo.getChangelog().isKnown(base)) {
+				throw new IllegalArgumentException("unknown parent");
+			}
+			// BundleFormat wiki says:
+			// Each Changelog entry patches the result of all previous patches 
+			// (the previous, or parent patch of a given patch p is the patch that has a node equal to p's p1 field)
+			byte[] baseRevContent = hgRepo.getChangelog().content(base);
 			for (GroupElement ge : changelogGroup) {
-				if (baseRevContent == null) {
-					// first parent is base revision, see bundlerepo.py
-					// if not prev: prev = p1 in bundlerevlog cons
-					baseRevContent = hgRepo.getChangelog().content(ge.firstParent());
-				}
 				int resultLen = 10000; // XXX calculate based on baseRevContent.length and ge.patches
 				byte[] csetContent = RevlogStream.apply(baseRevContent, resultLen, ge.patches);
 				Changeset cs = Changeset.parse(csetContent, 0, csetContent.length);

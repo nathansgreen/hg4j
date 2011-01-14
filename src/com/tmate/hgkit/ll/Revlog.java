@@ -35,6 +35,16 @@ public abstract class Revlog {
 		return content.revisionCount();
 	}
 
+	// Till now, i follow approach that NULL nodeid is never part of revlog
+	public boolean isKnown(Nodeid nodeid) {
+		try {
+			int revision = content.findLocalRevisionNumber(nodeid);
+			return revision >= 0 && revision < getRevisionCount();
+		} catch (IllegalArgumentException ex) {
+			// FIXME bad way to figure out if nodeid is from this revlog
+			return false;
+		}
+	}
 	/**
 	 * Access to revision data as is (decompressed, but otherwise unprocessed, i.e. not parsed for e.g. changeset or manifest entries) 
 	 * @param nodeid
