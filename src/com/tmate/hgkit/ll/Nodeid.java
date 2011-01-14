@@ -37,8 +37,9 @@ public final class Nodeid {
 
 	@Override
 	public int hashCode() {
-		// TODO consider own impl, especially if byte[] get replaced with 5 ints
-		return Arrays.hashCode(binaryData);
+		// digest (part thereof) seems to be nice candidate for the hashCode
+		byte[] b = binaryData;
+		return b[0] << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
 	}
 	
 	@Override
