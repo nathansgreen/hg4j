@@ -250,6 +250,11 @@ public class LocalHgRepo extends HgRepository {
 		return repoDir;
 	}
 
+	@Override
+	protected HgTags createTags() {
+		return new HgTags();
+	}
+
 	private final HashMap<String, SoftReference<RevlogStream>> streamsCache = new HashMap<String, SoftReference<RevlogStream>>();
 
 	/**

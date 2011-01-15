@@ -151,8 +151,17 @@ public class Log {
 			StringBuilder sb = new StringBuilder();
 			Formatter f = new Formatter(sb);
 			f.format("changeset:   %d:%s\n", revNumber, complete ? csetNodeid : csetNodeid.shortNotation());
-			if (revNumber == tip) {
-				sb.append("tag:        tip\n");
+			if (revNumber == tip || repo.getTags().isTagged(csetNodeid)) {
+				
+				sb.append("tag:         ");
+				for (String t : repo.getTags().tags(csetNodeid)) {
+					sb.append(t);
+					sb.append(' ');
+				}
+				if (revNumber == tip) {
+					sb.append("tip");
+				}
+				sb.append('\n');
 			}
 			if (complete) {
 				if (changelogWalker == null) {

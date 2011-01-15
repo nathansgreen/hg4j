@@ -16,9 +16,9 @@ public abstract class HgRepository {
 		return new IllegalStateException("Not implemented");
 	}
 
-	
 	private Changelog changelog;
 	private HgManifest manifest;
+	private HgTags tags;
 
 	private boolean isInvalid = true;
 	
@@ -46,6 +46,15 @@ public abstract class HgRepository {
 		}
 		return this.manifest;
 	}
+	
+	public final HgTags getTags() {
+		if (tags == null) {
+			tags = createTags();
+		}
+		return tags;
+	}
+	
+	protected abstract HgTags createTags();
 
 	public abstract HgDataFile getFileNode(String path);
 
