@@ -73,7 +73,12 @@ public class RevlogStream {
 		}
 	}
 	
-	public int findLocalRevisionNumber(Nodeid nodeid) {
+	// Perhaps, RevlogStream should be limited to use of plain int revisions for access,
+	// while Nodeids should be kept on the level up, in Revlog. Guess, Revlog better keep
+	// map of nodeids, and once this comes true, we may get rid of this method.
+	// Unlike its counterpart, Revlog#getLocalRevisionNumber, doesn't fail with exception if node not found,
+	// returns a predefined constant instead
+	/*package-local*/ int findLocalRevisionNumber(Nodeid nodeid) {
 		// XXX this one may be implemented with iterate() once there's mechanism to stop iterations
 		final int indexSize = revisionCount();
 		DataAccess daIndex = getIndexStream();
@@ -95,7 +100,7 @@ public class RevlogStream {
 		} finally {
 			daIndex.done();
 		}
-		throw new IllegalArgumentException(String.format("%s doesn't represent a revision of %s", nodeid.toString(), indexFile.getName() /*XXX HgDataFile.getPath might be more suitable here*/));
+		return Integer.MIN_VALUE;
 	}
 
 
@@ -143,7 +148,9 @@ public class RevlogStream {
 			daIndex.seek(inline ? (int) index.get(i).offset : i * REVLOGV1_RECORD_SIZE);
 			for (; i <= end; i++ ) {
 				long l = daIndex.readLong();
+				@SuppressWarnings("unused")
 				long offset = l >>> 16;
+				@SuppressWarnings("unused")
 				int flags = (int) (l & 0X0FFFF);
 				int compressedLen = daIndex.readInt();
 				int actualLen = daIndex.readInt();
@@ -233,6 +240,7 @@ public class RevlogStream {
 			while(true) {
 				int compressedLen = da.readInt();
 				// 8+4 = 12 bytes total read here
+				@SuppressWarnings("unused")
 				int actualLen = da.readInt();
 				int baseRevision = da.readInt();
 				// 12 + 8 = 20 bytes read here

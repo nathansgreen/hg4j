@@ -31,10 +31,10 @@ then would like to see what changeset this file came from)?
 *.hgignored processing
 +Nodeid to keep 20 bytes always, Revlog.Inspector to get nodeid array of meaningful data exact size (nor heading 00 bytes, nor 12 extra bytes from the spec)
 +DataAccess - implement memory mapped files, 
++Changeset to get index (local revision number)
 
 DataAccess - collect debug info (buffer misses, file size/total read operations) to find out better strategy to buffer size detection. Compare performance.
 delta merge
-Changeset to get index (local revision number)
 RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or dirstate 
 RevlogStream - Inflater. Perhaps, InflaterStream instead?
 Implement use of fncache (use names from it - perhaps, would help for Mac issues Alex mentioned) along with 'digest'-ing long file names

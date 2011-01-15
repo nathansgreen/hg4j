@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Formatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,7 +37,7 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 	private List<String> files; // unmodifiable collection (otherwise #files() and implicit #clone() shall be revised)
 	private Date time;
 	private int timezone; // not sure it's of any use
-	private String extras; // TODO branch, etc.
+	private Map<String,String> extras;
 	
 	private Changeset() {
 	}
@@ -69,7 +70,11 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 	}
 
 	public Map<String, String> extras() {
-		return null; // TODO
+		return extras;
+	}
+	
+	public String branch() {
+		return extras.get("branch");
 	}
 	
 	@Override
@@ -129,6 +134,21 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 		// on commit and timezone is recorded to adjust it to UTC.
 		Date _time = new Date(unixTime * 1000);
 		String _extras = space2 < _timeString.length() ? _timeString.substring(space2+1) : null;
+		Map<String, String> _extrasMap;
+		if (_extras == null) {
+			 _extrasMap = Collections.singletonMap("branch", "default"); 
+		} else {
+			_extrasMap = new HashMap<String, String>();
+			for (String pair : _extras.split("\00")) {
+				int eq = pair.indexOf('=');
+				// FIXME need to decode key/value, @see changelog.py:decodeextra
+				_extrasMap.put(pair.substring(0, eq), pair.substring(eq+1));
+			}
+			if (!_extrasMap.containsKey("branch")) {
+				_extrasMap.put("branch", "default");
+			}
+			_extrasMap = Collections.unmodifiableMap(_extrasMap);
+		}
 		
 		//
 		int lastStart = breakIndex3 + 1;
@@ -161,7 +181,7 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 		this.timezone = _timezone;
 		this.files = Collections.unmodifiableList(_files);
 		this.comment = _comment;
-		this.extras = _extras;
+		this.extras = _extrasMap;
 	}
 
 	private static int indexOf(byte[] src, byte what, int startOffset, int endIndex) {

@@ -35,23 +35,33 @@ public abstract class Revlog {
 		return content.revisionCount();
 	}
 
+	public int getLocalRevisionNumber(Nodeid nid) {
+		int revision = content.findLocalRevisionNumber(nid);
+		if (revision == Integer.MIN_VALUE) {
+			throw new IllegalArgumentException(String.format("%s doesn't represent a revision of %s", nid.toString(), this /*XXX HgDataFile.getPath might be more suitable here*/));
+		}
+		return revision;
+	}
+
 	// Till now, i follow approach that NULL nodeid is never part of revlog
 	public boolean isKnown(Nodeid nodeid) {
-		try {
-			int revision = content.findLocalRevisionNumber(nodeid);
-			return revision >= 0 && revision < getRevisionCount();
-		} catch (IllegalArgumentException ex) {
-			// FIXME bad way to figure out if nodeid is from this revlog
+		final int rn = content.findLocalRevisionNumber(nodeid);
+		if (Integer.MIN_VALUE == rn) {
 			return false;
 		}
+		if (rn < 0 || rn >= content.revisionCount()) {
+			// Sanity check
+			throw new IllegalStateException();
+		}
+		return true;
 	}
+
 	/**
 	 * Access to revision data as is (decompressed, but otherwise unprocessed, i.e. not parsed for e.g. changeset or manifest entries) 
 	 * @param nodeid
 	 */
 	public byte[] content(Nodeid nodeid) {
-		int revision = content.findLocalRevisionNumber(nodeid);
-		return content(revision);
+		return content(getLocalRevisionNumber(nodeid));
 	}
 	
 	/**
@@ -140,9 +150,20 @@ public abstract class Revlog {
 		public Nodeid firstParent(Nodeid nid) {
 			return firstParent.get(nid);
 		}
+
+		// never null, Nodeid.NULL if none known
+		public Nodeid safeFirstParent(Nodeid nid) {
+			Nodeid rv = firstParent(nid);
+			return rv == null ? Nodeid.NULL : rv;
+		}
 		
 		public Nodeid secondParent(Nodeid nid) {
 			return secondParent.get(nid);
+		}
+
+		public Nodeid safeSecondParent(Nodeid nid) {
+			Nodeid rv = secondParent(nid);
+			return rv == null ? Nodeid.NULL : rv;
 		}
 
 		public boolean appendParentsOf(Nodeid nid, Collection<Nodeid> c) {

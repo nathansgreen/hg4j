@@ -33,8 +33,7 @@ public class HgDataFile extends Revlog {
 	}
 
 	public int length(Nodeid nodeid) {
-		int revision = content.findLocalRevisionNumber(nodeid);
-		return content.dataLength(revision);
+		return content.dataLength(getLocalRevisionNumber(nodeid));
 	}
 
 	public byte[] content() {

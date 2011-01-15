@@ -8,8 +8,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import com.tmate.hgkit.ll.HgRepository;
 import com.tmate.hgkit.ll.LocalHgRepo;
@@ -57,6 +59,8 @@ public class RepositoryLookup {
 		public String repoLocation;
 		public List<String> files;
 		public int limit = -1;
+		public Set<String> users;
+		public Set<String> branches;
 
 		public static Options parse(String[] commandLineArgs) {
 			Options rv = new Options();
@@ -82,6 +86,20 @@ public class RepositoryLookup {
 								throw new IllegalArgumentException();
 							}
 							rv.limit = Integer.parseInt(it.next());
+							break;
+						}
+						case (int) 'u' : {
+							if (rv.users == null) {
+								rv.users = new LinkedHashSet<String>();
+							}
+							rv.users.add(it.next());
+							break;
+						}
+						case (int) 'b' : {
+							if (rv.branches == null) {
+								rv.branches = new LinkedHashSet<String>();
+							}
+							rv.branches.add(it.next());
 							break;
 						}
 					}
