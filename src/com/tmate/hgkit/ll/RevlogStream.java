@@ -323,6 +323,11 @@ public class RevlogStream {
 
 	// @see http://mercurial.selenic.com/wiki/BundleFormat, in Changelog group description
 	/*package-local*/ static class PatchRecord { // copy of struct frag from mpatch.c
+		/*
+		   Given there are pr1 and pr2:
+		     pr1.start to pr1.end will be replaced with pr's data (of pr1.len)
+		     pr1.end to pr2.start gets copied from base
+		 */
 		int start, end, len;
 		byte[] data;
 
