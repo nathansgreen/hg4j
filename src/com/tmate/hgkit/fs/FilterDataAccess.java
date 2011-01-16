@@ -1,0 +1,96 @@
+/*
+ * Copyright (c) 2011 Artem Tikhomirov 
+ */
+package com.tmate.hgkit.fs;
+
+import java.io.IOException;
+
+/**
+ * XXX Perhaps, DataAccessSlice? Unlike FilterInputStream, we limit amount of data read from DataAccess being filtered.
+ *   
+ * @author artem
+ */
+public class FilterDataAccess extends DataAccess {
+	private final DataAccess dataAccess;
+	private final long offset;
+	private final int length;
+	private int count;
+
+	public FilterDataAccess(DataAccess dataAccess, long offset, int length) {
+		this.dataAccess = dataAccess;
+		this.offset = offset;
+		this.length = length;
+		count = length;
+	}
+
+	protected int available() {
+		return count;
+	}
+
+	@Override
+	public void reset() throws IOException {
+		count = length;
+	}
+	
+	@Override
+	public boolean isEmpty() {
+		return count <= 0;
+	}
+	
+	@Override
+	public long length() {
+		return length;
+	}
+
+	@Override
+	public void seek(long localOffset) throws IOException {
+		if (localOffset < 0 || localOffset > length) {
+			throw new IllegalArgumentException();
+		}
+		dataAccess.seek(offset + localOffset);
+		count = (int) (length - localOffset);
+	}
+
+	@Override
+	public void skip(int bytes) throws IOException {
+		int newCount = count - bytes;
+		if (newCount < 0 || newCount > length) {
+			throw new IllegalArgumentException();
+		}
+		seek(length - newCount);
+		/*
+		 can't use next code because don't want to rewind backing DataAccess on reset()
+		 i.e. this.reset() modifies state of this instance only, while filtered DA may go further.
+		 Only actual this.skip/seek/read would rewind it to desired position 
+	  		dataAccess.skip(bytes);
+			count = newCount;
+		 */
+
+	}
+
+	@Override
+	public byte readByte() throws IOException {
+		if (count <= 0) {
+			throw new IllegalArgumentException("Underflow"); // XXX be descriptive
+		}
+		if (count == length) {
+			dataAccess.seek(offset);
+		}
+		count--;
+		return dataAccess.readByte();
+	}
+
+	@Override
+	public void readBytes(byte[] b, int off, int len) throws IOException {
+		if (count <= 0 || len > count) {
+			throw new IllegalArgumentException("Underflow"); // XXX be descriptive
+		}
+		if (count == length) {
+			dataAccess.seek(offset);
+		}
+		dataAccess.readBytes(b, off, len);
+		count -= len;
+	}
+
+	// done shall be no-op, as we have no idea what's going on with DataAccess we filter
+}

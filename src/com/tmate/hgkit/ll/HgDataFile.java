@@ -7,6 +7,8 @@ import static com.tmate.hgkit.ll.HgRepository.TIP;
 
 import java.util.Arrays;
 
+import com.tmate.hgkit.fs.DataAccess;
+
 /**
  * Extends Revlog/uses RevlogStream?
  * ? name:HgFileNode?
@@ -52,7 +54,7 @@ public class HgDataFile extends Revlog {
 		Revlog.Inspector insp = new Revlog.Inspector() {
 			int count = 0;
 			
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 				commitRevisions[count++] = linkRevision;
 			}
 		};
@@ -87,7 +89,7 @@ public class HgDataFile extends Revlog {
 			public int p2 = -1;
 			public byte[] nodeid;
 			
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 				p1 = parent1Revision;
 				p2 = parent2Revision;
 				this.nodeid = new byte[20];

@@ -22,13 +22,13 @@ import com.tmate.hgkit.ll.Changeset;
 public class Main {
 
 	public static void main(String[] args) throws Exception {
-//		String repo = "/temp/hg/hello/.hg/";
-//		String filename = "store/00changelog.i";
+		String repo = "/temp/hg/hello/.hg/";
+		String filename = "store/00changelog.i";
 //		String filename = "store/data/hello.c.i";
 //		String filename = "store/data/docs/readme.i";
-		String repo = "/eclipse-3.7/ws.hg/com.tmate.hgkit/.hg/";
+//		String repo = "/eclipse-3.7/ws.hg/com.tmate.hgkit/.hg/";
 //		String filename = "store/data/design.txt.i";
-		String filename = "store/data/src/com/tmate/hgkit/ll/_revlog_stream.java.i";
+//		String filename = "store/data/src/com/tmate/hgkit/ll/_revlog_stream.java.i";
 		//
 		LinkedList<Changeset> changelog = new LinkedList<Changeset>();
 		//

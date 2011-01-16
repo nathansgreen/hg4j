@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
+import com.tmate.hgkit.fs.ByteArrayDataAccess;
 import com.tmate.hgkit.fs.DataAccess;
 import com.tmate.hgkit.fs.DataAccessProvider;
 
@@ -45,7 +46,7 @@ public class HgBundle {
 			// (the previous, or parent patch of a given patch p is the patch that has a node equal to p's p1 field)
 			byte[] baseRevContent = hgRepo.getChangelog().content(base);
 			for (GroupElement ge : changelogGroup) {
-				byte[] csetContent = RevlogStream.apply(baseRevContent, -1, ge.patches);
+				byte[] csetContent = RevlogStream.apply(new ByteArrayDataAccess(baseRevContent), -1, ge.patches);
 				dh = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
 				if (!ge.node().equalsTo(dh.asBinary())) {
 					throw new IllegalStateException("Integrity check failed on " + bundleFile + ", node:" + ge.node());

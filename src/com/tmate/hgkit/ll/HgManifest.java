@@ -3,6 +3,8 @@
  */
 package com.tmate.hgkit.ll;
 
+import com.tmate.hgkit.fs.DataAccess;
+
 /**
  *
  * @author artem
@@ -18,7 +20,7 @@ public class HgManifest extends Revlog {
 
 			private boolean gtg = true; // good to go
 
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 				if (!gtg) {
 					return;
 				}
@@ -27,6 +29,7 @@ public class HgManifest extends Revlog {
 				String fname = null;
 				String flags = null;
 				Nodeid nid = null;
+				byte[] data = da.byteArray();
 				for (i = 0; gtg && i < actualLen; i++) {
 					int x = i;
 					for( ; data[i] != '\n' && i < actualLen; i++) {

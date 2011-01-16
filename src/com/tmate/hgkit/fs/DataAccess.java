@@ -9,11 +9,19 @@ import java.io.IOException;
  * relevant parts of DataInput, non-stream nature (seek operation), explicit check for end of data.
  * convenient skip (+/- bytes)
  * Primary goal - effective file read, so that clients don't need to care whether to call few 
- * distinct getInt() or readBytes(totalForFewInts) and parse themselves instead in an attempt to optimize.  
+ * distinct getInt() or readBytes(totalForFewInts) and parse themselves instead in an attempt to optimize.
+ * Name: ByteSource? DataSource, DataInput, ByteInput 
  */
 public class DataAccess {
 	public boolean isEmpty() {
 		return true;
+	}
+	public long length() {
+		return 0;
+	}
+	// get this instance into initial state
+	public void reset() throws IOException {
+		// nop, empty instance is always in the initial state
 	}
 	// absolute positioning
 	public void seek(long offset) throws IOException {
@@ -44,5 +52,18 @@ public class DataAccess {
 	}
 	public byte readByte() throws IOException {
 		throw new UnsupportedOperationException();
+	}
+
+	// XXX decide whether may or may not change position in the DataAccess
+	// FIXME exception handling is not right, just for the sake of quick test
+	public byte[] byteArray() {
+		byte[] rv = new byte[(int) length()];
+		try {
+			reset();
+			readBytes(rv, 0, rv.length);
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+		return rv;
 	}
 }

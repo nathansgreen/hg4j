@@ -10,6 +10,8 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
+import com.tmate.hgkit.fs.DataAccess;
+
 /**
  *
  * @author artem
@@ -70,8 +72,8 @@ public abstract class Revlog {
 	public byte[] content(int revision) {
 		final byte[][] dataPtr = new byte[1][];
 		Revlog.Inspector insp = new Revlog.Inspector() {
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
-				dataPtr[0] = data;
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+				dataPtr[0] = data.byteArray();
 			}
 		};
 		content.iterate(revision, revision, true, insp);
@@ -84,7 +86,7 @@ public abstract class Revlog {
 	public interface Inspector {
 		// XXX boolean retVal to indicate whether to continue?
 		// TODO specify nodeid and data length, and reuse policy (i.e. if revlog stream doesn't reuse nodeid[] for each call) 
-		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, byte[] data);
+		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data);
 	}
 
 	/*
@@ -115,7 +117,7 @@ public abstract class Revlog {
 			Inspector insp = new Inspector() {
 				final Nodeid[] sequentialRevisionNodeids = new Nodeid[revisionCount];
 				int ix = 0;
-				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 					if (ix != revisionNumber) {
 						// XXX temp code, just to make sure I understand what's going on here
 						throw new IllegalStateException();

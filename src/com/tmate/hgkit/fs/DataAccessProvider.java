@@ -72,6 +72,16 @@ public class DataAccessProvider {
 		}
 		
 		@Override
+		public long length() {
+			return size;
+		}
+		
+		@Override
+		public void reset() throws IOException {
+			seek(0);
+		}
+		
+		@Override
 		public void seek(long offset) {
 			assert offset >= 0;
 			// offset may not necessarily be further than current position in the file (e.g. rewind) 
@@ -171,6 +181,16 @@ public class DataAccessProvider {
 		@Override
 		public boolean isEmpty() {
 			return bufferStartInFile + buffer.position() >= size;
+		}
+		
+		@Override
+		public long length() {
+			return size;
+		}
+		
+		@Override
+		public void reset() throws IOException {
+			seek(0);
 		}
 		
 		@Override

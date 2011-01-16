@@ -11,11 +11,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.zip.DataFormatException;
-import java.util.zip.Inflater;
 
+import com.tmate.hgkit.fs.ByteArrayDataAccess;
 import com.tmate.hgkit.fs.DataAccess;
 import com.tmate.hgkit.fs.DataAccessProvider;
+import com.tmate.hgkit.fs.FilterDataAccess;
+import com.tmate.hgkit.fs.InflaterDataAccess;
 
 /**
  * ? Single RevlogStream per file per repository with accessor to record access session (e.g. with back/forward operations), 
@@ -135,7 +136,7 @@ public class RevlogStream {
 		}
 		try {
 			byte[] nodeidBuf = new byte[20];
-			byte[] lastData = null;
+			DataAccess lastUserData = null;
 			int i;
 			boolean extraReadsToBaseRev = false;
 			if (needData && index.get(start).baseRevision < start) {
@@ -145,8 +146,12 @@ public class RevlogStream {
 				i = start;
 			}
 			
-			daIndex.seek(inline ? (int) index.get(i).offset : i * REVLOGV1_RECORD_SIZE);
+			daIndex.seek(inline ? index.get(i).offset : i * REVLOGV1_RECORD_SIZE);
 			for (; i <= end; i++ ) {
+				if (inline && needData) {
+					// inspector reading data (though FilterDataAccess) may have affected index position
+					daIndex.seek(index.get(i).offset);
+				}
 				long l = daIndex.readLong();
 				@SuppressWarnings("unused")
 				long offset = l >>> 16;
@@ -161,49 +166,41 @@ public class RevlogStream {
 				// Hg has 32 bytes here, uses 20 for nodeid, and keeps 12 last bytes empty
 				daIndex.readBytes(nodeidBuf, 0, 20);
 				daIndex.skip(12);
-				byte[] data = null;
+				DataAccess userDataAccess = null;
 				if (needData) {
-					byte[] dataBuf = new byte[compressedLen];
+					final byte firstByte;
+					long streamOffset = index.get(i).offset;
+					DataAccess streamDataAccess;
 					if (inline) {
-						daIndex.readBytes(dataBuf, 0, compressedLen);
+						streamDataAccess = daIndex;
+						streamOffset += REVLOGV1_RECORD_SIZE; // don't need to do seek as it's actual position in the index stream
 					} else {
-						daData.seek(index.get(i).offset);
-						daData.readBytes(dataBuf, 0, compressedLen);
+						streamDataAccess = daData;
+						daData.seek(streamOffset);
 					}
-					if (dataBuf[0] == 0x78 /* 'x' */) {
-						try {
-							Inflater zlib = new Inflater(); // XXX Consider reuse of Inflater, and/or stream alternative
-							zlib.setInput(dataBuf, 0, compressedLen);
-							byte[] result = new byte[actualLen*2]; // FIXME need to use zlib.finished() instead 
-							int resultLen = zlib.inflate(result);
-							zlib.end();
-							data = new byte[resultLen];
-							System.arraycopy(result, 0, data, 0, resultLen);
-						} catch (DataFormatException ex) {
-							ex.printStackTrace();
-							data = new byte[0]; // FIXME need better failure strategy
-						}
-					} else if (dataBuf[0] == 0x75 /* 'u' */) {
-						data = new byte[dataBuf.length - 1];
-						System.arraycopy(dataBuf, 1, data, 0, data.length);
+					firstByte = streamDataAccess.readByte();
+					if (firstByte == 0x78 /* 'x' */) {
+						userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen);
+					} else if (firstByte == 0x75 /* 'u' */) {
+						userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
 					} else {
 						// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0'
 						// but I don't see reason not to return data as is 
-						data = dataBuf;
+						userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
 					}
 					// XXX 
 					if (baseRevision != i) { // XXX not sure if this is the right way to detect a patch
 						// this is a patch
 						LinkedList<PatchRecord> patches = new LinkedList<PatchRecord>();
-						int patchElementIndex = 0;
-						do {
-							PatchRecord pr = PatchRecord.read(data, patchElementIndex);
+						while (!userDataAccess.isEmpty()) {
+							PatchRecord pr = PatchRecord.read(userDataAccess);
+							System.out.printf("PatchRecord:%d %d %d\n", pr.start, pr.end, pr.len);
 							patches.add(pr);
-							patchElementIndex += 12 + pr.len;
-						} while (patchElementIndex < data.length);
+						}
+						userDataAccess.done();
 						//
-						byte[] baseRevContent = lastData;
-						data = apply(baseRevContent, actualLen, patches);
+						byte[] userData = apply(lastUserData, actualLen, patches);
+						userDataAccess = new ByteArrayDataAccess(userData);
 					}
 				} else {
 					if (inline) {
@@ -211,9 +208,15 @@ public class RevlogStream {
 					}
 				}
 				if (!extraReadsToBaseRev || i >= start) {
-					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, data);
+					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, userDataAccess);
 				}
-				lastData = data;
+				if (userDataAccess != null) {
+					userDataAccess.reset();
+					if (lastUserData != null) {
+						lastUserData.done();
+					}
+					lastUserData = userDataAccess;
+				}
 			}
 		} catch (IOException ex) {
 			throw new IllegalStateException(ex); // FIXME need better handling
@@ -292,10 +295,10 @@ public class RevlogStream {
 
 	// mpatch.c : apply()
 	// FIXME need to implement patch merge (fold, combine, gather and discard from aforementioned mpatch.[c|py]), also see Revlog and Mercurial PDF
-	/*package-local for HgBundle; until moved to better place*/static byte[] apply(byte[] baseRevisionContent, int outcomeLen, List<PatchRecord> patch) {
+	/*package-local for HgBundle; until moved to better place*/static byte[] apply(DataAccess baseRevisionContent, int outcomeLen, List<PatchRecord> patch) throws IOException {
 		int last = 0, destIndex = 0;
 		if (outcomeLen == -1) {
-			outcomeLen = baseRevisionContent.length;
+			outcomeLen = (int) baseRevisionContent.length();
 			for (PatchRecord pr : patch) {
 				outcomeLen += pr.start - last + pr.len;
 				last = pr.end;
@@ -303,15 +306,18 @@ public class RevlogStream {
 			outcomeLen -= last;
 			last = 0;
 		}
+		System.out.println(baseRevisionContent.length());
 		byte[] rv = new byte[outcomeLen];
 		for (PatchRecord pr : patch) {
-			System.arraycopy(baseRevisionContent, last, rv, destIndex, pr.start-last);
+			baseRevisionContent.seek(last);
+			baseRevisionContent.readBytes(rv, destIndex, pr.start-last);
 			destIndex += pr.start - last;
 			System.arraycopy(pr.data, 0, rv, destIndex, pr.data.length);
 			destIndex += pr.data.length;
 			last = pr.end;
 		}
-		System.arraycopy(baseRevisionContent, last, rv, destIndex, baseRevisionContent.length - last);
+		baseRevisionContent.seek(last);
+		baseRevisionContent.readBytes(rv, destIndex, (int) (baseRevisionContent.length() - last));
 		return rv;
 	}
 
