@@ -140,7 +140,7 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 		} else {
 			_extrasMap = new HashMap<String, String>();
 			for (String pair : _extras.split("\00")) {
-				int eq = pair.indexOf('=');
+				int eq = pair.indexOf(':');
 				// FIXME need to decode key/value, @see changelog.py:decodeextra
 				_extrasMap.put(pair.substring(0, eq), pair.substring(eq+1));
 			}
