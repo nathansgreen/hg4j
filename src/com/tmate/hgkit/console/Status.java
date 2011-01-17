@@ -5,11 +5,16 @@ package com.tmate.hgkit.console;
 
 import static com.tmate.hgkit.ll.HgRepository.TIP;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 import com.tmate.hgkit.fs.RepositoryLookup;
 import com.tmate.hgkit.ll.HgDataFile;
 import com.tmate.hgkit.ll.HgRepository;
 import com.tmate.hgkit.ll.LocalHgRepo;
 import com.tmate.hgkit.ll.Nodeid;
+import com.tmate.hgkit.ll.StatusCollector;
 
 /**
  *
@@ -30,17 +35,34 @@ public class Status {
 		final StatusDump dump = new StatusDump();
 		dump.showIgnored = false;
 		dump.showClean = false;
-		final int r1 = 0, r2 = 11;
+		StatusCollector sc = new StatusCollector(hgRepo);
+		final int r1 = 0, r2 = 3;
 		System.out.printf("Status for changes between revision %d and %d:\n", r1, r2);
-		hgRepo.status(r1, r2, dump);
-		System.out.println("\nStatus against working dir:");
-		((LocalHgRepo) hgRepo).statusLocal(TIP, dump);
-		System.out.println();
-		System.out.printf("Manifest of the revision %d:\n", r2);
-		hgRepo.getManifest().walk(r2, r2, new Manifest.Dump());
-		System.out.println();
-		System.out.printf("\nStatus of working dir against %d:\n", r2);
-		((LocalHgRepo) hgRepo).statusLocal(r2, dump);
+		sc.walk(r1, r2, dump);
+		// 
+		System.out.println("\n\nSame, but sorted in the way hg status does:");
+		StatusCollector.Record r = sc.status(r1, r2);
+		sortAndPrint('M', r.getModified());
+		sortAndPrint('A', r.getAdded());
+		sortAndPrint('R', r.getRemoved());
+//		System.out.println("\nStatus against working dir:");
+//		((LocalHgRepo) hgRepo).statusLocal(TIP, dump);
+//		System.out.println();
+//		System.out.printf("Manifest of the revision %d:\n", r2);
+//		hgRepo.getManifest().walk(r2, r2, new Manifest.Dump());
+//		System.out.println();
+//		System.out.printf("\nStatus of working dir against %d:\n", r2);
+//		((LocalHgRepo) hgRepo).statusLocal(r2, dump);
+	}
+	
+	private static void sortAndPrint(char prefix, List<String> ul) {
+		ArrayList<String> sortList = new ArrayList<String>(ul);
+		Collections.sort(sortList);
+		for (String s : sortList)  {
+			System.out.print(prefix);
+			System.out.print(' ');
+			System.out.println(s);
+		}
 	}
 	
 	protected static void testStatusInternals(HgRepository hgRepo) {
@@ -53,7 +75,7 @@ public class Status {
 		}
 	}
 
-	private static class StatusDump implements HgRepository.StatusInspector {
+	private static class StatusDump implements StatusCollector.Inspector {
 		public boolean hideStatusPrefix = false; // hg status -n option
 		public boolean showCopied = true; // -C
 		public boolean showIgnored = true; // -i

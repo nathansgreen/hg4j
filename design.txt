@@ -39,7 +39,8 @@ RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or
 RevlogStream - Inflater. Perhaps, InflaterStream instead?
 Implement use of fncache (use names from it - perhaps, would help for Mac issues Alex mentioned) along with 'digest'-ing long file names
 
- 
+repo.status - use same collector class twice, difference as external code. add external walker that keeps collected maps and use it
+  in Log operation to give files+,files-  
  
 Status operation from GUI - guess, usually on a file/subfolder, hence API should allow for starting path (unlike cmdline, seems useless to implement include/exclide patterns - GUI users hardly enter them, ever)
 
