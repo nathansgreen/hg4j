@@ -48,14 +48,14 @@ public class Status {
 		//
 		System.out.println("\n\nTry hg status --change <rev>:");
 		sc.change(0, dump);
-//		System.out.println("\nStatus against working dir:");
-//		((LocalHgRepo) hgRepo).statusLocal(TIP, dump);
-//		System.out.println();
-//		System.out.printf("Manifest of the revision %d:\n", r2);
-//		hgRepo.getManifest().walk(r2, r2, new Manifest.Dump());
-//		System.out.println();
-//		System.out.printf("\nStatus of working dir against %d:\n", r2);
-//		((LocalHgRepo) hgRepo).statusLocal(r2, dump);
+		System.out.println("\nStatus against working dir:");
+		((LocalHgRepo) hgRepo).statusLocal(TIP, dump);
+		System.out.println();
+		System.out.printf("Manifest of the revision %d:\n", r2);
+		hgRepo.getManifest().walk(r2, r2, new Manifest.Dump());
+		System.out.println();
+		System.out.printf("\nStatus of working dir against %d:\n", r2);
+		((LocalHgRepo) hgRepo).statusLocal(r2, dump);
 	}
 	
 	private static void sortAndPrint(char prefix, List<String> ul) {
