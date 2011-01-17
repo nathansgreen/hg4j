@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Artem Tikhomirov 
+ * Copyright (c) 2010, 2011 Artem Tikhomirov 
  */
 package com.tmate.hgkit.ll;
 
@@ -20,25 +20,30 @@ import com.tmate.hgkit.fs.DataAccessProvider;
  */
 public class HgDirstate {
 
-	private final LocalHgRepo repo;
+	private final DataAccessProvider accessProvider;
 	private final File dirstateFile;
 	private Map<String, Record> normal;
 	private Map<String, Record> added;
 	private Map<String, Record> removed;
 	private Map<String, Record> merged;
 
-	public HgDirstate(LocalHgRepo hgRepo, File dirstate) {
-		this.repo = hgRepo;
-		this.dirstateFile = dirstate;
+	/*package-local*/ HgDirstate() {
+		// empty instance
+		accessProvider = null;
+		dirstateFile = null;
+	}
+
+	public HgDirstate(DataAccessProvider dap, File dirstate) {
+		accessProvider = dap;
+		dirstateFile = dirstate;
 	}
 
 	private void read() {
 		normal = added = removed = merged = Collections.<String, Record>emptyMap();
-		if (!dirstateFile.exists()) {
+		if (dirstateFile == null || !dirstateFile.exists()) {
 			return;
 		}
-		DataAccessProvider dap = repo.getDataAccess();
-		DataAccess da = dap.create(dirstateFile);
+		DataAccess da = accessProvider.create(dirstateFile);
 		if (da.isEmpty()) {
 			return;
 		}

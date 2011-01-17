@@ -40,6 +40,10 @@ public class StatusCollector {
 		return i;
 	}
 	
+	/*package-local*/ ManifestRevisionInspector raw(int rev) {
+		return get(rev);
+	}
+	
 	// hg status --change <rev>
 	public void change(int rev, Inspector inspector) {
 		int[] parents = new int[2];

@@ -23,22 +23,47 @@ public class WorkingCopyStatusCollector {
 
 	private final HgRepository repo;
 	private final FileWalker repoWalker;
+	private HgDirstate dirstate;
+	private StatusCollector baseRevisionCollector;
 
 	public WorkingCopyStatusCollector(HgRepository hgRepo, FileWalker hgRepoWalker) {
 		this.repo = hgRepo;
 		this.repoWalker = hgRepoWalker;
 	}
+	
+	/**
+	 * Optionally, supply a collector instance that may cache (or have already cached) base revision
+	 * @param sc may be null
+	 */
+	public void setBseRevisionCollector(StatusCollector sc) {
+		baseRevisionCollector = sc;
+	}
+	
+	private HgDirstate getDirstate() {
+		if (dirstate == null) {
+			if (repo instanceof LocalHgRepo) {
+				dirstate = ((LocalHgRepo) repo).loadDirstate();
+			} else {
+				dirstate = new HgDirstate();
+			}
+		}
+		return dirstate;
+	}
 
+	// may be invoked few times
 	public void walk(int baseRevision, StatusCollector.Inspector inspector) {
 		final HgIgnore hgIgnore = ((LocalHgRepo) repo).loadIgnore(); // FIXME hack
-		final HgDirstate dirstate = ((LocalHgRepo) repo).loadDirstate(); // FIXME hack
-		TreeSet<String> knownEntries = dirstate.all();
+		TreeSet<String> knownEntries = getDirstate().all();
 		final boolean isTipBase = baseRevision == TIP || baseRevision == repo.getManifest().getRevisionCount();
 		StatusCollector.ManifestRevisionInspector collect = null;
 		Set<String> baseRevFiles = Collections.emptySet();
 		if (!isTipBase) {
-			collect = new StatusCollector.ManifestRevisionInspector(baseRevision, baseRevision);
-			repo.getManifest().walk(baseRevision, baseRevision, collect);
+			if (baseRevisionCollector != null) {
+				collect = baseRevisionCollector.raw(baseRevision);
+			} else {
+				collect = new StatusCollector.ManifestRevisionInspector(baseRevision, baseRevision);
+				repo.getManifest().walk(baseRevision, baseRevision, collect);
+			}
 			baseRevFiles = new TreeSet<String>(collect.files(baseRevision));
 		}
 		repoWalker.reset();
@@ -53,10 +78,10 @@ public class WorkingCopyStatusCollector {
 				if (collect != null) { // need to check against base revision, not FS file
 					Nodeid nid1 = collect.nodeid(baseRevision, fname);
 					String flags = collect.flags(baseRevision, fname);
-					checkLocalStatusAgainstBaseRevision(baseRevFiles, nid1, flags, fname, f, dirstate, inspector);
+					checkLocalStatusAgainstBaseRevision(baseRevFiles, nid1, flags, fname, f, inspector);
 					baseRevFiles.remove(fname);
 				} else {
-					checkLocalStatusAgainstFile(fname, f, dirstate, inspector);
+					checkLocalStatusAgainstFile(fname, f, inspector);
 				}
 			} else {
 				inspector.unknown(fname);
@@ -69,7 +94,7 @@ public class WorkingCopyStatusCollector {
 		}
 		for (String m : knownEntries) {
 			// removed from the repository and missing from working dir shall not be reported as 'deleted' 
-			if (dirstate.checkRemoved(m) == null) {
+			if (getDirstate().checkRemoved(m) == null) {
 				inspector.missing(m);
 			}
 		}
@@ -84,9 +109,9 @@ public class WorkingCopyStatusCollector {
 	//********************************************
 
 	
-	private static void checkLocalStatusAgainstFile(String fname, File f, HgDirstate dirstate, StatusCollector.Inspector inspector) {
+	private void checkLocalStatusAgainstFile(String fname, File f, StatusCollector.Inspector inspector) {
 		HgDirstate.Record r;
-		if ((r = dirstate.checkNormal(fname)) != null) {
+		if ((r = getDirstate().checkNormal(fname)) != null) {
 			// either clean or modified
 			if (f.lastModified() / 1000 == r.time && r.size == f.length()) {
 				inspector.clean(fname);
@@ -94,35 +119,35 @@ public class WorkingCopyStatusCollector {
 				// FIXME check actual content to avoid false modified files
 				inspector.modified(fname);
 			}
-		} else if ((r = dirstate.checkAdded(fname)) != null) {
+		} else if ((r = getDirstate().checkAdded(fname)) != null) {
 			if (r.name2 == null) {
 				inspector.added(fname);
 			} else {
 				inspector.copied(fname, r.name2);
 			}
-		} else if ((r = dirstate.checkRemoved(fname)) != null) {
+		} else if ((r = getDirstate().checkRemoved(fname)) != null) {
 			inspector.removed(fname);
-		} else if ((r = dirstate.checkMerged(fname)) != null) {
+		} else if ((r = getDirstate().checkMerged(fname)) != null) {
 			inspector.modified(fname);
 		}
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, Nodeid nid1, String flags, String fname, File f, HgDirstate dirstate, StatusCollector.Inspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, Nodeid nid1, String flags, String fname, File f, StatusCollector.Inspector inspector) {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
 		HgDirstate.Record r;
 		if (nid1 == null) {
 			// normal: added?
 			// added: not known at the time of baseRevision, shall report
 			// merged: was not known, report as added?
-			if ((r = dirstate.checkAdded(fname)) != null) {
+			if ((r = getDirstate().checkAdded(fname)) != null) {
 				if (r.name2 != null && baseRevNames.contains(r.name2)) {
 					baseRevNames.remove(r.name2);
 					inspector.copied(r.name2, fname);
 					return;
 				}
 				// fall-through, report as added
-			} else if (dirstate.checkRemoved(fname) != null) {
+			} else if (getDirstate().checkRemoved(fname) != null) {
 				// removed: removed file was not known at the time of baseRevision, and we should not report it as removed
 				return;
 			}
@@ -130,7 +155,7 @@ public class WorkingCopyStatusCollector {
 		} else {
 			// was known; check whether clean or modified
 			// when added - seems to be the case of a file added once again, hence need to check if content is different
-			if ((r = dirstate.checkNormal(fname)) != null || (r = dirstate.checkMerged(fname)) != null || (r = dirstate.checkAdded(fname)) != null) {
+			if ((r = getDirstate().checkNormal(fname)) != null || (r = getDirstate().checkMerged(fname)) != null || (r = getDirstate().checkAdded(fname)) != null) {
 				// either clean or modified
 				HgDataFile fileNode = repo.getFileNode(fname);
 				final int lengthAtRevision = fileNode.length(nid1);

@@ -3,20 +3,14 @@
  */
 package com.tmate.hgkit.ll;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileInputStream;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.ref.SoftReference;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Set;
 import java.util.TreeSet;
 
 import com.tmate.hgkit.fs.DataAccessProvider;
@@ -56,9 +50,8 @@ public class LocalHgRepo extends HgRepository {
 	}
 	
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
-	public final HgDirstate loadDirstate() {
-		// XXX may cache in SoftReference if creation is expensive
-		return new HgDirstate(this, new File(repoDir, "dirstate"));
+	final HgDirstate loadDirstate() {
+		return new HgDirstate(getDataAccess(), new File(repoDir, "dirstate"));
 	}
 
 	// package-local, see comment for loadDirstate

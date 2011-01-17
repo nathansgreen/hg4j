@@ -12,6 +12,7 @@ import java.util.List;
 import com.tmate.hgkit.fs.RepositoryLookup;
 import com.tmate.hgkit.ll.HgDataFile;
 import com.tmate.hgkit.ll.HgRepository;
+import com.tmate.hgkit.ll.Internals;
 import com.tmate.hgkit.ll.LocalHgRepo;
 import com.tmate.hgkit.ll.Nodeid;
 import com.tmate.hgkit.ll.StatusCollector;
@@ -32,7 +33,8 @@ public class Status {
 			return;
 		}
 		System.out.println(hgRepo.getLocation());
-		((LocalHgRepo) hgRepo).loadDirstate().dump();
+		Internals debug = new Internals(hgRepo);
+		debug.dumpDirstate();
 		final StatusDump dump = new StatusDump();
 		dump.showIgnored = false;
 		dump.showClean = false;

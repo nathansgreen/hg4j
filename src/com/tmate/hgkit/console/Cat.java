@@ -6,9 +6,8 @@ package com.tmate.hgkit.console;
 import com.tmate.hgkit.fs.RepositoryLookup;
 import com.tmate.hgkit.ll.DigestHelper;
 import com.tmate.hgkit.ll.HgDataFile;
-import com.tmate.hgkit.ll.HgIgnore;
 import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.LocalHgRepo;
+import com.tmate.hgkit.ll.Internals;
 
 /**
  * @author artem
@@ -24,9 +23,11 @@ public class Cat {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		HgIgnore ignore = ((LocalHgRepo) hgRepo).loadIgnore();
-		for (String s : new String[] {"design.txt", "src/com/tmate/hgkit/ll/Changelog.java", "src/Extras.java", "bin/com/tmate/hgkit/ll/Changelog.class"} ) {
-			System.out.println("Ignored " + s + ": " + ignore.isIgnored(s));
+		Internals debug = new Internals(hgRepo);
+		String[] toCheck = new String[] {"design.txt", "src/com/tmate/hgkit/ll/Changelog.java", "src/Extras.java", "bin/com/tmate/hgkit/ll/Changelog.class"};
+		boolean[] checkResult = debug.checkIgnored(toCheck);
+		for (int i = 0; i < toCheck.length; i++) {
+			System.out.println("Ignored " + toCheck[i] + ": " + checkResult[i]);
 		}
 		DigestHelper dh = new DigestHelper();
 		for (String fname : cmdLineOpts.files) {
