@@ -45,6 +45,9 @@ public class Status {
 		sortAndPrint('M', r.getModified());
 		sortAndPrint('A', r.getAdded());
 		sortAndPrint('R', r.getRemoved());
+		//
+		System.out.println("\n\nTry hg status --change <rev>:");
+		sc.change(0, dump);
 //		System.out.println("\nStatus against working dir:");
 //		((LocalHgRepo) hgRepo).statusLocal(TIP, dump);
 //		System.out.println();

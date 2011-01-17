@@ -24,6 +24,10 @@ public class StatusCollector {
 	public StatusCollector(HgRepository hgRepo) {
 		this.repo = hgRepo;
 		cache = new HashMap<Integer, ManifestRevisionInspector>();
+		ManifestRevisionInspector emptyFakeState = new ManifestRevisionInspector(-1, -1);
+		emptyFakeState.begin(-1, null);
+		emptyFakeState.end(-1);
+		cache.put(-1, emptyFakeState);
 	}
 	
 	private ManifestRevisionInspector get(int rev) {
@@ -35,7 +39,17 @@ public class StatusCollector {
 		}
 		return i;
 	}
+	
+	// hg status --change <rev>
+	public void change(int rev, Inspector inspector) {
+		int[] parents = new int[2];
+		repo.getChangelog().parents(rev, parents, null, null);
+		walk(parents[0], rev, inspector);
+	}
 
+	// I assume revision numbers are the same for changelog and manifest - here 
+	// user would like to pass changelog revision numbers, and I use them directly to walk manifest.
+	// if this assumption is wrong, fix this (lookup manifest revisions from changeset).
 	public void walk(int rev1, int rev2, Inspector inspector) {
 		if (rev1 == rev2) {
 			throw new IllegalArgumentException();
@@ -198,6 +212,7 @@ public class StatusCollector {
 
 		/**
 		 * [minRev, maxRev]
+		 * [-1,-1] also accepted (for fake empty instance)
 		 * @param minRev - inclusive
 		 * @param maxRev - inclusive
 		 */
