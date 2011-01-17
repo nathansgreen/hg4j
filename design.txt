@@ -32,18 +32,18 @@ then would like to see what changeset this file came from)?
 +Nodeid to keep 20 bytes always, Revlog.Inspector to get nodeid array of meaningful data exact size (nor heading 00 bytes, nor 12 extra bytes from the spec)
 +DataAccess - implement memory mapped files, 
 +Changeset to get index (local revision number)
++RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or dirstate (StatusCollector and WCSC) 
++RevlogStream - Inflater. Perhaps, InflaterStream instead? branch:wrap-data-access
++repo.status - use same collector class twice, difference as external code. add external walker that keeps collected maps and use it in Log operation to give files+,files-  
 
-DataAccess - collect debug info (buffer misses, file size/total read operations) to find out better strategy to buffer size detection. Compare performance.
-delta merge
-RevisionWalker (on manifest) and WorkingCopyWalker (io.File) talking to ? and/or dirstate 
-RevlogStream - Inflater. Perhaps, InflaterStream instead?
+
 Implement use of fncache (use names from it - perhaps, would help for Mac issues Alex mentioned) along with 'digest'-ing long file names
+delta merge
+DataAccess - collect debug info (buffer misses, file size/total read operations) to find out better strategy to buffer size detection. Compare performance.
 
-repo.status - use same collector class twice, difference as external code. add external walker that keeps collected maps and use it
-  in Log operation to give files+,files-  
- 
+
 Status operation from GUI - guess, usually on a file/subfolder, hence API should allow for starting path (unlike cmdline, seems useless to implement include/exclide patterns - GUI users hardly enter them, ever)
-
+  -> recently introduced FileWalker may perhaps help solving this (if starts walking from selected folder) for status op against WorkingDir?
 
 ??? encodings of fncache, .hgignore, dirstate
 ??? http://mercurial.selenic.com/wiki/Manifest says "Multiple changesets may refer to the same manifest revision". To me, each changeset 
@@ -55,6 +55,8 @@ ReadOperation gets buffer (of whatever size, as decided by FS impl), parses it a
 This helps to ensure streams are closed after reading, allows caching (if the same file (or LRU) is read few times in sequence)
 and allows buffer management (i.e. reuse. Single buffer for all reads). 
 Scheduling multiple operations (in future, to deal with writes - single queue for FS operations - no locks?)
+
+WRITE: Need to register instances that cache files (e.g. dirstate or .hgignore) to FS notifier, so that cache may get cleared if the file changes (i.e. WriteOperation touches it).  
 
 File access:
 * NIO and mapped files - should be fast. Although seems to give less control on mem usage. 

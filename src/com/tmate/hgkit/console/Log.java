@@ -16,6 +16,7 @@ import com.tmate.hgkit.ll.HgDataFile;
 import com.tmate.hgkit.ll.HgRepository;
 import com.tmate.hgkit.ll.Nodeid;
 import com.tmate.hgkit.ll.Revlog;
+import com.tmate.hgkit.ll.StatusCollector;
 
 /**
  * @author artem
@@ -33,6 +34,7 @@ public class Log {
 		System.out.println(hgRepo.getLocation());
 		final Dump dump = new Dump(hgRepo);
 		dump.complete = true; //cmdLineOpts;
+		dump.verbose = false; //cmdLineOpts;
 		dump.reverseOrder = true;
 		dump.branches = cmdLineOpts.branches;
 		if (cmdLineOpts.users != null) {
@@ -96,15 +98,17 @@ public class Log {
 	//   - complete == true (--debug) files are not broke down to modified,+ and -
 	private static final class Dump implements Changeset.Inspector {
 		// params
-		boolean complete = false;
+		boolean complete = false; // roughly --debug
 		boolean reverseOrder = false;
 		Set<String> branches;
 		Set<String> users; // shall be lowercased
+		boolean verbose = true; // roughly -v
 		// own
 		private LinkedList<String> l = new LinkedList<String>();
 		private final HgRepository repo;
 		private Revlog.ParentWalker changelogWalker;
-		private final int tip ; 
+		private final int tip ;
+		private StatusCollector statusHelper;
 
 		public Dump(HgRepository hgRepo) {
 			repo = hgRepo;
@@ -176,23 +180,58 @@ public class Log {
 				f.format("parent:      %d:%s\nparent:      %d:%s\nmanifest:    %d:%s\n", p1x, p1, p2x, p2, mx, cset.manifest());
 			}
 			f.format("user:        %s\ndate:        %s\n", cset.user(), cset.dateString());
-			if (complete) {
+			if (!complete && verbose) {
 				final List<String> files = cset.files();
 				sb.append("files:      ");
 				for (String s : files) {
 					sb.append(' ');
 					sb.append(s);
 				}
+				sb.append('\n');
+			}
+			if (complete) {
+				if (statusHelper == null) {
+					statusHelper = new StatusCollector(repo);
+				}
+				StatusCollector.Record r = new StatusCollector.Record();
+				statusHelper.change(revNumber, r);
+				if (!r.getModified().isEmpty()) {
+					sb.append("files:      ");
+					for (String s : r.getModified()) {
+						sb.append(' ');
+						sb.append(s);
+					}
+					sb.append('\n');
+				}
+				if (!r.getAdded().isEmpty()) {
+					sb.append("files+:     ");
+					for (String s : r.getAdded()) {
+						sb.append(' ');
+						sb.append(s);
+					}
+					sb.append('\n');
+				}
+				if (!r.getRemoved().isEmpty()) {
+					sb.append("files-:     ");
+					for (String s : r.getRemoved()) {
+						sb.append(' ');
+						sb.append(s);
+					}
+					sb.append('\n');
+				}
 				if (cset.extras() != null) {
-					sb.append("\nextra:      ");
+					sb.append("extra:      ");
 					for (Map.Entry<String, String> e : cset.extras().entrySet()) {
 						sb.append(' ');
 						sb.append(e.getKey());
 						sb.append('=');
 						sb.append(e.getValue());
 					}
+					sb.append('\n');
 				}
-				f.format("\ndescription:\n%s\n\n", cset.comment());
+			}
+			if (complete || verbose) {
+				f.format("description:\n%s\n\n", cset.comment());
 			} else {
 				f.format("summary:     %s\n\n", cset.comment());
 			}
