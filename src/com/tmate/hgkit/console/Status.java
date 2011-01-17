@@ -15,6 +15,7 @@ import com.tmate.hgkit.ll.HgRepository;
 import com.tmate.hgkit.ll.LocalHgRepo;
 import com.tmate.hgkit.ll.Nodeid;
 import com.tmate.hgkit.ll.StatusCollector;
+import com.tmate.hgkit.ll.WorkingCopyStatusCollector;
 
 /**
  *
@@ -49,13 +50,21 @@ public class Status {
 		System.out.println("\n\nTry hg status --change <rev>:");
 		sc.change(0, dump);
 		System.out.println("\nStatus against working dir:");
-		((LocalHgRepo) hgRepo).statusLocal(TIP, dump);
+		WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(hgRepo, ((LocalHgRepo) hgRepo).createWorkingDirWalker());
+		wcc.walk(TIP, dump);
 		System.out.println();
 		System.out.printf("Manifest of the revision %d:\n", r2);
 		hgRepo.getManifest().walk(r2, r2, new Manifest.Dump());
 		System.out.println();
 		System.out.printf("\nStatus of working dir against %d:\n", r2);
-		((LocalHgRepo) hgRepo).statusLocal(r2, dump);
+		r = wcc.status(r2);
+		sortAndPrint('M', r.getModified());
+		sortAndPrint('A', r.getAdded());
+		sortAndPrint('R', r.getRemoved());
+		sortAndPrint('?', r.getUnknown());
+		sortAndPrint('I', r.getIgnored());
+		sortAndPrint('C', r.getClean());
+		sortAndPrint('!', r.getMissing());
 	}
 	
 	private static void sortAndPrint(char prefix, List<String> ul) {
