@@ -21,14 +21,30 @@ import com.tmate.hgkit.ll.WorkingCopyStatusCollector;
 public class TestStatus {
 
 	public static void main(String[] args) throws Exception {
-		final StatusOutputParser statusParser = new StatusOutputParser();
-		ExecHelper eh = new ExecHelper(statusParser, null);
-		eh.run("hg", "status", "-A");
-		// run java equivalent
 		HgRepository repo = new RepositoryLookup().detectFromWorkingDir();
 		final WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(repo, new FileWalker(new File(System.getProperty("user.dir"))));
+		final StatusOutputParser statusParser = new StatusOutputParser();
+		ExecHelper eh = new ExecHelper(statusParser, null);
+		// 
+		eh.run("hg", "status", "-A");
 		StatusCollector.Record r = wcc.status(HgRepository.TIP);
-		// compare result
+		report("hg status -A", r, statusParser);
+		//
+		statusParser.reset();
+		int revision = 3;
+		eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
+		r = wcc.status(revision);
+		report("status -A --rev " + revision, r, statusParser);
+		//
+		statusParser.reset();
+		eh.run("hg", "status", "-A", "--change", String.valueOf(revision));
+		r = new StatusCollector.Record();
+		new StatusCollector(repo).change(revision, r);
+		report("status -A --change " + revision, r, statusParser);
+	}
+	
+	private static void report(String what, StatusCollector.Record r, StatusOutputParser statusParser) {
+		System.out.println(">>>" + what);
 		reportNotEqual("MODIFIED", r.getModified(), statusParser.getModified());
 		reportNotEqual("ADDED", r.getAdded(), statusParser.getAdded());
 		reportNotEqual("REMOVED", r.getRemoved(), statusParser.getRemoved());
@@ -37,6 +53,7 @@ public class TestStatus {
 		reportNotEqual("MISSING", r.getMissing(), statusParser.getMissing());
 		reportNotEqual("UNKNOWN", r.getUnknown(), statusParser.getUnknown());
 		// TODO compare equals
+		System.out.println("<<<\n");
 	}
 	
 	private static <T> void reportNotEqual(String what, Collection<T> l1, Collection<T> l2) {
