@@ -66,3 +66,5 @@ File access:
 
 Tests:
 DataAccess - readBytes(length > memBufferSize, length*2 > memBufferSize) - to check impl is capable to read huge chunks of data, regardless of own buffer size
+
+ExecHelper('cmd', OutputParser()).run(). StatusOutputParser, LogOutputParser extends OutputParser. construct java result similar to that of cmd, compare results
