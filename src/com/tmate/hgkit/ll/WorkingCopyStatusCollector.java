@@ -35,7 +35,7 @@ public class WorkingCopyStatusCollector {
 	 * Optionally, supply a collector instance that may cache (or have already cached) base revision
 	 * @param sc may be null
 	 */
-	public void setBseRevisionCollector(StatusCollector sc) {
+	public void setBaseRevisionCollector(StatusCollector sc) {
 		baseRevisionCollector = sc;
 	}
 	
