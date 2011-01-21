@@ -1,7 +1,20 @@
 /*
- * Copyright (c) 2011 Artem Tikhomirov 
+ * Copyright (c) 2011 TMate Software Ltd
+ *  
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * For information on how to redistribute this software under
+ * the terms of a license other than GNU General Public License
+ * contact TMate Software at support@svnkit.com
  */
-package com.tmate.hgkit;
+package org.tmatesoft.hg.test;
 
 import java.io.File;
 import java.util.Collection;
@@ -16,16 +29,30 @@ import com.tmate.hgkit.ll.WorkingCopyStatusCollector;
 
 /**
  *
- * @author artem
+ * @author Artem Tikhomirov
+ * @author TMate Software Ltd.
  */
 public class TestStatus {
 
+	private StatusOutputParser statusParser;
+	private ExecHelper eh;
+	private final HgRepository repo;
+
 	public static void main(String[] args) throws Exception {
 		HgRepository repo = new RepositoryLookup().detectFromWorkingDir();
+		TestStatus test = new TestStatus(repo);
+		test.testLowLevel();
+		test.testStatusCommand();
+	}
+	
+	public TestStatus(HgRepository hgRepo) {
+		repo = hgRepo;
+		statusParser = new StatusOutputParser();
+		eh = new ExecHelper(statusParser, null);
+	}
+	
+	public void testLowLevel() throws Exception {
 		final WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(repo, new FileWalker(new File(System.getProperty("user.dir"))));
-		final StatusOutputParser statusParser = new StatusOutputParser();
-		ExecHelper eh = new ExecHelper(statusParser, null);
-		// 
 		eh.run("hg", "status", "-A");
 		StatusCollector.Record r = wcc.status(HgRepository.TIP);
 		report("hg status -A", r, statusParser);
@@ -41,6 +68,10 @@ public class TestStatus {
 		r = new StatusCollector.Record();
 		new StatusCollector(repo).change(revision, r);
 		report("status -A --change " + revision, r, statusParser);
+	}
+	
+	public void testStatusCommand() throws Exception {
+		throw HgRepository.notImplemented();
 	}
 	
 	private static void report(String what, StatusCollector.Record r, StatusOutputParser statusParser) {
