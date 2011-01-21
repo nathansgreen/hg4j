@@ -60,8 +60,15 @@ public class Cset implements Cloneable {
 		revNumber = localRevNumber;
 		nodeid = nid;
 		changeset = rawChangeset;
+		modifiedFiles = addedFiles = null;
+		deletedFiles = null;
 	}
-	
+	public int getRevision() {
+		return revNumber;
+	}
+	public Nodeid getNodeid() {
+		return nodeid;
+	}
 	public String getUser() {
 		return changeset.user();
 	}
@@ -73,6 +80,9 @@ public class Cset implements Cloneable {
 	}
 	public String getDate() {
 		return changeset.dateString();
+	}
+	public Nodeid getManifestRevision() {
+		return changeset.manifest();
 	}
 
 	public List<Path> getAffectedFiles() {

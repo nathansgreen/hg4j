@@ -4,19 +4,19 @@
 package com.tmate.hgkit.console;
 
 import java.util.Formatter;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
+import org.tmatesoft.hg.core.Cset;
+import org.tmatesoft.hg.core.LogCommand;
+import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.Path;
 
 import com.tmate.hgkit.fs.RepositoryLookup;
-import com.tmate.hgkit.ll.Changeset;
 import com.tmate.hgkit.ll.HgDataFile;
 import com.tmate.hgkit.ll.HgRepository;
 import com.tmate.hgkit.ll.Nodeid;
 import com.tmate.hgkit.ll.Revlog;
-import com.tmate.hgkit.ll.StatusCollector;
 
 /**
  * @author artem
@@ -36,17 +36,25 @@ public class Log {
 		dump.complete = true; //cmdLineOpts;
 		dump.verbose = false; //cmdLineOpts;
 		dump.reverseOrder = true;
-		dump.branches = cmdLineOpts.branches;
+		LogCommand cmd = new LogCommand(hgRepo);
 		if (cmdLineOpts.users != null) {
-			dump.users = new LinkedHashSet<String>();
 			for (String u : cmdLineOpts.users) {
-				dump.users.add(u.toLowerCase());
+				cmd.user(u);
 			}
+		}
+		if (cmdLineOpts.branches != null) {
+			for (String b : cmdLineOpts.branches) {
+				cmd.branch(b);
+			}
+		}
+		if (cmdLineOpts.limit != -1) {
+			cmd.limit(cmdLineOpts.limit);
+			
 		}
 		if (cmdLineOpts.files.isEmpty()) {
 			if (cmdLineOpts.limit == -1) {
 				// no revisions and no limit
-				hgRepo.getChangelog().all(dump);
+				cmd.execute(dump);
 			} else {
 				// in fact, external (to dump inspector) --limit processing yelds incorrect results when other args
 				// e.g. -u or -b are used (i.e. with -u shall give <limit> csets with user, not check last <limit> csets for user 
@@ -55,7 +63,7 @@ public class Log {
 					System.out.println("No changes");
 					return;
 				}
-				hgRepo.getChangelog().range(r[0], r[1], dump);
+				cmd.range(r[0], r[1]).execute(dump);
 			}
 			dump.complete();
 		} else {
@@ -63,14 +71,14 @@ public class Log {
 				HgDataFile f1 = hgRepo.getFileNode(fname);
 				System.out.println("History of the file: " + f1.getPath());
 				if (cmdLineOpts.limit == -1) {
-					f1.history(dump);
+					cmd.file(Path.create(fname)).execute(dump);
 				} else {
 					int[] r = new int[] { 0, f1.getRevisionCount() };
 					if (fixRange(r, dump.reverseOrder, cmdLineOpts.limit) == 0) {
 						System.out.println("No changes");
 						continue;
 					}
-					f1.history(r[0], r[1], dump);
+					cmd.range(r[0], r[1]).file(Path.create(fname)).execute(dump);
 				}
 				dump.complete();
 			}
@@ -94,45 +102,24 @@ public class Log {
 		return rv;
 	}
 
-	// Differences with standard hg log output
-	//   - complete == true (--debug) files are not broke down to modified,+ and -
-	private static final class Dump implements Changeset.Inspector {
+	private static final class Dump implements LogCommand.Handler {
 		// params
 		boolean complete = false; // roughly --debug
 		boolean reverseOrder = false;
-		Set<String> branches;
-		Set<String> users; // shall be lowercased
 		boolean verbose = true; // roughly -v
 		// own
 		private LinkedList<String> l = new LinkedList<String>();
 		private final HgRepository repo;
 		private Revlog.ParentWalker changelogWalker;
 		private final int tip ;
-		private StatusCollector statusHelper;
 
 		public Dump(HgRepository hgRepo) {
 			repo = hgRepo;
 			tip = hgRepo.getChangelog().getRevisionCount() - 1;
 		}
 
-		public void next(int revisionNumber, Nodeid nodeid, Changeset cset) {
-			if (branches != null && !branches.contains(cset.branch())) {
-				return;
-			}
-			if (users != null) {
-				String csetUser = cset.user().toLowerCase();
-				boolean found = false;
-				for (String u : users) {
-					if (csetUser.indexOf(u) != -1) {
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					return;
-				}
-			}
-			final String s = print(revisionNumber, nodeid, cset);
+		public void next(Cset changeset) {
+			final String s = print(changeset);
 			if (reverseOrder) {
 				l.addFirst(s);
 			} else {
@@ -151,18 +138,19 @@ public class Log {
 			changelogWalker = null;
 		}
 
-		private String print(int revNumber, Nodeid csetNodeid, Changeset cset) {
+		private String print(Cset cset) {
 			StringBuilder sb = new StringBuilder();
 			Formatter f = new Formatter(sb);
-			f.format("changeset:   %d:%s\n", revNumber, complete ? csetNodeid : csetNodeid.shortNotation());
-			if (revNumber == tip || repo.getTags().isTagged(csetNodeid)) {
+			final Nodeid csetNodeid = cset.getNodeid();
+			f.format("changeset:   %d:%s\n", cset.getRevision(), complete ? csetNodeid : csetNodeid.shortNotation());
+			if (cset.getRevision() == tip || repo.getTags().isTagged(csetNodeid)) {
 				
 				sb.append("tag:         ");
 				for (String t : repo.getTags().tags(csetNodeid)) {
 					sb.append(t);
 					sb.append(' ');
 				}
-				if (revNumber == tip) {
+				if (cset.getRevision() == tip) {
 					sb.append("tip");
 				}
 				sb.append('\n');
@@ -176,64 +164,59 @@ public class Log {
 				Nodeid p2 = changelogWalker.safeSecondParent(csetNodeid);
 				int p1x = p1 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevisionNumber(p1);
 				int p2x = p2 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevisionNumber(p2);
-				int mx = repo.getManifest().getLocalRevisionNumber(cset.manifest());
-				f.format("parent:      %d:%s\nparent:      %d:%s\nmanifest:    %d:%s\n", p1x, p1, p2x, p2, mx, cset.manifest());
+				int mx = repo.getManifest().getLocalRevisionNumber(cset.getManifestRevision());
+				f.format("parent:      %d:%s\nparent:      %d:%s\nmanifest:    %d:%s\n", p1x, p1, p2x, p2, mx, cset.getManifestRevision());
 			}
-			f.format("user:        %s\ndate:        %s\n", cset.user(), cset.dateString());
+			f.format("user:        %s\ndate:        %s\n", cset.getUser(), cset.getDate());
 			if (!complete && verbose) {
-				final List<String> files = cset.files();
+				final List<Path> files = cset.getAffectedFiles();
 				sb.append("files:      ");
-				for (String s : files) {
+				for (Path s : files) {
 					sb.append(' ');
 					sb.append(s);
 				}
 				sb.append('\n');
 			}
 			if (complete) {
-				if (statusHelper == null) {
-					statusHelper = new StatusCollector(repo);
-				}
-				StatusCollector.Record r = new StatusCollector.Record();
-				statusHelper.change(revNumber, r);
-				if (!r.getModified().isEmpty()) {
+				if (!cset.getModifiedFiles().isEmpty()) {
 					sb.append("files:      ");
-					for (String s : r.getModified()) {
+					for (FileRevision s : cset.getModifiedFiles()) {
 						sb.append(' ');
-						sb.append(s);
+						sb.append(s.getPath());
 					}
 					sb.append('\n');
 				}
-				if (!r.getAdded().isEmpty()) {
+				if (!cset.getAddedFiles().isEmpty()) {
 					sb.append("files+:     ");
-					for (String s : r.getAdded()) {
+					for (FileRevision s : cset.getAddedFiles()) {
 						sb.append(' ');
-						sb.append(s);
+						sb.append(s.getPath());
 					}
 					sb.append('\n');
 				}
-				if (!r.getRemoved().isEmpty()) {
+				if (!cset.getRemovedFiles().isEmpty()) {
 					sb.append("files-:     ");
-					for (String s : r.getRemoved()) {
+					for (Path s : cset.getRemovedFiles()) {
 						sb.append(' ');
 						sb.append(s);
 					}
 					sb.append('\n');
 				}
-				if (cset.extras() != null) {
-					sb.append("extra:      ");
-					for (Map.Entry<String, String> e : cset.extras().entrySet()) {
-						sb.append(' ');
-						sb.append(e.getKey());
-						sb.append('=');
-						sb.append(e.getValue());
-					}
-					sb.append('\n');
-				}
+//				if (cset.extras() != null) {
+//					sb.append("extra:      ");
+//					for (Map.Entry<String, String> e : cset.extras().entrySet()) {
+//						sb.append(' ');
+//						sb.append(e.getKey());
+//						sb.append('=');
+//						sb.append(e.getValue());
+//					}
+//					sb.append('\n');
+//				}
 			}
 			if (complete || verbose) {
-				f.format("description:\n%s\n\n", cset.comment());
+				f.format("description:\n%s\n\n", cset.getComment());
 			} else {
-				f.format("summary:     %s\n\n", cset.comment());
+				f.format("summary:     %s\n\n", cset.getComment());
 			}
 			return sb.toString();
 		}
