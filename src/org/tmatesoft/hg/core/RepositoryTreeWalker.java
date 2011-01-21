@@ -54,6 +54,11 @@ public class RepositoryTreeWalker {
 		throw HgRepository.notImplemented();
 	}
 	
+	public RepositoryTreeWalker revision(int rev) {
+		startRev = endRev = rev;
+		return this;
+	}
+	
 	public RepositoryTreeWalker dirs(boolean include) {
 		// XXX whether directories with directories only are include or not
 		// now lists only directories with files
