@@ -3,8 +3,12 @@
  */
 package com.tmate.hgkit.ll;
 
+import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.util.PathRewrite;
+
 
 /**
+ * Shall be as state-less as possible, all the caching happens outside the repo, in commands/walkers
  * @author artem
  */
 public abstract class HgRepository {
@@ -57,8 +61,11 @@ public abstract class HgRepository {
 	protected abstract HgTags createTags();
 
 	public abstract HgDataFile getFileNode(String path);
+	public abstract HgDataFile getFileNode(Path path);
 
 	public abstract String getLocation();
+	
+	public abstract PathRewrite getPathHelper();
 
 
 	protected abstract String toStoragePath(String path, boolean isData);

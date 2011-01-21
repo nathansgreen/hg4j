@@ -30,6 +30,10 @@ public class StatusCollector {
 		cache.put(-1, emptyFakeState);
 	}
 	
+	public HgRepository getRepo() {
+		return repo;
+	}
+	
 	private ManifestRevisionInspector get(int rev) {
 		ManifestRevisionInspector i = cache.get(rev);
 		if (i == null) {
@@ -58,9 +62,14 @@ public class StatusCollector {
 		if (rev1 == rev2) {
 			throw new IllegalArgumentException();
 		}
+		if (inspector == null) {
+			throw new IllegalArgumentException();
+		}
+		if (inspector instanceof Record) {
+			((Record) inspector).init(rev1, rev2, this);
+		}
 		// in fact, rev1 and rev2 are often next (or close) to each other,
 		// thus, we can optimize Manifest reads here (manifest.walk(rev1, rev2))
- 
 		ManifestRevisionInspector r1, r2;
 		if (!cache.containsKey(rev1) && !cache.containsKey(rev2) && Math.abs(rev1 - rev2) < 5 /*subjective equivalent of 'close enough'*/) {
 			int minRev = rev1 < rev2 ? rev1 : rev2;
@@ -118,6 +127,35 @@ public class StatusCollector {
 	public static class Record implements Inspector {
 		private List<String> modified, added, removed, clean, missing, unknown, ignored;
 		private Map<String, String> copied;
+		
+		private int startRev, endRev;
+		private StatusCollector statusHelper;
+		
+		// XXX StatusCollector may additionally initialize Record instance to speed lookup of changed file revisions
+		// here I need access to ManifestRevisionInspector via #raw(). Perhaps, non-static class (to get
+		// implicit reference to StatusCollector) may be better?
+		// Since users may want to reuse Record instance we've once created (and initialized), we need to  
+		// ensure functionality is correct for each/any call (#walk checks instanceof Record and fixes it up)
+		// Perhaps, distinct helper (sc.getRevisionHelper().nodeid(fname)) would be better, just not clear
+		// how to supply [start..end] values there easily
+		/*package-local*/void init(int startRevision, int endRevision, StatusCollector self) {
+			startRev = startRevision;
+			endRev = endRevision;
+			statusHelper = self;
+		}
+		
+		public Nodeid nodeidBeforeChange(String fname) {
+			if ((modified == null || !modified.contains(fname)) && (removed == null || !removed.contains(fname))) {
+				return null;
+			}
+			return statusHelper.raw(startRev).nodeid(startRev, fname);
+		}
+		public Nodeid nodeidAfterChange(String fname) {
+			if ((modified == null || !modified.contains(fname)) && (added == null || !added.contains(fname))) {
+				return null;
+			}
+			return statusHelper.raw(endRev).nodeid(endRev, fname);
+		}
 		
 		public List<String> getModified() {
 			return proper(modified);
@@ -208,6 +246,7 @@ public class StatusCollector {
 		}
 	}
 
+	// XXX in fact, indexed access brings more trouble than benefits, get rid of it? Distinct instance per revision is good enough
 	public /*XXX private, actually. Made public unless repo.statusLocal finds better place*/ static final class ManifestRevisionInspector implements HgManifest.Inspector {
 		private final HashMap<String, Nodeid>[] idsMap;
 		private final HashMap<String, String>[] flagsMap;

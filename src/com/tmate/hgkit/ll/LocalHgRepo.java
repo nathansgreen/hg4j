@@ -13,6 +13,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.util.PathRewrite;
+
 import com.tmate.hgkit.fs.DataAccessProvider;
 import com.tmate.hgkit.fs.FileWalker;
 
@@ -24,6 +27,12 @@ public class LocalHgRepo extends HgRepository {
 	private File repoDir; // .hg folder
 	private final String repoLocation;
 	private final DataAccessProvider dataAccess;
+	private final PathRewrite normalizePath = new PathRewrite() {
+		
+		public String rewrite(String path) {
+			return normalize(path);
+		}
+	};
 
 	public LocalHgRepo(String repositoryPath) {
 		setInvalid(true);
@@ -102,6 +111,16 @@ public class LocalHgRepo extends HgRepository {
 		return new HgDataFile(this, nPath, content);
 	}
 
+	@Override
+	public HgDataFile getFileNode(Path path) {
+		return getFileNode(path.toString());
+	}
+	
+	@Override
+	public PathRewrite getPathHelper() {
+		return normalizePath;
+	}
+	
 	private boolean revlogv1;
 	private boolean store;
 	private boolean fncache;

@@ -95,6 +95,15 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 		sb.append("}");
 		return sb.toString();
 	}
+	
+	@Override
+	public Changeset clone() {
+		try {
+			return (Changeset) super.clone();
+		} catch (CloneNotSupportedException ex) {
+			throw new InternalError(ex.toString());
+		}
+	}
 
 	public static Changeset parse(byte[] data, int offset, int length) {
 		Changeset rv = new Changeset();

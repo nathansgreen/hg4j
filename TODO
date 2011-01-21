@@ -1,0 +1,21 @@
+Read-only support, version 1.0
+==============================
+Committed:
+* hg log
+  user, date, branch, limit
+  filename(multiple?)
+  
+* hg manifest (aka ls)
+  
+* hg status
+
+* hg cat
+
+Proposed:
+- LogCommand.revision(int... rev)+ to walk selected revisions only (list->sort(array) on execute, binary search)
+- LogCommand.before(Date date) and .after()
+- LogCommand.match() to specify pattern, no selected file()s only?  
+
+Read-only support, version 1.1
+==============================
+

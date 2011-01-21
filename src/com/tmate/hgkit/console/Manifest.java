@@ -5,6 +5,10 @@ package com.tmate.hgkit.console;
 
 import static com.tmate.hgkit.ll.HgRepository.TIP;
 
+import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.core.RepositoryTreeWalker;
+import org.tmatesoft.hg.core.LogCommand.FileRevision;
+
 import com.tmate.hgkit.fs.RepositoryLookup;
 import com.tmate.hgkit.ll.HgManifest;
 import com.tmate.hgkit.ll.HgRepository;
@@ -25,8 +29,26 @@ public class Manifest {
 			return;
 		}
 		System.out.println(hgRepo.getLocation());
-		HgManifest.Inspector insp = new Dump();
-		hgRepo.getManifest().walk(0, TIP, insp);
+		hgRepo.getManifest().walk(0, TIP, new Dump());
+		//
+		new RepositoryTreeWalker(hgRepo).dirs(true).walk(new RepositoryTreeWalker.Handler() {
+			
+			public void begin(Nodeid manifestRevision) {
+				System.out.println(">> " + manifestRevision);
+			}
+			public void dir(Path p) {
+				System.out.println(p);
+			}
+			public void file(FileRevision fileRevision) {
+				System.out.print(fileRevision.getRevision());;
+				System.out.print("   ");
+				System.out.println(fileRevision.getPath());
+			}
+			
+			public void end(Nodeid manifestRevision) {
+				System.out.println();
+			}
+		}); 
 	}
 
 	public static final class Dump implements HgManifest.Inspector {

@@ -49,6 +49,11 @@ Status operation from GUI - guess, usually on a file/subfolder, hence API should
 ??? http://mercurial.selenic.com/wiki/Manifest says "Multiple changesets may refer to the same manifest revision". To me, each changeset 
 changes repository, hence manifest should update nodeids of the files it lists, effectively creating new manifest revision.
 
+? hg status, compare revision and local file with kw expansion and eol extension
+? subrepos in log, status (-S) and manifest commands
+
+Commands to get CommandContext where they may share various caches (e.g. StatusCollector)
+
 >>>> Effective file read/data access
 ReadOperation, Revlog does: repo.getFileSystem().run(this.file, new ReadOperation(), long start=0, long end = -1)
 ReadOperation gets buffer (of whatever size, as decided by FS impl), parses it and then  reports if needs more data.
