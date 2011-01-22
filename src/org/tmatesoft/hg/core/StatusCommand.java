@@ -16,9 +16,19 @@
  */
 package org.tmatesoft.hg.core;
 
-import org.tmatesoft.hg.core.Path.Matcher;
+import static com.tmate.hgkit.ll.HgRepository.BAD_REVISION;
+import static com.tmate.hgkit.ll.HgRepository.TIP;
+import static com.tmate.hgkit.ll.HgRepository.WORKING_COPY;
 
+import org.tmatesoft.hg.core.Path.Matcher;
+import org.tmatesoft.hg.util.PathPool;
+
+import com.tmate.hgkit.fs.FileWalker;
 import com.tmate.hgkit.ll.HgRepository;
+import com.tmate.hgkit.ll.LocalHgRepo;
+import com.tmate.hgkit.ll.StatusCollector;
+import com.tmate.hgkit.ll.WorkingCopyStatusCollector;
+import com.tmate.hgkit.ll.StatusCollector.Record;
 
 /**
  *
@@ -28,22 +38,55 @@ import com.tmate.hgkit.ll.HgRepository;
 public class StatusCommand {
 	private final HgRepository repo;
 
-	private boolean needClean = false;
-	private boolean needIgnored = false;
+	private boolean needModified;
+	private boolean needAdded;
+	private boolean needRemoved;
+	private boolean needUnknown;
+	private boolean needMissing;
+	private boolean needClean;
+	private boolean needIgnored;
 	private Matcher matcher;
-	private int startRevision;
-	private Integer endRevision; // need three states, set, -1 or actual rev number
+	private int startRevision = TIP;
+	private int endRevision = WORKING_COPY; 
 	private boolean visitSubRepo = true;
 
-	public StatusCommand(HgRepository hgRepo) {
-		this.repo = hgRepo;
+	public StatusCommand(HgRepository hgRepo) { 
+		repo = hgRepo;
+		defaults();
 	}
 
-	public StatusCommand all() {
-		needClean = true;
+	public StatusCommand defaults() {
+		needModified = needAdded = needRemoved = needUnknown = needMissing = true;
+		needClean = needIgnored = false;
 		return this;
 	}
+	public StatusCommand all() {
+		needModified = needAdded = needRemoved = needUnknown = needMissing = true;
+		needClean = needIgnored = true;
+		return this;
+	}
+	
 
+	public StatusCommand modified(boolean include) {
+		needModified = include;
+		return this;
+	}
+	public StatusCommand added(boolean include) {
+		needAdded = include;
+		return this;
+	}
+	public StatusCommand removed(boolean include) {
+		needRemoved = include;
+		return this;
+	}
+	public StatusCommand deleted(boolean include) {
+		needMissing = include;
+		return this;
+	}
+	public StatusCommand unknown(boolean include) {
+		needUnknown = include;
+		return this;
+	}
 	public StatusCommand clean(boolean include) {
 		needClean = include;
 		return this;
@@ -53,17 +96,36 @@ public class StatusCommand {
 		return this;
 	}
 	
-	// if set, either base:revision or base:workingdir
+	/**
+	 * if set, either base:revision or base:workingdir
+	 * to unset, pass {@link HgRepository#TIP} or {@link HgRepository#BAD_REVISION}
+	 * @param revision
+	 * @return
+	 */
+	
 	public StatusCommand base(int revision) {
+		if (revision == WORKING_COPY) {
+			throw new IllegalArgumentException();
+		}
+		if (revision == BAD_REVISION) {
+			revision = TIP;
+		}
 		startRevision = revision;
 		return this;
 	}
 	
-	// revision without base == --change
+	/**
+	 * Revision without base == --change
+	 * Pass {@link HgRepository#WORKING_COPY} or {@link HgRepository#BAD_REVISION} to reset
+	 * @param revision
+	 * @return
+	 */
 	public StatusCommand revision(int revision) {
-		// XXX how to clear endRevision, if needed.
-		// Perhaps, use of WC_REVISION or BAD_REVISION == -2 or Int.MIN_VALUE?
-		endRevision = new Integer(revision);
+		if (revision == BAD_REVISION) {
+			revision = WORKING_COPY;
+		}
+		// XXX negative values, except for predefined constants, shall throw IAE.
+		endRevision = revision;
 		return this;
 	}
 	
@@ -77,7 +139,21 @@ public class StatusCommand {
 		throw HgRepository.notImplemented();
 	}
 	
-	public void execute() {
-		throw HgRepository.notImplemented();
+	public void execute(StatusCollector.Inspector inspector) {
+		StatusCollector sc = new StatusCollector(repo); // TODO from CommandContext
+//		StatusCollector.Record r = new StatusCollector.Record(); // XXX use own inspector not to collect entries that
+		// are not interesting or do not match name
+		if (endRevision == WORKING_COPY) {
+			WorkingCopyStatusCollector wcsc = new WorkingCopyStatusCollector(repo, ((LocalHgRepo) repo).createWorkingDirWalker());
+			wcsc.setBaseRevisionCollector(sc);
+			wcsc.walk(startRevision, inspector);
+		} else {
+			if (startRevision == TIP) {
+				sc.change(endRevision, inspector);
+			} else {
+				sc.walk(startRevision, endRevision, inspector);
+			}
+		}
+//		PathPool pathHelper = new PathPool(repo.getPathHelper()); // TODO from CommandContext
 	}
 }

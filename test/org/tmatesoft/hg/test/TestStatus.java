@@ -16,10 +16,14 @@
  */
 package org.tmatesoft.hg.test;
 
+import static com.tmate.hgkit.ll.HgRepository.TIP;
+
 import java.io.File;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+
+import org.tmatesoft.hg.core.StatusCommand;
 
 import com.tmate.hgkit.fs.FileWalker;
 import com.tmate.hgkit.fs.RepositoryLookup;
@@ -34,9 +38,9 @@ import com.tmate.hgkit.ll.WorkingCopyStatusCollector;
  */
 public class TestStatus {
 
+	private final HgRepository repo;
 	private StatusOutputParser statusParser;
 	private ExecHelper eh;
-	private final HgRepository repo;
 
 	public static void main(String[] args) throws Exception {
 		HgRepository repo = new RepositoryLookup().detectFromWorkingDir();
@@ -53,6 +57,7 @@ public class TestStatus {
 	
 	public void testLowLevel() throws Exception {
 		final WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(repo, new FileWalker(new File(System.getProperty("user.dir"))));
+		statusParser.reset();
 		eh.run("hg", "status", "-A");
 		StatusCollector.Record r = wcc.status(HgRepository.TIP);
 		report("hg status -A", r, statusParser);
@@ -71,7 +76,25 @@ public class TestStatus {
 	}
 	
 	public void testStatusCommand() throws Exception {
-		throw HgRepository.notImplemented();
+		final StatusCommand sc = new StatusCommand(repo).all();
+		StatusCollector.Record r;
+		statusParser.reset();
+		eh.run("hg", "status", "-A");
+		sc.execute(r = new StatusCollector.Record());
+		report("hg status -A", r, statusParser);
+		//
+		statusParser.reset();
+		int revision = 3;
+		eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
+		sc.base(revision).execute(r = new StatusCollector.Record());
+		report("status -A --rev " + revision, r, statusParser);
+		//
+		statusParser.reset();
+		eh.run("hg", "status", "-A", "--change", String.valueOf(revision));
+		sc.base(TIP).revision(revision).execute(r = new StatusCollector.Record());
+		report("status -A --change " + revision, r, statusParser);
+		
+		// TODO check not -A, but defaults()/custom set of modifications 
 	}
 	
 	private static void report(String what, StatusCollector.Record r, StatusOutputParser statusParser) {

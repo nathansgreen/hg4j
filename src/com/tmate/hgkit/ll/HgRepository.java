@@ -14,6 +14,8 @@ import org.tmatesoft.hg.util.PathRewrite;
 public abstract class HgRepository {
 
 	public static final int TIP = -1;
+	public static final int BAD_REVISION = Integer.MIN_VALUE;
+	public static final int WORKING_COPY = -2;
 
 	// temp aux marker method
 	public static IllegalStateException notImplemented() {

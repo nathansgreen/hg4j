@@ -3,6 +3,9 @@
  */
 package com.tmate.hgkit.ll;
 
+import static com.tmate.hgkit.ll.HgRepository.BAD_REVISION;
+import static com.tmate.hgkit.ll.HgRepository.TIP;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,7 +29,7 @@ public class StatusCollector {
 		cache = new HashMap<Integer, ManifestRevisionInspector>();
 		ManifestRevisionInspector emptyFakeState = new ManifestRevisionInspector(-1, -1);
 		emptyFakeState.begin(-1, null);
-		emptyFakeState.end(-1);
+		emptyFakeState.end(-1); // FIXME HgRepo.TIP == -1 as well, need to distinguish fake "prior to first" revision from "the very last" 
 		cache.put(-1, emptyFakeState);
 	}
 	
@@ -67,6 +70,12 @@ public class StatusCollector {
 		}
 		if (inspector instanceof Record) {
 			((Record) inspector).init(rev1, rev2, this);
+		}
+		if (rev1 == TIP) {
+			rev1 = repo.getManifest().getRevisionCount() - 1;
+		}
+		if (rev2 == TIP) {
+			rev2 = repo.getManifest().getRevisionCount() - 1; // XXX add Revlog.tip() func ? 
 		}
 		// in fact, rev1 and rev2 are often next (or close) to each other,
 		// thus, we can optimize Manifest reads here (manifest.walk(rev1, rev2))
@@ -145,12 +154,18 @@ public class StatusCollector {
 		}
 		
 		public Nodeid nodeidBeforeChange(String fname) {
+			if (statusHelper == null || startRev == BAD_REVISION) {
+				return null;
+			}
 			if ((modified == null || !modified.contains(fname)) && (removed == null || !removed.contains(fname))) {
 				return null;
 			}
 			return statusHelper.raw(startRev).nodeid(startRev, fname);
 		}
 		public Nodeid nodeidAfterChange(String fname) {
+			if (statusHelper == null || endRev == BAD_REVISION) {
+				return null;
+			}
 			if ((modified == null || !modified.contains(fname)) && (added == null || !added.contains(fname))) {
 				return null;
 			}

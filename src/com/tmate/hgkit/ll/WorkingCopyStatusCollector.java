@@ -3,6 +3,7 @@
  */
 package com.tmate.hgkit.ll;
 
+import static com.tmate.hgkit.ll.HgRepository.BAD_REVISION;
 import static com.tmate.hgkit.ll.HgRepository.TIP;
 
 import java.io.BufferedInputStream;
@@ -54,7 +55,13 @@ public class WorkingCopyStatusCollector {
 	public void walk(int baseRevision, StatusCollector.Inspector inspector) {
 		final HgIgnore hgIgnore = ((LocalHgRepo) repo).loadIgnore(); // FIXME hack
 		TreeSet<String> knownEntries = getDirstate().all();
-		final boolean isTipBase = baseRevision == TIP || baseRevision == repo.getManifest().getRevisionCount();
+		final boolean isTipBase;
+		if (baseRevision == TIP) {
+			baseRevision = repo.getManifest().getRevisionCount() - 1;
+			isTipBase = true;
+		} else {
+			isTipBase = baseRevision == repo.getManifest().getRevisionCount() - 1;
+		}
 		StatusCollector.ManifestRevisionInspector collect = null;
 		Set<String> baseRevFiles = Collections.emptySet();
 		if (!isTipBase) {
@@ -65,6 +72,10 @@ public class WorkingCopyStatusCollector {
 				repo.getManifest().walk(baseRevision, baseRevision, collect);
 			}
 			baseRevFiles = new TreeSet<String>(collect.files(baseRevision));
+		}
+		if (inspector instanceof StatusCollector.Record) {
+			StatusCollector sc = baseRevisionCollector == null ? new StatusCollector(repo) : baseRevisionCollector;
+			((StatusCollector.Record) inspector).init(baseRevision, BAD_REVISION, sc);
 		}
 		repoWalker.reset();
 		while (repoWalker.hasNext()) {
