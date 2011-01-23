@@ -95,6 +95,7 @@ public class ConfigFile {
 					section.put(key, value);
 				}
 			}
+			br.close();
 		} catch (IOException ex) {
 			ex.printStackTrace(); // XXX shall outer world care?
 		}
