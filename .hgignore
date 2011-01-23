@@ -1,4 +1,5 @@
 syntax:glob
 bin
 src/Extras.java
-hgkit.jar
+jhg.jar
+jhg-tests.jar

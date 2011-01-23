@@ -36,7 +36,7 @@ public class ManifestOutputParser implements OutputParser {
 	private final LinkedHashMap<Path, Nodeid> result = new LinkedHashMap<Path, Nodeid>();
 
 	public ManifestOutputParser() {
-		pattern = Pattern.compile("^([a-z0-9]{40}) (\\d{3})   (.+)$", Pattern.MULTILINE);
+		pattern = Pattern.compile("^([a-f0-9]{40}) (\\d{3})   (.+)$", Pattern.MULTILINE);
 	}
 	
 	public void reset() {

@@ -35,7 +35,7 @@ import com.tmate.hgkit.ll.StatusCollector;
 
 /**
  * <pre>
- *   new LogCommand().limit(20).branch("maintenance-2.1").user("me").execute();
+ *   new LogCommand().limit(20).branch("maintenance-2.1").user("me").execute(new MyHandler());
  * </pre>
  * Not thread-safe (each thread has to use own {@link LogCommand} instance).
  * 
