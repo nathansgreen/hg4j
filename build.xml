@@ -38,9 +38,9 @@
     </target>
 	
 	<target name="tests" depends="build, build-tests">
-		<java classpath="jhg.jar,jhg-tests.jar" classname="org.tmatesoft.hg.test.TestHistory"/>
-		<java classpath="jhg.jar,jhg-tests.jar" classname="org.tmatesoft.hg.test.TestManifest"/>
-		<java classpath="jhg.jar,jhg-tests.jar" classname="org.tmatesoft.hg.test.TestStatus"/>
+		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestHistory"/>
+		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestManifest"/>
+		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestStatus"/>
 	</target>
 
     <target name="build">
@@ -52,6 +52,9 @@
     			<include name="org/tmatesoft/hg/util/**" />
     			<include name="org/tmatesoft/hg/repo/**" />
     			<include name="org/tmatesoft/hg/internal/**" />
+    			<!-- -->
+    			<include name="com/tmate/hgkit/fs/**" />
+    			<include name="com/tmate/hgkit/ll/**" />
     		</fileset>
     	</jar>
     </target>
