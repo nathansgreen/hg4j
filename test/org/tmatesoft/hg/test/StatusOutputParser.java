@@ -87,7 +87,7 @@ public class StatusOutputParser implements OutputParser {
 				}
 				// last added is copy destination
 				// to get or to remove it - depends on what StatusCollector does in this case
-				copied.put(fname, added.get(added.size() - 1));
+				copied.put(added.get(added.size() - 1), fname);
 				break;
 			}
 			}

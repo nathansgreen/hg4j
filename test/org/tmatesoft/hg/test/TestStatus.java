@@ -19,8 +19,10 @@ package org.tmatesoft.hg.test;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.tmatesoft.hg.core.StatusCommand;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -104,6 +106,28 @@ public class TestStatus {
 		reportNotEqual("IGNORED", r.getIgnored(), statusParser.getIgnored());
 		reportNotEqual("MISSING", r.getMissing(), statusParser.getMissing());
 		reportNotEqual("UNKNOWN", r.getUnknown(), statusParser.getUnknown());
+		List<String> copiedKeyDiff = difference(r.getCopied().keySet(), statusParser.getCopied().keySet());
+		HashMap<String, String> copyDiff = new HashMap<String,String>();
+		if (copiedKeyDiff.isEmpty()) {
+			for (String jk : r.getCopied().keySet()) {
+				String jv = r.getCopied().get(jk);
+				if (statusParser.getCopied().containsKey(jk)) {
+					String cmdv = statusParser.getCopied().get(jk);
+					if (!jv.equals(cmdv)) {
+						copyDiff.put(jk, jv + " instead of " + cmdv);
+					}
+				} else {
+					copyDiff.put(jk, "ERRONEOUSLY REPORTED IN JAVA");
+				}
+			}
+		}
+		System.out.println("COPIED" + (copiedKeyDiff.isEmpty() && copyDiff.isEmpty() ? " are the same" : " are NOT the same:"));
+		for (String s : copiedKeyDiff) {
+			System.out.println("\tNon-matching key:" + s);
+		}
+		for (String s : copyDiff.keySet()) {
+			System.out.println(s + " : " + copyDiff.get(s));
+		}
 		// TODO compare equals
 		System.out.println("<<<\n");
 	}
