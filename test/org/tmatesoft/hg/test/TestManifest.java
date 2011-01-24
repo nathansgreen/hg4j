@@ -16,19 +16,19 @@
  */
 package org.tmatesoft.hg.test;
 
-import static com.tmate.hgkit.ll.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.RepositoryTreeWalker;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.Lookup;
 
-import com.tmate.hgkit.fs.RepositoryLookup;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.Nodeid;
 
 /**
  *
@@ -53,7 +53,7 @@ public class TestManifest {
 	};
 
 	public static void main(String[] args) throws Exception {
-		HgRepository repo = new RepositoryLookup().detectFromWorkingDir();
+		HgRepository repo = new Lookup().detectFromWorkingDir();
 		TestManifest tm = new TestManifest(repo);
 		tm.testTip();
 		tm.testFirstRevision();

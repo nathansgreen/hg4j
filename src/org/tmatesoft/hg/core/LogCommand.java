@@ -16,7 +16,7 @@
  */
 package org.tmatesoft.hg.core;
 
-import static com.tmate.hgkit.ll.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Calendar;
 import java.util.Collections;
@@ -26,12 +26,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.repo.Changeset;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.StatusCollector;
 import org.tmatesoft.hg.util.PathPool;
 
-import com.tmate.hgkit.ll.Changeset;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.Nodeid;
-import com.tmate.hgkit.ll.StatusCollector;
 
 /**
  * <pre>
@@ -137,7 +136,7 @@ public class LogCommand implements Changeset.Inspector {
 	}
 
 	/**
-	 * Similar to {@link #execute(com.tmate.hgkit.ll.Changeset.Inspector)}, collects and return result as a list.
+	 * Similar to {@link #execute(org.tmatesoft.hg.repo.Changeset.Inspector)}, collects and return result as a list.
 	 */
 	public List<Cset> execute() {
 		CollectHandler collector = new CollectHandler();

@@ -14,40 +14,38 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@svnkit.com
  */
-package org.tmatesoft.hg.util;
+package org.tmatesoft.hg.core;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.io.File;
+
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.Lookup;
 
 /**
  *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public interface PathRewrite {
+public class RepositoryFacade {
+	private HgRepository repo;
 
-	public String rewrite(String path);
+	public RepositoryFacade() {
+	}
 
-	public class Composite implements PathRewrite {
-		private List<PathRewrite> chain;
+	public boolean init() throws Exception /*FIXME RepoInitException*/ {
+		repo = new Lookup().detectFromWorkingDir();
+		return repo != null && !repo.isInvalid();
+	}
+	
+	public boolean initFrom(File repoLocation) throws Exception {
+		repo = new Lookup().detect(repoLocation.getCanonicalPath());
+		return repo != null && !repo.isInvalid();
+	}
 
-		public Composite(PathRewrite... e) {
-			LinkedList<PathRewrite> r = new LinkedList<PathRewrite>();
-			for (int i = (e == null ? -1 : e.length); i >=0; i--) {
-				r.addFirst(e[i]);
-			}
-			chain = r;
-		}
-		public Composite chain(PathRewrite e) {
-			chain.add(e);
-			return this;
-		}
-
-		public String rewrite(String path) {
-			for (PathRewrite pr : chain) {
-				path = pr.rewrite(path);
-			}
-			return path;
-		}
+	public LogCommand createLogCommand() {
+		return new LogCommand(repo/*, getCommandContext()*/);
+	}
+	public StatusCommand createStatusCommand() {
+		return new StatusCommand(repo/*, getCommandContext()*/);
 	}
 }

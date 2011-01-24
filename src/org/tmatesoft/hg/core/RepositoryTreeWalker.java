@@ -16,7 +16,7 @@
  */
 package org.tmatesoft.hg.core;
 
-import static com.tmate.hgkit.ll.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.ConcurrentModificationException;
 import java.util.LinkedHashMap;
@@ -24,11 +24,10 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.PathPool;
 
-import com.tmate.hgkit.ll.HgManifest;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.Nodeid;
 
 /**
  *

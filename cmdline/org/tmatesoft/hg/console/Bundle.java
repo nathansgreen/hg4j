@@ -14,40 +14,34 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@svnkit.com
  */
-package org.tmatesoft.hg.util;
+package org.tmatesoft.hg.console;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.io.File;
+
+import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.repo.HgBundle;
+import org.tmatesoft.hg.repo.HgRepository;
+
 
 /**
- *
+ * WORK IN PROGRESS, DO NOT USE
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public interface PathRewrite {
+public class Bundle {
 
-	public String rewrite(String path);
-
-	public class Composite implements PathRewrite {
-		private List<PathRewrite> chain;
-
-		public Composite(PathRewrite... e) {
-			LinkedList<PathRewrite> r = new LinkedList<PathRewrite>();
-			for (int i = (e == null ? -1 : e.length); i >=0; i--) {
-				r.addFirst(e[i]);
-			}
-			chain = r;
+	public static void main(String[] args) throws Exception {
+		Options cmdLineOpts = Options.parse(args);
+		HgRepository hgRepo = cmdLineOpts.findRepository();
+		if (hgRepo.isInvalid()) {
+			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
+			return;
 		}
-		public Composite chain(PathRewrite e) {
-			chain.add(e);
-			return this;
-		}
-
-		public String rewrite(String path) {
-			for (PathRewrite pr : chain) {
-				path = pr.rewrite(path);
-			}
-			return path;
-		}
+		File bundleFile = new File("/temp/hg/hg-bundle-a78c980749e3.tmp");
+		DataAccessProvider dap = new DataAccessProvider();
+		HgBundle hgBundle = new HgBundle(dap, bundleFile);
+//		hgBundle.dump();
+		hgBundle.changes(hgRepo);
 	}
 }

@@ -16,20 +16,18 @@
  */
 package org.tmatesoft.hg.test;
 
-import static com.tmate.hgkit.ll.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.core.StatusCommand;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.Lookup;
+import org.tmatesoft.hg.repo.StatusCollector;
+import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
 
-import com.tmate.hgkit.fs.FileWalker;
-import com.tmate.hgkit.fs.RepositoryLookup;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.StatusCollector;
-import com.tmate.hgkit.ll.WorkingCopyStatusCollector;
 
 /**
  *
@@ -43,7 +41,7 @@ public class TestStatus {
 	private ExecHelper eh;
 
 	public static void main(String[] args) throws Exception {
-		HgRepository repo = new RepositoryLookup().detectFromWorkingDir();
+		HgRepository repo = new Lookup().detectFromWorkingDir();
 		TestStatus test = new TestStatus(repo);
 		test.testLowLevel();
 		test.testStatusCommand();
@@ -56,7 +54,7 @@ public class TestStatus {
 	}
 	
 	public void testLowLevel() throws Exception {
-		final WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(repo, new FileWalker(new File(System.getProperty("user.dir"))));
+		final WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(repo);
 		statusParser.reset();
 		eh.run("hg", "status", "-A");
 		StatusCollector.Record r = wcc.status(HgRepository.TIP);

@@ -16,16 +16,15 @@
  */
 package org.tmatesoft.hg.console;
 
-import static com.tmate.hgkit.ll.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.RepositoryTreeWalker;
-import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgRepository;
 
-import com.tmate.hgkit.fs.RepositoryLookup;
-import com.tmate.hgkit.ll.HgManifest;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.Nodeid;
 
 /**
  *
@@ -35,9 +34,8 @@ import com.tmate.hgkit.ll.Nodeid;
 public class Manifest {
 
 	public static void main(String[] args) throws Exception {
-		RepositoryLookup repoLookup = new RepositoryLookup();
-		RepositoryLookup.Options cmdLineOpts = RepositoryLookup.Options.parse(args);
-		HgRepository hgRepo = repoLookup.detect(cmdLineOpts);
+		Options cmdLineOpts = Options.parse(args);
+		HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;

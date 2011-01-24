@@ -23,13 +23,12 @@ import java.util.List;
 import org.tmatesoft.hg.core.Cset;
 import org.tmatesoft.hg.core.LogCommand;
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.repo.Changelog;
+import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgRepository;
 
-import com.tmate.hgkit.fs.RepositoryLookup;
-import com.tmate.hgkit.ll.HgDataFile;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.Nodeid;
-import com.tmate.hgkit.ll.Revlog;
 
 /**
  * @author Artem Tikhomirov
@@ -38,9 +37,8 @@ import com.tmate.hgkit.ll.Revlog;
 public class Log {
 
 	public static void main(String[] args) throws Exception {
-		RepositoryLookup repoLookup = new RepositoryLookup();
-		RepositoryLookup.Options cmdLineOpts = RepositoryLookup.Options.parse(args);
-		HgRepository hgRepo = repoLookup.detect(cmdLineOpts);
+		Options cmdLineOpts = Options.parse(args);
+		HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
@@ -124,7 +122,7 @@ public class Log {
 		// own
 		private LinkedList<String> l = new LinkedList<String>();
 		private final HgRepository repo;
-		private Revlog.ParentWalker changelogWalker;
+		private Changelog.ParentWalker changelogWalker;
 		private final int tip ;
 
 		public Dump(HgRepository hgRepo) {

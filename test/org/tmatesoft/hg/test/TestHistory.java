@@ -22,10 +22,10 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.Cset;
 import org.tmatesoft.hg.core.LogCommand;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.Lookup;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
 
-import com.tmate.hgkit.fs.RepositoryLookup;
-import com.tmate.hgkit.ll.HgRepository;
 
 /**
  *
@@ -39,7 +39,7 @@ public class TestHistory {
 	private LogOutputParser changelogParser;
 	
 	public static void main(String[] args) throws Exception {
-		TestHistory th = new TestHistory(new RepositoryLookup().detectFromWorkingDir());
+		TestHistory th = new TestHistory(new Lookup().detectFromWorkingDir());
 		th.testCompleteLog();
 	}
 

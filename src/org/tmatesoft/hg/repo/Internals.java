@@ -14,40 +14,36 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@svnkit.com
  */
-package org.tmatesoft.hg.util;
+package org.tmatesoft.hg.repo;
 
-import java.util.LinkedList;
-import java.util.List;
 
 /**
- *
+ * DO NOT USE THIS CLASS, INTENDED FOR TESTING PURPOSES.
+ * 
+ * Debug helper, to access otherwise restricted (package-local) methods
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
+
  */
-public interface PathRewrite {
+public class Internals {
 
-	public String rewrite(String path);
+	private final HgRepository repo;
 
-	public class Composite implements PathRewrite {
-		private List<PathRewrite> chain;
+	public Internals(HgRepository hgRepo) {
+		repo = hgRepo;
+	}
 
-		public Composite(PathRewrite... e) {
-			LinkedList<PathRewrite> r = new LinkedList<PathRewrite>();
-			for (int i = (e == null ? -1 : e.length); i >=0; i--) {
-				r.addFirst(e[i]);
-			}
-			chain = r;
+	public void dumpDirstate() {
+		repo.loadDirstate().dump();
+	}
+
+	public boolean[] checkIgnored(String... toCheck) {
+		HgIgnore ignore = repo.loadIgnore();
+		boolean[] rv = new boolean[toCheck.length];
+		for (int i = 0; i < toCheck.length; i++) {
+			rv[i] = ignore.isIgnored(toCheck[i]);
 		}
-		public Composite chain(PathRewrite e) {
-			chain.add(e);
-			return this;
-		}
-
-		public String rewrite(String path) {
-			for (PathRewrite pr : chain) {
-				path = pr.rewrite(path);
-			}
-			return path;
-		}
+		return rv;
 	}
 }

@@ -14,43 +14,27 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@svnkit.com
  */
-package org.tmatesoft.hg.test;
+package org.tmatesoft.hg.repo;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Collections;
+import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
-
 
 /**
+ * FIXME Place-holder, implement
  *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class ManifestOutputParser implements OutputParser {
+public class HgTags {
 
-	private final Pattern pattern;
-	private final LinkedHashMap<Path, Nodeid> result = new LinkedHashMap<Path, Nodeid>();
+	public List<String> tags(Nodeid nid) {
+		return Collections.emptyList();
+	}
 
-	public ManifestOutputParser() {
-		pattern = Pattern.compile("^([a-f0-9]{40}) (\\d{3})   (.+)$", Pattern.MULTILINE);
-	}
-	
-	public void reset() {
-		result.clear();
-	}
-	
-	public Map<Path, Nodeid> getResult() {
-		return result;
-	}
-	
-	public void parse(CharSequence seq) {
-		Matcher m = pattern.matcher(seq);
-		while (m.find()) {
-			result.put(Path.create(m.group(3)), Nodeid.fromAscii(m.group(1).getBytes(), 0, 40));
-		}
+	public boolean isTagged(Nodeid nid) {
+		// TODO implement
+		return false;
 	}
 }

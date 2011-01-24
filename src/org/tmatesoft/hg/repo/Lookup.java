@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2010-2011 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,40 +14,36 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@svnkit.com
  */
-package org.tmatesoft.hg.util;
+package org.tmatesoft.hg.repo;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.io.File;
 
 /**
- *
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public interface PathRewrite {
+public class Lookup {
 
-	public String rewrite(String path);
+	public HgRepository detectFromWorkingDir() throws Exception {
+		return detect(System.getProperty("user.dir"));
+	}
 
-	public class Composite implements PathRewrite {
-		private List<PathRewrite> chain;
-
-		public Composite(PathRewrite... e) {
-			LinkedList<PathRewrite> r = new LinkedList<PathRewrite>();
-			for (int i = (e == null ? -1 : e.length); i >=0; i--) {
-				r.addFirst(e[i]);
+	public HgRepository detect(String location) throws Exception /*FIXME Exception type, RepoInitException? */ {
+		File dir = new File(location);
+		File repository;
+		do {
+			repository = new File(dir, ".hg");
+			if (repository.exists() && repository.isDirectory()) {
+				break;
 			}
-			chain = r;
+			repository = null;
+			dir = dir.getParentFile();
+			
+		} while(dir != null);
+		if (repository == null) {
+			return new HgRepository(location);
 		}
-		public Composite chain(PathRewrite e) {
-			chain.add(e);
-			return this;
-		}
-
-		public String rewrite(String path) {
-			for (PathRewrite pr : chain) {
-				path = pr.rewrite(path);
-			}
-			return path;
-		}
+		return new HgRepository(repository);
 	}
 }

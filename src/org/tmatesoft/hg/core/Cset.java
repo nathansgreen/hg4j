@@ -21,12 +21,11 @@ import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.repo.Changeset;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.StatusCollector;
 import org.tmatesoft.hg.util.PathPool;
 
-import com.tmate.hgkit.ll.Changeset;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.Nodeid;
-import com.tmate.hgkit.ll.StatusCollector;
 
 /**
  * TODO rename to Changeset along with original Changeset moved to .repo and renamed to HgChangeset?

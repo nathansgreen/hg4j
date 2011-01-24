@@ -16,19 +16,14 @@
  */
 package org.tmatesoft.hg.core;
 
-import static com.tmate.hgkit.ll.HgRepository.BAD_REVISION;
-import static com.tmate.hgkit.ll.HgRepository.TIP;
-import static com.tmate.hgkit.ll.HgRepository.WORKING_COPY;
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 
 import org.tmatesoft.hg.core.Path.Matcher;
-import org.tmatesoft.hg.util.PathPool;
-
-import com.tmate.hgkit.fs.FileWalker;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.LocalHgRepo;
-import com.tmate.hgkit.ll.StatusCollector;
-import com.tmate.hgkit.ll.WorkingCopyStatusCollector;
-import com.tmate.hgkit.ll.StatusCollector.Record;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.StatusCollector;
+import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
 
 /**
  *
@@ -144,7 +139,7 @@ public class StatusCommand {
 //		StatusCollector.Record r = new StatusCollector.Record(); // XXX use own inspector not to collect entries that
 		// are not interesting or do not match name
 		if (endRevision == WORKING_COPY) {
-			WorkingCopyStatusCollector wcsc = new WorkingCopyStatusCollector(repo, ((LocalHgRepo) repo).createWorkingDirWalker());
+			WorkingCopyStatusCollector wcsc = new WorkingCopyStatusCollector(repo);
 			wcsc.setBaseRevisionCollector(sc);
 			wcsc.walk(startRevision, inspector);
 		} else {

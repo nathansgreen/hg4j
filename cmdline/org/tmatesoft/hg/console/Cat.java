@@ -16,11 +16,11 @@
  */
 package org.tmatesoft.hg.console;
 
-import com.tmate.hgkit.fs.RepositoryLookup;
-import com.tmate.hgkit.ll.DigestHelper;
-import com.tmate.hgkit.ll.HgDataFile;
-import com.tmate.hgkit.ll.HgRepository;
-import com.tmate.hgkit.ll.Internals;
+import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.Internals;
+
 
 /**
  * @author Artem Tikhomirov
@@ -29,9 +29,8 @@ import com.tmate.hgkit.ll.Internals;
 public class Cat {
 
 	public static void main(String[] args) throws Exception {
-		RepositoryLookup repoLookup = new RepositoryLookup();
-		RepositoryLookup.Options cmdLineOpts = RepositoryLookup.Options.parse(args);
-		HgRepository hgRepo = repoLookup.detect(cmdLineOpts);
+		Options cmdLineOpts = Options.parse(args);
+		HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;

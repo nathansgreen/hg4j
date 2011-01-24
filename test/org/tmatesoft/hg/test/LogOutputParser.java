@@ -21,7 +21,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.tmate.hgkit.ll.HgRepository;
+import org.tmatesoft.hg.repo.HgRepository;
+
 
 /**
  *
