@@ -125,7 +125,10 @@ public class WorkingCopyStatusCollector {
 				inspector.missing(m);
 			} else {
 				// removed from the repo
-				inspector.removed(m);
+				// if we check against non-tip revision, do not report files that were added past that revision and now removed.
+				if (collect == null || baseRevFiles.contains(m)) {
+					inspector.removed(m);
+				}
 			}
 		}
 	}

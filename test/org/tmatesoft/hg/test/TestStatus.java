@@ -32,7 +32,7 @@ import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
 
 
 /**
- *
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -95,6 +95,14 @@ public class TestStatus {
 		report("status -A --change " + revision, r, statusParser);
 		
 		// TODO check not -A, but defaults()/custom set of modifications 
+	}
+	
+	public void testRemovedAgainstNonTip() {
+		/*
+		 status --rev N when a file added past revision N was removed ((both physically and in dirstate), but not yet committed
+
+		 Reports extra REMOVED file (the one added and removed in between). Shall not
+		 */
 	}
 	
 	private static void report(String what, StatusCollector.Record r, StatusOutputParser statusParser) {
