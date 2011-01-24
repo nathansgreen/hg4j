@@ -82,15 +82,16 @@ public class Log {
 			for (String fname : cmdLineOpts.files) {
 				HgDataFile f1 = hgRepo.getFileNode(fname);
 				System.out.println("History of the file: " + f1.getPath());
+				String normalizesName = hgRepo.getPathHelper().rewrite(fname);
 				if (cmdLineOpts.limit == -1) {
-					cmd.file(Path.create(fname)).execute(dump);
+					cmd.file(Path.create(normalizesName)).execute(dump);
 				} else {
 					int[] r = new int[] { 0, f1.getRevisionCount() };
 					if (fixRange(r, dump.reverseOrder, cmdLineOpts.limit) == 0) {
 						System.out.println("No changes");
 						continue;
 					}
-					cmd.range(r[0], r[1]).file(Path.create(fname)).execute(dump);
+					cmd.range(r[0], r[1]).file(Path.create(normalizesName)).execute(dump);
 				}
 				dump.complete();
 			}

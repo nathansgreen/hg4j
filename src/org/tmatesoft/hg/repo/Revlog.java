@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.RevlogStream;
 
 
 /**
@@ -92,7 +93,7 @@ abstract class Revlog {
 	 */
 	public byte[] content(int revision) {
 		final byte[][] dataPtr = new byte[1][];
-		Revlog.Inspector insp = new Revlog.Inspector() {
+		RevlogStream.Inspector insp = new RevlogStream.Inspector() {
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
 				dataPtr[0] = data;
 			}
@@ -123,7 +124,7 @@ abstract class Revlog {
 		if (parent2 != null && parent2.length < 20) {
 			throw new IllegalArgumentException(parent2.toString());
 		}
-		class ParentCollector implements Revlog.Inspector {
+		class ParentCollector implements RevlogStream.Inspector {
 			public int p1 = -1;
 			public int p2 = -1;
 			public byte[] nodeid;
@@ -158,15 +159,6 @@ abstract class Revlog {
 		}
 	}
 
-	// FIXME byte[] data might be too expensive, for few usecases it may be better to have intermediate Access object (when we don't need full data 
-	// instantly - e.g. calculate hash, or comparing two revisions
-	// XXX seems that RevlogStream is better place for this class. 
-	public interface Inspector {
-		// XXX boolean retVal to indicate whether to continue?
-		// TODO specify nodeid and data length, and reuse policy (i.e. if revlog stream doesn't reuse nodeid[] for each call) 
-		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, byte[] data);
-	}
-
 	/*
 	 * XXX think over if it's better to do either:
 	 * pw = getChangelog().new ParentWalker(); pw.init() and pass pw instance around as needed
@@ -192,7 +184,7 @@ abstract class Revlog {
 			secondParent = new HashMap<Nodeid, Nodeid>(firstParent.size() >> 1); // assume branches/merges are less frequent
 			allNodes = new LinkedHashSet<Nodeid>();
 			
-			Inspector insp = new Inspector() {
+			RevlogStream.Inspector insp = new RevlogStream.Inspector() {
 				final Nodeid[] sequentialRevisionNodeids = new Nodeid[revisionCount];
 				int ix = 0;
 				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {

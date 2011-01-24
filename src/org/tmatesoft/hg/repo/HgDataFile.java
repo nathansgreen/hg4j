@@ -20,6 +20,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.internal.RevlogStream;
 
 
 
@@ -45,6 +46,7 @@ public class HgDataFile extends Revlog {
 		return content != null; // XXX need better impl
 	}
 
+	// human-readable (i.e. "COPYING", not "store/data/_c_o_p_y_i_n_g.i")
 	public Path getPath() {
 		return path; // hgRepo.backresolve(this) -> name?
 	}
@@ -65,8 +67,17 @@ public class HgDataFile extends Revlog {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
 		}
+		final int last = content.revisionCount() - 1;
+		if (start < 0 || start > last) {
+			throw new IllegalArgumentException();
+		}
+		if (end == TIP) {
+			end = last;
+		} else if (end < start || end > last) {
+			throw new IllegalArgumentException();
+		}
 		final int[] commitRevisions = new int[end - start + 1];
-		Revlog.Inspector insp = new Revlog.Inspector() {
+		RevlogStream.Inspector insp = new RevlogStream.Inspector() {
 			int count = 0;
 			
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {

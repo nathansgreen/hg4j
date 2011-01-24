@@ -69,6 +69,9 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 		if (path == null) {
 			throw new IllegalArgumentException();
 		}
+		if (path.indexOf('\\') != -1) {
+			throw new IllegalArgumentException();
+		}
 		Path rv = new Path(path);
 		return rv;
 	}

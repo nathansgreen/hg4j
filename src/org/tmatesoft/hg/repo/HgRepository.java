@@ -24,6 +24,7 @@ import java.util.HashMap;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.RequiresFile;
+import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -124,11 +125,13 @@ public final class HgRepository {
 	public HgDataFile getFileNode(String path) {
 		String nPath = normalizePath.rewrite(path);
 		String storagePath = dataPathHelper.rewrite(nPath);
-		return getFileNode(Path.create(storagePath));
+		RevlogStream content = resolve(Path.create(storagePath));
+		return new HgDataFile(this, Path.create(nPath), content);
 	}
 
 	public HgDataFile getFileNode(Path path) {
-		RevlogStream content = resolve(path);
+		String storagePath = dataPathHelper.rewrite(path.toString());
+		RevlogStream content = resolve(Path.create(storagePath));
 		// XXX no content when no file? or HgDataFile.exists() to detect that? How about files that were removed in previous releases?
 		return new HgDataFile(this, path, content);
 	}

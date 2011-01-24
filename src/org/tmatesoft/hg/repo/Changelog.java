@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.RevlogStream;
 
 
 /**
@@ -40,7 +41,7 @@ public class Changelog extends Revlog {
 	}
 
 	public void range(int start, int end, final Changeset.Inspector inspector) {
-		Revlog.Inspector i = new Revlog.Inspector() {
+		RevlogStream.Inspector i = new RevlogStream.Inspector() {
 			
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
 				Changeset cset = Changeset.parse(data, 0, data.length);
@@ -53,7 +54,7 @@ public class Changelog extends Revlog {
 
 	public List<Changeset> range(int start, int end) {
 		final ArrayList<Changeset> rv = new ArrayList<Changeset>(end - start + 1);
-		Revlog.Inspector i = new Revlog.Inspector() {
+		RevlogStream.Inspector i = new RevlogStream.Inspector() {
 			
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
 				Changeset cset = Changeset.parse(data, 0, data.length);
@@ -68,7 +69,7 @@ public class Changelog extends Revlog {
 		if (revisions == null || revisions.length == 0) {
 			return;
 		}
-		Revlog.Inspector i = new Revlog.Inspector() {
+		RevlogStream.Inspector i = new RevlogStream.Inspector() {
 			
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
 				if (Arrays.binarySearch(revisions, revisionNumber) >= 0) {

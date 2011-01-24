@@ -25,6 +25,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.RevlogStream;
 
 
 /**

@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.repo;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.RevlogStream;
 
 
 /**
@@ -31,7 +32,7 @@ public class HgManifest extends Revlog {
 	}
 
 	public void walk(int start, int end, final Inspector inspector) {
-		Revlog.Inspector insp = new Revlog.Inspector() {
+		RevlogStream.Inspector insp = new RevlogStream.Inspector() {
 
 			private boolean gtg = true; // good to go
 

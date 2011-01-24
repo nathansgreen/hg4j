@@ -50,6 +50,7 @@ public class LogCommand implements Changeset.Inspector {
 	private int startRev = 0, endRev = TIP;
 	private Handler delegate;
 	private Calendar date;
+	private Path file;
 	private Cset changeset;
 
 	public LogCommand(HgRepository hgRepo) {
@@ -129,10 +130,15 @@ public class LogCommand implements Changeset.Inspector {
 		return this;
 	}
 	
-	// multiple? Bad idea, would need to include extra method into Handler to tell start of next file
+	/**
+	 * Visit history of a given file only.
+	 * @param file path relative to repository root. Pass <code>null</code> to reset.
+	 */
 	public LogCommand file(Path file) {
+		// multiple? Bad idea, would need to include extra method into Handler to tell start of next file
 		// implicit --follow in this case
-		throw HgRepository.notImplemented();
+		this.file = file;
+		return this;
 	}
 
 	/**
@@ -161,7 +167,11 @@ public class LogCommand implements Changeset.Inspector {
 			delegate = handler;
 			count = 0;
 			changeset = new Cset(new StatusCollector(repo), new PathPool(repo.getPathHelper()));
-			repo.getChangelog().range(startRev, endRev, this);
+			if (file == null) {
+				repo.getChangelog().range(startRev, endRev, this);
+			} else {
+				repo.getFileNode(file).history(startRev, endRev, this);
+			}
 		} finally {
 			delegate = null;
 			changeset = null;

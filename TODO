@@ -2,12 +2,16 @@ Read-only support, version 1.0
 ==============================
 Committed:
 * hg log
-  user, date, branch, limit
-  filename(multiple?)
+  + user, branch, limit
+  - date, 
+  + filename
+  - filename and follow history
+  - 
   
 * hg manifest (aka ls)
   
 * hg status
+  - copies for revisions
 
 * hg cat
 

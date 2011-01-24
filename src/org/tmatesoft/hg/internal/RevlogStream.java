@@ -14,7 +14,7 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@svnkit.com
  */
-package org.tmatesoft.hg.repo;
+package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
@@ -28,12 +28,9 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.DataAccess;
-import org.tmatesoft.hg.internal.DataAccessProvider;
 
 
 /**
- * XXX move to .internal?
  * ? Single RevlogStream per file per repository with accessor to record access session (e.g. with back/forward operations), 
  * or numerous RevlogStream with separate representation of the underlaying data (cached, lazy ChunkStream)?
  * 
@@ -51,7 +48,7 @@ public class RevlogStream {
 	private final DataAccessProvider dataAccess;
 
 	// if we need anything else from HgRepo, might replace DAP parameter with HgRepo and query it for DAP.
-	RevlogStream(DataAccessProvider dap, File indexFile) {
+	public RevlogStream(DataAccessProvider dap, File indexFile) {
 		this.dataAccess = dap;
 		this.indexFile = indexFile;
 	}
@@ -97,7 +94,7 @@ public class RevlogStream {
 	// map of nodeids, and once this comes true, we may get rid of this method.
 	// Unlike its counterpart, Revlog#getLocalRevisionNumber, doesn't fail with exception if node not found,
 	// returns a predefined constant instead
-	/*package-local*/ int findLocalRevisionNumber(Nodeid nodeid) {
+	public int findLocalRevisionNumber(Nodeid nodeid) {
 		// XXX this one may be implemented with iterate() once there's mechanism to stop iterations
 		final int indexSize = revisionCount();
 		DataAccess daIndex = getIndexStream();
@@ -127,7 +124,7 @@ public class RevlogStream {
 
 	// should be possible to use TIP, ALL, or -1, -2, -n notation of Hg
 	// ? boolean needsNodeid
-	public void iterate(int start, int end, boolean needData, Revlog.Inspector inspector) {
+	public void iterate(int start, int end, boolean needData, Inspector inspector) {
 		initOutline();
 		final int indexSize = index.size();
 		if (indexSize == 0) {
@@ -311,7 +308,7 @@ public class RevlogStream {
 
 	// mpatch.c : apply()
 	// FIXME need to implement patch merge (fold, combine, gather and discard from aforementioned mpatch.[c|py]), also see Revlog and Mercurial PDF
-	/*package-local for HgBundle; until moved to better place*/static byte[] apply(byte[] baseRevisionContent, int outcomeLen, List<PatchRecord> patch) {
+	public/*for HgBundle; until moved to better place*/static byte[] apply(byte[] baseRevisionContent, int outcomeLen, List<PatchRecord> patch) {
 		int last = 0, destIndex = 0;
 		if (outcomeLen == -1) {
 			outcomeLen = baseRevisionContent.length;
@@ -335,14 +332,14 @@ public class RevlogStream {
 	}
 
 	// @see http://mercurial.selenic.com/wiki/BundleFormat, in Changelog group description
-	/*package-local*/ static class PatchRecord { // copy of struct frag from mpatch.c
+	public static class PatchRecord {
 		/*
 		   Given there are pr1 and pr2:
 		     pr1.start to pr1.end will be replaced with pr's data (of pr1.len)
 		     pr1.end to pr2.start gets copied from base
 		 */
-		int start, end, len;
-		byte[] data;
+		public int start, end, len;
+		public byte[] data;
 
 		// TODO consider PatchRecord that only records data position (absolute in data source), and acquires data as needed 
 		private PatchRecord(int p1, int p2, int length, byte[] src) {
@@ -362,7 +359,7 @@ public class RevlogStream {
 			return new PatchRecord(p1, p2, len, dataCopy);
 		}
 
-		/*package-local*/ static PatchRecord read(DataAccess da) throws IOException {
+		public /*for HgBundle*/ static PatchRecord read(DataAccess da) throws IOException {
 			int p1 = da.readInt();
 			int p2 = da.readInt();
 			int len = da.readInt();
@@ -370,7 +367,13 @@ public class RevlogStream {
 			da.readBytes(src, 0, len);
 			return new PatchRecord(p1, p2, len, src);
 		}
-		
-		
+	}
+
+	// FIXME byte[] data might be too expensive, for few usecases it may be better to have intermediate Access object (when we don't need full data 
+	// instantly - e.g. calculate hash, or comparing two revisions
+	public interface Inspector {
+		// XXX boolean retVal to indicate whether to continue?
+		// TODO specify nodeid and data length, and reuse policy (i.e. if revlog stream doesn't reuse nodeid[] for each call) 
+		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, byte[] data);
 	}
 }
