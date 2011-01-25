@@ -22,6 +22,10 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.Cset;
 import org.tmatesoft.hg.core.LogCommand;
+import org.tmatesoft.hg.core.LogCommand.CollectHandler;
+import org.tmatesoft.hg.core.LogCommand.FileHistoryHandler;
+import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.Lookup;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
@@ -41,6 +45,7 @@ public class TestHistory {
 	public static void main(String[] args) throws Exception {
 		TestHistory th = new TestHistory(new Lookup().detectFromWorkingDir());
 		th.testCompleteLog();
+		th.testFollowHistory();
 	}
 
 	public TestHistory(HgRepository hgRepo) {
@@ -52,12 +57,40 @@ public class TestHistory {
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug");
 		List<Cset> r = new LogCommand(repo).execute();
-		report("hg log", r); 
+		report("hg log - COMPLETE REPO HISTORY", r, true); 
+	}
+	
+	public void testFollowHistory() throws Exception {
+		final Path f = Path.create("cmdline/org/tmatesoft/hg/console/Remote.java");
+		try {
+			if (repo.getFileNode(f).exists()) { // FIXME getFileNode shall not fail with IAE
+				changelogParser.reset();
+				eh.run("hg", "log", "--debug", "--follow", f.toString());
+				
+				class H extends CollectHandler implements FileHistoryHandler {
+					boolean copyReported = false;
+					boolean fromMatched = false;
+					public void copy(FileRevision from, FileRevision to) {
+						copyReported = true;
+						fromMatched = "src/com/tmate/hgkit/console/Remote.java".equals(from.getPath().toString());
+					}
+				};
+				H h = new H();
+				new LogCommand(repo).file(f, true).execute(h);
+				System.out.print("hg log - FOLLOW FILE HISTORY");
+				System.out.println("\tcopyReported:" + h.copyReported + ", and was " + (h.fromMatched ? "CORRECT" : "WRONG"));
+				report("hg log - FOLLOW FILE HISTORY", h.getChanges(), false);
+			}
+		} catch (IllegalArgumentException ex) {
+			System.out.println("Can't test file history with follow because need to query specific file with history");
+		}
 	}
 
-	private void report(String what, List<Cset> r) {
+	private void report(String what, List<Cset> r, boolean reverseConsoleResults) {
 		final List<Record> consoleResult = changelogParser.getResult();
-		Collections.reverse(consoleResult);
+		if (reverseConsoleResults) {
+			Collections.reverse(consoleResult);
+		}
 		Iterator<LogOutputParser.Record> consoleResultItr = consoleResult.iterator();
 		boolean hasErrors = false;
 		for (Cset cs : r) {
