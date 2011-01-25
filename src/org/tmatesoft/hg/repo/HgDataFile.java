@@ -20,7 +20,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
@@ -192,8 +192,8 @@ public class HgDataFile extends Revlog {
 
 	private static class Metadata {
 		// XXX sparse array needed
-		private final HashMap<Integer, Integer> offsets = new HashMap<Integer, Integer>(5);
-		private final HashMap<Integer, MetadataEntry[]> entries = new HashMap<Integer, MetadataEntry[]>(5);
+		private final TreeMap<Integer, Integer> offsets = new TreeMap<Integer, Integer>();
+		private final TreeMap<Integer, MetadataEntry[]> entries = new TreeMap<Integer, MetadataEntry[]>();
 		boolean known(int revision) {
 			return offsets.containsKey(revision);
 		}
