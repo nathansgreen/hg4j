@@ -84,14 +84,14 @@ public class Log {
 				System.out.println("History of the file: " + f1.getPath());
 				String normalizesName = hgRepo.getPathHelper().rewrite(fname);
 				if (cmdLineOpts.limit == -1) {
-					cmd.file(Path.create(normalizesName)).execute(dump);
+					cmd.file(Path.create(normalizesName), true).execute(dump);
 				} else {
 					int[] r = new int[] { 0, f1.getRevisionCount() };
 					if (fixRange(r, dump.reverseOrder, cmdLineOpts.limit) == 0) {
 						System.out.println("No changes");
 						continue;
 					}
-					cmd.range(r[0], r[1]).file(Path.create(normalizesName)).execute(dump);
+					cmd.range(r[0], r[1]).file(Path.create(normalizesName), true).execute(dump);
 				}
 				dump.complete();
 			}
@@ -115,7 +115,7 @@ public class Log {
 		return rv;
 	}
 
-	private static final class Dump implements LogCommand.Handler {
+	private static final class Dump implements LogCommand.FileHistoryHandler {
 		// params
 		boolean complete = false; // roughly --debug
 		boolean reverseOrder = false;
@@ -130,10 +130,17 @@ public class Log {
 			repo = hgRepo;
 			tip = hgRepo.getChangelog().getRevisionCount() - 1;
 		}
+		
+		public void copy(FileRevision from, FileRevision to) {
+			System.out.printf("Got notified that %s(%s) was originally known as %s(%s)\n", to.getPath(), to.getRevision(), from.getPath(), from.getRevision());
+		}
 
 		public void next(Cset changeset) {
 			final String s = print(changeset);
 			if (reverseOrder) {
+				// XXX in fact, need to insert s into l according to changeset.getRevision()
+				// because when file history is being followed, revisions of the original file (with smaller revNumber)
+				// are reported *after* revisions of present file and with addFirst appear above them
 				l.addFirst(s);
 			} else {
 				System.out.print(s);

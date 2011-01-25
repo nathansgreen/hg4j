@@ -24,6 +24,7 @@ import org.tmatesoft.hg.util.PathRewrite;
 
 /**
  * @see http://mercurial.selenic.com/wiki/CaseFoldingPlan
+ * @see http://mercurial.selenic.com/wiki/fncacheRepoFormat
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

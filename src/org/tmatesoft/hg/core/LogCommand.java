@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.repo.Changeset;
+import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.StatusCollector;
 import org.tmatesoft.hg.util.PathPool;
@@ -51,8 +52,9 @@ public class LogCommand implements Changeset.Inspector {
 	private Handler delegate;
 	private Calendar date;
 	private Path file;
+	private boolean followHistory; // makes sense only when file != null
 	private Cset changeset;
-
+	
 	public LogCommand(HgRepository hgRepo) {
 		this.repo = hgRepo;
 	}
@@ -133,11 +135,12 @@ public class LogCommand implements Changeset.Inspector {
 	/**
 	 * Visit history of a given file only.
 	 * @param file path relative to repository root. Pass <code>null</code> to reset.
+	 * @param followCopyRename true to report changesets of the original file(-s), if copy/rename ever occured to the file. 
 	 */
-	public LogCommand file(Path file) {
+	public LogCommand file(Path file, boolean followCopyRename) {
 		// multiple? Bad idea, would need to include extra method into Handler to tell start of next file
-		// implicit --follow in this case
 		this.file = file;
+		followHistory = followCopyRename;
 		return this;
 	}
 
@@ -170,7 +173,24 @@ public class LogCommand implements Changeset.Inspector {
 			if (file == null) {
 				repo.getChangelog().range(startRev, endRev, this);
 			} else {
-				repo.getFileNode(file).history(startRev, endRev, this);
+				HgDataFile fileNode = repo.getFileNode(file);
+				fileNode.history(startRev, endRev, this);
+				if (handler instanceof FileHistoryHandler && fileNode.isCopy()) {
+					// even if we do not follow history, report file rename
+					do {
+						FileRevision src = new FileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
+						FileRevision dst = new FileRevision(repo, fileNode.getRevisionNumber(0), fileNode.getPath());
+						((FileHistoryHandler) handler).copy(src, dst);
+						if (limit > 0 && count >= limit) {
+							// if limit reach, follow is useless.
+							break;
+						}
+						if (followHistory) {
+							fileNode = repo.getFileNode(src.getPath());
+							fileNode.history(this);
+						}
+					} while (followHistory && fileNode.isCopy());
+				}
 			}
 		} finally {
 			delegate = null;
@@ -215,6 +235,23 @@ public class LogCommand implements Changeset.Inspector {
 		void next(Cset changeset);
 	}
 	
+	/**
+	 * When {@link LogCommand} is executed against file, handler passed to {@link LogCommand#execute(Handler)} may optionally
+	 * implement this interface to get information about file renames. Method {@link #copy(FileRevision, FileRevision)} would
+	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #next(Cset)}.
+	 * 
+	 * For {@link LogCommand#file(Path, boolean)} with renamed file path and follow argument set to false, 
+	 * {@link #copy(FileRevision, FileRevision)} would be invoked for the first copy/rename in the history of the file, but not 
+	 * followed by any changesets. 
+	 *
+	 * @author Artem Tikhomirov
+	 * @author TMate Software Ltd.
+	 */
+	public interface FileHistoryHandler extends Handler {
+		// XXX perhaps, should distinguish copy from rename? And what about merged revisions and following them?
+		void copy(FileRevision from, FileRevision to);
+	}
+	
 	public static class CollectHandler implements Handler {
 		private final List<Cset> result = new LinkedList<Cset>();
 
@@ -232,7 +269,7 @@ public class LogCommand implements Changeset.Inspector {
 		private final Nodeid revision;
 		private final Path path;
 		
-		public FileRevision(HgRepository hgRepo, Nodeid rev, Path p) {
+		/*package-local*/FileRevision(HgRepository hgRepo, Nodeid rev, Path p) {
 			if (hgRepo == null || rev == null || p == null) {
 				throw new IllegalArgumentException();
 			}
@@ -249,7 +286,7 @@ public class LogCommand implements Changeset.Inspector {
 		}
 		public byte[] getContent() {
 			// XXX Content wrapper, to allow formats other than byte[], e.g. Stream, DataAccess, etc?
-			return repo.getFileNode(path).content();
+			return repo.getFileNode(path).content(revision);
 		}
 	}
 }

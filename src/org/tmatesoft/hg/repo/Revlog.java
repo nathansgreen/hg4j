@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Arrays;
@@ -58,10 +59,15 @@ abstract class Revlog {
 	public int getRevisionCount() {
 		return content.revisionCount();
 	}
+	
+	public Nodeid getRevisionNumber(int revision) {
+		// XXX cache nodeids?
+		return Nodeid.fromBinary(content.nodeid(revision), 0);
+	}
 
 	public int getLocalRevisionNumber(Nodeid nid) {
 		int revision = content.findLocalRevisionNumber(nid);
-		if (revision == Integer.MIN_VALUE) {
+		if (revision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.format("%s doesn't represent a revision of %s", nid.toString(), this /*XXX HgDataFile.getPath might be more suitable here*/));
 		}
 		return revision;

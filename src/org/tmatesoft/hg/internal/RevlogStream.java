@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.File;
@@ -28,6 +29,7 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgRepository;
 
 
 /**
@@ -89,11 +91,35 @@ public class RevlogStream {
 		}
 	}
 	
+	public byte[] nodeid(int revision) {
+		final int indexSize = revisionCount();
+		if (revision == TIP) {
+			revision = indexSize - 1;
+		}
+		if (revision < 0 || revision >= indexSize) {
+			throw new IllegalArgumentException(Integer.toString(revision));
+		}
+		DataAccess daIndex = getIndexStream();
+		try {
+			int recordOffset = inline ? (int) index.get(revision).offset : revision * REVLOGV1_RECORD_SIZE;
+			daIndex.seek(recordOffset + 32);
+			byte[] rv = new byte[20];
+			daIndex.readBytes(rv, 0, 20);
+			return rv;
+		} catch (IOException ex) {
+			ex.printStackTrace();
+			throw new IllegalStateException();
+		} finally {
+		}
+	}
+	
 	// Perhaps, RevlogStream should be limited to use of plain int revisions for access,
 	// while Nodeids should be kept on the level up, in Revlog. Guess, Revlog better keep
 	// map of nodeids, and once this comes true, we may get rid of this method.
-	// Unlike its counterpart, Revlog#getLocalRevisionNumber, doesn't fail with exception if node not found,
-	// returns a predefined constant instead
+	// Unlike its counterpart, {@link Revlog#getLocalRevisionNumber()}, doesn't fail with exception if node not found,
+	/**
+	 * @return integer in [0..revisionCount()) or {@link HgRepository#BAD_REVISION} if not found
+	 */
 	public int findLocalRevisionNumber(Nodeid nodeid) {
 		// XXX this one may be implemented with iterate() once there's mechanism to stop iterations
 		final int indexSize = revisionCount();
@@ -116,7 +142,7 @@ public class RevlogStream {
 		} finally {
 			daIndex.done();
 		}
-		return Integer.MIN_VALUE;
+		return BAD_REVISION;
 	}
 
 
