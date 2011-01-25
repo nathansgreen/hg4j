@@ -117,6 +117,13 @@ public final class Nodeid {
 		return new Nodeid(b, false);
 	}
 
+	public static Nodeid fromAscii(String asciiRepresentation) {
+		if (asciiRepresentation.length() != 40) {
+			throw new IllegalArgumentException();
+		}
+		// XXX is better impl for String possible?
+		return fromAscii(asciiRepresentation.getBytes(), 0, 40);
+	}
 	public static Nodeid fromAscii(byte[] asciiRepresentation, int offset, int length) {
 		if (length != 40) {
 			throw new IllegalArgumentException();
