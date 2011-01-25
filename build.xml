@@ -23,15 +23,15 @@
     <target name="samples" depends="build">
     	
     	<echo message="History of a specific file(s)"/>
-    	<java classpath="jhg.jar" classname="com.tmate.hgkit.console.Log">
+    	<java classpath="jhg.jar" classname="org.tmatesoft.hg.console.Log">
     		<arg line="design.txt .classpath src/com/tmate/hgkit/ll/LocalHgRepo.java"/>
     	</java>
     	
     	<echo message="Whole repo log"/>
-    	<java classpath="jhg.jar" classname="com.tmate.hgkit.console.Log"/>
+    	<java classpath="jhg.jar" classname="org.tmatesoft.hg.console.Log"/>
     	
     	<echo message="Content of a file"/>
-    	<java classpath="jhg.jar" classname="com.tmate.hgkit.console.Cat">
+    	<java classpath="jhg.jar" classname="org.tmatesoft.hg.console.Cat">
     		<arg line="src/com/tmate/hgkit/ll/Revlog.java"/>
     	</java>
 
@@ -49,6 +49,7 @@
     	<jar destfile="jhg.jar">
     		<fileset dir="bin/">
     			<include name="org/tmatesoft/hg/core/**" />
+    			<include name="org/tmatesoft/hg/console/**" />
     			<include name="org/tmatesoft/hg/util/**" />
     			<include name="org/tmatesoft/hg/repo/**" />
     			<include name="org/tmatesoft/hg/internal/**" />
