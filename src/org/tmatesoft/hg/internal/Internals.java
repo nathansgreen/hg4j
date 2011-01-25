@@ -33,7 +33,7 @@ public class Internals {
 	private int revlogVersion = 0;
 	private int requiresFlags = 0;
 
-	void setStorageConfig(int version, int flags) {
+	public/*for tests, otherwise pkg*/ void setStorageConfig(int version, int flags) {
 		revlogVersion = version;
 		requiresFlags = flags;
 	}

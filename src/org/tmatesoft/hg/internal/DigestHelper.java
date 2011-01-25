@@ -101,6 +101,16 @@ public class DigestHelper {
 		digest = alg.digest();
 		return this;
 	}
+	
+	public DigestHelper sha1(CharSequence... seq) {
+		MessageDigest alg = getSHA1();
+		for (CharSequence s : seq) {
+			byte[] b = s.toString().getBytes();
+			alg.update(b);
+		}
+		digest = alg.digest();
+		return this;
+	}
 
 	public static String toHexString(byte[] data, final int offset, final int count) {
 		char[] result = new char[count << 1];
