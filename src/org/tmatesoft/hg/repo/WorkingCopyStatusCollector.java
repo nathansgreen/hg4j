@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.StatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.FileWalker;
 
 /**
@@ -83,10 +84,10 @@ public class WorkingCopyStatusCollector {
 			if (baseRevisionCollector != null) {
 				collect = baseRevisionCollector.raw(baseRevision);
 			} else {
-				collect = new StatusCollector.ManifestRevisionInspector(baseRevision, baseRevision);
+				collect = new StatusCollector.ManifestRevisionInspector();
 				repo.getManifest().walk(baseRevision, baseRevision, collect);
 			}
-			baseRevFiles = new TreeSet<String>(collect.files(baseRevision));
+			baseRevFiles = new TreeSet<String>(collect.files());
 		}
 		if (inspector instanceof StatusCollector.Record) {
 			StatusCollector sc = baseRevisionCollector == null ? new StatusCollector(repo) : baseRevisionCollector;
@@ -102,9 +103,7 @@ public class WorkingCopyStatusCollector {
 			} else if (knownEntries.remove(fname)) {
 				// modified, added, removed, clean
 				if (collect != null) { // need to check against base revision, not FS file
-					Nodeid nid1 = collect.nodeid(baseRevision, fname);
-					String flags = collect.flags(baseRevision, fname);
-					checkLocalStatusAgainstBaseRevision(baseRevFiles, nid1, flags, fname, f, inspector);
+					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, fname, f, inspector);
 					baseRevFiles.remove(fname);
 				} else {
 					checkLocalStatusAgainstFile(fname, f, inspector);
@@ -166,8 +165,10 @@ public class WorkingCopyStatusCollector {
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, Nodeid nid1, String flags, String fname, File f, StatusCollector.Inspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevisionInspector collect, String fname, File f, StatusCollector.Inspector inspector) {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
+		Nodeid nid1 = collect.nodeid(fname);
+		String flags = collect.flags(fname);
 		HgDirstate.Record r;
 		if (nid1 == null) {
 			// normal: added?

@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
@@ -46,7 +47,7 @@ public class StatusCollector {
 	public StatusCollector(HgRepository hgRepo) {
 		this.repo = hgRepo;
 		cache = new HashMap<Integer, ManifestRevisionInspector>();
-		ManifestRevisionInspector emptyFakeState = new ManifestRevisionInspector(-1, -1);
+		ManifestRevisionInspector emptyFakeState = new ManifestRevisionInspector();
 		emptyFakeState.begin(-1, null);
 		emptyFakeState.end(-1); // FIXME HgRepo.TIP == -1 as well, need to distinguish fake "prior to first" revision from "the very last" 
 		cache.put(-1, emptyFakeState);
@@ -59,7 +60,7 @@ public class StatusCollector {
 	private ManifestRevisionInspector get(int rev) {
 		ManifestRevisionInspector i = cache.get(rev);
 		if (i == null) {
-			i = new ManifestRevisionInspector(rev, rev);
+			i = new ManifestRevisionInspector();
 			cache.put(rev, i);
 			repo.getManifest().walk(rev, rev, i);
 		}
@@ -98,27 +99,48 @@ public class StatusCollector {
 		}
 		// in fact, rev1 and rev2 are often next (or close) to each other,
 		// thus, we can optimize Manifest reads here (manifest.walk(rev1, rev2))
-		ManifestRevisionInspector r1, r2;
+		ManifestRevisionInspector r1, r2 ;
 		if (!cache.containsKey(rev1) && !cache.containsKey(rev2) && Math.abs(rev1 - rev2) < 5 /*subjective equivalent of 'close enough'*/) {
 			int minRev = rev1 < rev2 ? rev1 : rev2;
 			int maxRev = minRev == rev1 ? rev2 : rev1;
-			r1 = r2 = new ManifestRevisionInspector(minRev, maxRev);
-			for (int i = minRev; i <= maxRev; i++) {
-				cache.put(i, r1);
+			if (minRev > 0) {
+				minRev--; // expand range a bit
+				// XXX perhaps, if revlog.baseRevision is cheap, shall expand minRev up to baseRevision
+				// which gonna be read anyway
 			}
-			repo.getManifest().walk(minRev, maxRev, r1);
-		} else {
-			r1 = get(rev1);
-			r2 = get(rev2);
+	
+			repo.getManifest().walk(minRev, maxRev, new HgManifest.Inspector() {
+				private ManifestRevisionInspector delegate;
+
+				public boolean begin(int revision, Nodeid nid) {
+					cache.put(revision, delegate = new ManifestRevisionInspector());
+					delegate.begin(revision, nid);
+					return true;
+				}
+
+				public boolean next(Nodeid nid, String fname, String flags) {
+					delegate.next(nid, fname, flags);
+					return true;
+				}
+				
+				public boolean end(int revision) {
+					delegate.end(revision);
+					delegate = null;
+					return true;
+				}
+			});
 		}
+		r1 = get(rev1);
+		r2 = get(rev2);
+
 		
-		TreeSet<String> r1Files = new TreeSet<String>(r1.files(rev1));
-		for (String fname : r2.files(rev2)) {
+		TreeSet<String> r1Files = new TreeSet<String>(r1.files());
+		for (String fname : r2.files()) {
 			if (r1Files.remove(fname)) {
-				Nodeid nidR1 = r1.nodeid(rev1, fname);
-				Nodeid nidR2 = r2.nodeid(rev2, fname);
-				String flagsR1 = r1.flags(rev1, fname);
-				String flagsR2 = r2.flags(rev2, fname);
+				Nodeid nidR1 = r1.nodeid(fname);
+				Nodeid nidR2 = r2.nodeid(fname);
+				String flagsR1 = r1.flags(fname);
+				String flagsR2 = r2.flags(fname);
 				if (nidR1.equals(nidR2) && ((flagsR2 == null && flagsR1 == null) || flagsR2.equals(flagsR1))) {
 					inspector.clean(fname);
 				} else {
@@ -202,7 +224,7 @@ public class StatusCollector {
 			if ((modified == null || !modified.contains(fname)) && (removed == null || !removed.contains(fname))) {
 				return null;
 			}
-			return statusHelper.raw(startRev).nodeid(startRev, fname);
+			return statusHelper.raw(startRev).nodeid(fname);
 		}
 		public Nodeid nodeidAfterChange(String fname) {
 			if (statusHelper == null || endRev == BAD_REVISION) {
@@ -211,7 +233,7 @@ public class StatusCollector {
 			if ((modified == null || !modified.contains(fname)) && (added == null || !added.contains(fname))) {
 				return null;
 			}
-			return statusHelper.raw(endRev).nodeid(endRev, fname);
+			return statusHelper.raw(endRev).nodeid(fname);
 		}
 		
 		public List<String> getModified() {
@@ -304,69 +326,41 @@ public class StatusCollector {
 		}
 	}
 
-	// XXX in fact, indexed access brings more trouble than benefits, get rid of it? Distinct instance per revision is good enough
-	public /*XXX private, actually. Made public unless repo.statusLocal finds better place*/ static final class ManifestRevisionInspector implements HgManifest.Inspector {
-		private final HashMap<String, Nodeid>[] idsMap;
-		private final HashMap<String, String>[] flagsMap;
-		private final int baseRevision;
-		private int r = -1; // cursor
+	/*package-local*/ static final class ManifestRevisionInspector implements HgManifest.Inspector {
+		private final TreeMap<String, Nodeid> idsMap;
+		private final TreeMap<String, String> flagsMap;
 
-		/**
-		 * [minRev, maxRev]
-		 * [-1,-1] also accepted (for fake empty instance)
-		 * @param minRev - inclusive
-		 * @param maxRev - inclusive
-		 */
-		@SuppressWarnings("unchecked")
-		public ManifestRevisionInspector(int minRev, int maxRev) {
-			baseRevision = minRev;
-			int range = maxRev - minRev + 1;
-			idsMap = new HashMap[range];
-			flagsMap = new HashMap[range];
+		public ManifestRevisionInspector() {
+			idsMap = new TreeMap<String, Nodeid>();
+			flagsMap = new TreeMap<String, String>();
 		}
 		
-		public Collection<String> files(int rev) {
-			if (rev < baseRevision || rev >= baseRevision + idsMap.length) {
-				throw new IllegalArgumentException();
-			}
-			return idsMap[rev - baseRevision].keySet();
+		public Collection<String> files() {
+			return idsMap.keySet();
 		}
 
-		public Nodeid nodeid(int rev, String fname) {
-			if (rev < baseRevision || rev >= baseRevision + idsMap.length) {
-				throw new IllegalArgumentException();
-			}
-			return idsMap[rev - baseRevision].get(fname);
+		public Nodeid nodeid(String fname) {
+			return idsMap.get(fname);
 		}
 
-		public String flags(int rev, String fname) {
-			if (rev < baseRevision || rev >= baseRevision + idsMap.length) {
-				throw new IllegalArgumentException();
-			}
-			return flagsMap[rev - baseRevision].get(fname);
+		public String flags(String fname) {
+			return flagsMap.get(fname);
 		}
 
 		//
 
 		public boolean next(Nodeid nid, String fname, String flags) {
-			idsMap[r].put(fname, nid);
-			flagsMap[r].put(fname, flags);
+			idsMap.put(fname, nid);
+			flagsMap.put(fname, flags);
 			return true;
 		}
 
 		public boolean end(int revision) {
-			assert revision == r + baseRevision;
-			r = -1;
-			return revision+1 < baseRevision + idsMap.length;
+			// in fact, this class cares about single revision
+			return false; 
 		}
 
 		public boolean begin(int revision, Nodeid nid) {
-			if (revision < baseRevision || revision >= baseRevision + idsMap.length) {
-				throw new IllegalArgumentException();
-			}
-			r = revision - baseRevision;
-			idsMap[r] = new HashMap<String, Nodeid>();
-			flagsMap[r] = new HashMap<String, String>();
 			return true;
 		}
 	}
