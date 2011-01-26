@@ -85,6 +85,10 @@ public class Cset implements Cloneable {
 	}
 
 	public List<Path> getAffectedFiles() {
+		// reports files as recorded in changelog. Note, merge revisions may have no
+		// files listed, and thus this method would return empty list, while
+		// #getModifiedFiles() would return list with merged file(s) (because it uses status to get 'em, not
+		// what #files() gives).
 		ArrayList<Path> rv = new ArrayList<Path>(changeset.files().size());
 		for (String name : changeset.files()) {
 			rv.add(pathHelper.path(name));

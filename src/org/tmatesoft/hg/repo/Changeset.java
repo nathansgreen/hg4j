@@ -179,19 +179,25 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 		//
 		int lastStart = breakIndex3 + 1;
 		int breakIndex4 = indexOf(data, lineBreak, lastStart, bufferEndIndex);
-		ArrayList<String> _files = new ArrayList<String>(5);
-		while (breakIndex4 != -1 && breakIndex4 + 1 < bufferEndIndex) {
-			_files.add(new String(data, lastStart, breakIndex4 - lastStart));
-			lastStart = breakIndex4 + 1;
-			if (data[breakIndex4 + 1] == lineBreak) {
-				// found \n\n
-				break;
-			} else {
-				breakIndex4 = indexOf(data, lineBreak, lastStart, bufferEndIndex);
+		ArrayList<String> _files = null;
+		if (breakIndex4 > lastStart) {
+			// if breakIndex4 == lastStart, we already found \n\n and hence there are no files (e.g. merge revision)
+			_files = new ArrayList<String>(5);
+			while (breakIndex4 != -1 && breakIndex4 + 1 < bufferEndIndex) {
+				_files.add(new String(data, lastStart, breakIndex4 - lastStart));
+				lastStart = breakIndex4 + 1;
+				if (data[breakIndex4 + 1] == lineBreak) {
+					// found \n\n
+					break;
+				} else {
+					breakIndex4 = indexOf(data, lineBreak, lastStart, bufferEndIndex);
+				}
 			}
-		}
-		if (breakIndex4 == -1 || breakIndex4 >= bufferEndIndex) {
-			throw new IllegalArgumentException("Bad Changeset data");
+			if (breakIndex4 == -1 || breakIndex4 >= bufferEndIndex) {
+				throw new IllegalArgumentException("Bad Changeset data");
+			}
+		} else {
+			breakIndex4--;
 		}
 		String _comment;
 		try {
@@ -205,7 +211,7 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 		this.user = _user;
 		this.time = _time;
 		this.timezone = _timezone;
-		this.files = Collections.unmodifiableList(_files);
+		this.files = _files == null ? Collections.<String>emptyList() : Collections.unmodifiableList(_files);
 		this.comment = _comment;
 		this.extras = _extrasMap;
 	}

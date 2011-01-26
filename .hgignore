@@ -3,3 +3,4 @@ bin
 src/Extras.java
 jhg.jar
 jhg-tests.jar
+jhg-cl.jar
