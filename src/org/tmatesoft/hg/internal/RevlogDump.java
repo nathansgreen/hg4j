@@ -44,10 +44,10 @@ public class RevlogDump {
 //		String filename = "store/data/hello.c.i";
 //		String filename = "store/data/docs/readme.i";
 		boolean dumpData = true;
-		if (args.length > 2) {
+		if (args.length > 1) {
 			repo = args[0];
 			filename = args[1];
-			dumpData = "dumpData".equals(args[2]);
+			dumpData = args.length > 2 ? "dumpData".equals(args[2]) : false;
 		}
 		//
 		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(repo + filename))));

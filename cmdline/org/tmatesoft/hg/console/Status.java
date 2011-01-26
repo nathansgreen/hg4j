@@ -29,6 +29,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.Internals;
 import org.tmatesoft.hg.repo.StatusCollector;
+import org.tmatesoft.hg.repo.StatusCollector.Record;
 import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
 
 /**
@@ -51,13 +52,18 @@ public class Status {
 		//
 //		new Internals(hgRepo).dumpDirstate();
 		//
-		mardu(hgRepo);
+		//statusWorkingCopy(hgRepo);
+		statusRevVsWorkingCopy(hgRepo);
 	}
-	
-	private static void mardu(HgRepository hgRepo) {
+
+	private static void statusWorkingCopy(HgRepository hgRepo) {
 		WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(hgRepo);
 		StatusCollector.Record r = new StatusCollector.Record();
 		wcc.walk(TIP, r);
+		mardu(r);
+	}
+
+	private static void mardu(Record r) {
 		sortAndPrint('M', r.getModified());
 		sortAndPrint('A', r.getAdded(), r.getCopied());
 		sortAndPrint('R', r.getRemoved());
@@ -65,6 +71,13 @@ public class Status {
 //		sortAndPrint('I', r.getIgnored());
 //		sortAndPrint('C', r.getClean());
 		sortAndPrint('!', r.getMissing());
+	}
+	
+	private static void statusRevVsWorkingCopy(HgRepository hgRepo) {
+		WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(hgRepo);
+		StatusCollector.Record r = new StatusCollector.Record();
+		wcc.walk(3, r);
+		mardu(r);
 	}
 
 	private static void bunchOfTests(HgRepository hgRepo) throws Exception {

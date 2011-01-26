@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.core.Path;
 
 
 /**
@@ -124,7 +125,28 @@ public class StatusCollector {
 					inspector.modified(fname);
 				}
 			} else {
-				inspector.added(fname);
+				HgDataFile df = repo.getFileNode(fname);
+				boolean isCopy = false;
+				while (df.isCopy()) {
+					Path original = df.getCopySourceName();
+					if (r1Files.contains(original.toString())) {
+						df = repo.getFileNode(original);
+						int changelogRevision = df.getChangesetLocalRevision(0);
+						if (changelogRevision <= rev1) {
+							// copy/rename source was known prior to rev1 
+							// (both r1Files.contains is true and original was created earlier than rev1)
+							// without r1Files.contains changelogRevision <= rev1 won't suffice as the file
+							// might get removed somewhere in between (changelogRevision < R < rev1)
+							inspector.copied(original.toString(), fname);
+							isCopy = true;
+						}
+						break;
+					} 
+					df = repo.getFileNode(original); // try more steps away
+				}
+				if (!isCopy) {
+					inspector.added(fname);
+				}
 			}
 		}
 		for (String left : r1Files) {

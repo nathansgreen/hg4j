@@ -182,9 +182,9 @@ public class Log {
 				}
 				Nodeid p1 = changelogWalker.safeFirstParent(csetNodeid);
 				Nodeid p2 = changelogWalker.safeSecondParent(csetNodeid);
-				int p1x = p1 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevisionNumber(p1);
-				int p2x = p2 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevisionNumber(p2);
-				int mx = repo.getManifest().getLocalRevisionNumber(cset.getManifestRevision());
+				int p1x = p1 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevision(p1);
+				int p2x = p2 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevision(p2);
+				int mx = repo.getManifest().getLocalRevision(cset.getManifestRevision());
 				f.format("parent:      %d:%s\nparent:      %d:%s\nmanifest:    %d:%s\n", p1x, p1, p2x, p2, mx, cset.getManifestRevision());
 			}
 			f.format("user:        %s\ndate:        %s\n", cset.getUser(), cset.getDate());

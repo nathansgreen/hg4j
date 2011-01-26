@@ -87,7 +87,7 @@ public class StatusOutputParser implements OutputParser {
 				}
 				// last added is copy destination
 				// to get or to remove it - depends on what StatusCollector does in this case
-				copied.put(added.get(added.size() - 1), fname);
+				copied.put(added.get(added.size() - 1), toJavaImplConvention(fname));
 				break;
 			}
 			}
@@ -141,11 +141,15 @@ public class StatusOutputParser implements OutputParser {
 		if (l == null) {
 			l = new LinkedList<String>();
 		}
+		l.add(toJavaImplConvention(s));
+		return l;
+	}
+
+	private String toJavaImplConvention(String s) {
 		if (winPathSeparator) {
 			// Java impl always give slashed path, while Hg uses local, os-specific convention
 			s = s.replace('\\', '/'); 
 		}
-		l.add(s);
-		return l;
+		return s;
 	}
 }

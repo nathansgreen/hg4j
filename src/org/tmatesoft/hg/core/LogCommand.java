@@ -179,7 +179,7 @@ public class LogCommand implements Changeset.Inspector {
 					// even if we do not follow history, report file rename
 					do {
 						FileRevision src = new FileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
-						FileRevision dst = new FileRevision(repo, fileNode.getRevisionNumber(0), fileNode.getPath());
+						FileRevision dst = new FileRevision(repo, fileNode.getRevision(0), fileNode.getPath());
 						((FileHistoryHandler) handler).copy(src, dst);
 						if (limit > 0 && count >= limit) {
 							// if limit reach, follow is useless.

@@ -60,12 +60,12 @@ abstract class Revlog {
 		return content.revisionCount();
 	}
 	
-	public Nodeid getRevisionNumber(int revision) {
+	public Nodeid getRevision(int revision) {
 		// XXX cache nodeids?
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
 	}
 
-	public int getLocalRevisionNumber(Nodeid nid) {
+	public int getLocalRevision(Nodeid nid) {
 		int revision = content.findLocalRevisionNumber(nid);
 		if (revision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.format("%s doesn't represent a revision of %s", nid.toString(), this /*XXX HgDataFile.getPath might be more suitable here*/));
@@ -91,7 +91,7 @@ abstract class Revlog {
 	 * @param nodeid
 	 */
 	public byte[] content(Nodeid nodeid) {
-		return content(getLocalRevisionNumber(nodeid));
+		return content(getLocalRevision(nodeid));
 	}
 	
 	/**

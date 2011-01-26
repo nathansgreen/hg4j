@@ -46,7 +46,7 @@ public class TestStatus {
 		HgRepository repo = new Lookup().detectFromWorkingDir();
 		TestStatus test = new TestStatus(repo);
 		test.testLowLevel();
-		test.testStatusCommand();
+//		test.testStatusCommand();
 	}
 	
 	public TestStatus(HgRepository hgRepo) {
@@ -73,6 +73,13 @@ public class TestStatus {
 		r = new StatusCollector.Record();
 		new StatusCollector(repo).change(revision, r);
 		report("status -A --change " + revision, r, statusParser);
+		//
+		statusParser.reset();
+		int rev2 = 80;
+		final String range = String.valueOf(revision) + ":" + String.valueOf(rev2);
+		eh.run("hg", "status", "-A", "--rev", range);
+		r = new StatusCollector(repo).status(revision, rev2);
+		report("Status -A -rev " + range, r, statusParser);
 	}
 	
 	public void testStatusCommand() throws Exception {

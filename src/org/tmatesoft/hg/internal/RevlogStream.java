@@ -110,6 +110,29 @@ public class RevlogStream {
 			ex.printStackTrace();
 			throw new IllegalStateException();
 		} finally {
+			daIndex.done();
+		}
+	}
+	
+	public int linkRevision(int revision) {
+		final int last = revisionCount() - 1;
+		if (revision == TIP) {
+			revision = last;
+		}
+		if (revision < 0 || revision > last) {
+			throw new IllegalArgumentException(Integer.toString(revision));
+		}
+		DataAccess daIndex = getIndexStream();
+		try {
+			int recordOffset = inline ? (int) index.get(revision).offset : revision * REVLOGV1_RECORD_SIZE;
+			daIndex.seek(recordOffset + 20);
+			int linkRev = daIndex.readInt();
+			return linkRev;
+		} catch (IOException ex) {
+			ex.printStackTrace();
+			throw new IllegalStateException();
+		} finally {
+			daIndex.done();
 		}
 	}
 	
@@ -189,19 +212,19 @@ public class RevlogStream {
 			
 			daIndex.seek(inline ? (int) index.get(i).offset : i * REVLOGV1_RECORD_SIZE);
 			for (; i <= end; i++ ) {
-				long l = daIndex.readLong();
+				long l = daIndex.readLong();  // 0
 				@SuppressWarnings("unused")
 				long offset = l >>> 16;
 				@SuppressWarnings("unused")
 				int flags = (int) (l & 0X0FFFF);
-				int compressedLen = daIndex.readInt();
-				int actualLen = daIndex.readInt();
-				int baseRevision = daIndex.readInt();
-				int linkRevision = daIndex.readInt();
+				int compressedLen = daIndex.readInt(); // +8
+				int actualLen = daIndex.readInt(); // +12
+				int baseRevision = daIndex.readInt(); // +16
+				int linkRevision = daIndex.readInt(); // +20
 				int parent1Revision = daIndex.readInt();
 				int parent2Revision = daIndex.readInt();
 				// Hg has 32 bytes here, uses 20 for nodeid, and keeps 12 last bytes empty
-				daIndex.readBytes(nodeidBuf, 0, 20);
+				daIndex.readBytes(nodeidBuf, 0, 20); // +32
 				daIndex.skip(12);
 				byte[] data = null;
 				if (needData) {

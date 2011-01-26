@@ -57,7 +57,7 @@ public class HgDataFile extends Revlog {
 	}
 
 	public int length(Nodeid nodeid) {
-		return content.dataLength(getLocalRevisionNumber(nodeid));
+		return content.dataLength(getLocalRevision(nodeid));
 	}
 
 	public byte[] content() {
@@ -147,6 +147,16 @@ public class HgDataFile extends Revlog {
 		content.iterate(start, end, false, insp);
 		getRepo().getChangelog().range(inspector, commitRevisions);
 	}
+	
+	// for a given local revision of the file, find out local revision in the changelog
+	public int getChangesetLocalRevision(int revision) {
+		return content.linkRevision(revision);
+	}
+
+	public Nodeid getChangesetRevision(Nodeid nid) {
+		int changelogRevision = getChangesetLocalRevision(getLocalRevision(nid));
+		return getRepo().getChangelog().getRevision(changelogRevision);
+	}
 
 	public boolean isCopy() {
 		if (metadata == null) {
@@ -171,8 +181,17 @@ public class HgDataFile extends Revlog {
 		}
 		throw new UnsupportedOperationException();
 	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder(getClass().getSimpleName());
+		sb.append('(');
+		sb.append(getPath());
+		sb.append(')');
+		return sb.toString();
+	}
 
-	public static final class MetadataEntry {
+	private static final class MetadataEntry {
 		private final String entry;
 		private final int valueStart;
 		/*package-local*/MetadataEntry(String key, String value) {
