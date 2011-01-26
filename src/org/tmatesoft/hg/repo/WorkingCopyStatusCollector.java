@@ -103,7 +103,7 @@ public class WorkingCopyStatusCollector {
 			} else if (knownEntries.remove(fname)) {
 				// modified, added, removed, clean
 				if (collect != null) { // need to check against base revision, not FS file
-					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, fname, f, inspector);
+					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, baseRevision, fname, f, inspector);
 					baseRevFiles.remove(fname);
 				} else {
 					checkLocalStatusAgainstFile(fname, f, inspector);
@@ -165,7 +165,7 @@ public class WorkingCopyStatusCollector {
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevisionInspector collect, String fname, File f, StatusCollector.Inspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevisionInspector collect, int baseRevision, String fname, File f, StatusCollector.Inspector inspector) {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
 		Nodeid nid1 = collect.nodeid(fname);
 		String flags = collect.flags(fname);
@@ -174,9 +174,15 @@ public class WorkingCopyStatusCollector {
 			// normal: added?
 			// added: not known at the time of baseRevision, shall report
 			// merged: was not known, report as added?
-			if ((r = getDirstate().checkAdded(fname)) != null) {
+			if ((r = getDirstate().checkNormal(fname)) != null) {
+				String origin = StatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
+				if (origin != null) {
+					inspector.copied(origin, fname);
+					return;
+				}
+			} else if ((r = getDirstate().checkAdded(fname)) != null) {
 				if (r.name2 != null && baseRevNames.contains(r.name2)) {
-					baseRevNames.remove(r.name2);
+					baseRevNames.remove(r.name2); // XXX surely I shall not report rename source as Removed?
 					inspector.copied(r.name2, fname);
 					return;
 				}

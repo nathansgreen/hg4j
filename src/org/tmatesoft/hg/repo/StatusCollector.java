@@ -147,26 +147,10 @@ public class StatusCollector {
 					inspector.modified(fname);
 				}
 			} else {
-				HgDataFile df = repo.getFileNode(fname);
-				boolean isCopy = false;
-				while (df.isCopy()) {
-					Path original = df.getCopySourceName();
-					if (r1Files.contains(original.toString())) {
-						df = repo.getFileNode(original);
-						int changelogRevision = df.getChangesetLocalRevision(0);
-						if (changelogRevision <= rev1) {
-							// copy/rename source was known prior to rev1 
-							// (both r1Files.contains is true and original was created earlier than rev1)
-							// without r1Files.contains changelogRevision <= rev1 won't suffice as the file
-							// might get removed somewhere in between (changelogRevision < R < rev1)
-							inspector.copied(original.toString(), fname);
-							isCopy = true;
-						}
-						break;
-					} 
-					df = repo.getFileNode(original); // try more steps away
-				}
-				if (!isCopy) {
+				String copyOrigin = getOriginIfCopy(repo, fname, r1Files, rev1);
+				if (copyOrigin != null) {
+					inspector.copied(copyOrigin, fname);
+				} else {
 					inspector.added(fname);
 				}
 			}
@@ -181,6 +165,27 @@ public class StatusCollector {
 		Record rv = new Record();
 		walk(rev1, rev2, rv);
 		return rv;
+	}
+	
+	/*package-local*/static String getOriginIfCopy(HgRepository hgRepo, String fname, Collection<String> originals, int originalChangelogRevision) {
+		HgDataFile df = hgRepo.getFileNode(fname);
+		while (df.isCopy()) {
+			Path original = df.getCopySourceName();
+			if (originals.contains(original.toString())) {
+				df = hgRepo.getFileNode(original);
+				int changelogRevision = df.getChangesetLocalRevision(0);
+				if (changelogRevision <= originalChangelogRevision) {
+					// copy/rename source was known prior to rev1 
+					// (both r1Files.contains is true and original was created earlier than rev1)
+					// without r1Files.contains changelogRevision <= rev1 won't suffice as the file
+					// might get removed somewhere in between (changelogRevision < R < rev1)
+					return original.toString();
+				}
+				break; // copy/rename done later
+			} 
+			df = hgRepo.getFileNode(original); // try more steps away
+		}
+		return null;
 	}
 
 	public interface Inspector {
