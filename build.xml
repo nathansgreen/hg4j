@@ -20,24 +20,24 @@
             description
     </description>
 
-    <target name="samples" depends="build">
+    <target name="samples" depends="build-cmdline">
     	
     	<echo message="History of a specific file(s)"/>
-    	<java classpath="jhg.jar" classname="org.tmatesoft.hg.console.Log">
+    	<java classpath="jhg.jar;jhg-cl.jar" classname="org.tmatesoft.hg.console.Log">
     		<arg line="design.txt .classpath src/com/tmate/hgkit/ll/LocalHgRepo.java"/>
     	</java>
     	
     	<echo message="Whole repo log"/>
-    	<java classpath="jhg.jar" classname="org.tmatesoft.hg.console.Log"/>
+    	<java classpath="jhg.jar;jhg-cl.jar" classname="org.tmatesoft.hg.console.Log"/>
     	
     	<echo message="Content of a file"/>
-    	<java classpath="jhg.jar" classname="org.tmatesoft.hg.console.Cat">
+    	<java classpath="jhg.jar;jhg-cl.jar" classname="org.tmatesoft.hg.console.Cat">
     		<arg line="src/com/tmate/hgkit/ll/Revlog.java"/>
     	</java>
 
     </target>
 	
-	<target name="tests" depends="build, build-tests">
+	<target name="tests" depends="build-tests">
 		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestHistory"/>
 		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestManifest"/>
 		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestStatus"/>
@@ -49,27 +49,23 @@
     	<jar destfile="jhg.jar">
     		<fileset dir="bin/">
     			<include name="org/tmatesoft/hg/core/**" />
-    			<include name="org/tmatesoft/hg/console/**" />
     			<include name="org/tmatesoft/hg/util/**" />
     			<include name="org/tmatesoft/hg/repo/**" />
     			<include name="org/tmatesoft/hg/internal/**" />
-    			<!-- -->
-    			<include name="com/tmate/hgkit/fs/**" />
-    			<include name="com/tmate/hgkit/ll/**" />
     		</fileset>
     	</jar>
     </target>
 
-    <target name="build-tests">
+    <target name="build-tests" depends="build">
     	<mkdir dir="bin"/>
     	<javac srcdir="test" destdir="bin"/>
-    	<jar destfile="jhg-tests.jar" basedir="bin" includes="org/tmatesoft/hg/test/**/*"/>
+    	<jar destfile="jhg-tests.jar" basedir="bin" includes="org/tmatesoft/hg/test/**"/>
     </target>
 
-    <target name="build-cmdline">
+    <target name="build-cmdline" depends="build">
     	<mkdir dir="bin"/>
     	<javac srcdir="cmdline" destdir="bin"/>
-    	<jar destfile="jhg-cl.jar" basedir="bin" includes="org/tmatesoft/hg/console/**/*"/>
+    	<jar destfile="jhg-cl.jar" basedir="bin" includes="org/tmatesoft/hg/console/**"/>
     </target>
 
 </project>
