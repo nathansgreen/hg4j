@@ -87,8 +87,8 @@ public class RepositoryTreeWalker {
 			mediator.start();
 			repo.getManifest().walk(startRev, endRev, mediator);
 		} finally {
-			visitor = null;
 			mediator.done();
+			visitor = null;
 		}
 	}
 
