@@ -21,7 +21,6 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -31,6 +30,8 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.util.PathPool;
+import org.tmatesoft.hg.util.PathRewrite;
 
 
 /**
@@ -43,10 +44,11 @@ public class StatusCollector {
 
 	private final HgRepository repo;
 	private final Map<Integer, ManifestRevisionInspector> cache; // sparse array, in fact
+	private PathPool pathPool;
 
 	public StatusCollector(HgRepository hgRepo) {
 		this.repo = hgRepo;
-		cache = new HashMap<Integer, ManifestRevisionInspector>();
+		cache = new TreeMap<Integer, ManifestRevisionInspector>();
 		ManifestRevisionInspector emptyFakeState = new ManifestRevisionInspector();
 		emptyFakeState.begin(-1, null);
 		emptyFakeState.end(-1); // FIXME HgRepo.TIP == -1 as well, need to distinguish fake "prior to first" revision from "the very last" 
@@ -70,9 +72,20 @@ public class StatusCollector {
 	/*package-local*/ ManifestRevisionInspector raw(int rev) {
 		return get(rev);
 	}
+	/*package-local*/ PathPool getPathPool() {
+		if (pathPool == null) {
+			pathPool = new PathPool(new PathRewrite.Empty());
+		}
+		return pathPool;
+	}
+
+	public void setPathPool(PathPool pathPool) {
+		this.pathPool = pathPool;
+	}
+		
 	
 	// hg status --change <rev>
-	public void change(int rev, Inspector inspector) {
+	public void change(int rev, HgStatusInspector inspector) {
 		int[] parents = new int[2];
 		repo.getChangelog().parents(rev, parents, null, null);
 		walk(parents[0], rev, inspector);
@@ -81,7 +94,7 @@ public class StatusCollector {
 	// I assume revision numbers are the same for changelog and manifest - here 
 	// user would like to pass changelog revision numbers, and I use them directly to walk manifest.
 	// if this assumption is wrong, fix this (lookup manifest revisions from changeset).
-	public void walk(int rev1, int rev2, Inspector inspector) {
+	public void walk(int rev1, int rev2, HgStatusInspector inspector) {
 		if (rev1 == rev2) {
 			throw new IllegalArgumentException();
 		}
@@ -133,7 +146,8 @@ public class StatusCollector {
 		r1 = get(rev1);
 		r2 = get(rev2);
 
-		
+		PathPool pp = getPathPool();
+
 		TreeSet<String> r1Files = new TreeSet<String>(r1.files());
 		for (String fname : r2.files()) {
 			if (r1Files.remove(fname)) {
@@ -142,23 +156,22 @@ public class StatusCollector {
 				String flagsR1 = r1.flags(fname);
 				String flagsR2 = r2.flags(fname);
 				if (nidR1.equals(nidR2) && ((flagsR2 == null && flagsR1 == null) || flagsR2.equals(flagsR1))) {
-					inspector.clean(fname);
+					inspector.clean(pp.path(fname));
 				} else {
-					inspector.modified(fname);
+					inspector.modified(pp.path(fname));
 				}
 			} else {
 				String copyOrigin = getOriginIfCopy(repo, fname, r1Files, rev1);
 				if (copyOrigin != null) {
-					inspector.copied(copyOrigin, fname);
+					inspector.copied(pp.path(copyOrigin), pp.path(fname));
 				} else {
-					inspector.added(fname);
+					inspector.added(pp.path(fname));
 				}
 			}
 		}
 		for (String left : r1Files) {
-			inspector.removed(left);
+			inspector.removed(pp.path(left));
 		}
-		// inspector.done() if useful e.g. in UI client
 	}
 	
 	public Record status(int rev1, int rev2) {
@@ -188,23 +201,11 @@ public class StatusCollector {
 		return null;
 	}
 
-	public interface Inspector {
-		void modified(String fname);
-		void added(String fname);
-		// XXX need to specify whether StatusCollector invokes added() along with copied or not!
-		void copied(String fnameOrigin, String fnameAdded); // if copied files of no interest, should delegate to self.added(fnameAdded);
-		void removed(String fname);
-		void clean(String fname);
-		void missing(String fname); // aka deleted (tracked by Hg, but not available in FS any more
-		void unknown(String fname); // not tracked
-		void ignored(String fname);
-	}
-
 	// XXX for r1..r2 status, only modified, added, removed (and perhaps, clean) make sense
 	// XXX Need to specify whether copy targets are in added or not (@see Inspector#copied above)
-	public static class Record implements Inspector {
-		private List<String> modified, added, removed, clean, missing, unknown, ignored;
-		private Map<String, String> copied;
+	public static class Record implements HgStatusInspector {
+		private List<Path> modified, added, removed, clean, missing, unknown, ignored;
+		private Map<Path, Path> copied;
 		
 		private int startRev, endRev;
 		private StatusCollector statusHelper;
@@ -222,61 +223,61 @@ public class StatusCollector {
 			statusHelper = self;
 		}
 		
-		public Nodeid nodeidBeforeChange(String fname) {
+		public Nodeid nodeidBeforeChange(Path fname) {
 			if (statusHelper == null || startRev == BAD_REVISION) {
 				return null;
 			}
 			if ((modified == null || !modified.contains(fname)) && (removed == null || !removed.contains(fname))) {
 				return null;
 			}
-			return statusHelper.raw(startRev).nodeid(fname);
+			return statusHelper.raw(startRev).nodeid(fname.toString());
 		}
-		public Nodeid nodeidAfterChange(String fname) {
+		public Nodeid nodeidAfterChange(Path fname) {
 			if (statusHelper == null || endRev == BAD_REVISION) {
 				return null;
 			}
 			if ((modified == null || !modified.contains(fname)) && (added == null || !added.contains(fname))) {
 				return null;
 			}
-			return statusHelper.raw(endRev).nodeid(fname);
+			return statusHelper.raw(endRev).nodeid(fname.toString());
 		}
 		
-		public List<String> getModified() {
+		public List<Path> getModified() {
 			return proper(modified);
 		}
 
-		public List<String> getAdded() {
+		public List<Path> getAdded() {
 			return proper(added);
 		}
 
-		public List<String> getRemoved() {
+		public List<Path> getRemoved() {
 			return proper(removed);
 		}
 
-		public Map<String,String> getCopied() {
+		public Map<Path,Path> getCopied() {
 			if (copied == null) {
 				return Collections.emptyMap();
 			}
 			return Collections.unmodifiableMap(copied);
 		}
 
-		public List<String> getClean() {
+		public List<Path> getClean() {
 			return proper(clean);
 		}
 
-		public List<String> getMissing() {
+		public List<Path> getMissing() {
 			return proper(missing);
 		}
 
-		public List<String> getUnknown() {
+		public List<Path> getUnknown() {
 			return proper(unknown);
 		}
 
-		public List<String> getIgnored() {
+		public List<Path> getIgnored() {
 			return proper(ignored);
 		}
 		
-		private List<String> proper(List<String> l) {
+		private List<Path> proper(List<Path> l) {
 			if (l == null) {
 				return Collections.emptyList();
 			}
@@ -286,47 +287,47 @@ public class StatusCollector {
 		//
 		//
 		
-		public void modified(String fname) {
+		public void modified(Path fname) {
 			modified = doAdd(modified, fname);
 		}
 
-		public void added(String fname) {
+		public void added(Path fname) {
 			added = doAdd(added, fname);
 		}
 
-		public void copied(String fnameOrigin, String fnameAdded) {
+		public void copied(Path fnameOrigin, Path fnameAdded) {
 			if (copied == null) {
-				copied = new LinkedHashMap<String, String>();
+				copied = new LinkedHashMap<Path, Path>();
 			}
 			added(fnameAdded);
 			copied.put(fnameAdded, fnameOrigin);
 		}
 
-		public void removed(String fname) {
+		public void removed(Path fname) {
 			removed = doAdd(removed, fname);
 		}
 
-		public void clean(String fname) {
+		public void clean(Path fname) {
 			clean = doAdd(clean, fname);
 		}
 
-		public void missing(String fname) {
+		public void missing(Path fname) {
 			missing = doAdd(missing, fname);
 		}
 
-		public void unknown(String fname) {
+		public void unknown(Path fname) {
 			unknown = doAdd(unknown, fname);
 		}
 
-		public void ignored(String fname) {
+		public void ignored(Path fname) {
 			ignored = doAdd(ignored, fname);
 		}
 
-		private static List<String> doAdd(List<String> l, String s) {
+		private static List<Path> doAdd(List<Path> l, Path p) {
 			if (l == null) {
-				l = new LinkedList<String>();
+				l = new LinkedList<Path>();
 			}
-			l.add(s);
+			l.add(p);
 			return l;
 		}
 	}

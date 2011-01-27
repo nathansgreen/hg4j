@@ -27,6 +27,12 @@ import java.util.List;
 public interface PathRewrite {
 
 	public String rewrite(String path);
+	
+	public static class Empty implements PathRewrite {
+		public String rewrite(String path) {
+			return path;
+		}
+	}
 
 	public class Composite implements PathRewrite {
 		private List<PathRewrite> chain;

@@ -22,8 +22,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
+import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.StatusCommand;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.Lookup;
@@ -121,13 +121,13 @@ public class TestStatus {
 		reportNotEqual("IGNORED", r.getIgnored(), statusParser.getIgnored());
 		reportNotEqual("MISSING", r.getMissing(), statusParser.getMissing());
 		reportNotEqual("UNKNOWN", r.getUnknown(), statusParser.getUnknown());
-		List<String> copiedKeyDiff = difference(r.getCopied().keySet(), statusParser.getCopied().keySet());
-		HashMap<String, String> copyDiff = new HashMap<String,String>();
+		List<Path> copiedKeyDiff = difference(r.getCopied().keySet(), statusParser.getCopied().keySet());
+		HashMap<Path, String> copyDiff = new HashMap<Path,String>();
 		if (copiedKeyDiff.isEmpty()) {
-			for (String jk : r.getCopied().keySet()) {
-				String jv = r.getCopied().get(jk);
+			for (Path jk : r.getCopied().keySet()) {
+				Path jv = r.getCopied().get(jk);
 				if (statusParser.getCopied().containsKey(jk)) {
-					String cmdv = statusParser.getCopied().get(jk);
+					Path cmdv = statusParser.getCopied().get(jk);
 					if (!jv.equals(cmdv)) {
 						copyDiff.put(jk, jv + " instead of " + cmdv);
 					}
@@ -137,10 +137,10 @@ public class TestStatus {
 			}
 		}
 		System.out.println("COPIED" + (copiedKeyDiff.isEmpty() && copyDiff.isEmpty() ? " are the same" : " are NOT the same:"));
-		for (String s : copiedKeyDiff) {
+		for (Path s : copiedKeyDiff) {
 			System.out.println("\tNon-matching key:" + s);
 		}
-		for (String s : copyDiff.keySet()) {
+		for (Path s : copyDiff.keySet()) {
 			System.out.println(s + " : " + copyDiff.get(s));
 		}
 		// TODO compare equals

@@ -27,6 +27,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.Internals;
 import org.tmatesoft.hg.repo.StatusCollector;
 import org.tmatesoft.hg.repo.StatusCollector.Record;
@@ -117,13 +118,13 @@ public class Status {
 		sortAndPrint('!', r.getMissing());
 	}
 	
-	private static void sortAndPrint(char prefix, List<String> ul) {
+	private static void sortAndPrint(char prefix, List<Path> ul) {
 		sortAndPrint(prefix, ul, null);
 	}
-	private static void sortAndPrint(char prefix, List<String> ul, Map<String, String> copies) {
-		ArrayList<String> sortList = new ArrayList<String>(ul);
+	private static void sortAndPrint(char prefix, List<Path> ul, Map<Path, Path> copies) {
+		ArrayList<Path> sortList = new ArrayList<Path>(ul);
 		Collections.sort(sortList);
-		for (String s : sortList)  {
+		for (Path s : sortList)  {
 			System.out.print(prefix);
 			System.out.print(' ');
 			System.out.println(s);
@@ -143,52 +144,52 @@ public class Status {
 		}
 	}
 
-	private static class StatusDump implements StatusCollector.Inspector {
+	private static class StatusDump implements HgStatusInspector {
 		public boolean hideStatusPrefix = false; // hg status -n option
 		public boolean showCopied = true; // -C
 		public boolean showIgnored = true; // -i
 		public boolean showClean = true; // -c
 
-		public void modified(String fname) {
+		public void modified(Path fname) {
 			print('M', fname);
 		}
 
-		public void added(String fname) {
+		public void added(Path fname) {
 			print('A', fname);
 		}
 
-		public void copied(String fnameOrigin, String fnameAdded) {
+		public void copied(Path fnameOrigin, Path fnameAdded) {
 			added(fnameAdded);
 			if (showCopied) {
 				print(' ', fnameOrigin);
 			}
 		}
 
-		public void removed(String fname) {
+		public void removed(Path fname) {
 			print('R', fname);
 		}
 
-		public void clean(String fname) {
+		public void clean(Path fname) {
 			if (showClean) {
 				print('C', fname);
 			}
 		}
 
-		public void missing(String fname) {
+		public void missing(Path fname) {
 			print('!', fname);
 		}
 
-		public void unknown(String fname) {
+		public void unknown(Path fname) {
 			print('?', fname);
 		}
 
-		public void ignored(String fname) {
+		public void ignored(Path fname) {
 			if (showIgnored) {
 				print('I', fname);
 			}
 		}
 		
-		private void print(char status, String fname) {
+		private void print(char status, Path fname) {
 			if (!hideStatusPrefix) {
 				System.out.print(status);
 				System.out.print(' ');

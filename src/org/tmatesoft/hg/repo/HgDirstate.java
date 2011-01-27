@@ -34,7 +34,7 @@ import org.tmatesoft.hg.internal.DataAccessProvider;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgDirstate {
+class HgDirstate {
 
 	private final DataAccessProvider accessProvider;
 	private final File dirstateFile;
@@ -143,7 +143,7 @@ public class HgDirstate {
 
 
 
-	public void dump() {
+	/*package-local*/ void dump() {
 		read();
 		@SuppressWarnings("unchecked")
 		Map<String, Record>[] all = new Map[] { normal, added, removed, merged };

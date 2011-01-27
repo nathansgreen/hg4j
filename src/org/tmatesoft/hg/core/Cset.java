@@ -135,24 +135,22 @@ public class Cset implements Cloneable {
 		StatusCollector.Record r = new StatusCollector.Record();
 		statusHelper.change(revNumber, r);
 		final HgRepository repo = statusHelper.getRepo();
-		for (String s : r.getModified()) {
-			Path p = pathHelper.path(s);
+		for (Path s : r.getModified()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
 				throw new IllegalArgumentException();
 			}
-			modified.add(new FileRevision(repo, nid, p));
+			modified.add(new FileRevision(repo, nid, s));
 		}
-		for (String s : r.getAdded()) {
-			Path p = pathHelper.path(s);
+		for (Path s : r.getAdded()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
 				throw new IllegalArgumentException();
 			}
-			added.add(new FileRevision(repo, nid, p));
+			added.add(new FileRevision(repo, nid, s));
 		}
-		for (String s : r.getRemoved()) {
-			deleted.add(pathHelper.path(s));
+		for (Path s : r.getRemoved()) {
+			deleted.add(s);
 		}
 		modified.trimToSize();
 		added.trimToSize();

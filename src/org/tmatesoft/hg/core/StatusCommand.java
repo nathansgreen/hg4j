@@ -20,8 +20,12 @@ import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 
+import java.util.ConcurrentModificationException;
+
+import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Path.Matcher;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.StatusCollector;
 import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
 
@@ -33,17 +37,12 @@ import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
 public class StatusCommand {
 	private final HgRepository repo;
 
-	private boolean needModified;
-	private boolean needAdded;
-	private boolean needRemoved;
-	private boolean needUnknown;
-	private boolean needMissing;
-	private boolean needClean;
-	private boolean needIgnored;
-	private Matcher matcher;
 	private int startRevision = TIP;
 	private int endRevision = WORKING_COPY; 
 	private boolean visitSubRepo = true;
+	
+	private HgStatusInspector visitor;
+	private final Mediator mediator = new Mediator();
 
 	public StatusCommand(HgRepository hgRepo) { 
 		repo = hgRepo;
@@ -51,43 +50,45 @@ public class StatusCommand {
 	}
 
 	public StatusCommand defaults() {
-		needModified = needAdded = needRemoved = needUnknown = needMissing = true;
-		needClean = needIgnored = false;
+		final Mediator m = mediator;
+		m.needModified = m.needAdded = m.needRemoved = m.needUnknown = m.needMissing = true;
+		m.needClean = m.needIgnored = false;
 		return this;
 	}
 	public StatusCommand all() {
-		needModified = needAdded = needRemoved = needUnknown = needMissing = true;
-		needClean = needIgnored = true;
+		final Mediator m = mediator;
+		m.needModified = m.needAdded = m.needRemoved = m.needUnknown = m.needMissing = true;
+		m.needClean = m.needIgnored = true;
 		return this;
 	}
 	
 
 	public StatusCommand modified(boolean include) {
-		needModified = include;
+		mediator.needModified = include;
 		return this;
 	}
 	public StatusCommand added(boolean include) {
-		needAdded = include;
+		mediator.needAdded = include;
 		return this;
 	}
 	public StatusCommand removed(boolean include) {
-		needRemoved = include;
+		mediator.needRemoved = include;
 		return this;
 	}
 	public StatusCommand deleted(boolean include) {
-		needMissing = include;
+		mediator.needMissing = include;
 		return this;
 	}
 	public StatusCommand unknown(boolean include) {
-		needUnknown = include;
+		mediator.needUnknown = include;
 		return this;
 	}
 	public StatusCommand clean(boolean include) {
-		needClean = include;
+		mediator.needClean = include;
 		return this;
 	}
 	public StatusCommand ignored(boolean include) {
-		needIgnored = include;
+		mediator.needIgnored = include;
 		return this;
 	}
 	
@@ -124,31 +125,130 @@ public class StatusCommand {
 		return this;
 	}
 	
+	// pass null to reset
 	public StatusCommand match(Path.Matcher pathMatcher) {
-		matcher = pathMatcher;
-		return this;
+		mediator.matcher = pathMatcher;
+		throw HgRepository.notImplemented();
 	}
 
 	public StatusCommand subrepo(boolean visit) {
 		visitSubRepo  = visit;
 		throw HgRepository.notImplemented();
 	}
-	
-	public void execute(StatusCollector.Inspector inspector) {
+
+	/**
+	 * Perform status operation according to parameters set.
+	 *  
+	 * @param handler callback to get status information
+	 * @throws IllegalArgumentException if handler is <code>null</code>
+	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
+	 */
+	public void execute(final HgStatusInspector handler) {
+		if (handler == null) {
+			throw new IllegalArgumentException();
+		}
+		if (visitor != null) {
+			throw new ConcurrentModificationException();
+		}
+		visitor = handler;
 		StatusCollector sc = new StatusCollector(repo); // TODO from CommandContext
-//		StatusCollector.Record r = new StatusCollector.Record(); // XXX use own inspector not to collect entries that
-		// are not interesting or do not match name
-		if (endRevision == WORKING_COPY) {
-			WorkingCopyStatusCollector wcsc = new WorkingCopyStatusCollector(repo);
-			wcsc.setBaseRevisionCollector(sc);
-			wcsc.walk(startRevision, inspector);
-		} else {
-			if (startRevision == TIP) {
-				sc.change(endRevision, inspector);
+//		PathPool pathHelper = new PathPool(repo.getPathHelper()); // TODO from CommandContext
+		try {
+			// XXX if I need a rough estimation (for ProgressMonitor) of number of work units,
+			// I may use number of files in either rev1 or rev2 manifest edition
+			mediator.start();
+			if (endRevision == WORKING_COPY) {
+				WorkingCopyStatusCollector wcsc = new WorkingCopyStatusCollector(repo);
+				wcsc.setBaseRevisionCollector(sc);
+				wcsc.walk(startRevision, mediator);
 			} else {
-				sc.walk(startRevision, endRevision, inspector);
+				if (startRevision == TIP) {
+					sc.change(endRevision, mediator);
+				} else {
+					sc.walk(startRevision, endRevision, mediator);
+				}
+			}
+		} finally {
+			mediator.done();
+			visitor = null;
+		}
+	}
+
+	private class Mediator implements HgStatusInspector {
+		boolean needModified;
+		boolean needAdded;
+		boolean needRemoved;
+		boolean needUnknown;
+		boolean needMissing;
+		boolean needClean;
+		boolean needIgnored;
+		boolean needCopies = false; // FIXME decide if I need such an argument in StatusComment
+		Matcher matcher;
+
+		Mediator() {
+		}
+		
+		public void start() {
+			
+		}
+		public void done() {
+		}
+
+		public void modified(Path fname) {
+			if (needModified) {
+				if (matcher == null || matcher.accept(fname)) {
+					visitor.modified(fname);
+				}
 			}
 		}
-//		PathPool pathHelper = new PathPool(repo.getPathHelper()); // TODO from CommandContext
+		public void added(Path fname) {
+			if (needAdded) {
+				if (matcher == null || matcher.accept(fname)) {
+					visitor.added(fname);
+				}
+			}
+		}
+		public void removed(Path fname) {
+			if (needRemoved) {
+				if (matcher == null || matcher.accept(fname)) {
+					visitor.removed(fname);
+				}
+			}
+		}
+		public void copied(Path fnameOrigin, Path fnameAdded) {
+			if (needCopies) {
+				if (matcher == null || matcher.accept(fnameAdded)) {
+					visitor.copied(fnameOrigin, fnameAdded);
+				}
+			}
+		}
+		public void missing(Path fname) {
+			if (needMissing) {
+				if (matcher == null || matcher.accept(fname)) {
+					visitor.missing(fname);
+				}
+			}
+		}
+		public void unknown(Path fname) {
+			if (needUnknown) {
+				if (matcher == null || matcher.accept(fname)) {
+					visitor.unknown(fname);
+				}
+			}
+		}
+		public void clean(Path fname) {
+			if (needClean) {
+				if (matcher == null || matcher.accept(fname)) {
+					visitor.clean(fname);
+				}
+			}
+		}
+		public void ignored(Path fname) {
+			if (needIgnored) {
+				if (matcher == null || matcher.accept(fname)) {
+					visitor.ignored(fname);
+				}
+			}
+		}
 	}
 }

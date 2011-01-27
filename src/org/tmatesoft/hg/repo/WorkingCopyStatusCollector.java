@@ -30,6 +30,8 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.StatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.FileWalker;
+import org.tmatesoft.hg.util.PathPool;
+import org.tmatesoft.hg.util.PathRewrite;
 
 /**
  *
@@ -42,6 +44,7 @@ public class WorkingCopyStatusCollector {
 	private final FileWalker repoWalker;
 	private HgDirstate dirstate;
 	private StatusCollector baseRevisionCollector;
+	private PathPool pathPool;
 
 	public WorkingCopyStatusCollector(HgRepository hgRepo) {
 		this(hgRepo, hgRepo.createWorkingDirWalker());
@@ -59,6 +62,22 @@ public class WorkingCopyStatusCollector {
 	public void setBaseRevisionCollector(StatusCollector sc) {
 		baseRevisionCollector = sc;
 	}
+
+	/*package-local*/ PathPool getPathPool() {
+		if (pathPool == null) {
+			if (baseRevisionCollector == null) {
+				pathPool = new PathPool(new PathRewrite.Empty());
+			} else {
+				return baseRevisionCollector.getPathPool();
+			}
+		}
+		return pathPool;
+	}
+
+	public void setPathPool(PathPool pathPool) {
+		this.pathPool = pathPool;
+	}
+
 	
 	private HgDirstate getDirstate() {
 		if (dirstate == null) {
@@ -68,7 +87,7 @@ public class WorkingCopyStatusCollector {
 	}
 
 	// may be invoked few times
-	public void walk(int baseRevision, StatusCollector.Inspector inspector) {
+	public void walk(int baseRevision, HgStatusInspector inspector) {
 		final HgIgnore hgIgnore = repo.getIgnore();
 		TreeSet<String> knownEntries = getDirstate().all();
 		final boolean isTipBase;
@@ -94,12 +113,13 @@ public class WorkingCopyStatusCollector {
 			((StatusCollector.Record) inspector).init(baseRevision, BAD_REVISION, sc);
 		}
 		repoWalker.reset();
+		final PathPool pp = getPathPool();
 		while (repoWalker.hasNext()) {
 			repoWalker.next();
 			String fname = repoWalker.name();
 			File f = repoWalker.file();
 			if (hgIgnore.isIgnored(fname)) {
-				inspector.ignored(fname);
+				inspector.ignored(pp.path(fname));
 			} else if (knownEntries.remove(fname)) {
 				// modified, added, removed, clean
 				if (collect != null) { // need to check against base revision, not FS file
@@ -109,24 +129,24 @@ public class WorkingCopyStatusCollector {
 					checkLocalStatusAgainstFile(fname, f, inspector);
 				}
 			} else {
-				inspector.unknown(fname);
+				inspector.unknown(pp.path(fname));
 			}
 		}
 		if (collect != null) {
 			for (String r : baseRevFiles) {
-				inspector.removed(r);
+				inspector.removed(pp.path(r));
 			}
 		}
 		for (String m : knownEntries) {
 			// missing known file from a working dir  
 			if (getDirstate().checkRemoved(m) == null) {
 				// not removed from the repository = 'deleted'  
-				inspector.missing(m);
+				inspector.missing(pp.path(m));
 			} else {
 				// removed from the repo
 				// if we check against non-tip revision, do not report files that were added past that revision and now removed.
 				if (collect == null || baseRevFiles.contains(m)) {
-					inspector.removed(m);
+					inspector.removed(pp.path(m));
 				}
 			}
 		}
@@ -141,31 +161,31 @@ public class WorkingCopyStatusCollector {
 	//********************************************
 
 	
-	private void checkLocalStatusAgainstFile(String fname, File f, StatusCollector.Inspector inspector) {
+	private void checkLocalStatusAgainstFile(String fname, File f, HgStatusInspector inspector) {
 		HgDirstate.Record r;
 		if ((r = getDirstate().checkNormal(fname)) != null) {
 			// either clean or modified
 			if (f.lastModified() / 1000 == r.time && r.size == f.length()) {
-				inspector.clean(fname);
+				inspector.clean(getPathPool().path(fname));
 			} else {
 				// FIXME check actual content to avoid false modified files
-				inspector.modified(fname);
+				inspector.modified(getPathPool().path(fname));
 			}
 		} else if ((r = getDirstate().checkAdded(fname)) != null) {
 			if (r.name2 == null) {
-				inspector.added(fname);
+				inspector.added(getPathPool().path(fname));
 			} else {
-				inspector.copied(r.name2, fname);
+				inspector.copied(getPathPool().path(r.name2), getPathPool().path(fname));
 			}
 		} else if ((r = getDirstate().checkRemoved(fname)) != null) {
-			inspector.removed(fname);
+			inspector.removed(getPathPool().path(fname));
 		} else if ((r = getDirstate().checkMerged(fname)) != null) {
-			inspector.modified(fname);
+			inspector.modified(getPathPool().path(fname));
 		}
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevisionInspector collect, int baseRevision, String fname, File f, StatusCollector.Inspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevisionInspector collect, int baseRevision, String fname, File f, HgStatusInspector inspector) {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
 		Nodeid nid1 = collect.nodeid(fname);
 		String flags = collect.flags(fname);
@@ -177,13 +197,13 @@ public class WorkingCopyStatusCollector {
 			if ((r = getDirstate().checkNormal(fname)) != null) {
 				String origin = StatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
 				if (origin != null) {
-					inspector.copied(origin, fname);
+					inspector.copied(getPathPool().path(origin), getPathPool().path(fname));
 					return;
 				}
 			} else if ((r = getDirstate().checkAdded(fname)) != null) {
 				if (r.name2 != null && baseRevNames.contains(r.name2)) {
 					baseRevNames.remove(r.name2); // XXX surely I shall not report rename source as Removed?
-					inspector.copied(r.name2, fname);
+					inspector.copied(getPathPool().path(r.name2), getPathPool().path(fname));
 					return;
 				}
 				// fall-through, report as added
@@ -191,7 +211,7 @@ public class WorkingCopyStatusCollector {
 				// removed: removed file was not known at the time of baseRevision, and we should not report it as removed
 				return;
 			}
-			inspector.added(fname);
+			inspector.added(getPathPool().path(fname));
 		} else {
 			// was known; check whether clean or modified
 			// when added - seems to be the case of a file added once again, hence need to check if content is different
@@ -200,14 +220,14 @@ public class WorkingCopyStatusCollector {
 				HgDataFile fileNode = repo.getFileNode(fname);
 				final int lengthAtRevision = fileNode.length(nid1);
 				if (r.size /* XXX File.length() ?! */ != lengthAtRevision || flags != todoGenerateFlags(fname /*java.io.File*/)) {
-					inspector.modified(fname);
+					inspector.modified(getPathPool().path(fname));
 				} else {
 					// check actual content to see actual changes
 					// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
 					if (areTheSame(f, fileNode.content(nid1))) {
-						inspector.clean(fname);
+						inspector.clean(getPathPool().path(fname));
 					} else {
-						inspector.modified(fname);
+						inspector.modified(getPathPool().path(fname));
 					}
 				}
 			}
