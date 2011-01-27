@@ -27,8 +27,8 @@ import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.StatusCommand;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.Lookup;
-import org.tmatesoft.hg.repo.StatusCollector;
-import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
+import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 
 
 /**
@@ -56,10 +56,10 @@ public class TestStatus {
 	}
 	
 	public void testLowLevel() throws Exception {
-		final WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(repo);
+		final HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(repo);
 		statusParser.reset();
 		eh.run("hg", "status", "-A");
-		StatusCollector.Record r = wcc.status(HgRepository.TIP);
+		HgStatusCollector.Record r = wcc.status(HgRepository.TIP);
 		report("hg status -A", r, statusParser);
 		//
 		statusParser.reset();
@@ -70,35 +70,35 @@ public class TestStatus {
 		//
 		statusParser.reset();
 		eh.run("hg", "status", "-A", "--change", String.valueOf(revision));
-		r = new StatusCollector.Record();
-		new StatusCollector(repo).change(revision, r);
+		r = new HgStatusCollector.Record();
+		new HgStatusCollector(repo).change(revision, r);
 		report("status -A --change " + revision, r, statusParser);
 		//
 		statusParser.reset();
 		int rev2 = 80;
 		final String range = String.valueOf(revision) + ":" + String.valueOf(rev2);
 		eh.run("hg", "status", "-A", "--rev", range);
-		r = new StatusCollector(repo).status(revision, rev2);
+		r = new HgStatusCollector(repo).status(revision, rev2);
 		report("Status -A -rev " + range, r, statusParser);
 	}
 	
 	public void testStatusCommand() throws Exception {
 		final StatusCommand sc = new StatusCommand(repo).all();
-		StatusCollector.Record r;
+		HgStatusCollector.Record r;
 		statusParser.reset();
 		eh.run("hg", "status", "-A");
-		sc.execute(r = new StatusCollector.Record());
+		sc.execute(r = new HgStatusCollector.Record());
 		report("hg status -A", r, statusParser);
 		//
 		statusParser.reset();
 		int revision = 3;
 		eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
-		sc.base(revision).execute(r = new StatusCollector.Record());
+		sc.base(revision).execute(r = new HgStatusCollector.Record());
 		report("status -A --rev " + revision, r, statusParser);
 		//
 		statusParser.reset();
 		eh.run("hg", "status", "-A", "--change", String.valueOf(revision));
-		sc.base(TIP).revision(revision).execute(r = new StatusCollector.Record());
+		sc.base(TIP).revision(revision).execute(r = new HgStatusCollector.Record());
 		report("status -A --change " + revision, r, statusParser);
 		
 		// TODO check not -A, but defaults()/custom set of modifications 
@@ -112,7 +112,7 @@ public class TestStatus {
 		 */
 	}
 	
-	private static void report(String what, StatusCollector.Record r, StatusOutputParser statusParser) {
+	private static void report(String what, HgStatusCollector.Record r, StatusOutputParser statusParser) {
 		System.out.println(">>>" + what);
 		reportNotEqual("MODIFIED", r.getModified(), statusParser.getModified());
 		reportNotEqual("ADDED", r.getAdded(), statusParser.getAdded());

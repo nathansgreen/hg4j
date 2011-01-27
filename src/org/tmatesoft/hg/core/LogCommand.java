@@ -29,7 +29,7 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.repo.Changeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.StatusCollector;
+import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.PathPool;
 
 
@@ -169,7 +169,7 @@ public class LogCommand implements Changeset.Inspector {
 		try {
 			delegate = handler;
 			count = 0;
-			changeset = new Cset(new StatusCollector(repo), new PathPool(repo.getPathHelper()));
+			changeset = new Cset(new HgStatusCollector(repo), new PathPool(repo.getPathHelper()));
 			if (file == null) {
 				repo.getChangelog().range(startRev, endRev, this);
 			} else {

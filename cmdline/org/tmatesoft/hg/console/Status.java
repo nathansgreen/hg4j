@@ -29,9 +29,9 @@ import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.Internals;
-import org.tmatesoft.hg.repo.StatusCollector;
-import org.tmatesoft.hg.repo.StatusCollector.Record;
-import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
+import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgStatusCollector.Record;
+import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 
 /**
  *
@@ -58,8 +58,8 @@ public class Status {
 	}
 
 	private static void statusWorkingCopy(HgRepository hgRepo) {
-		WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(hgRepo);
-		StatusCollector.Record r = new StatusCollector.Record();
+		HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(hgRepo);
+		HgStatusCollector.Record r = new HgStatusCollector.Record();
 		wcc.walk(TIP, r);
 		mardu(r);
 	}
@@ -75,8 +75,8 @@ public class Status {
 	}
 	
 	private static void statusRevVsWorkingCopy(HgRepository hgRepo) {
-		WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(hgRepo);
-		StatusCollector.Record r = new StatusCollector.Record();
+		HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(hgRepo);
+		HgStatusCollector.Record r = new HgStatusCollector.Record();
 		wcc.walk(3, r);
 		mardu(r);
 	}
@@ -87,13 +87,13 @@ public class Status {
 		final StatusDump dump = new StatusDump();
 		dump.showIgnored = false;
 		dump.showClean = false;
-		StatusCollector sc = new StatusCollector(hgRepo);
+		HgStatusCollector sc = new HgStatusCollector(hgRepo);
 		final int r1 = 0, r2 = 3;
 		System.out.printf("Status for changes between revision %d and %d:\n", r1, r2);
 		sc.walk(r1, r2, dump);
 		// 
 		System.out.println("\n\nSame, but sorted in the way hg status does:");
-		StatusCollector.Record r = sc.status(r1, r2);
+		HgStatusCollector.Record r = sc.status(r1, r2);
 		sortAndPrint('M', r.getModified());
 		sortAndPrint('A', r.getAdded());
 		sortAndPrint('R', r.getRemoved());
@@ -101,7 +101,7 @@ public class Status {
 		System.out.println("\n\nTry hg status --change <rev>:");
 		sc.change(0, dump);
 		System.out.println("\nStatus against working dir:");
-		WorkingCopyStatusCollector wcc = new WorkingCopyStatusCollector(hgRepo);
+		HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(hgRepo);
 		wcc.walk(TIP, dump);
 		System.out.println();
 		System.out.printf("Manifest of the revision %d:\n", r2);

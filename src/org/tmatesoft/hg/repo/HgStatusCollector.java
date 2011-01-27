@@ -40,13 +40,13 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class StatusCollector {
+public class HgStatusCollector {
 
 	private final HgRepository repo;
 	private final Map<Integer, ManifestRevisionInspector> cache; // sparse array, in fact
 	private PathPool pathPool;
 
-	public StatusCollector(HgRepository hgRepo) {
+	public HgStatusCollector(HgRepository hgRepo) {
 		this.repo = hgRepo;
 		cache = new TreeMap<Integer, ManifestRevisionInspector>();
 		ManifestRevisionInspector emptyFakeState = new ManifestRevisionInspector();
@@ -208,7 +208,7 @@ public class StatusCollector {
 		private Map<Path, Path> copied;
 		
 		private int startRev, endRev;
-		private StatusCollector statusHelper;
+		private HgStatusCollector statusHelper;
 		
 		// XXX StatusCollector may additionally initialize Record instance to speed lookup of changed file revisions
 		// here I need access to ManifestRevisionInspector via #raw(). Perhaps, non-static class (to get
@@ -217,7 +217,7 @@ public class StatusCollector {
 		// ensure functionality is correct for each/any call (#walk checks instanceof Record and fixes it up)
 		// Perhaps, distinct helper (sc.getRevisionHelper().nodeid(fname)) would be better, just not clear
 		// how to supply [start..end] values there easily
-		/*package-local*/void init(int startRevision, int endRevision, StatusCollector self) {
+		/*package-local*/void init(int startRevision, int endRevision, HgStatusCollector self) {
 			startRev = startRevision;
 			endRev = endRevision;
 			statusHelper = self;

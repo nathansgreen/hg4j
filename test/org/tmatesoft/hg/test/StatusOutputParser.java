@@ -24,7 +24,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.repo.StatusCollector;
+import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -38,7 +38,7 @@ public class StatusOutputParser implements OutputParser {
 	private final Pattern pattern;
 	// although using StatusCollector.Record is not really quite honest for testing,
 	// it's deemed acceptable as long as that class is primitive 'collect all results'
-	private StatusCollector.Record result = new StatusCollector.Record();
+	private HgStatusCollector.Record result = new HgStatusCollector.Record();
 	private final PathPool pathHelper;
 
 	public StatusOutputParser() {
@@ -59,7 +59,7 @@ public class StatusOutputParser implements OutputParser {
 	}
 
 	public void reset() {
-		result = new StatusCollector.Record();
+		result = new HgStatusCollector.Record();
 	}
 
 	public void parse(CharSequence seq) {

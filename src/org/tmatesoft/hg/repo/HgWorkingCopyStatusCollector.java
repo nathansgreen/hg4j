@@ -28,7 +28,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.repo.StatusCollector.ManifestRevisionInspector;
+import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -38,19 +38,19 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class WorkingCopyStatusCollector {
+public class HgWorkingCopyStatusCollector {
 
 	private final HgRepository repo;
 	private final FileWalker repoWalker;
 	private HgDirstate dirstate;
-	private StatusCollector baseRevisionCollector;
+	private HgStatusCollector baseRevisionCollector;
 	private PathPool pathPool;
 
-	public WorkingCopyStatusCollector(HgRepository hgRepo) {
+	public HgWorkingCopyStatusCollector(HgRepository hgRepo) {
 		this(hgRepo, hgRepo.createWorkingDirWalker());
 	}
 
-	WorkingCopyStatusCollector(HgRepository hgRepo, FileWalker hgRepoWalker) {
+	HgWorkingCopyStatusCollector(HgRepository hgRepo, FileWalker hgRepoWalker) {
 		this.repo = hgRepo;
 		this.repoWalker = hgRepoWalker;
 	}
@@ -59,7 +59,7 @@ public class WorkingCopyStatusCollector {
 	 * Optionally, supply a collector instance that may cache (or have already cached) base revision
 	 * @param sc may be null
 	 */
-	public void setBaseRevisionCollector(StatusCollector sc) {
+	public void setBaseRevisionCollector(HgStatusCollector sc) {
 		baseRevisionCollector = sc;
 	}
 
@@ -97,20 +97,20 @@ public class WorkingCopyStatusCollector {
 		} else {
 			isTipBase = baseRevision == repo.getManifest().getRevisionCount() - 1;
 		}
-		StatusCollector.ManifestRevisionInspector collect = null;
+		HgStatusCollector.ManifestRevisionInspector collect = null;
 		Set<String> baseRevFiles = Collections.emptySet();
 		if (!isTipBase) {
 			if (baseRevisionCollector != null) {
 				collect = baseRevisionCollector.raw(baseRevision);
 			} else {
-				collect = new StatusCollector.ManifestRevisionInspector();
+				collect = new HgStatusCollector.ManifestRevisionInspector();
 				repo.getManifest().walk(baseRevision, baseRevision, collect);
 			}
 			baseRevFiles = new TreeSet<String>(collect.files());
 		}
-		if (inspector instanceof StatusCollector.Record) {
-			StatusCollector sc = baseRevisionCollector == null ? new StatusCollector(repo) : baseRevisionCollector;
-			((StatusCollector.Record) inspector).init(baseRevision, BAD_REVISION, sc);
+		if (inspector instanceof HgStatusCollector.Record) {
+			HgStatusCollector sc = baseRevisionCollector == null ? new HgStatusCollector(repo) : baseRevisionCollector;
+			((HgStatusCollector.Record) inspector).init(baseRevision, BAD_REVISION, sc);
 		}
 		repoWalker.reset();
 		final PathPool pp = getPathPool();
@@ -152,8 +152,8 @@ public class WorkingCopyStatusCollector {
 		}
 	}
 
-	public StatusCollector.Record status(int baseRevision) {
-		StatusCollector.Record rv = new StatusCollector.Record();
+	public HgStatusCollector.Record status(int baseRevision) {
+		HgStatusCollector.Record rv = new HgStatusCollector.Record();
 		walk(baseRevision, rv);
 		return rv;
 	}
@@ -195,7 +195,7 @@ public class WorkingCopyStatusCollector {
 			// added: not known at the time of baseRevision, shall report
 			// merged: was not known, report as added?
 			if ((r = getDirstate().checkNormal(fname)) != null) {
-				String origin = StatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
+				String origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
 				if (origin != null) {
 					inspector.copied(getPathPool().path(origin), getPathPool().path(fname));
 					return;

@@ -26,8 +26,8 @@ import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Path.Matcher;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusInspector;
-import org.tmatesoft.hg.repo.StatusCollector;
-import org.tmatesoft.hg.repo.WorkingCopyStatusCollector;
+import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 
 /**
  *
@@ -151,14 +151,14 @@ public class StatusCommand {
 			throw new ConcurrentModificationException();
 		}
 		visitor = handler;
-		StatusCollector sc = new StatusCollector(repo); // TODO from CommandContext
+		HgStatusCollector sc = new HgStatusCollector(repo); // TODO from CommandContext
 //		PathPool pathHelper = new PathPool(repo.getPathHelper()); // TODO from CommandContext
 		try {
 			// XXX if I need a rough estimation (for ProgressMonitor) of number of work units,
 			// I may use number of files in either rev1 or rev2 manifest edition
 			mediator.start();
 			if (endRevision == WORKING_COPY) {
-				WorkingCopyStatusCollector wcsc = new WorkingCopyStatusCollector(repo);
+				HgWorkingCopyStatusCollector wcsc = new HgWorkingCopyStatusCollector(repo);
 				wcsc.setBaseRevisionCollector(sc);
 				wcsc.walk(startRevision, mediator);
 			} else {
