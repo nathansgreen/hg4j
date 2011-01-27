@@ -45,7 +45,7 @@ public class Incoming {
 		}
 		// in fact, all we need from changelog is set of all nodeids. However, since ParentWalker reuses same Nodeids, it's not too expensive
 		// to reuse it here, XXX although later this may need to be refactored
-		final Changelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
+		final HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
 		pw.init();
 		//
 		HashSet<Nodeid> base = new HashSet<Nodeid>();

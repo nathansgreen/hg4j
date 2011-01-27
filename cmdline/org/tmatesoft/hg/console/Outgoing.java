@@ -47,7 +47,7 @@ public class Outgoing {
 		base.add(Nodeid.fromAscii("d6d2a630f4a6d670c90a5ca909150f2b426ec88f".getBytes(), 0, 40));
 		//
 		// fill with all known
-		Changelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
+		HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
 		pw.init();
 		LinkedHashSet<Nodeid> sendToRemote = new LinkedHashSet<Nodeid>(pw.allNodes());
 		dump("initial state", sendToRemote);

@@ -123,7 +123,7 @@ public class Log {
 		// own
 		private LinkedList<String> l = new LinkedList<String>();
 		private final HgRepository repo;
-		private Changelog.ParentWalker changelogWalker;
+		private HgChangelog.ParentWalker changelogWalker;
 		private final int tip ;
 
 		public Dump(HgRepository hgRepo) {
