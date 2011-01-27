@@ -52,13 +52,13 @@ public class StatusCommand {
 	public StatusCommand defaults() {
 		final Mediator m = mediator;
 		m.needModified = m.needAdded = m.needRemoved = m.needUnknown = m.needMissing = true;
-		m.needClean = m.needIgnored = false;
+		m.needCopies = m.needClean = m.needIgnored = false;
 		return this;
 	}
 	public StatusCommand all() {
 		final Mediator m = mediator;
 		m.needModified = m.needAdded = m.needRemoved = m.needUnknown = m.needMissing = true;
-		m.needClean = m.needIgnored = true;
+		m.needCopies = m.needClean = m.needIgnored = true;
 		return this;
 	}
 	
@@ -182,7 +182,7 @@ public class StatusCommand {
 		boolean needMissing;
 		boolean needClean;
 		boolean needIgnored;
-		boolean needCopies = false; // FIXME decide if I need such an argument in StatusComment
+		boolean needCopies;
 		Matcher matcher;
 
 		Mediator() {

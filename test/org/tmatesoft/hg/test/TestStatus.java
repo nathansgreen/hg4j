@@ -46,7 +46,7 @@ public class TestStatus {
 		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		TestStatus test = new TestStatus(repo);
 		test.testLowLevel();
-//		test.testStatusCommand();
+		test.testStatusCommand();
 	}
 	
 	public TestStatus(HgRepository hgRepo) {
