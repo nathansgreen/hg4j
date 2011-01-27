@@ -39,7 +39,7 @@ public class Internals {
 	}
 
 	public boolean[] checkIgnored(String... toCheck) {
-		HgIgnore ignore = repo.loadIgnore();
+		HgIgnore ignore = repo.getIgnore();
 		boolean[] rv = new boolean[toCheck.length];
 		for (int i = 0; i < toCheck.length; i++) {
 			rv[i] = ignore.isIgnored(toCheck[i]);

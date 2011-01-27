@@ -71,6 +71,7 @@ public final class HgRepository {
 	private final HashMap<Path, SoftReference<RevlogStream>> streamsCache = new HashMap<Path, SoftReference<RevlogStream>>();
 	
 	private final org.tmatesoft.hg.internal.Internals impl = new org.tmatesoft.hg.internal.Internals();
+	private HgIgnore ignore;
 
 	HgRepository(String repositoryPath) {
 		repoDir = null;
@@ -150,8 +151,18 @@ public final class HgRepository {
 	}
 
 	// package-local, see comment for loadDirstate
-	/*package-local*/ final HgIgnore loadIgnore() {
-		return new HgIgnore(this);
+	/*package-local*/ final HgIgnore getIgnore() {
+		// TODO read config for additional locations
+		if (ignore == null) {
+			ignore = new HgIgnore();
+			try {
+				File ignoreFile = new File(repoDir.getParentFile(), ".hgignore");
+				ignore.read(ignoreFile);
+			} catch (IOException ex) {
+				ex.printStackTrace(); // log warn
+			}
+		}
+		return ignore;
 	}
 
 	/*package-local*/ DataAccessProvider getDataAccess() {

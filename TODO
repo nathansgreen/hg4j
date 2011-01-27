@@ -1,6 +1,8 @@
 Read-only support, version 1.0
 ==============================
 Committed:
+* store+fncache, RevlogNG (i.e. no support for older store formats) 
+
 * hg log
   + user, branch, limit
   - date, 
@@ -12,10 +14,15 @@ Committed:
 
   
 * hg status
-  - copies for revisions
-
+  + copies for [revision..revision] and for [revision..working dir]
+  - path or anything meaningful instead of Strings
+  - matchers
 
 * hg cat
+
+* hgignore
+  + glob
+  + pattern
 
 
 Proposed:
@@ -23,6 +30,9 @@ Proposed:
 - LogCommand.before(Date date) and .after()
 - LogCommand.match() to specify pattern, no selected file()s only?
 * RepositoryFacade and CommandContext  
+- hgignore: read extra ignore files from config file (ui.ignore)
+- tags
+
 
 Read-only support, version 1.1
 ==============================

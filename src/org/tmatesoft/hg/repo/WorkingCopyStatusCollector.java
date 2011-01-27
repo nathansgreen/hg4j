@@ -69,7 +69,7 @@ public class WorkingCopyStatusCollector {
 
 	// may be invoked few times
 	public void walk(int baseRevision, StatusCollector.Inspector inspector) {
-		final HgIgnore hgIgnore = repo.loadIgnore();
+		final HgIgnore hgIgnore = repo.getIgnore();
 		TreeSet<String> knownEntries = getDirstate().all();
 		final boolean isTipBase;
 		if (baseRevision == TIP) {
