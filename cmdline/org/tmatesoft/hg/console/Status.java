@@ -28,7 +28,7 @@ import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusInspector;
-import org.tmatesoft.hg.repo.Internals;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusCollector.Record;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
@@ -82,7 +82,7 @@ public class Status {
 	}
 
 	private static void bunchOfTests(HgRepository hgRepo) throws Exception {
-		Internals debug = new Internals(hgRepo);
+		HgInternals debug = new HgInternals(hgRepo);
 		debug.dumpDirstate();
 		final StatusDump dump = new StatusDump();
 		dump.showIgnored = false;

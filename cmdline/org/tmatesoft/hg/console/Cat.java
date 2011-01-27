@@ -19,7 +19,7 @@ package org.tmatesoft.hg.console;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.Internals;
+import org.tmatesoft.hg.repo.HgInternals;
 
 
 /**
@@ -35,7 +35,7 @@ public class Cat {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		Internals debug = new Internals(hgRepo);
+		HgInternals debug = new HgInternals(hgRepo);
 		String[] toCheck = new String[] {"design.txt", "src/com/tmate/hgkit/ll/Changelog.java", "src/Extras.java", "bin/com/tmate/hgkit/ll/Changelog.class"};
 		boolean[] checkResult = debug.checkIgnored(toCheck);
 		for (int i = 0; i < toCheck.length; i++) {

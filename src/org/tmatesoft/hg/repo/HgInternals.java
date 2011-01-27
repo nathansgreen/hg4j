@@ -26,11 +26,11 @@ package org.tmatesoft.hg.repo;
  * @author TMate Software Ltd.
 
  */
-public class Internals {
+public class HgInternals {
 
 	private final HgRepository repo;
 
-	public Internals(HgRepository hgRepo) {
+	public HgInternals(HgRepository hgRepo) {
 		repo = hgRepo;
 	}
 
