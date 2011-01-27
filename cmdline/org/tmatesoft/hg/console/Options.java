@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.Lookup;
+import org.tmatesoft.hg.repo.HgLookup;
 
 /**
  * Parse command-line options
@@ -44,9 +44,9 @@ class Options {
 	
 	public HgRepository findRepository() throws Exception {
 		if (repoLocation != null) {
-			return new Lookup().detect(repoLocation);
+			return new HgLookup().detect(repoLocation);
 		}
-		return new Lookup().detectFromWorkingDir();
+		return new HgLookup().detectFromWorkingDir();
 	}
 
 

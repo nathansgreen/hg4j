@@ -19,7 +19,7 @@ package org.tmatesoft.hg.core;
 import java.io.File;
 
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.Lookup;
+import org.tmatesoft.hg.repo.HgLookup;
 
 /**
  *
@@ -33,12 +33,12 @@ public class RepositoryFacade {
 	}
 
 	public boolean init() throws Exception /*FIXME RepoInitException*/ {
-		repo = new Lookup().detectFromWorkingDir();
+		repo = new HgLookup().detectFromWorkingDir();
 		return repo != null && !repo.isInvalid();
 	}
 	
 	public boolean initFrom(File repoLocation) throws Exception {
-		repo = new Lookup().detect(repoLocation.getCanonicalPath());
+		repo = new HgLookup().detect(repoLocation.getCanonicalPath());
 		return repo != null && !repo.isInvalid();
 	}
 

@@ -27,7 +27,7 @@ import org.tmatesoft.hg.core.LogCommand.FileHistoryHandler;
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.Lookup;
+import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
 
 
@@ -43,7 +43,7 @@ public class TestHistory {
 	private LogOutputParser changelogParser;
 	
 	public static void main(String[] args) throws Exception {
-		TestHistory th = new TestHistory(new Lookup().detectFromWorkingDir());
+		TestHistory th = new TestHistory(new HgLookup().detectFromWorkingDir());
 		th.testCompleteLog();
 		th.testFollowHistory();
 	}

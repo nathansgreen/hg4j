@@ -23,14 +23,19 @@ import java.io.File;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Lookup {
+public class HgLookup {
 
 	public HgRepository detectFromWorkingDir() throws Exception {
 		return detect(System.getProperty("user.dir"));
 	}
 
 	public HgRepository detect(String location) throws Exception /*FIXME Exception type, RepoInitException? */ {
-		File dir = new File(location);
+		return detect(new File(location));
+	}
+
+	// look up in specified location and above
+	public HgRepository detect(File location) throws Exception {
+		File dir = location;
 		File repository;
 		do {
 			repository = new File(dir, ".hg");
@@ -42,7 +47,8 @@ public class Lookup {
 			
 		} while(dir != null);
 		if (repository == null) {
-			return new HgRepository(location);
+			// return invalid repository
+			return new HgRepository(location.getPath());
 		}
 		return new HgRepository(repository);
 	}

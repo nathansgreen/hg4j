@@ -27,7 +27,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.RepositoryTreeWalker;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.Lookup;
+import org.tmatesoft.hg.repo.HgLookup;
 
 
 /**
@@ -53,7 +53,7 @@ public class TestManifest {
 	};
 
 	public static void main(String[] args) throws Exception {
-		HgRepository repo = new Lookup().detectFromWorkingDir();
+		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		TestManifest tm = new TestManifest(repo);
 		tm.testTip();
 		tm.testFirstRevision();

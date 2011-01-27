@@ -26,7 +26,7 @@ import java.util.List;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.StatusCommand;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.Lookup;
+import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 
@@ -43,7 +43,7 @@ public class TestStatus {
 	private ExecHelper eh;
 
 	public static void main(String[] args) throws Exception {
-		HgRepository repo = new Lookup().detectFromWorkingDir();
+		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		TestStatus test = new TestStatus(repo);
 		test.testLowLevel();
 //		test.testStatusCommand();
