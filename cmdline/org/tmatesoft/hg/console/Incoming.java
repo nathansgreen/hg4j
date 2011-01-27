@@ -23,7 +23,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.repo.Changelog;
+import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgRepository;
 
 

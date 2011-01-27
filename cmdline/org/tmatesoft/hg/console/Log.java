@@ -25,7 +25,7 @@ import org.tmatesoft.hg.core.LogCommand;
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.repo.Changelog;
+import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 

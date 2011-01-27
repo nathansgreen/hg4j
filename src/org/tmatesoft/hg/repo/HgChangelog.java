@@ -30,9 +30,9 @@ import org.tmatesoft.hg.internal.RevlogStream;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Changelog extends Revlog {
+public class HgChangelog extends Revlog {
 
-	/*package-local*/ Changelog(HgRepository hgRepo, RevlogStream content) {
+	/*package-local*/ HgChangelog(HgRepository hgRepo, RevlogStream content) {
 		super(hgRepo, content);
 	}
 

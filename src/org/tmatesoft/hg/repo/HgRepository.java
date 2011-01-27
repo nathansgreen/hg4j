@@ -64,7 +64,7 @@ public final class HgRepository {
 	private final PathRewrite dataPathHelper;
 	private final PathRewrite repoPathHelper;
 
-	private Changelog changelog;
+	private HgChangelog changelog;
 	private HgManifest manifest;
 	private HgTags tags;
 	// XXX perhaps, shall enable caching explicitly
@@ -99,11 +99,11 @@ public final class HgRepository {
 		return repoDir == null || !repoDir.exists() || !repoDir.isDirectory();
 	}
 	
-	public Changelog getChangelog() {
+	public HgChangelog getChangelog() {
 		if (this.changelog == null) {
 			String storagePath = repoPathHelper.rewrite("00changelog.i");
 			RevlogStream content = resolve(Path.create(storagePath));
-			this.changelog = new Changelog(this, content);
+			this.changelog = new HgChangelog(this, content);
 		}
 		return this.changelog;
 	}
