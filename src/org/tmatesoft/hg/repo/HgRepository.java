@@ -119,6 +119,12 @@ public final class HgRepository {
 	public final HgTags getTags() {
 		if (tags == null) {
 			tags = new HgTags();
+			try {
+				tags.readGlobal(new File(repoDir.getParentFile(), ".hgtags"));
+				tags.readLocal(new File(repoDir, "localtags"));
+			} catch (IOException ex) {
+				ex.printStackTrace(); // FIXME log or othewise report
+			}
 		}
 		return tags;
 	}
