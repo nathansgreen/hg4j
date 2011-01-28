@@ -40,8 +40,10 @@
     </target>
 	
 	<target name="tests" depends="build-tests">
-		<junit printsummary="on">
+		<junit>
 			<classpath path="hg4j.jar;hg4j-tests.jar;${junit.jar}"/>
+			<formatter type="xml"/>
+			<formatter type="plain" usefile="no"/>
 			<test name="org.tmatesoft.hg.test.TestHistory"/>
 			<test name="org.tmatesoft.hg.test.TestManifest"/>
 			<test name="org.tmatesoft.hg.test.TestStatus"/>

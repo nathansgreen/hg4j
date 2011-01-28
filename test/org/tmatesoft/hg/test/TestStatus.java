@@ -16,14 +16,17 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.junit.Assume;
+import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.StatusCommand;
@@ -40,15 +43,19 @@ import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
  */
 public class TestStatus {
 
+	@Rule
+	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
+
 	private final HgRepository repo;
 	private StatusOutputParser statusParser;
 	private ExecHelper eh;
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Throwable {
 		TestStatus test = new TestStatus();
 		test.testLowLevel();
 		test.testStatusCommand();
 		test.testPerformance();
+		test.errorCollector.verify();
 	}
 	
 	public TestStatus() throws Exception {
@@ -144,15 +151,14 @@ public class TestStatus {
 	}
 	
 	
-	private static void report(String what, HgStatusCollector.Record r, StatusOutputParser statusParser) {
-		System.out.println(">>>" + what);
-		reportNotEqual("MODIFIED", r.getModified(), statusParser.getModified());
-		reportNotEqual("ADDED", r.getAdded(), statusParser.getAdded());
-		reportNotEqual("REMOVED", r.getRemoved(), statusParser.getRemoved());
-		reportNotEqual("CLEAN", r.getClean(), statusParser.getClean());
-		reportNotEqual("IGNORED", r.getIgnored(), statusParser.getIgnored());
-		reportNotEqual("MISSING", r.getMissing(), statusParser.getMissing());
-		reportNotEqual("UNKNOWN", r.getUnknown(), statusParser.getUnknown());
+	private void report(String what, HgStatusCollector.Record r, StatusOutputParser statusParser) {
+		reportNotEqual(what + "#MODIFIED", r.getModified(), statusParser.getModified());
+		reportNotEqual(what + "#ADDED", r.getAdded(), statusParser.getAdded());
+		reportNotEqual(what + "#REMOVED", r.getRemoved(), statusParser.getRemoved());
+		reportNotEqual(what + "#CLEAN", r.getClean(), statusParser.getClean());
+		reportNotEqual(what + "#IGNORED", r.getIgnored(), statusParser.getIgnored());
+		reportNotEqual(what + "#MISSING", r.getMissing(), statusParser.getMissing());
+		reportNotEqual(what + "#UNKNOWN", r.getUnknown(), statusParser.getUnknown());
 		List<Path> copiedKeyDiff = difference(r.getCopied().keySet(), statusParser.getCopied().keySet());
 		HashMap<Path, String> copyDiff = new HashMap<Path,String>();
 		if (copiedKeyDiff.isEmpty()) {
@@ -168,30 +174,13 @@ public class TestStatus {
 				}
 			}
 		}
-		System.out.println("COPIED" + (copiedKeyDiff.isEmpty() && copyDiff.isEmpty() ? " are the same" : " are NOT the same:"));
-		for (Path s : copiedKeyDiff) {
-			System.out.println("\tNon-matching key:" + s);
-		}
-		for (Path s : copyDiff.keySet()) {
-			System.out.println(s + " : " + copyDiff.get(s));
-		}
-		// TODO compare equals
-		System.out.println("<<<\n");
+		errorCollector.checkThat(what + "#Non-matching 'copied' keys: ", copiedKeyDiff, equalTo(Collections.<Path>emptyList()));
+		errorCollector.checkThat(what + "#COPIED", copyDiff, equalTo(Collections.<Path,String>emptyMap()));
 	}
 	
-	private static <T> void reportNotEqual(String what, Collection<T> l1, Collection<T> l2) {
+	private <T> void reportNotEqual(String what, Collection<T> l1, Collection<T> l2) {
 		List<T> diff = difference(l1, l2);
-		System.out.print(what);
-		if (!diff.isEmpty()) {
-			System.out.print(" are NOT the same: ");
-			for (T t : diff) {
-				System.out.print(t);
-				System.out.print(", ");
-			}
-			System.out.println();
-		} else {
-			System.out.println(" are the same");
-		}
+		errorCollector.checkThat(what, diff, equalTo(Collections.<T>emptyList()));
 	}
 
 	private static <T> List<T> difference(Collection<T> l1, Collection<T> l2) {

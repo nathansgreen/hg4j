@@ -16,10 +16,17 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
+import org.hamcrest.CoreMatchers;
+import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.Cset;
 import org.tmatesoft.hg.core.LogCommand;
@@ -39,14 +46,18 @@ import org.tmatesoft.hg.test.LogOutputParser.Record;
  */
 public class TestHistory {
 
+	@Rule
+	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
+
 	private final HgRepository repo;
 	private ExecHelper eh;
 	private LogOutputParser changelogParser;
 	
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Throwable {
 		TestHistory th = new TestHistory();
 		th.testCompleteLog();
 		th.testFollowHistory();
+		th.errorCollector.verify();
 		th.testPerformance();
 	}
 	
@@ -85,9 +96,20 @@ public class TestHistory {
 				};
 				H h = new H();
 				new LogCommand(repo).file(f, true).execute(h);
-				System.out.print("hg log - FOLLOW FILE HISTORY");
-				System.out.println("\tcopyReported:" + h.copyReported + ", and was " + (h.fromMatched ? "CORRECT" : "WRONG"));
-				report("hg log - FOLLOW FILE HISTORY", h.getChanges(), false);
+				String what = "hg log - FOLLOW FILE HISTORY";
+				errorCollector.checkThat(what + "#copyReported ", h.copyReported, is(true));
+				errorCollector.checkThat(what + "#copyFromMatched", h.fromMatched, is(true));
+				//
+				// cmdline always gives in changesets in order from newest (bigger rev number) to oldest.
+				// LogCommand does other way round, from oldest to newest, follewed by revisions of copy source, if any
+				// (apparently older than oldest of the copy target). Hence need to sort Java results according to rev numbers
+				final LinkedList<Cset> sorted = new LinkedList<Cset>(h.getChanges());
+				Collections.sort(sorted, new Comparator<Cset>() {
+					public int compare(Cset cs1, Cset cs2) {
+						return cs1.getRevision() < cs2.getRevision() ? 1 : -1;
+					}
+				});
+				report(what, sorted, false);
 			}
 		} catch (IllegalArgumentException ex) {
 			System.out.println("Can't test file history with follow because need to query specific file with history");
@@ -100,7 +122,6 @@ public class TestHistory {
 			Collections.reverse(consoleResult);
 		}
 		Iterator<LogOutputParser.Record> consoleResultItr = consoleResult.iterator();
-		boolean hasErrors = false;
 		for (Cset cs : r) {
 			LogOutputParser.Record cr = consoleResultItr.next();
 			int x = cs.getRevision() == cr.changesetIndex ? 0x1 : 0;
@@ -108,17 +129,10 @@ public class TestHistory {
 			x |= cs.getNodeid().toString().equals(cr.changesetNodeid) ? 0x4 : 0;
 			x |= cs.getUser().equals(cr.user) ? 0x8 : 0;
 			x |= cs.getComment().equals(cr.description) ? 0x10 : 0;
-			if (x != 0x1f) {
-				System.err.printf("Error in %d (%d):0%o\n", cs.getRevision(), cr.changesetIndex, x);
-				hasErrors = true;
-			}
+			errorCollector.checkThat(String.format(what + ". Error in %d:%d. ", cs.getRevision(), cr.changesetIndex), x, equalTo(0x1f));
 			consoleResultItr.remove();
 		}
-		if (consoleResultItr.hasNext()) {
-			System.out.println("Insufficient results from Java");
-			hasErrors = true;
-		}
-		System.out.println(what + (hasErrors ? " FAIL" : " OK"));
+		errorCollector.checkThat(what + ". Insufficient results from Java ", consoleResultItr.hasNext(), equalTo(false));
 	}
 
 	public void testPerformance() throws Exception {

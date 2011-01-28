@@ -16,20 +16,24 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
 import org.junit.Assume;
+import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.RepositoryTreeWalker;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRepository;
 
 
 /**
@@ -38,6 +42,9 @@ import org.tmatesoft.hg.repo.HgLookup;
  * @author TMate Software Ltd.
  */
 public class TestManifest {
+
+	@Rule
+	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 
 	private final HgRepository repo;
 	private ManifestOutputParser manifestParser;
@@ -54,11 +61,12 @@ public class TestManifest {
 		public void begin(Nodeid manifestRevision) {}
 	};
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Throwable {
 		TestManifest tm = new TestManifest();
 		tm.testTip();
 		tm.testFirstRevision();
 		tm.testRevisionInTheMiddle();
+		tm.errorCollector.verify();
 	}
 	
 	public TestManifest() throws Exception {
@@ -100,26 +108,13 @@ public class TestManifest {
 
 	private void report(String what) throws Exception {
 		final Map<Path, Nodeid> cmdLineResult = new LinkedHashMap<Path, Nodeid>(manifestParser.getResult());
-		boolean error = false;
 		for (FileRevision fr : revisions) {
 			Nodeid nid = cmdLineResult.remove(fr.getPath());
-			if (nid == null) {
-				System.out.println("Extra " + fr.getPath() + " in Java result");
-				error = true;
-			} else {
-				if (!nid.equals(fr.getRevision())) {
-					System.out.println("Non-matching nodeid:" + nid);
-					error = true;
-				}
+			errorCollector.checkThat("Extra " + fr.getPath() + " in Java result", nid, notNullValue());
+			if (nid != null) {
+				errorCollector.checkThat("Non-matching nodeid:" + nid, nid, equalTo(fr.getRevision()));
 			}
 		}
-		if (!cmdLineResult.isEmpty()) {
-			System.out.println("Non-matched entries from command line:");
-			error = true;
-			for (Path p : cmdLineResult.keySet()) {
-				System.out.println(p);
-			}
-		}
-		System.out.println(what + (error ? " ERROR" : " OK"));
+		errorCollector.checkThat("Non-matched entries from command line:", cmdLineResult, equalTo(Collections.<Path,Nodeid>emptyMap()));
 	}
 }

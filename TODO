@@ -24,6 +24,7 @@ Committed:
   + glob
   + pattern
 
+* Tests with JUnit 
 
 Proposed:
 - LogCommand.revision(int... rev)+ to walk selected revisions only (list->sort(array) on execute, binary search)

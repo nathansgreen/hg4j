@@ -4,3 +4,4 @@ src/Extras.java
 hg4j.jar
 hg4j-tests.jar
 hg4j-console.jar
+TEST-*.xml
