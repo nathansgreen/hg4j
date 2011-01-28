@@ -47,6 +47,7 @@ public class TestStatus {
 		TestStatus test = new TestStatus(repo);
 		test.testLowLevel();
 		test.testStatusCommand();
+		test.testPerformance();
 	}
 	
 	public TestStatus(HgRepository hgRepo) {
@@ -111,6 +112,29 @@ public class TestStatus {
 		 Reports extra REMOVED file (the one added and removed in between). Shall not
 		 */
 	}
+	
+	/*
+	 * With warm-up of previous tests, 10 runs, time in milliseconds
+	 * 'hg status -A': Native client total 953 (95 per run), Java client 94 (9)
+	 * 'hg status -A --rev 3:80': Native client total 1828 (182 per run), Java client 235 (23)
+	 * 'hg log --debug', 10 runs: Native client total 1766 (176 per run), Java client 78 (7)
+	 */
+	public void testPerformance() throws Exception {
+		final int runs = 10;
+		final long start1 = System.currentTimeMillis();
+		for (int i = 0; i < runs; i++) {
+			statusParser.reset();
+			eh.run("hg", "status", "-A", "--rev", "3:80");
+		}
+		final long start2 = System.currentTimeMillis();
+		for (int i = 0; i < runs; i++) {
+			HgStatusCollector.Record r = new HgStatusCollector.Record();
+			new StatusCommand(repo).all().base(3).revision(80).execute(r);
+		}
+		final long end = System.currentTimeMillis();
+		System.out.printf("'hg status -A --rev 3:80', %d runs:  Native client total %d (%d per run), Java client %d (%d)\n", runs, start2-start1, (start2-start1)/runs, end-start2, (end-start2)/runs);
+	}
+	
 	
 	private static void report(String what, HgStatusCollector.Record r, StatusOutputParser statusParser) {
 		System.out.println(">>>" + what);

@@ -22,12 +22,14 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.Cset;
 import org.tmatesoft.hg.core.LogCommand;
+import org.tmatesoft.hg.core.StatusCommand;
 import org.tmatesoft.hg.core.LogCommand.CollectHandler;
 import org.tmatesoft.hg.core.LogCommand.FileHistoryHandler;
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
 
 
@@ -46,6 +48,7 @@ public class TestHistory {
 		TestHistory th = new TestHistory(new HgLookup().detectFromWorkingDir());
 		th.testCompleteLog();
 		th.testFollowHistory();
+		th.testPerformance();
 	}
 
 	public TestHistory(HgRepository hgRepo) {
@@ -111,5 +114,20 @@ public class TestHistory {
 			hasErrors = true;
 		}
 		System.out.println(what + (hasErrors ? " FAIL" : " OK"));
+	}
+
+	public void testPerformance() throws Exception {
+		final int runs = 10;
+		final long start1 = System.currentTimeMillis();
+		for (int i = 0; i < runs; i++) {
+			changelogParser.reset();
+			eh.run("hg", "log", "--debug");
+		}
+		final long start2 = System.currentTimeMillis();
+		for (int i = 0; i < runs; i++) {
+			new LogCommand(repo).execute();
+		}
+		final long end = System.currentTimeMillis();
+		System.out.printf("'hg log --debug', %d runs: Native client total %d (%d per run), Java client %d (%d)\n", runs, start2-start1, (start2-start1)/runs, end-start2, (end-start2)/runs);
 	}
 }
