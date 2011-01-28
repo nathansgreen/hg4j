@@ -12,7 +12,7 @@
  *
  * For information on how to redistribute this software under
  * the terms of a license other than GNU General Public License
- * contact TMate Software at support@svnkit.com
+ * contact TMate Software at support@hg4j.com
  */
 package org.tmatesoft.hg.repo;
 
