@@ -1,6 +1,6 @@
 syntax:glob
 bin
 src/Extras.java
-jhg.jar
-jhg-tests.jar
-jhg-cl.jar
+hg4j.jar
+hg4j-tests.jar
+hg4j-console.jar

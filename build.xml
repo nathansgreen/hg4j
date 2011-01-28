@@ -15,38 +15,49 @@
  the terms of a license other than GNU General Public License
  contact TMate Software at support@svnkit.com
 -->
-<project name="jhg" default="samples">
+<project name="hg4j" default="samples">
     <description>
-            description
+            Build, test and showcase hg4j 
     </description>
+	
+	<property name="junit.jar" value="lib/junit-4.8.2.jar"/>
 
     <target name="samples" depends="build-cmdline">
     	
     	<echo message="History of a specific file(s)"/>
-    	<java classpath="jhg.jar;jhg-cl.jar" classname="org.tmatesoft.hg.console.Log">
+    	<java classpath="hg4j.jar;hg4j-console.jar" classname="org.tmatesoft.hg.console.Log">
     		<arg line="design.txt .classpath src/com/tmate/hgkit/ll/LocalHgRepo.java"/>
     	</java>
     	
     	<echo message="Whole repo log"/>
-    	<java classpath="jhg.jar;jhg-cl.jar" classname="org.tmatesoft.hg.console.Log"/>
+    	<java classpath="hg4j.jar;hg4j-console.jar" classname="org.tmatesoft.hg.console.Log"/>
     	
     	<echo message="Content of a file"/>
-    	<java classpath="jhg.jar;jhg-cl.jar" classname="org.tmatesoft.hg.console.Cat">
+    	<java classpath="hg4j.jar;hg4j-console.jar" classname="org.tmatesoft.hg.console.Cat">
     		<arg line="src/com/tmate/hgkit/ll/Revlog.java"/>
     	</java>
 
     </target>
 	
 	<target name="tests" depends="build-tests">
-		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestHistory"/>
-		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestManifest"/>
-		<java classpath="jhg.jar;jhg-tests.jar" classname="org.tmatesoft.hg.test.TestStatus"/>
+		<junit printsummary="on">
+			<classpath path="hg4j.jar;hg4j-tests.jar;${junit.jar}"/>
+			<test name="org.tmatesoft.hg.test.TestHistory"/>
+			<test name="org.tmatesoft.hg.test.TestManifest"/>
+			<test name="org.tmatesoft.hg.test.TestStatus"/>
+			<test name="org.tmatesoft.hg.test.TestStorePath"/>
+		</junit>
+		<!--
+		<java classpath="hg4j.jar;hg4j-tests.jar" classname="org.tmatesoft.hg.test.TestHistory"/>
+		<java classpath="hg4j.jar;hg4j-tests.jar" classname="org.tmatesoft.hg.test.TestManifest"/>
+		<java classpath="hg4j.jar;hg4j-tests.jar" classname="org.tmatesoft.hg.test.TestStatus"/>
+		-->
 	</target>
 
     <target name="build">
     	<mkdir dir="bin"/>
     	<javac srcdir="src" destdir="bin"/>
-    	<jar destfile="jhg.jar">
+    	<jar destfile="hg4j.jar">
     		<fileset dir="bin/">
     			<include name="org/tmatesoft/hg/core/**" />
     			<include name="org/tmatesoft/hg/util/**" />
@@ -59,13 +70,13 @@
     <target name="build-tests" depends="build">
     	<mkdir dir="bin"/>
     	<javac srcdir="test" destdir="bin"/>
-    	<jar destfile="jhg-tests.jar" basedir="bin" includes="org/tmatesoft/hg/test/**"/>
+    	<jar destfile="hg4j-tests.jar" basedir="bin" includes="org/tmatesoft/hg/test/**"/>
     </target>
 
     <target name="build-cmdline" depends="build">
     	<mkdir dir="bin"/>
     	<javac srcdir="cmdline" destdir="bin"/>
-    	<jar destfile="jhg-cl.jar" basedir="bin" includes="org/tmatesoft/hg/console/**"/>
+    	<jar destfile="hg4j-console.jar" basedir="bin" includes="org/tmatesoft/hg/console/**"/>
     </target>
 
 </project>

@@ -23,10 +23,12 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.junit.Assume;
+import org.junit.Test;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.StatusCommand;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 
@@ -43,19 +45,24 @@ public class TestStatus {
 	private ExecHelper eh;
 
 	public static void main(String[] args) throws Exception {
-		HgRepository repo = new HgLookup().detectFromWorkingDir();
-		TestStatus test = new TestStatus(repo);
+		TestStatus test = new TestStatus();
 		test.testLowLevel();
 		test.testStatusCommand();
 		test.testPerformance();
 	}
 	
-	public TestStatus(HgRepository hgRepo) {
+	public TestStatus() throws Exception {
+		this(new HgLookup().detectFromWorkingDir());
+	}
+
+	private TestStatus(HgRepository hgRepo) {
 		repo = hgRepo;
+		Assume.assumeTrue(!repo.isInvalid());
 		statusParser = new StatusOutputParser();
 		eh = new ExecHelper(statusParser, null);
 	}
 	
+	@Test
 	public void testLowLevel() throws Exception {
 		final HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(repo);
 		statusParser.reset();
@@ -83,6 +90,7 @@ public class TestStatus {
 		report("Status -A -rev " + range, r, statusParser);
 	}
 	
+	@Test
 	public void testStatusCommand() throws Exception {
 		final StatusCommand sc = new StatusCommand(repo).all();
 		HgStatusCollector.Record r;

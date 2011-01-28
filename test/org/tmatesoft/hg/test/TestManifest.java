@@ -22,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
+import org.junit.Assume;
+import org.junit.Test;
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
@@ -53,26 +55,33 @@ public class TestManifest {
 	};
 
 	public static void main(String[] args) throws Exception {
-		HgRepository repo = new HgLookup().detectFromWorkingDir();
-		TestManifest tm = new TestManifest(repo);
+		TestManifest tm = new TestManifest();
 		tm.testTip();
 		tm.testFirstRevision();
 		tm.testRevisionInTheMiddle();
 	}
+	
+	public TestManifest() throws Exception {
+		this(new HgLookup().detectFromWorkingDir());
+	}
 
-	public TestManifest(HgRepository hgRepo) {
+	private TestManifest(HgRepository hgRepo) {
 		repo = hgRepo;
+		Assume.assumeTrue(repo.isInvalid());
 		eh = new ExecHelper(manifestParser = new ManifestOutputParser(), null);
 	}
-	
+
+	@Test
 	public void testTip() throws Exception {
 		testRevision(TIP);
 	}
 
+	@Test
 	public void testFirstRevision() throws Exception {
 		testRevision(0);
 	}
 	
+	@Test
 	public void testRevisionInTheMiddle() throws Exception {
 		int rev = repo.getManifest().getRevisionCount() / 2;
 		if (rev == 0) {

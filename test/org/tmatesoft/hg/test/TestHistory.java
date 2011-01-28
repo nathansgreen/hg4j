@@ -20,16 +20,15 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import org.junit.Test;
 import org.tmatesoft.hg.core.Cset;
 import org.tmatesoft.hg.core.LogCommand;
-import org.tmatesoft.hg.core.StatusCommand;
 import org.tmatesoft.hg.core.LogCommand.CollectHandler;
 import org.tmatesoft.hg.core.LogCommand.FileHistoryHandler;
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgLookup;
-import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
 
 
@@ -45,17 +44,22 @@ public class TestHistory {
 	private LogOutputParser changelogParser;
 	
 	public static void main(String[] args) throws Exception {
-		TestHistory th = new TestHistory(new HgLookup().detectFromWorkingDir());
+		TestHistory th = new TestHistory();
 		th.testCompleteLog();
 		th.testFollowHistory();
 		th.testPerformance();
 	}
+	
+	public TestHistory() throws Exception {
+		this(new HgLookup().detectFromWorkingDir());
+	}
 
-	public TestHistory(HgRepository hgRepo) {
+	private TestHistory(HgRepository hgRepo) {
 		repo = hgRepo;
 		eh = new ExecHelper(changelogParser = new LogOutputParser(true), null);
 	}
 
+	@Test
 	public void testCompleteLog() throws Exception {
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug");
@@ -63,6 +67,7 @@ public class TestHistory {
 		report("hg log - COMPLETE REPO HISTORY", r, true); 
 	}
 	
+	@Test
 	public void testFollowHistory() throws Exception {
 		final Path f = Path.create("cmdline/org/tmatesoft/hg/console/Remote.java");
 		try {
