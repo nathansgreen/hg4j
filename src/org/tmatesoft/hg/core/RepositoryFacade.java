@@ -45,7 +45,16 @@ public class RepositoryFacade {
 	public LogCommand createLogCommand() {
 		return new LogCommand(repo/*, getCommandContext()*/);
 	}
+
 	public StatusCommand createStatusCommand() {
 		return new StatusCommand(repo/*, getCommandContext()*/);
+	}
+
+	public CatCommand createCatCommand() {
+		return new CatCommand(repo);
+	}
+
+	public RepositoryTreeWalker createManifestCommand() {
+		return new RepositoryTreeWalker(repo);
 	}
 }
