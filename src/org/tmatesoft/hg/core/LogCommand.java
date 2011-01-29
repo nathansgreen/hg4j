@@ -56,7 +56,7 @@ public class LogCommand implements Changeset.Inspector {
 	private Cset changeset;
 	
 	public LogCommand(HgRepository hgRepo) {
-		this.repo = hgRepo;
+		repo = hgRepo;
 	}
 
 	/**

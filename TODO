@@ -19,12 +19,17 @@ Committed:
   - matchers
 
 * hg cat
+  + CatCommand. File, revision. 
+  - Cat command line client
 
-* hgignore
++ hgignore
   + glob
   + pattern
 
-* Tests with JUnit 
++ Tests with JUnit 
+
+* tags
+  * Tags are read and can be queried (cmdline Log does)
 
 Proposed:
 - LogCommand.revision(int... rev)+ to walk selected revisions only (list->sort(array) on execute, binary search)
@@ -32,7 +37,7 @@ Proposed:
 - LogCommand.match() to specify pattern, no selected file()s only?
 * RepositoryFacade and CommandContext  
 - hgignore: read extra ignore files from config file (ui.ignore)
-- tags
+
 
 
 Read-only support, version 1.1
