@@ -16,17 +16,16 @@
  */
 package org.tmatesoft.hg.core;
 
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
-import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
+import static org.tmatesoft.hg.core.StatusCommand.HgStatus.Kind.*;
+import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.util.ConcurrentModificationException;
 
-import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Path.Matcher;
+import org.tmatesoft.hg.core.StatusCommand.HgStatus.Kind;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 
 /**
@@ -41,7 +40,7 @@ public class StatusCommand {
 	private int endRevision = WORKING_COPY; 
 	private boolean visitSubRepo = true;
 	
-	private HgStatusInspector visitor;
+	private Handler handler;
 	private final Mediator mediator = new Mediator();
 
 	public StatusCommand(HgRepository hgRepo) { 
@@ -143,14 +142,14 @@ public class StatusCommand {
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
 	 */
-	public void execute(final HgStatusInspector handler) {
-		if (handler == null) {
+	public void execute(Handler statusHandler) {
+		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}
-		if (visitor != null) {
+		if (handler != null) {
 			throw new ConcurrentModificationException();
 		}
-		visitor = handler;
+		handler = statusHandler;
 		HgStatusCollector sc = new HgStatusCollector(repo); // TODO from CommandContext
 //		PathPool pathHelper = new PathPool(repo.getPathHelper()); // TODO from CommandContext
 		try {
@@ -170,10 +169,50 @@ public class StatusCommand {
 			}
 		} finally {
 			mediator.done();
-			visitor = null;
+			handler = null;
 		}
 	}
 
+	public interface Handler {
+		void handleStatus(HgStatus s);
+	}
+
+	public static class HgStatus {
+		public enum Kind {
+			Modified, Added, Removed, Unknown, Missing, Clean, Ignored
+		};
+		private final Kind kind;
+		private final Path path;
+		private final Path origin;
+		
+		HgStatus(Kind kind, Path path) {
+			this(kind, path, null);
+		}
+
+		HgStatus(Kind kind, Path path, Path copyOrigin) {
+			this.kind = kind;
+			this.path  = path;
+			origin = copyOrigin;
+		}
+
+		public Kind getKind() {
+			return kind;
+		}
+
+		public Path getPath() {
+			return path;
+		}
+
+		public Path getOriginalPath() {
+			return origin;
+		}
+
+		public boolean isCopy() {
+			return origin != null;
+		}
+	}
+
+	
 	private class Mediator implements HgStatusInspector {
 		boolean needModified;
 		boolean needAdded;
@@ -197,56 +236,56 @@ public class StatusCommand {
 		public void modified(Path fname) {
 			if (needModified) {
 				if (matcher == null || matcher.accept(fname)) {
-					visitor.modified(fname);
+					handler.handleStatus(new HgStatus(Modified, fname));
 				}
 			}
 		}
 		public void added(Path fname) {
 			if (needAdded) {
 				if (matcher == null || matcher.accept(fname)) {
-					visitor.added(fname);
+					handler.handleStatus(new HgStatus(Added, fname));
 				}
 			}
 		}
 		public void removed(Path fname) {
 			if (needRemoved) {
 				if (matcher == null || matcher.accept(fname)) {
-					visitor.removed(fname);
+					handler.handleStatus(new HgStatus(Removed, fname));
 				}
 			}
 		}
 		public void copied(Path fnameOrigin, Path fnameAdded) {
 			if (needCopies) {
 				if (matcher == null || matcher.accept(fnameAdded)) {
-					visitor.copied(fnameOrigin, fnameAdded);
+					handler.handleStatus(new HgStatus(Kind.Added, fnameAdded, fnameOrigin));
 				}
 			}
 		}
 		public void missing(Path fname) {
 			if (needMissing) {
 				if (matcher == null || matcher.accept(fname)) {
-					visitor.missing(fname);
+					handler.handleStatus(new HgStatus(Missing, fname));
 				}
 			}
 		}
 		public void unknown(Path fname) {
 			if (needUnknown) {
 				if (matcher == null || matcher.accept(fname)) {
-					visitor.unknown(fname);
+					handler.handleStatus(new HgStatus(Unknown, fname));
 				}
 			}
 		}
 		public void clean(Path fname) {
 			if (needClean) {
 				if (matcher == null || matcher.accept(fname)) {
-					visitor.clean(fname);
+					handler.handleStatus(new HgStatus(Clean, fname));
 				}
 			}
 		}
 		public void ignored(Path fname) {
 			if (needIgnored) {
 				if (matcher == null || matcher.accept(fname)) {
-					visitor.ignored(fname);
+					handler.handleStatus(new HgStatus(Ignored, fname));
 				}
 			}
 		}

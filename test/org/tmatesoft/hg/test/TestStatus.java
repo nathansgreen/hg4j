@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.test;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.tmatesoft.hg.core.StatusCommand.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Collection;
@@ -24,12 +25,16 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.StatusCommand;
+import org.tmatesoft.hg.core.StatusCommand.HgStatus;
+import org.tmatesoft.hg.core.StatusCommand.HgStatus.Kind;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -100,24 +105,45 @@ public class TestStatus {
 	@Test
 	public void testStatusCommand() throws Exception {
 		final StatusCommand sc = new StatusCommand(repo).all();
-		HgStatusCollector.Record r;
+		StatusCollector r;
 		statusParser.reset();
 		eh.run("hg", "status", "-A");
-		sc.execute(r = new HgStatusCollector.Record());
-		report("hg status -A", r, statusParser);
+		sc.execute(r = new StatusCollector());
+		report("hg status -A", r);
 		//
 		statusParser.reset();
 		int revision = 3;
 		eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
-		sc.base(revision).execute(r = new HgStatusCollector.Record());
-		report("status -A --rev " + revision, r, statusParser);
+		sc.base(revision).execute(r = new StatusCollector());
+		report("status -A --rev " + revision, r);
 		//
 		statusParser.reset();
 		eh.run("hg", "status", "-A", "--change", String.valueOf(revision));
-		sc.base(TIP).revision(revision).execute(r = new HgStatusCollector.Record());
-		report("status -A --change " + revision, r, statusParser);
+		sc.base(TIP).revision(revision).execute(r = new StatusCollector());
+		report("status -A --change " + revision, r);
 		
 		// TODO check not -A, but defaults()/custom set of modifications 
+	}
+	
+	private static class StatusCollector implements StatusCommand.Handler {
+		private final Map<StatusCommand.HgStatus.Kind, List<Path>> map = new TreeMap<StatusCommand.HgStatus.Kind, List<Path>>();
+
+		public void handleStatus(HgStatus s) {
+			List<Path> l = map.get(s.getKind());
+			if (l == null) {
+				l = new LinkedList<Path>();
+				map.put(s.getKind(), l);
+			}
+			l.add(s.getPath());
+		}
+		
+		public List<Path> get(Kind k) {
+			List<Path> rv = map.get(k);
+			if (rv == null) {
+				return Collections.emptyList();
+			}
+			return rv;
+		}
 	}
 	
 	public void testRemovedAgainstNonTip() {
@@ -143,14 +169,24 @@ public class TestStatus {
 		}
 		final long start2 = System.currentTimeMillis();
 		for (int i = 0; i < runs; i++) {
-			HgStatusCollector.Record r = new HgStatusCollector.Record();
+			StatusCollector r = new StatusCollector();
 			new StatusCommand(repo).all().base(3).revision(80).execute(r);
 		}
 		final long end = System.currentTimeMillis();
 		System.out.printf("'hg status -A --rev 3:80', %d runs:  Native client total %d (%d per run), Java client %d (%d)\n", runs, start2-start1, (start2-start1)/runs, end-start2, (end-start2)/runs);
 	}
 	
-	
+	private void report(String what, StatusCollector r) {
+		reportNotEqual(what + "#MODIFIED", r.get(Modified), statusParser.getModified());
+		reportNotEqual(what + "#ADDED", r.get(Added), statusParser.getAdded());
+		reportNotEqual(what + "#REMOVED", r.get(Removed), statusParser.getRemoved());
+		reportNotEqual(what + "#CLEAN", r.get(Clean), statusParser.getClean());
+		reportNotEqual(what + "#IGNORED", r.get(Ignored), statusParser.getIgnored());
+		reportNotEqual(what + "#MISSING", r.get(Missing), statusParser.getMissing());
+		reportNotEqual(what + "#UNKNOWN", r.get(Unknown), statusParser.getUnknown());
+		// FIXME test copies
+	}
+
 	private void report(String what, HgStatusCollector.Record r, StatusOutputParser statusParser) {
 		reportNotEqual(what + "#MODIFIED", r.getModified(), statusParser.getModified());
 		reportNotEqual(what + "#ADDED", r.getAdded(), statusParser.getAdded());
