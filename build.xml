@@ -21,19 +21,27 @@
     </description>
 	
 	<property name="junit.jar" value="lib/junit-4.8.2.jar"/>
+	<property name="ver.qualifier" value=".rc1"/>
+	<property name="version.lib" value="0.0.9"/>
+	<property name="version.jar" value="${version.lib}${ver.qualifier}"/>
+	
+	<property name="hg4j.jar" value="hg4j_${version.jar}.jar"/>
+	<property name="hg4j-tests.jar" value="hg4j-tests_${version.jar}.jar"/>
+	<property name="hg4j-console.jar" value="hg4j-console_${version.jar}.jar"/>
 
     <target name="samples" depends="build-cmdline">
+    	<path id="path.cmdline" path="${hg4j.jar};${hg4j-console.jar}"/>
     	
     	<echo message="History of a specific file(s)"/>
-    	<java classpath="hg4j.jar;hg4j-console.jar" classname="org.tmatesoft.hg.console.Log">
+    	<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Log">
     		<arg line="design.txt .classpath src/com/tmate/hgkit/ll/LocalHgRepo.java"/>
     	</java>
     	
     	<echo message="Whole repo log"/>
-    	<java classpath="hg4j.jar;hg4j-console.jar" classname="org.tmatesoft.hg.console.Log"/>
+    	<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Log"/>
     	
     	<echo message="Content of a file"/>
-    	<java classpath="hg4j.jar;hg4j-console.jar" classname="org.tmatesoft.hg.console.Cat">
+    	<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Cat">
     		<arg line="src/com/tmate/hgkit/ll/Revlog.java"/>
     	</java>
 
@@ -41,7 +49,7 @@
 	
 	<target name="tests" depends="build-tests">
 		<junit>
-			<classpath path="hg4j.jar;hg4j-tests.jar;${junit.jar}"/>
+			<classpath path="${hg4j.jar};${hg4j-tests.jar};${junit.jar}"/>
 			<formatter type="xml"/>
 			<formatter type="plain" usefile="no"/>
 			<test name="org.tmatesoft.hg.test.TestHistory"/>
@@ -59,7 +67,7 @@
     <target name="build">
     	<mkdir dir="bin"/>
     	<javac srcdir="src" destdir="bin"/>
-    	<jar destfile="hg4j.jar">
+    	<jar destfile="${hg4j.jar}">
     		<fileset dir="bin/">
     			<include name="org/tmatesoft/hg/core/**" />
     			<include name="org/tmatesoft/hg/util/**" />
@@ -72,13 +80,13 @@
     <target name="build-tests" depends="build">
     	<mkdir dir="bin"/>
     	<javac srcdir="test" destdir="bin"/>
-    	<jar destfile="hg4j-tests.jar" basedir="bin" includes="org/tmatesoft/hg/test/**"/>
+    	<jar destfile="${hg4j-tests.jar}" basedir="bin" includes="org/tmatesoft/hg/test/**"/>
     </target>
 
     <target name="build-cmdline" depends="build">
     	<mkdir dir="bin"/>
     	<javac srcdir="cmdline" destdir="bin"/>
-    	<jar destfile="hg4j-console.jar" basedir="bin" includes="org/tmatesoft/hg/console/**"/>
+    	<jar destfile="${hg4j-console.jar}" basedir="bin" includes="org/tmatesoft/hg/console/**"/>
     </target>
 
 </project>
