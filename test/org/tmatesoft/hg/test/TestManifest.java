@@ -18,6 +18,7 @@ package org.tmatesoft.hg.test;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Collections;
@@ -25,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
+import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
@@ -75,7 +77,7 @@ public class TestManifest {
 
 	private TestManifest(HgRepository hgRepo) {
 		repo = hgRepo;
-		Assume.assumeTrue(repo.isInvalid());
+		assertTrue(!repo.isInvalid());
 		eh = new ExecHelper(manifestParser = new ManifestOutputParser(), null);
 	}
 
