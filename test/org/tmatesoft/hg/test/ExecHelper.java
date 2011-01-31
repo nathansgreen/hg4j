@@ -49,6 +49,7 @@ public class ExecHelper {
 				if (new File(pe, cmd[0] + ".exe").exists()) {
 					break;
 				}
+				// PATHEXT controls precedence of .exe, .bat and .cmd files, ususlly .exe wins
 				if (new File(pe, cmd[0] + ".bat").exists() || new File(pe, cmd[0] + ".cmd").exists()) {
 					ArrayList<String> command = new ArrayList<String>();
 					command.add("cmd.exe");
