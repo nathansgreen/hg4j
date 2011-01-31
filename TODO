@@ -34,6 +34,7 @@ Committed:
   * Tags are read and can be queried (cmdline Log does)
   
 - keywords
+  - filter with context. filters shall have weight (to allow certain filter come first)
 
 - newlines
 
