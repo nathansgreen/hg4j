@@ -20,7 +20,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.CharBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
+import java.util.StringTokenizer;
 
 /**
  *
@@ -38,8 +41,28 @@ public class ExecHelper {
 	}
 
 	public void run(String... cmd) throws IOException, InterruptedException {
-		Process p = new ProcessBuilder(cmd).directory(dir).redirectErrorStream(true).start();
-//		Process p = Runtime.getRuntime().exec(cmd, null, dir);
+		ProcessBuilder pb = null;
+		if (System.getProperty("os.name").startsWith("Windows")) {
+			StringTokenizer st = new StringTokenizer(System.getenv("PATH"), ";");
+			while (st.hasMoreTokens()) {
+				File pe = new File(st.nextToken());
+				if (new File(pe, cmd[0] + ".exe").exists()) {
+					break;
+				}
+				if (new File(pe, cmd[0] + ".bat").exists() || new File(pe, cmd[0] + ".cmd").exists()) {
+					ArrayList<String> command = new ArrayList<String>();
+					command.add("cmd.exe");
+					command.add("/C");
+					command.addAll(Arrays.asList(cmd));
+					pb = new ProcessBuilder(command);
+					break;
+				}
+			}
+		}
+		if (pb == null) {
+			pb = new ProcessBuilder(cmd);
+		}
+		Process p = pb.directory(dir).redirectErrorStream(true).start();
 		InputStreamReader stdOut = new InputStreamReader(p.getInputStream());
 		LinkedList<CharBuffer> l = new LinkedList<CharBuffer>();
 		int r = -1;
