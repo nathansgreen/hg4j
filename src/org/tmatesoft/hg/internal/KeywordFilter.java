@@ -22,6 +22,8 @@ import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.util.TreeMap;
 
+import javax.swing.text.html.Option;
+
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgRepository;
 
@@ -31,6 +33,7 @@ import org.tmatesoft.hg.repo.HgRepository;
  * @author TMate Software Ltd.
  */
 public class KeywordFilter implements Filter {
+	// present implementation is stateless, however, filter use pattern shall not assume that. In fact, Factory may us that 
 	private final boolean isExpanding;
 	private final TreeMap<String,String> keywords;
 	private final int minBufferLen;
@@ -45,6 +48,13 @@ public class KeywordFilter implements Filter {
 		keywords.put("Id", "Id");
 		keywords.put("Revision", "Revision");
 		keywords.put("Author", "Author");
+		keywords.put("Date", "Date");
+		keywords.put("LastChangedRevision", "LastChangedRevision");
+		keywords.put("LastChangedBy", "LastChangedBy");
+		keywords.put("LastChangedDate", "LastChangedDate");
+		keywords.put("Source", "Source");
+		keywords.put("Header", "Header");
+
 		int l = 0;
 		for (String s : keywords.keySet()) {
 			if (s.length() > l) {
@@ -99,7 +109,7 @@ public class KeywordFilter implements Filter {
 							// not to run into such situation
 							throw new IllegalStateException("Try src buffer of a greater size");
 						}
-						rv = ByteBuffer.allocateDirect(keywordStart - x);
+						rv = ByteBuffer.allocate(keywordStart - x);
 					}
 					// copy all from source till latest possible kw start 
 					copySlice(src, x, keywordStart, rv);
@@ -112,7 +122,10 @@ public class KeywordFilter implements Filter {
 					String keyword;
 					if ((keyword = matchKeyword(src, keywordStart, i)) != null) {
 						if (rv == null) {
-							rv = ByteBuffer.allocateDirect(isExpanding ? src.capacity() * 4 : src.capacity());
+							// src.remaining(), not .capacity because src is not read, and remaining represents 
+							// actual bytes count, while capacity - potential.
+							// Factor of 4 is pure guess and a HACK, need to be fixed with re-expanding buffer on demand
+							rv = ByteBuffer.allocate(isExpanding ? src.remaining() * 4 : src.remaining());
 						}
 						copySlice(src, x, keywordStart+1, rv);
 						rv.put(keyword.getBytes());
@@ -150,7 +163,7 @@ public class KeywordFilter implements Filter {
 		if (keywordStart != -1) {
 			if (rv == null) {
 				// no expansion happened yet, and we have potential kw start
-				rv = ByteBuffer.allocateDirect(keywordStart - src.position());
+				rv = ByteBuffer.allocate(keywordStart - src.position());
 				copySlice(src, src.position(), keywordStart, rv);
 			}
 			src.position(keywordStart);
@@ -189,11 +202,14 @@ public class KeywordFilter implements Filter {
 			chars[i] = c;
 		}
 		String kw = new String(chars, 0, i);
+		System.out.println(keywords.subMap("I", "J"));
+		System.out.println(keywords.subMap("A", "B"));
+		System.out.println(keywords.subMap("Au", "B"));
 		return keywords.get(kw);
 	}
 	
 	// copies part of the src buffer, [from..to). doesn't modify src position
-	private static void copySlice(ByteBuffer src, int from, int to, ByteBuffer dst) {
+	static void copySlice(ByteBuffer src, int from, int to, ByteBuffer dst) {
 		if (to > src.limit()) {
 			throw new IllegalArgumentException("Bad right boundary");
 		}
@@ -206,7 +222,7 @@ public class KeywordFilter implements Filter {
 	}
 
 	private static int indexOf(ByteBuffer b, char ch, int from, boolean newlineBreaks) {
-	for (int i = from; i < b.limit(); i++) {
+		for (int i = from; i < b.limit(); i++) {
 			byte c = b.get(i);
 			if (ch == c) {
 				return i;
@@ -238,7 +254,7 @@ public class KeywordFilter implements Filter {
 
 	public static class Factory implements Filter.Factory {
 
-		public Filter create(HgRepository hgRepo, Path path) {
+		public Filter create(HgRepository hgRepo, Path path, Options opts) {
 			return new KeywordFilter(true);
 		}
 	}
@@ -247,16 +263,14 @@ public class KeywordFilter implements Filter {
 	public static void main(String[] args) throws Exception {
 		FileInputStream fis = new FileInputStream(new File("/temp/kwoutput.txt"));
 		FileOutputStream fos = new FileOutputStream(new File("/temp/kwoutput2.txt"));
-		ByteBuffer b = ByteBuffer.allocateDirect(256);
+		ByteBuffer b = ByteBuffer.allocate(256);
 		KeywordFilter kwFilter = new KeywordFilter(false);
 		while (fis.getChannel().read(b) != -1) {
 			b.flip(); // get ready to be read
 			ByteBuffer f = kwFilter.filter(b);
-			fos.getChannel().write(f);
+			fos.getChannel().write(f); // XXX in fact, f may not be fully consumed
 			if (b.hasRemaining()) {
-				ByteBuffer remaining = b.slice();
-				b.clear();
-				b.put(remaining);
+				b.compact();
 			} else {
 				b.clear();
 			}

@@ -31,6 +31,14 @@ public interface Filter {
 	ByteBuffer filter(ByteBuffer src);
 
 	interface Factory {
-		Filter create(HgRepository hgRepo, Path path);
+		Filter create(HgRepository hgRepo, Path path, Options opts);
+	}
+
+	enum Direction {
+		FromRepo, ToRepo
+	}
+
+	abstract class Options {
+		abstract Direction getDirection();
 	}
 }
