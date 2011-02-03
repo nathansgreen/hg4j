@@ -38,22 +38,28 @@ import org.tmatesoft.hg.internal.RevlogStream;
  */
 abstract class Revlog {
 
-	private final HgRepository hgRepo;
+	private final HgRepository repo;
 	protected final RevlogStream content;
 
-	protected Revlog(HgRepository hgRepo, RevlogStream content) {
+	protected Revlog(HgRepository hgRepo, RevlogStream contentStream) {
 		if (hgRepo == null) {
 			throw new IllegalArgumentException();
 		}
-		if (content == null) {
+		if (contentStream == null) {
 			throw new IllegalArgumentException();
 		}
-		this.hgRepo = hgRepo;
-		this.content = content;
+		repo = hgRepo;
+		content = contentStream;
+	}
+	
+	// invalid Revlog
+	protected Revlog(HgRepository hgRepo) {
+		repo = hgRepo;
+		content = null;
 	}
 
 	public final HgRepository getRepo() {
-		return hgRepo;
+		return repo;
 	}
 
 	public int getRevisionCount() {

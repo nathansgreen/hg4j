@@ -18,6 +18,7 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.TreeMap;
@@ -25,6 +26,7 @@ import java.util.TreeMap;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.util.ByteChannel;
 
 
 
@@ -42,11 +44,18 @@ public class HgDataFile extends Revlog {
 	private final Path path;
 	private Metadata metadata;
 	
-	/*package-local*/HgDataFile(HgRepository hgRepo, Path path, RevlogStream content) {
+	/*package-local*/HgDataFile(HgRepository hgRepo, Path filePath, RevlogStream content) {
 		super(hgRepo, content);
-		this.path = path;
+		path = filePath;
 	}
-	
+
+	/*package-local*/HgDataFile(HgRepository hgRepo, Path filePath) {
+		super(hgRepo);
+		path = filePath;
+	}
+
+	// exists is not the best name possible. now it means no file with such name was ever known to the repo.
+	// it might be confused with files existed before but lately removed. 
 	public boolean exists() {
 		return content != null; // XXX need better impl
 	}
@@ -62,6 +71,21 @@ public class HgDataFile extends Revlog {
 
 	public byte[] content() {
 		return content(TIP);
+	}
+	
+	public void content(int revision, ByteChannel sink) throws /*TODO typed*/Exception {
+		byte[] content = content(revision);
+		ByteBuffer buf = ByteBuffer.allocate(512);
+		int left = content.length;
+		int offset = 0;
+		do {
+			buf.put(content, offset, Math.min(left, buf.remaining()));
+			buf.flip();
+			int consumed = sink.write(buf);
+			buf.compact();
+			offset += consumed;
+			left -= consumed;
+		} while (left > 0);
 	}
 
 	// for data files need to check heading of the file content for possible metadata

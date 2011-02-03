@@ -139,13 +139,20 @@ public final class HgRepository {
 		String nPath = normalizePath.rewrite(path);
 		String storagePath = dataPathHelper.rewrite(nPath);
 		RevlogStream content = resolve(Path.create(storagePath));
-		return new HgDataFile(this, Path.create(nPath), content);
+		Path p = Path.create(nPath);
+		if (content == null) {
+			return new HgDataFile(this, p);
+		}
+		return new HgDataFile(this, p, content);
 	}
 
 	public HgDataFile getFileNode(Path path) {
 		String storagePath = dataPathHelper.rewrite(path.toString());
 		RevlogStream content = resolve(Path.create(storagePath));
-		// XXX no content when no file? or HgDataFile.exists() to detect that? How about files that were removed in previous releases?
+		// XXX no content when no file? or HgDataFile.exists() to detect that?
+		if (content == null) {
+			return new HgDataFile(this, path);
+		}
 		return new HgDataFile(this, path, content);
 	}
 

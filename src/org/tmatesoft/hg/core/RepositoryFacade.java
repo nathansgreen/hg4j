@@ -41,6 +41,13 @@ public class RepositoryFacade {
 		repo = new HgLookup().detect(repoLocation.getCanonicalPath());
 		return repo != null && !repo.isInvalid();
 	}
+	
+	public HgRepository getRepository() {
+		if (repo == null) {
+			throw new IllegalStateException("Call any of #init*() methods first first");
+		}
+		return repo;
+	}
 
 	public LogCommand createLogCommand() {
 		return new LogCommand(repo/*, getCommandContext()*/);

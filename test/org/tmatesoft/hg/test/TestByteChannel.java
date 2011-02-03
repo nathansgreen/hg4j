@@ -14,11 +14,15 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@svnkit.com
  */
-package org.tmatesoft.hg.internal;
+package org.tmatesoft.hg.test;
 
-import java.nio.ByteBuffer;
+import java.util.Arrays;
 
-import org.tmatesoft.hg.core.Path;
+import org.junit.Assert;
+import org.tmatesoft.hg.core.CatCommand;
+import org.tmatesoft.hg.core.RepositoryFacade;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -26,32 +30,18 @@ import org.tmatesoft.hg.repo.HgRepository;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public interface Filter {
+public class TestByteChannel {
 
-	// returns a buffer ready to be read. may return original buffer.
-	// original buffer may not be fully consumed, #compact() might be operation to perform 
-	ByteBuffer filter(ByteBuffer src);
-
-	interface Factory {
-		void initialize(HgRepository hgRepo, ConfigFile cfg);
-		// may return null if for a given path and/or options this filter doesn't make any sense
-		Filter create(Path path, Options opts);
-	}
-
-	enum Direction {
-		FromRepo, ToRepo
-	}
-
-	public class Options {
-
-		private final Direction direction;
-		public Options(Direction dir) {
-			direction = dir;
-		}
-		
-		Direction getDirection() {
-			return direction;
-		}
-
+	public static void main(String[] args) throws Exception {
+		RepositoryFacade rf = new RepositoryFacade();
+		rf.init();
+		HgDataFile file = rf.getRepository().getFileNode("COPYING");
+		int rev = HgRepository.TIP;
+		byte[] oldAccess = file.content(rev);
+		ByteArrayChannel ch = new ByteArrayChannel();
+		file.content(rev, ch);
+		byte[] newAccess = ch.toArray();
+		Assert.assertArrayEquals(oldAccess, newAccess);
+		//CatCommand cmd = rf.createCatCommand();
 	}
 }

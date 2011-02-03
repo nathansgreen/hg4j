@@ -20,11 +20,10 @@ import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.OutputStream;
 
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.ByteChannel;
 
 /**
  * Command to obtain content of a 
@@ -61,26 +60,26 @@ public class CatCommand {
 		return this;
 	}
 
-	public void execute(OutputStream os) throws IOException /*TODO own exception type*/ {
+	public void execute(ByteChannel sink) throws Exception /*TODO own exception type*/ {
 		if (localRevision == BAD_REVISION && revision == null) {
 			throw new IllegalArgumentException("Either local file revision number or nodeid shall be specified");
 		}
 		if (file == null) {
 			throw new IllegalArgumentException("Name of the file is missing");
 		}
-		if (os == null) {
+		if (sink == null) {
 			throw new IllegalArgumentException();
 		}
 		HgDataFile dataFile = repo.getFileNode(file);
 		if (!dataFile.exists()) {
 			throw new FileNotFoundException();
 		}
-		byte[] content;
+		int revToExtract;
 		if (revision != null) {
-			content = dataFile.content(revision);
+			revToExtract = dataFile.getLocalRevision(revision);
 		} else {
-			content = dataFile.content(localRevision);
+			revToExtract = localRevision;
 		}
-		os.write(content);
+		dataFile.content(revToExtract, sink);
 	}
 }
