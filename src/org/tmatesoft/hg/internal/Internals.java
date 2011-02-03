@@ -16,10 +16,12 @@
  */
 package org.tmatesoft.hg.internal;
 
-import static org.tmatesoft.hg.internal.RequiresFile.DOTENCODE;
-import static org.tmatesoft.hg.internal.RequiresFile.FNCACHE;
-import static org.tmatesoft.hg.internal.RequiresFile.STORE;
+import static org.tmatesoft.hg.internal.RequiresFile.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.PathRewrite;
 
 /**
@@ -32,6 +34,11 @@ public class Internals {
 	
 	private int revlogVersion = 0;
 	private int requiresFlags = 0;
+	private List<Filter.Factory> filterFactories;
+	
+
+	public Internals() {
+	}
 
 	public/*for tests, otherwise pkg*/ void setStorageConfig(int version, int flags) {
 		revlogVersion = version;
@@ -58,5 +65,26 @@ public class Internals {
 				}
 			};
 		}
+	}
+
+	public ConfigFile newConfigFile() {
+		return new ConfigFile();
+	}
+
+	public List<Filter.Factory> getFilters(HgRepository hgRepo, ConfigFile cfg) {
+		if (filterFactories == null) {
+			filterFactories = new ArrayList<Filter.Factory>();
+			if (cfg.hasEnabledExtension("eol")) {
+				NewlineFilter.Factory ff = new NewlineFilter.Factory();
+				ff.initialize(hgRepo, cfg);
+				filterFactories.add(ff);
+			}
+			if (cfg.hasEnabledExtension("keyword")) {
+				KeywordFilter.Factory ff = new KeywordFilter.Factory();
+				ff.initialize(hgRepo, cfg);
+				filterFactories.add(ff);
+			}
+		}
+		return filterFactories;
 	}
 }

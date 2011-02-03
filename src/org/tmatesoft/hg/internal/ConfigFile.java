@@ -36,18 +36,35 @@ public class ConfigFile {
 	private List<String> sections;
 	private List<Map<String,String>> content;
 
-	public ConfigFile() {
+	ConfigFile() {
 	}
 
 	public void addLocation(File path) {
 		read(path);
 	}
 	
+	public boolean hasSection(String sectionName) {
+		return sections == null ? false : sections.indexOf(sectionName) == -1;
+	}
+	
+	// XXX perhaps, should be moved to subclass HgRepoConfig, as it is not common operation for any config file
+	public boolean hasEnabledExtension(String extensionName) {
+		int x = sections != null ? sections.indexOf("extensions") : -1;
+		if (x == -1) {
+			return false;
+		}
+		String value = content.get(x).get(extensionName);
+		return value != null && !"!".equals(value);
+	}
+	
 	public List<String> getSectionNames() {
-		return Collections.unmodifiableList(sections);
+		return sections == null ? Collections.<String>emptyList() : Collections.unmodifiableList(sections);
 	}
 
 	public Map<String,String> getSection(String sectionName) {
+		if (sections ==  null) {
+			return Collections.emptyMap();
+		}
 		int x = sections.indexOf(sectionName);
 		if (x == -1) {
 			return Collections.emptyMap();
@@ -55,7 +72,25 @@ public class ConfigFile {
 		return Collections.unmodifiableMap(content.get(x));
 	}
 
+	public boolean getBoolean(String sectionName, String key, boolean defaultValue) {
+		String value = getSection(sectionName).get(key);
+		if (value == null) {
+			return defaultValue;
+		}
+		for (String s : new String[] { "true", "yes", "on", "1" }) {
+			if (s.equalsIgnoreCase(value)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// TODO handle %include and %unset directives
+	// TODO "" and lists
 	private void read(File f) {
+		if (f == null || !f.canRead()) {
+			return;
+		}
 		if (sections == null) {
 			sections = new ArrayList<String>();
 			content = new ArrayList<Map<String,String>>();

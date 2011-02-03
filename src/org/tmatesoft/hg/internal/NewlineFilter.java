@@ -24,8 +24,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Map;
 
 import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -154,14 +157,92 @@ public class NewlineFilter implements Filter {
 	}
 
 	public static class Factory implements Filter.Factory {
-		private final boolean localIsWin = File.separatorChar == '\\'; // FIXME
-		private final boolean failIfInconsistent = true;
+		private boolean failIfInconsistent = true;
+		private Path.Matcher lfMatcher;
+		private Path.Matcher crlfMatcher;
+		private Path.Matcher binMatcher;
+		private Path.Matcher nativeMatcher;
+		private String nativeRepoFormat;
+		private String nativeOSFormat;
 
-		public Filter create(HgRepository hgRepo, Path path, Options opts) {
-			if (opts.getDirection() == FromRepo) {
-			} else if (opts.getDirection() == ToRepo) {
+		public void initialize(HgRepository hgRepo, ConfigFile cfg) {
+			failIfInconsistent = cfg.getBoolean("eol", "only-consistent", true);
+			File cfgFile = new File(new HgInternals(hgRepo).getRepositoryDir(), ".hgeol");
+			if (!cfgFile.canRead()) {
+				return;
 			}
-			return new NewlineFilter(failIfInconsistent, 1);
+			// XXX if .hgeol is not checked out, we may get it from repository
+//			HgDataFile cfgFileNode = hgRepo.getFileNode(".hgeol");
+//			if (!cfgFileNode.exists()) {
+//				return;
+//			}
+			// XXX perhaps, add HgDataFile.hasWorkingCopy and workingCopyContent()?
+			ConfigFile hgeol = new ConfigFile();
+			hgeol.addLocation(cfgFile);
+			nativeRepoFormat = hgeol.getSection("repository").get("native");
+			if (nativeRepoFormat == null) {
+				nativeRepoFormat = "LF";
+			}
+			final String os = System.getProperty("os.name"); // XXX need centralized set of properties
+			nativeOSFormat = os.indexOf("Windows") != -1 ? "CRLF" : "LF";
+			// I assume pattern ordering in .hgeol is not important
+			ArrayList<String> lfPatterns = new ArrayList<String>();
+			ArrayList<String> crlfPatterns = new ArrayList<String>();
+			ArrayList<String> nativePatterns = new ArrayList<String>();
+			ArrayList<String> binPatterns = new ArrayList<String>();
+			for (Map.Entry<String,String> e : hgeol.getSection("patterns").entrySet()) {
+				if ("CRLF".equals(e.getValue())) {
+					crlfPatterns.add(e.getKey());
+				} else if ("LF".equals(e.getValue())) {
+					lfPatterns.add(e.getKey());
+				} else if ("native".equals(e.getValue())) {
+					nativePatterns.add(e.getKey());
+				} else if ("BIN".equals(e.getValue())) {
+					binPatterns.add(e.getKey());
+				} else {
+					System.out.printf("Can't recognize .hgeol entry: %s for %s", e.getValue(), e.getKey()); // FIXME log warning
+				}
+			}
+			if (!crlfPatterns.isEmpty()) {
+				crlfMatcher = new PathGlobMatcher(crlfPatterns.toArray(new String[crlfPatterns.size()]));
+			}
+			if (!lfPatterns.isEmpty()) {
+				lfMatcher = new PathGlobMatcher(lfPatterns.toArray(new String[lfPatterns.size()]));
+			}
+			if (!binPatterns.isEmpty()) {
+				binMatcher = new PathGlobMatcher(binPatterns.toArray(new String[binPatterns.size()]));
+			}
+			if (!nativePatterns.isEmpty()) {
+				nativeMatcher = new PathGlobMatcher(nativePatterns.toArray(new String[nativePatterns.size()]));
+			}
+		}
+
+		public Filter create(Path path, Options opts) {
+			if (binMatcher == null && crlfMatcher == null && lfMatcher == null && nativeMatcher == null) {
+				// not initialized - perhaps, no .hgeol found
+				return null;
+			}
+			if (binMatcher != null && binMatcher.accept(path)) {
+				return null;
+			}
+			if (crlfMatcher != null && crlfMatcher.accept(path)) {
+				return new NewlineFilter(failIfInconsistent, 1);
+			} else if (lfMatcher != null && lfMatcher.accept(path)) {
+				return new NewlineFilter(failIfInconsistent, 0);
+			} else if (nativeMatcher != null && nativeMatcher.accept(path)) {
+				if (nativeOSFormat.equals(nativeRepoFormat)) {
+					return null;
+				}
+				if (opts.getDirection() == FromRepo) {
+					int transform = "CRLF".equals(nativeOSFormat) ? 1 : 0;
+					return new NewlineFilter(failIfInconsistent, transform);
+				} else if (opts.getDirection() == ToRepo) {
+					int transform = "CRLF".equals(nativeOSFormat) ? 0 : 1;
+					return new NewlineFilter(failIfInconsistent, transform);
+				}
+				return null;
+			}
+			return null;
 		}
 	}
 

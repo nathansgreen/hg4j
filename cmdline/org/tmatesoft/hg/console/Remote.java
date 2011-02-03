@@ -33,6 +33,7 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import org.tmatesoft.hg.internal.ConfigFile;
+import org.tmatesoft.hg.internal.Internals;
 
 /**
  * WORK IN PROGRESS, DO NOT USE
@@ -53,7 +54,7 @@ public class Remote {
 	 */
 	public static void main(String[] args) throws Exception {
 		String nid = "d6d2a630f4a6d670c90a5ca909150f2b426ec88f";
-		ConfigFile cfg = new ConfigFile();
+		ConfigFile cfg = new Internals().newConfigFile();
 		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		String svnkitServer = cfg.getSection("paths").get("svnkit");
 		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=a78c980749e3ccebb47138b547e9b644a22797a9");

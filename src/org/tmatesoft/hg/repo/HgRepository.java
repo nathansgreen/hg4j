@@ -19,10 +19,15 @@ package org.tmatesoft.hg.repo;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.SoftReference;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 
 import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.FileWalker;
@@ -72,6 +77,7 @@ public final class HgRepository {
 	
 	private final org.tmatesoft.hg.internal.Internals impl = new org.tmatesoft.hg.internal.Internals();
 	private HgIgnore ignore;
+	private ConfigFile configFile;
 
 	HgRepository(String repositoryPath) {
 		repoDir = null;
@@ -147,6 +153,7 @@ public final class HgRepository {
 		return normalizePath;
 	}
 
+	// local to hide use of io.File. 
 	/*package-local*/ File getRepositoryRoot() {
 		return repoDir;
 	}
@@ -198,8 +205,44 @@ public final class HgRepository {
 		}
 		return null; // XXX empty stream instead?
 	}
+	
+	// can't expose internal class, otherwise seems reasonable to have it in API
+	/*package-local*/ ConfigFile getConfigFile() {
+		if (configFile == null) {
+			configFile = impl.newConfigFile();
+			configFile.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
+			// last one, overrides anything else
+			// <repo>/.hg/hgrc
+			configFile.addLocation(new File(getRepositoryRoot(), "hgrc"));
+		}
+		return configFile;
+	}
+	
+	/*package-local*/ List<Filter> getFiltersFromRepoToWorkingDir(Path p) {
+		return instantiateFilters(p, new Filter.Options(Filter.Direction.FromRepo));
+	}
+
+	/*package-local*/ List<Filter> getFiltersFromWorkingDirToRepo(Path p) {
+		return instantiateFilters(p, new Filter.Options(Filter.Direction.ToRepo));
+	}
+
+	private List<Filter> instantiateFilters(Path p, Filter.Options opts) {
+		List<Filter.Factory> factories = impl.getFilters(this, getConfigFile());
+		if (factories.isEmpty()) {
+			return Collections.emptyList();
+		}
+		ArrayList<Filter> rv = new ArrayList<Filter>(factories.size());
+		for (Filter.Factory ff : factories) {
+			Filter f = ff.create(p, opts);
+			if (f != null) {
+				rv.add(f);
+			}
+		}
+		return rv;
+	}
 
 	private void parseRequires() {
 		new RequiresFile().parse(impl, new File(repoDir, "requires"));
 	}
+
 }

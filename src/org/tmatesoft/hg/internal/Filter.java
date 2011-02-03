@@ -31,14 +31,25 @@ public interface Filter {
 	ByteBuffer filter(ByteBuffer src);
 
 	interface Factory {
-		Filter create(HgRepository hgRepo, Path path, Options opts);
+		void initialize(HgRepository hgRepo, ConfigFile cfg);
+		// may return null if for a given path and/or options this filter doesn't make any sense
+		Filter create(Path path, Options opts);
 	}
 
 	enum Direction {
 		FromRepo, ToRepo
 	}
 
-	abstract class Options {
-		abstract Direction getDirection();
+	public class Options {
+
+		private final Direction direction;
+		public Options(Direction dir) {
+			direction = dir;
+		}
+		
+		Direction getDirection() {
+			return direction;
+		}
+
 	}
 }

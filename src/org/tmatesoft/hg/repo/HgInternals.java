@@ -16,6 +16,10 @@
  */
 package org.tmatesoft.hg.repo;
 
+import java.io.File;
+
+import org.tmatesoft.hg.internal.ConfigFile;
+
 
 /**
  * DO NOT USE THIS CLASS, INTENDED FOR TESTING PURPOSES.
@@ -45,5 +49,13 @@ public class HgInternals {
 			rv[i] = ignore.isIgnored(toCheck[i]);
 		}
 		return rv;
+	}
+
+	public File getRepositoryDir() {
+		return repo.getRepositoryRoot();
+	}
+	
+	public ConfigFile getRepoConfig() {
+		return repo.getConfigFile();
 	}
 }

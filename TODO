@@ -33,10 +33,13 @@ Committed:
 * tags
   * Tags are read and can be queried (cmdline Log does)
   
-- keywords
-  - filter with context. filters shall have weight (to allow certain filter come first)
+* keywords
+  + filter with context (HgRepository + Path + Direction (to/from repo)
+  - filters shall have weight (to allow certain filter come first). Would need that once FilterFactories are pluggable
 
-- newlines
+* newlines
+  + \r\n <==> \n
+  - force translation if inconsistent
 
 
 Proposed:

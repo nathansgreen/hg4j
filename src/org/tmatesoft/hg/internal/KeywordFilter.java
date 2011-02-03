@@ -16,15 +16,13 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.TreeMap;
 
-import javax.swing.text.html.Option;
-
 import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.repo.Changeset;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -34,15 +32,22 @@ import org.tmatesoft.hg.repo.HgRepository;
  */
 public class KeywordFilter implements Filter {
 	// present implementation is stateless, however, filter use pattern shall not assume that. In fact, Factory may us that 
+	private final HgRepository repo;
 	private final boolean isExpanding;
 	private final TreeMap<String,String> keywords;
 	private final int minBufferLen;
+	private final Path path;
+	private Changeset latestFileCset;
 
 	/**
 	 * 
+	 * @param hgRepo 
+	 * @param path 
 	 * @param expand <code>true</code> to expand keywords, <code>false</code> to shrink
 	 */
-	private KeywordFilter(boolean expand) {
+	private KeywordFilter(HgRepository hgRepo, Path p, boolean expand) {
+		repo = hgRepo;
+		path = p;
 		isExpanding = expand;
 		keywords = new TreeMap<String,String>();
 		keywords.put("Id", "Id");
@@ -183,9 +188,13 @@ public class KeywordFilter implements Filter {
 		if ("Id".equals(keyword)) {
 			rv.put(identityString().getBytes());
 		} else if ("Revision".equals(keyword)) {
-			rv.put(revision());
+			rv.put(revision().getBytes());
 		} else if ("Author".equals(keyword)) {
 			rv.put(username().getBytes());
+		} else if ("Date".equals(keyword)) {
+			rv.put(date().getBytes());
+		} else {
+			throw new IllegalStateException(String.format("Keyword %s is not yet supported", keyword));
 		}
 	}
 
@@ -202,9 +211,10 @@ public class KeywordFilter implements Filter {
 			chars[i] = c;
 		}
 		String kw = new String(chars, 0, i);
-		System.out.println(keywords.subMap("I", "J"));
-		System.out.println(keywords.subMap("A", "B"));
-		System.out.println(keywords.subMap("Au", "B"));
+//		XXX may use subMap to look up keywords based on few available characters (not waiting till closing $)
+//		System.out.println(keywords.subMap("I", "J"));
+//		System.out.println(keywords.subMap("A", "B"));
+//		System.out.println(keywords.subMap("Au", "B"));
 		return keywords.get(kw);
 	}
 	
@@ -235,48 +245,74 @@ public class KeywordFilter implements Filter {
 	}
 
 	private String identityString() {
-		return "sample/file.txt, asd";
+		return String.format("%s,v %s %s %s", path, revision(), date(), username());
 	}
 
-	private byte[] revision() {
-		return "1234567890ab".getBytes();
+	private String revision() {
+		// FIXME add cset's nodeid into Changeset class 
+		int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);
+		return repo.getChangelog().getRevision(csetRev).shortNotation();
 	}
 	
 	private String username() {
-		/* ui.py: username()
-        Searched in this order: $HGUSER, [ui] section of hgrcs, $EMAIL
-        and stop searching if one of these is set.
-        If not found and ui.askusername is True, ask the user, else use
-        ($LOGNAME or $USER or $LNAME or $USERNAME) + "@full.hostname".
-        */
-		return "<Sample> sample@sample.org";
+		return getChangeset().user();
+	}
+	
+	private String date() {
+		return String.format("%tY/%<tm/%<td %<tH:%<tM:%<tS", getChangeset().date());
+	}
+	
+	private Changeset getChangeset() {
+		if (latestFileCset == null) {
+			int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);
+			latestFileCset = repo.getChangelog().range(csetRev, csetRev).get(0);
+		}
+		return latestFileCset;
 	}
 
 	public static class Factory implements Filter.Factory {
+		
+		private HgRepository repo;
+		private Path.Matcher matcher;
 
-		public Filter create(HgRepository hgRepo, Path path, Options opts) {
-			return new KeywordFilter(true);
-		}
-	}
-
-
-	public static void main(String[] args) throws Exception {
-		FileInputStream fis = new FileInputStream(new File("/temp/kwoutput.txt"));
-		FileOutputStream fos = new FileOutputStream(new File("/temp/kwoutput2.txt"));
-		ByteBuffer b = ByteBuffer.allocate(256);
-		KeywordFilter kwFilter = new KeywordFilter(false);
-		while (fis.getChannel().read(b) != -1) {
-			b.flip(); // get ready to be read
-			ByteBuffer f = kwFilter.filter(b);
-			fos.getChannel().write(f); // XXX in fact, f may not be fully consumed
-			if (b.hasRemaining()) {
-				b.compact();
-			} else {
-				b.clear();
+		public void initialize(HgRepository hgRepo, ConfigFile cfg) {
+			repo = hgRepo;
+			ArrayList<String> patterns = new ArrayList<String>();
+			for (Map.Entry<String,String> e : cfg.getSection("keyword").entrySet()) {
+				if (!"ignore".equalsIgnoreCase(e.getValue())) {
+					patterns.add(e.getKey());
+				}
 			}
+			matcher = new PathGlobMatcher(patterns.toArray(new String[patterns.size()]));
+			// TODO read and respect keyword patterns from [keywordmaps]
 		}
-		fis.close();
-		fos.flush();
-		fos.close();
+
+		public Filter create(Path path, Options opts) {
+			if (matcher.accept(path)) {
+				return new KeywordFilter(repo, path, true);
+			}
+			return null;
+		}
 	}
+
+//
+//	public static void main(String[] args) throws Exception {
+//		FileInputStream fis = new FileInputStream(new File("/temp/kwoutput.txt"));
+//		FileOutputStream fos = new FileOutputStream(new File("/temp/kwoutput2.txt"));
+//		ByteBuffer b = ByteBuffer.allocate(256);
+//		KeywordFilter kwFilter = new KeywordFilter(false);
+//		while (fis.getChannel().read(b) != -1) {
+//			b.flip(); // get ready to be read
+//			ByteBuffer f = kwFilter.filter(b);
+//			fos.getChannel().write(f); // XXX in fact, f may not be fully consumed
+//			if (b.hasRemaining()) {
+//				b.compact();
+//			} else {
+//				b.clear();
+//			}
+//		}
+//		fis.close();
+//		fos.flush();
+//		fos.close();
+//	}
 }

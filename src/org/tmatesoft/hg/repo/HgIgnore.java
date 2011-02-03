@@ -93,6 +93,7 @@ public class HgIgnore {
 		sb.append('^'); // help avoid matcher.find() to match 'bin' pattern in the middle of the filename
 		int start = 0, end = line.length() - 1;
 		// '*' at the beginning and end of a line are useless for Pattern
+		// XXX although how about **.txt - such globs can be seen in a config, are they valid for HgIgnore?
 		while (start <= end && line.charAt(start) == '*') start++;
 		while (end > start && line.charAt(end) == '*') end--;
 
@@ -118,6 +119,7 @@ public class HgIgnore {
 		return sb.toString();
 	}
 
+	// TODO use Path and PathGlobMatcher
 	public boolean isIgnored(String path) {
 		for (Pattern p : entries) {
 			if (p.matcher(path).find()) {
