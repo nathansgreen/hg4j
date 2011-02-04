@@ -53,7 +53,7 @@ public class DataAccess {
 		readBytes(b, 0, 8);
 		int i1 = b[0] << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
 		int i2 = b[4] << 24 | (b[5] & 0xFF) << 16 | (b[6] & 0xFF) << 8 | (b[7] & 0xFF);
-		return ((long) i1) << 32 | ((long) i2 & 0xFFFFFFFF);
+		return ((long) i1) << 32 | ((long) i2 & 0xFFFFFFFFl);
 	}
 	public void readBytes(byte[] buf, int offset, int length) throws IOException {
 		throw new UnsupportedOperationException();
