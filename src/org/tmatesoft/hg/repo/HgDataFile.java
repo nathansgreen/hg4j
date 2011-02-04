@@ -25,6 +25,7 @@ import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
 
@@ -73,15 +74,18 @@ public class HgDataFile extends Revlog {
 		return content(TIP);
 	}
 	
-	public void content(int revision, ByteChannel sink) throws /*TODO typed*/Exception {
+	/*XXX not sure applyFilters is the best way to do, perhaps, callers shall add filters themselves?*/
+	public void content(int revision, ByteChannel sink, boolean applyFilters) throws /*TODO typed*/Exception {
 		byte[] content = content(revision);
 		ByteBuffer buf = ByteBuffer.allocate(512);
 		int left = content.length;
 		int offset = 0;
+		ByteChannel _sink = applyFilters ? new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())) : sink;
 		do {
 			buf.put(content, offset, Math.min(left, buf.remaining()));
 			buf.flip();
-			int consumed = sink.write(buf);
+			// XXX I may not rely on returned number of bytes but track change in buf position instead.
+			int consumed = _sink.write(buf);
 			buf.compact();
 			offset += consumed;
 			left -= consumed;

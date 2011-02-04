@@ -80,6 +80,6 @@ public class CatCommand {
 		} else {
 			revToExtract = localRevision;
 		}
-		dataFile.content(revToExtract, sink);
+		dataFile.content(revToExtract, sink, true);
 	}
 }

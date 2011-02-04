@@ -115,7 +115,7 @@ public class KeywordFilter implements Filter {
 							// not to run into such situation
 							throw new IllegalStateException("Try src buffer of a greater size");
 						}
-						rv = ByteBuffer.allocate(keywordStart - x);
+						rv = ByteBuffer.allocate(keywordStart - copyFrom);
 					}
 					// copy all from source till latest possible kw start 
 					copySlice(src, copyFrom, keywordStart, rv);

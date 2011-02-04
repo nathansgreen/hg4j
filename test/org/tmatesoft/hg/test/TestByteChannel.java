@@ -33,7 +33,7 @@ public class TestByteChannel {
 	public static void main(String[] args) throws Exception {
 		RepositoryFacade rf = new RepositoryFacade();
 		rf.init();
-		HgDataFile file = rf.getRepository().getFileNode("TODO");
+		HgDataFile file = rf.getRepository().getFileNode("src/org/tmatesoft/hg/internal/KeywordFilter.java");
 		for (int i = file.getRevisionCount() - 1; i >= 0; i--) {
 			System.out.print("Content for revision:" + i);
 			compareContent(file, i);
@@ -45,7 +45,7 @@ public class TestByteChannel {
 	private static void compareContent(HgDataFile file, int rev) throws Exception {
 		byte[] oldAccess = file.content(rev);
 		ByteArrayChannel ch = new ByteArrayChannel();
-		file.content(rev, ch);
+		file.content(rev, ch, false);
 		byte[] newAccess = ch.toArray();
 		Assert.assertArrayEquals(oldAccess, newAccess);
 		// don't trust anyone (even JUnit) 
