@@ -16,11 +16,11 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
-import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -32,7 +32,6 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.ByteChannel;
@@ -175,8 +174,11 @@ public class HgWorkingCopyStatusCollector {
 			if (f.lastModified() / 1000 == r.time && r.size == f.length()) {
 				inspector.clean(getPathPool().path(fname));
 			} else {
-				// FIXME check actual content to avoid false modified files
-				inspector.modified(getPathPool().path(fname));
+				// check actual content to avoid false modified files
+				HgDataFile df = repo.getFileNode(fname);
+				if (!areTheSame(f, df.content(), df.getPath())) {
+					inspector.modified(df.getPath());
+				}
 			}
 		} else if ((r = getDirstate().checkAdded(fname)) != null) {
 			if (r.name2 == null) {
@@ -259,9 +261,19 @@ public class HgWorkingCopyStatusCollector {
 				final boolean[] checkValue = new boolean[] { true };
 				ByteChannel check = new ByteChannel() {
 					int x = 0;
+					final boolean debug = false; // XXX may want to add global variable to allow clients to turn 
 					public int write(ByteBuffer buffer) throws Exception {
 						for (int i = buffer.remaining(); i > 0; i--, x++) {
 							if (data[x] != buffer.get()) {
+								if (debug) {
+									byte[] xx = new byte[15];
+									if (buffer.position() > 5) {
+										buffer.position(buffer.position() - 5);
+									}
+									buffer.get(xx);
+									System.out.print("expected >>" + new String(data, max(0, x - 4), 20) + "<< but got >>");
+									System.out.println(new String(xx) + "<<");
+								}
 								checkValue[0] = false;
 								break;
 							}
