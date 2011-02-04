@@ -167,7 +167,7 @@ public class NewlineFilter implements Filter {
 
 		public void initialize(HgRepository hgRepo, ConfigFile cfg) {
 			failIfInconsistent = cfg.getBoolean("eol", "only-consistent", true);
-			File cfgFile = new File(new HgInternals(hgRepo).getRepositoryDir(), ".hgeol");
+			File cfgFile = new File(new HgInternals(hgRepo).getRepositoryDir().getParentFile(), ".hgeol");
 			if (!cfgFile.canRead()) {
 				return;
 			}

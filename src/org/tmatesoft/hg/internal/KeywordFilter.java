@@ -289,7 +289,7 @@ public class KeywordFilter implements Filter {
 
 		public Filter create(Path path, Options opts) {
 			if (matcher.accept(path)) {
-				return new KeywordFilter(repo, path, true);
+				return new KeywordFilter(repo, path, opts.getDirection() == Filter.Direction.FromRepo);
 			}
 			return null;
 		}

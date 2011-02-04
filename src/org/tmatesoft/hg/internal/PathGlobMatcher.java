@@ -58,12 +58,16 @@ public class PathGlobMatcher implements Path.Matcher {
 		boolean needLineEndMatch = glob.charAt(end) != '*';
 		while (end > 0 && glob.charAt(end) == '*') end--; // remove trailing * that are useless for Pattern.find()
 		StringBuilder sb = new StringBuilder(end*2);
+		if (glob.charAt(0) != '*') {
+			sb.append('^');
+		}
 		for (int i = 0; i <= end; i++) {
 			char ch = glob.charAt(i);
 			if (ch == '*') {
 				if (glob.charAt(i+1) == '*') { // i < end because we've stripped any trailing * earlier
 					// any char, including path segment separator
 					sb.append(".*?");
+					i++;
 				} else {
 					// just path segments
 					sb.append("[^/]*?");
