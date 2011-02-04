@@ -85,6 +85,7 @@ public class KeywordFilter implements Filter {
 		ByteBuffer rv = null;
 		int keywordStart = -1;
 		int x = src.position();
+		int copyFrom = x; // needs to be updated each time we copy a slice, but not each time we modify source index (x)
 		while (x < src.limit()) {
 			if (keywordStart == -1) {
 				int i = indexOf(src, '$', x, false);
@@ -92,7 +93,7 @@ public class KeywordFilter implements Filter {
 					if (rv == null) {
 						return src;
 					} else {
-						copySlice(src, x, src.limit(), rv);
+						copySlice(src, copyFrom, src.limit(), rv);
 						rv.flip();
 						src.position(src.limit());
 						return rv;
@@ -117,7 +118,7 @@ public class KeywordFilter implements Filter {
 						rv = ByteBuffer.allocate(keywordStart - x);
 					}
 					// copy all from source till latest possible kw start 
-					copySlice(src, x, keywordStart, rv);
+					copySlice(src, copyFrom, keywordStart, rv);
 					rv.flip();
 					// and tell caller we've consumed only to the potential kw start
 					src.position(keywordStart);
@@ -132,7 +133,7 @@ public class KeywordFilter implements Filter {
 							// Factor of 4 is pure guess and a HACK, need to be fixed with re-expanding buffer on demand
 							rv = ByteBuffer.allocate(isExpanding ? src.remaining() * 4 : src.remaining());
 						}
-						copySlice(src, x, keywordStart+1, rv);
+						copySlice(src, copyFrom, keywordStart+1, rv);
 						rv.put(keyword.getBytes());
 						if (isExpanding) {
 							rv.put((byte) ':');
@@ -143,11 +144,13 @@ public class KeywordFilter implements Filter {
 						rv.put((byte) '$');
 						keywordStart = -1;
 						x = i+1;
+						copyFrom = x;
 						continue;
 					} else {
 						if (rv != null) {
 							// we've already did some substitution, thus need to copy bytes we've scanned. 
 							copySlice(src, x, i, rv);
+							copyFrom = i;
 						} // no else in attempt to avoid rv creation if no real kw would be found  
 						keywordStart = i;
 						x = i; // '$' at i wasn't consumed, hence x points to i, not i+1. This is to avoid problems with case: "sdfsd $ asdfs $Id$ sdf"
@@ -158,6 +161,7 @@ public class KeywordFilter implements Filter {
 					// line break
 					if (rv != null) {
 						copySlice(src, x, i+1, rv);
+						copyFrom = i+1;
 					}
 					x = i+1;
 					keywordStart = -1; // Wasn't keyword, really
