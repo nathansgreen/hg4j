@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static java.lang.Math.min;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
@@ -23,12 +24,18 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
+import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -224,7 +231,7 @@ public class HgWorkingCopyStatusCollector {
 				} else {
 					// check actual content to see actual changes
 					// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
-					if (areTheSame(f, fileNode.content(nid1))) {
+					if (areTheSame(f, fileNode.content(nid1), fileNode.getPath())) {
 						inspector.clean(getPathPool().path(fname));
 					} else {
 						inspector.modified(getPathPool().path(fname));
@@ -242,22 +249,49 @@ public class HgWorkingCopyStatusCollector {
 		// The question is whether original Hg treats this case (same content, different parents and hence nodeids) as 'modified' or 'clean'
 	}
 
+	private boolean areTheSame(File f, final byte[] data, Path p) {
+		FileInputStream fis = null;
+		try {
+			try {
+				fis = new FileInputStream(f);
+				FileChannel fc = fis.getChannel();
+				ByteBuffer fb = ByteBuffer.allocate(min(data.length, 8192));
+				final boolean[] checkValue = new boolean[] { true };
+				ByteChannel check = new ByteChannel() {
+					int x = 0;
+					public int write(ByteBuffer buffer) throws Exception {
+						for (int i = buffer.remaining(); i > 0; i--, x++) {
+							if (data[x] != buffer.get()) {
+								checkValue[0] = false;
+								break;
+							}
+						}
+						buffer.position(buffer.limit()); // mark as read
+						return buffer.limit();
+					}
+				};
+				FilterByteChannel filters = new FilterByteChannel(check, repo.getFiltersFromWorkingDirToRepo(p));
+				while (fc.read(fb) != -1 && checkValue[0]) {
+					fb.flip();
+					filters.write(fb);
+					fb.compact();
+				}
+				return checkValue[0];
+			} catch (IOException ex) {
+				if (fis != null) {
+					fis.close();
+				}
+				ex.printStackTrace(); // log warn
+			}
+		} catch (/*TODO typed*/Exception ex) {
+			ex.printStackTrace();
+		}
+		return false;
+	}
+
 	private static String todoGenerateFlags(String fname) {
 		// FIXME implement
 		return null;
-	}
-	private static boolean areTheSame(File f, byte[] data) {
-		try {
-			BufferedInputStream is = new BufferedInputStream(new FileInputStream(f));
-			int i = 0;
-			while (i < data.length && data[i] == is.read()) {
-				i++; // increment only for successful match, otherwise won't tell last byte in data was the same as read from the stream
-			}
-			return i == data.length && is.read() == -1; // although data length is expected to be the same (see caller), check that we reached EOF, no more data left.
-		} catch (IOException ex) {
-			ex.printStackTrace(); // log warn
-		}
-		return false;
 	}
 
 }

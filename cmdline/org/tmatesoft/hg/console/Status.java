@@ -53,8 +53,8 @@ public class Status {
 		//
 //		new Internals(hgRepo).dumpDirstate();
 		//
-		//statusWorkingCopy(hgRepo);
-		statusRevVsWorkingCopy(hgRepo);
+		statusWorkingCopy(hgRepo);
+		//statusRevVsWorkingCopy(hgRepo);
 	}
 
 	private static void statusWorkingCopy(HgRepository hgRepo) {
