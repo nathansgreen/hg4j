@@ -15,8 +15,8 @@ Committed:
   
 * hg status
   + copies for [revision..revision] and for [revision..working dir]
-  - path or anything meaningful instead of Strings
-  - matchers
+  + path or anything meaningful instead of Strings
+  + matchers
 
 * hg cat
   + CatCommand. File, revision. 
@@ -39,7 +39,7 @@ Committed:
 
 * newlines
   + \r\n <==> \n
-  - force translation if inconsistent
+  - force translation if inconsistent (now either fails or does nothing)
 
 
 Proposed:

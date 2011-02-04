@@ -45,7 +45,7 @@ public class RepositoryTreeWalker {
 	private final Mediator mediator = new Mediator();
 
 	public RepositoryTreeWalker(HgRepository hgRepo) {
-		this.repo = hgRepo;
+		repo = hgRepo;
 	}
 
 	public RepositoryTreeWalker range(int rev1, int rev2) {

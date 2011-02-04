@@ -127,7 +127,7 @@ public class StatusCommand {
 	// pass null to reset
 	public StatusCommand match(Path.Matcher pathMatcher) {
 		mediator.matcher = pathMatcher;
-		throw HgRepository.notImplemented();
+		return this;
 	}
 
 	public StatusCommand subrepo(boolean visit) {
