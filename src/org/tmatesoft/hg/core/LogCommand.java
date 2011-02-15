@@ -175,18 +175,20 @@ public class LogCommand implements Changeset.Inspector {
 			} else {
 				HgDataFile fileNode = repo.getFileNode(file);
 				fileNode.history(startRev, endRev, this);
-				if (handler instanceof FileHistoryHandler && fileNode.isCopy()) {
+				if (fileNode.isCopy()) {
 					// even if we do not follow history, report file rename
 					do {
-						FileRevision src = new FileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
-						FileRevision dst = new FileRevision(repo, fileNode.getRevision(0), fileNode.getPath());
-						((FileHistoryHandler) handler).copy(src, dst);
+						if (handler instanceof FileHistoryHandler) {
+							FileRevision src = new FileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
+							FileRevision dst = new FileRevision(repo, fileNode.getRevision(0), fileNode.getPath());
+							((FileHistoryHandler) handler).copy(src, dst);
+						}
 						if (limit > 0 && count >= limit) {
 							// if limit reach, follow is useless.
 							break;
 						}
 						if (followHistory) {
-							fileNode = repo.getFileNode(src.getPath());
+							fileNode = repo.getFileNode(fileNode.getCopySourceName());
 							fileNode.history(this);
 						}
 					} while (followHistory && fileNode.isCopy());
