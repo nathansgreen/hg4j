@@ -176,12 +176,14 @@ public class Log {
 				sb.append('\n');
 			}
 			if (complete) {
-				if (changelogWalker == null) {
-					changelogWalker = repo.getChangelog().new ParentWalker();
-					changelogWalker.init();
-				}
-				Nodeid p1 = changelogWalker.safeFirstParent(csetNodeid);
-				Nodeid p2 = changelogWalker.safeSecondParent(csetNodeid);
+//				if (changelogWalker == null) {
+//					changelogWalker = repo.getChangelog().new ParentWalker();
+//					changelogWalker.init();
+//				}
+//				Nodeid p1 = changelogWalker.safeFirstParent(csetNodeid);
+//				Nodeid p2 = changelogWalker.safeSecondParent(csetNodeid);
+				Nodeid p1 = cset.getFirstParentRevision();
+				Nodeid p2 = cset.getSecondParentRevision();
 				int p1x = p1 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevision(p1);
 				int p2x = p2 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevision(p2);
 				int mx = repo.getManifest().getLocalRevision(cset.getManifestRevision());

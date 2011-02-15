@@ -117,6 +117,22 @@ public class Cset implements Cloneable {
 		return deletedFiles;
 	}
 
+	// XXX do I need boolean isMergeRevision()?
+	
+	public Nodeid getFirstParentRevision() {
+		// XXX may read once for both p1 and p2 
+		// or use ParentWalker to minimize reads even more.
+		byte[] p1 = new byte[20];
+		statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], p1, null);
+		return Nodeid.fromBinary(p1, 0);
+	}
+	
+	public Nodeid getSecondParentRevision() {
+		byte[] p2 = new byte[20];
+		statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], null, p2);
+		return Nodeid.fromBinary(p2, 0);
+	}
+
 	@Override
 	public Cset clone() {
 		try {
@@ -150,6 +166,7 @@ public class Cset implements Cloneable {
 			added.add(new FileRevision(repo, nid, s));
 		}
 		for (Path s : r.getRemoved()) {
+			// with Path from getRemoved, may just copy
 			deleted.add(s);
 		}
 		modified.trimToSize();
