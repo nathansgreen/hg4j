@@ -117,7 +117,9 @@ public class Cset implements Cloneable {
 		return deletedFiles;
 	}
 
-	// XXX do I need boolean isMergeRevision()?
+	public boolean isMerge() {
+		return !Nodeid.NULL.equals(getSecondParentRevision());
+	}
 	
 	public Nodeid getFirstParentRevision() {
 		// XXX may read once for both p1 and p2 

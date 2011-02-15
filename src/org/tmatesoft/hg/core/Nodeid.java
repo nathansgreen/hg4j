@@ -62,7 +62,7 @@ public final class Nodeid {
 	@Override
 	public boolean equals(Object o) {
 		if (o instanceof Nodeid) {
-			return Arrays.equals(this.binaryData, ((Nodeid) o).binaryData);
+			return this == o || equalsTo(((Nodeid) o).binaryData);
 		}
 		return false;
 	}
