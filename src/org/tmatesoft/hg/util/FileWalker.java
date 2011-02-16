@@ -33,8 +33,6 @@ public class FileWalker {
 	private File nextFile;
 	private String nextPath;
 
-	// FilenameFilter is used in a non-standard way - first argument, dir, is always startDir, 
-	// while second arg, name, is startDir-relative path to the file in question
 	public FileWalker(File startDir) {
 		this.startDir = startDir;
 		dirQueue = new LinkedList<File>();
