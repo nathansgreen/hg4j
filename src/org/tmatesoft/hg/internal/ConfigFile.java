@@ -107,10 +107,14 @@ public class ConfigFile {
 			Map<String,String> section = new LinkedHashMap<String, String>();
 			while ((line = br.readLine()) != null) {
 				line = line.trim();
+				int x;
+				if ((x = line.indexOf('#')) != -1) {
+					// do not keep comments in memory, get new, shorter string
+					line = new String(line.substring(0, x).trim());
+				}
 				if (line.length() <= 2) { // a=b or [a] are at least of length 3
 					continue;
 				}
-				int x;
 				if (line.charAt(0) == '[' && line.charAt(line.length() - 1) == ']') {
 					sectionName = line.substring(1, line.length() - 1);
 					if (sections.indexOf(sectionName) == -1) {
@@ -120,6 +124,7 @@ public class ConfigFile {
 						section = null; // drop cached value
 					}
 				} else if ((x = line.indexOf('=')) != -1) {
+					// share char[] of the original string
 					String key = line.substring(0, x).trim();
 					String value = line.substring(x+1).trim();
 					if (section == null) {

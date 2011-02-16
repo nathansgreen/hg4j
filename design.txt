@@ -86,7 +86,7 @@ File access:
   + RepositoryTreeWalker to ManifestCommand to match other command classes 
 
 * defects
-  - ConfigFile to strip comments from values (#)
+  + ConfigFile to strip comments from values (#)
 
 <<<<<
 
