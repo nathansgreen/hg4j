@@ -42,10 +42,9 @@ Committed:
   - force translation if inconsistent (now either fails or does nothing)
 
 * API
-  - rename in .core Cset -> HgChangeset,
-  - rename in .repo Changeset to HgChangelog.Changeset, Changeset.Inspector -> HgChangelog.Inspector
   - CommandContext
   - Data access - not bytes, but ByteChannel
+  - HgRepository constants (TIP, BAD, WC) to HgRevisions enum
 
 * defects
   ConfigFile to strip comments from values (#)

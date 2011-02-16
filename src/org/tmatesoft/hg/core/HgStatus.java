@@ -19,7 +19,7 @@ package org.tmatesoft.hg.core;
 import java.util.Date;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
-import org.tmatesoft.hg.repo.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.Changeset;
 
 public class HgStatus {
 

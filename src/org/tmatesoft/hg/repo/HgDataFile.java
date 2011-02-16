@@ -147,11 +147,11 @@ public class HgDataFile extends Revlog {
 		return rv;
 	}
 
-	public void history(Changeset.Inspector inspector) {
+	public void history(HgChangelog.Inspector inspector) {
 		history(0, content.revisionCount() - 1, inspector);
 	}
 
-	public void history(int start, int end, Changeset.Inspector inspector) {
+	public void history(int start, int end, HgChangelog.Inspector inspector) {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
 		}

@@ -26,6 +26,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.repo.HgChangelog.Changeset;
 
 
 /**

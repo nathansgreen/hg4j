@@ -44,8 +44,6 @@ DataAccess - collect debug info (buffer misses, file size/total read operations)
 Strip off metadata from beg of the stream - DataAccess (with rebase/moveBaseOffset(int)) would be handy
 Parameterize StatusCollector to produce copy only when needed. And HgDataFile.metadata perhaps should be moved to cacheable place?
 
-RevisionMap to replace TreeMap<Integer, ?> 
-
 Status operation from GUI - guess, usually on a file/subfolder, hence API should allow for starting path (unlike cmdline, seems useless to implement include/exclide patterns - GUI users hardly enter them, ever)
   -> recently introduced FileWalker may perhaps help solving this (if starts walking from selected folder) for status op against WorkingDir?
 
@@ -76,9 +74,19 @@ File access:
 * NIO and mapped files - should be fast. Although seems to give less control on mem usage. 
 * Regular InputStreams and chunked stream on top - allocate List<byte[]>, each (but last) chunk of fixed size (depending on initial file size) 
 
+
+* API
+  + rename in .core Cset -> HgChangeset,
+  + rename in .repo Changeset to HgChangelog.Changeset, Changeset.Inspector -> HgChangelog.Inspector
+  - CommandContext
+  - Data access - not bytes, but ByteChannel
+  - HgRepository constants (TIP, BAD, WC) to HgRevisions enum
+  - RevisionMap to replace TreeMap<Integer, ?> 
+
 <<<<<
 
 Tests:
 DataAccess - readBytes(length > memBufferSize, length*2 > memBufferSize) - to check impl is capable to read huge chunks of data, regardless of own buffer size
 
 ExecHelper('cmd', OutputParser()).run(). StatusOutputParser, LogOutputParser extends OutputParser. construct java result similar to that of cmd, compare results
+

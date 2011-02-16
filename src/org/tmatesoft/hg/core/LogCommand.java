@@ -26,7 +26,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.repo.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -42,7 +43,7 @@ import org.tmatesoft.hg.util.PathPool;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class LogCommand implements Changeset.Inspector {
+public class LogCommand implements HgChangelog.Inspector {
 
 	private final HgRepository repo;
 	private Set<String> users;
@@ -53,7 +54,7 @@ public class LogCommand implements Changeset.Inspector {
 	private Calendar date;
 	private Path file;
 	private boolean followHistory; // makes sense only when file != null
-	private Cset changeset;
+	private HgChangeset changeset;
 	
 	public LogCommand(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -147,7 +148,7 @@ public class LogCommand implements Changeset.Inspector {
 	/**
 	 * Similar to {@link #execute(org.tmatesoft.hg.repo.Changeset.Inspector)}, collects and return result as a list.
 	 */
-	public List<Cset> execute() {
+	public List<HgChangeset> execute() {
 		CollectHandler collector = new CollectHandler();
 		execute(collector);
 		return collector.getChanges();
@@ -169,7 +170,7 @@ public class LogCommand implements Changeset.Inspector {
 		try {
 			delegate = handler;
 			count = 0;
-			changeset = new Cset(new HgStatusCollector(repo), new PathPool(repo.getPathHelper()));
+			changeset = new HgChangeset(new HgStatusCollector(repo), new PathPool(repo.getPathHelper()));
 			if (file == null) {
 				repo.getChangelog().range(startRev, endRev, this);
 			} else {
@@ -232,15 +233,15 @@ public class LogCommand implements Changeset.Inspector {
 
 	public interface Handler {
 		/**
-		 * @param changeset not necessarily a distinct instance each time, {@link Cset#clone() clone()} if need a copy.
+		 * @param changeset not necessarily a distinct instance each time, {@link HgChangeset#clone() clone()} if need a copy.
 		 */
-		void next(Cset changeset);
+		void next(HgChangeset changeset);
 	}
 	
 	/**
 	 * When {@link LogCommand} is executed against file, handler passed to {@link LogCommand#execute(Handler)} may optionally
 	 * implement this interface to get information about file renames. Method {@link #copy(FileRevision, FileRevision)} would
-	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #next(Cset)}.
+	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #next(HgChangeset)}.
 	 * 
 	 * For {@link LogCommand#file(Path, boolean)} with renamed file path and follow argument set to false, 
 	 * {@link #copy(FileRevision, FileRevision)} would be invoked for the first copy/rename in the history of the file, but not 
@@ -255,13 +256,13 @@ public class LogCommand implements Changeset.Inspector {
 	}
 	
 	public static class CollectHandler implements Handler {
-		private final List<Cset> result = new LinkedList<Cset>();
+		private final List<HgChangeset> result = new LinkedList<HgChangeset>();
 
-		public List<Cset> getChanges() {
+		public List<HgChangeset> getChanges() {
 			return Collections.unmodifiableList(result);
 		}
 
-		public void next(Cset changeset) {
+		public void next(HgChangeset changeset) {
 			result.add(changeset.clone());
 		}
 	}

@@ -28,7 +28,7 @@ import java.util.List;
 import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.junit.Test;
-import org.tmatesoft.hg.core.Cset;
+import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.LogCommand;
 import org.tmatesoft.hg.core.LogCommand.CollectHandler;
 import org.tmatesoft.hg.core.LogCommand.FileHistoryHandler;
@@ -74,7 +74,7 @@ public class TestHistory {
 	public void testCompleteLog() throws Exception {
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug");
-		List<Cset> r = new LogCommand(repo).execute();
+		List<HgChangeset> r = new LogCommand(repo).execute();
 		report("hg log - COMPLETE REPO HISTORY", r, true); 
 	}
 	
@@ -103,9 +103,9 @@ public class TestHistory {
 				// cmdline always gives in changesets in order from newest (bigger rev number) to oldest.
 				// LogCommand does other way round, from oldest to newest, follewed by revisions of copy source, if any
 				// (apparently older than oldest of the copy target). Hence need to sort Java results according to rev numbers
-				final LinkedList<Cset> sorted = new LinkedList<Cset>(h.getChanges());
-				Collections.sort(sorted, new Comparator<Cset>() {
-					public int compare(Cset cs1, Cset cs2) {
+				final LinkedList<HgChangeset> sorted = new LinkedList<HgChangeset>(h.getChanges());
+				Collections.sort(sorted, new Comparator<HgChangeset>() {
+					public int compare(HgChangeset cs1, HgChangeset cs2) {
 						return cs1.getRevision() < cs2.getRevision() ? 1 : -1;
 					}
 				});
@@ -116,13 +116,13 @@ public class TestHistory {
 		}
 	}
 
-	private void report(String what, List<Cset> r, boolean reverseConsoleResults) {
+	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResults) {
 		final List<Record> consoleResult = changelogParser.getResult();
 		if (reverseConsoleResults) {
 			Collections.reverse(consoleResult);
 		}
 		Iterator<LogOutputParser.Record> consoleResultItr = consoleResult.iterator();
-		for (Cset cs : r) {
+		for (HgChangeset cs : r) {
 			LogOutputParser.Record cr = consoleResultItr.next();
 			int x = cs.getRevision() == cr.changesetIndex ? 0x1 : 0;
 			x |= cs.getDate().equals(cr.date) ? 0x2 : 0;

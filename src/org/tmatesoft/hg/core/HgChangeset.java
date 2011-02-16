@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
-import org.tmatesoft.hg.repo.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.Changeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.PathPool;
@@ -34,7 +34,7 @@ import org.tmatesoft.hg.util.PathPool;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Cset implements Cloneable {
+public class HgChangeset implements Cloneable {
 	private final HgStatusCollector statusHelper;
 	private final PathPool pathHelper;
 
@@ -49,7 +49,7 @@ public class Cset implements Cloneable {
 
 	// XXX consider CommandContext with StatusCollector, PathPool etc. Commands optionally get CC through a cons or create new
 	// and pass it around
-	/*package-local*/Cset(HgStatusCollector statusCollector, PathPool pathPool) {
+	/*package-local*/HgChangeset(HgStatusCollector statusCollector, PathPool pathPool) {
 		statusHelper = statusCollector;
 		pathHelper = pathPool;
 	}
@@ -136,9 +136,9 @@ public class Cset implements Cloneable {
 	}
 
 	@Override
-	public Cset clone() {
+	public HgChangeset clone() {
 		try {
-			Cset copy = (Cset) super.clone();
+			HgChangeset copy = (HgChangeset) super.clone();
 			copy.changeset = changeset.clone();
 			return copy;
 		} catch (CloneNotSupportedException ex) {

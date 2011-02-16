@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.repo.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.Changeset;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**

@@ -20,7 +20,7 @@ import java.util.Formatter;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.tmatesoft.hg.core.Cset;
+import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.LogCommand;
 import org.tmatesoft.hg.core.LogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
@@ -135,7 +135,7 @@ public class Log {
 			System.out.printf("Got notified that %s(%s) was originally known as %s(%s)\n", to.getPath(), to.getRevision(), from.getPath(), from.getRevision());
 		}
 
-		public void next(Cset changeset) {
+		public void next(HgChangeset changeset) {
 			final String s = print(changeset);
 			if (reverseOrder) {
 				// XXX in fact, need to insert s into l according to changeset.getRevision()
@@ -158,7 +158,7 @@ public class Log {
 			changelogWalker = null;
 		}
 
-		private String print(Cset cset) {
+		private String print(HgChangeset cset) {
 			StringBuilder sb = new StringBuilder();
 			Formatter f = new Formatter(sb);
 			final Nodeid csetNodeid = cset.getNodeid();
