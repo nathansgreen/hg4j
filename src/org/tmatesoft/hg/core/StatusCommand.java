@@ -16,13 +16,12 @@
  */
 package org.tmatesoft.hg.core;
 
-import static org.tmatesoft.hg.core.StatusCommand.HgStatus.Kind.*;
+import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.util.ConcurrentModificationException;
 
 import org.tmatesoft.hg.core.Path.Matcher;
-import org.tmatesoft.hg.core.StatusCommand.HgStatus.Kind;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
@@ -177,42 +176,6 @@ public class StatusCommand {
 		void handleStatus(HgStatus s);
 	}
 
-	public static class HgStatus {
-		public enum Kind {
-			Modified, Added, Removed, Unknown, Missing, Clean, Ignored
-		};
-		private final Kind kind;
-		private final Path path;
-		private final Path origin;
-		
-		HgStatus(Kind kind, Path path) {
-			this(kind, path, null);
-		}
-
-		HgStatus(Kind kind, Path path, Path copyOrigin) {
-			this.kind = kind;
-			this.path  = path;
-			origin = copyOrigin;
-		}
-
-		public Kind getKind() {
-			return kind;
-		}
-
-		public Path getPath() {
-			return path;
-		}
-
-		public Path getOriginalPath() {
-			return origin;
-		}
-
-		public boolean isCopy() {
-			return origin != null;
-		}
-	}
-
-	
 	private class Mediator implements HgStatusInspector {
 		boolean needModified;
 		boolean needAdded;
@@ -257,7 +220,7 @@ public class StatusCommand {
 		public void copied(Path fnameOrigin, Path fnameAdded) {
 			if (needCopies) {
 				if (matcher == null || matcher.accept(fnameAdded)) {
-					handler.handleStatus(new HgStatus(Kind.Added, fnameAdded, fnameOrigin));
+					handler.handleStatus(new HgStatus(Added, fnameAdded, fnameOrigin));
 				}
 			}
 		}

@@ -17,7 +17,8 @@
 package org.tmatesoft.hg.test;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.tmatesoft.hg.core.StatusCommand.HgStatus.Kind.*;
+import static org.tmatesoft.hg.core.HgStatus.*;
+import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Collection;
@@ -31,10 +32,9 @@ import java.util.TreeMap;
 import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.core.HgStatus;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.StatusCommand;
-import org.tmatesoft.hg.core.StatusCommand.HgStatus;
-import org.tmatesoft.hg.core.StatusCommand.HgStatus.Kind;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -126,7 +126,7 @@ public class TestStatus {
 	}
 	
 	private static class StatusCollector implements StatusCommand.Handler {
-		private final Map<StatusCommand.HgStatus.Kind, List<Path>> map = new TreeMap<StatusCommand.HgStatus.Kind, List<Path>>();
+		private final Map<HgStatus.Kind, List<Path>> map = new TreeMap<HgStatus.Kind, List<Path>>();
 
 		public void handleStatus(HgStatus s) {
 			List<Path> l = map.get(s.getKind());
