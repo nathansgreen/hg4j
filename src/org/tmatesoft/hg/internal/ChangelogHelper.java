@@ -33,6 +33,7 @@ public class ChangelogHelper {
 	private final int leftBoundary;
 	private final HgRepository repo;
 	private final TreeMap<Integer, Changeset> cache = new TreeMap<Integer, Changeset>();
+	private String nextCommitAuthor;
 
 	/**
 	 * @param hgRepo
@@ -74,6 +75,9 @@ public class ChangelogHelper {
 	}
 
 	public String getNextCommitUsername() {
-		return new HgInternals(repo).getNextCommitUsername();
+		if (nextCommitAuthor == null) {
+			nextCommitAuthor = new HgInternals(repo).getNextCommitUsername();
+		}
+		return nextCommitAuthor;
 	}
 }

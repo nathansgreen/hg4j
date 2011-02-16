@@ -73,6 +73,7 @@ public class HgStatus {
 		Changeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			if (kind == Kind.Modified || kind == Kind.Added || kind == Kind.Removed /*&& RightBoundary is TIP*/) {
+				// perhaps, also for Kind.Missing?
 				return logHelper.getNextCommitUsername();
 			}
 		} else {
