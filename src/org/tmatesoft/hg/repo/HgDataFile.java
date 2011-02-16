@@ -97,7 +97,7 @@ public class HgDataFile extends Revlog {
 	@Override
 	public byte[] content(int revision) {
 		if (revision == TIP) {
-			revision = content.revisionCount() - 1; // FIXME maxRevision.
+			revision = getLastRevision();
 		}
 		byte[] data = super.content(revision);
 		if (metadata == null) {
@@ -154,14 +154,14 @@ public class HgDataFile extends Revlog {
 	}
 
 	public void history(HgChangelog.Inspector inspector) {
-		history(0, content.revisionCount() - 1, inspector);
+		history(0, getLastRevision(), inspector);
 	}
 
 	public void history(int start, int end, HgChangelog.Inspector inspector) {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
 		}
-		final int last = content.revisionCount() - 1;
+		final int last = getLastRevision();
 		if (start < 0 || start > last) {
 			throw new IllegalArgumentException();
 		}

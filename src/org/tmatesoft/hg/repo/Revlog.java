@@ -62,16 +62,20 @@ abstract class Revlog {
 		return repo;
 	}
 
-	public int getRevisionCount() {
+	public final int getRevisionCount() {
 		return content.revisionCount();
 	}
 	
-	public Nodeid getRevision(int revision) {
+	public final int getLastRevision() {
+		return content.revisionCount() - 1;
+	}
+	
+	public final Nodeid getRevision(int revision) {
 		// XXX cache nodeids?
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
 	}
 
-	public int getLocalRevision(Nodeid nid) {
+	public final int getLocalRevision(Nodeid nid) {
 		int revision = content.findLocalRevisionNumber(nid);
 		if (revision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.format("%s doesn't represent a revision of %s", nid.toString(), this /*XXX HgDataFile.getPath might be more suitable here*/));
@@ -80,7 +84,7 @@ abstract class Revlog {
 	}
 
 	// Till now, i follow approach that NULL nodeid is never part of revlog
-	public boolean isKnown(Nodeid nodeid) {
+	public final boolean isKnown(Nodeid nodeid) {
 		final int rn = content.findLocalRevisionNumber(nodeid);
 		if (Integer.MIN_VALUE == rn) {
 			return false;

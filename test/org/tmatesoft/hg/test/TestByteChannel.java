@@ -34,7 +34,7 @@ public class TestByteChannel {
 		HgRepoFacade rf = new HgRepoFacade();
 		rf.init();
 		HgDataFile file = rf.getRepository().getFileNode("src/org/tmatesoft/hg/internal/KeywordFilter.java");
-		for (int i = file.getRevisionCount() - 1; i >= 0; i--) {
+		for (int i = file.getLastRevision(); i >= 0; i--) {
 			System.out.print("Content for revision:" + i);
 			compareContent(file, i);
 			System.out.println(" OK");

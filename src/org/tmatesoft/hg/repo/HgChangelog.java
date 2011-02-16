@@ -44,7 +44,7 @@ public class HgChangelog extends Revlog {
 	}
 
 	public void all(final HgChangelog.Inspector inspector) {
-		range(0, content.revisionCount() - 1, inspector);
+		range(0, lastRevision(), inspector);
 	}
 
 	public void range(int start, int end, final HgChangelog.Inspector inspector) {

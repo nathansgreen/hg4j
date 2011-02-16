@@ -105,10 +105,10 @@ public class HgStatusCollector {
 			((Record) inspector).init(rev1, rev2, this);
 		}
 		if (rev1 == TIP) {
-			rev1 = repo.getManifest().getRevisionCount() - 1;
+			rev1 = repo.getManifest().getLastRevision();
 		}
 		if (rev2 == TIP) {
-			rev2 = repo.getManifest().getRevisionCount() - 1; // XXX add Revlog.tip() func ? 
+			rev2 = repo.getManifest().getLastRevision(); 
 		}
 		// in fact, rev1 and rev2 are often next (or close) to each other,
 		// thus, we can optimize Manifest reads here (manifest.walk(rev1, rev2))
