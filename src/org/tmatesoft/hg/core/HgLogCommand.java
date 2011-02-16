@@ -35,15 +35,18 @@ import org.tmatesoft.hg.util.PathPool;
 
 
 /**
+ * Access to changelog, 'hg log' command counterpart.
+ * 
  * <pre>
+ * Usage:
  *   new LogCommand().limit(20).branch("maintenance-2.1").user("me").execute(new MyHandler());
  * </pre>
- * Not thread-safe (each thread has to use own {@link LogCommand} instance).
+ * Not thread-safe (each thread has to use own {@link HgLogCommand} instance).
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class LogCommand implements HgChangelog.Inspector {
+public class HgLogCommand implements HgChangelog.Inspector {
 
 	private final HgRepository repo;
 	private Set<String> users;
@@ -56,7 +59,7 @@ public class LogCommand implements HgChangelog.Inspector {
 	private boolean followHistory; // makes sense only when file != null
 	private HgChangeset changeset;
 	
-	public LogCommand(HgRepository hgRepo) {
+	public HgLogCommand(HgRepository hgRepo) {
 		repo = hgRepo;
 	}
 
@@ -65,7 +68,7 @@ public class LogCommand implements HgChangelog.Inspector {
 	 * @param user - full or partial name of the user, case-insensitive, non-null.
 	 * @return <code>this</code> instance for convenience
 	 */
-	public LogCommand user(String user) {
+	public HgLogCommand user(String user) {
 		if (user == null) {
 			throw new IllegalArgumentException();
 		}
@@ -82,7 +85,7 @@ public class LogCommand implements HgChangelog.Inspector {
 	 * @param branch - branch name, case-sensitive, non-null.
 	 * @return <code>this</code> instance for convenience
 	 */
-	public LogCommand branch(String branch) {
+	public HgLogCommand branch(String branch) {
 		if (branch == null) {
 			throw new IllegalArgumentException();
 		}
@@ -95,7 +98,7 @@ public class LogCommand implements HgChangelog.Inspector {
 	
 	// limit search to specific date
 	// multiple?
-	public LogCommand date(Calendar date) {
+	public HgLogCommand date(Calendar date) {
 		this.date = date;
 		// FIXME implement
 		// isSet(field) - false => don't use in detection of 'same date'
@@ -107,7 +110,7 @@ public class LogCommand implements HgChangelog.Inspector {
 	 * @param num - number of changeset to produce. Pass 0 to clear the limit. 
 	 * @return <code>this</code> instance for convenience
 	 */
-	public LogCommand limit(int num) {
+	public HgLogCommand limit(int num) {
 		limit = num;
 		return this;
 	}
@@ -119,7 +122,7 @@ public class LogCommand implements HgChangelog.Inspector {
 	 * @param rev2
 	 * @return <code>this</code> instance for convenience
 	 */
-	public LogCommand range(int rev1, int rev2) {
+	public HgLogCommand range(int rev1, int rev2) {
 		if (rev1 != TIP && rev2 != TIP) {
 			startRev = rev2 < rev1 ? rev2 : rev1;
 			endRev = startRev == rev2 ? rev1 : rev2;
@@ -138,7 +141,7 @@ public class LogCommand implements HgChangelog.Inspector {
 	 * @param file path relative to repository root. Pass <code>null</code> to reset.
 	 * @param followCopyRename true to report changesets of the original file(-s), if copy/rename ever occured to the file. 
 	 */
-	public LogCommand file(Path file, boolean followCopyRename) {
+	public HgLogCommand file(Path file, boolean followCopyRename) {
 		// multiple? Bad idea, would need to include extra method into Handler to tell start of next file
 		this.file = file;
 		followHistory = followCopyRename;
@@ -239,11 +242,11 @@ public class LogCommand implements HgChangelog.Inspector {
 	}
 	
 	/**
-	 * When {@link LogCommand} is executed against file, handler passed to {@link LogCommand#execute(Handler)} may optionally
+	 * When {@link HgLogCommand} is executed against file, handler passed to {@link HgLogCommand#execute(Handler)} may optionally
 	 * implement this interface to get information about file renames. Method {@link #copy(FileRevision, FileRevision)} would
 	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #next(HgChangeset)}.
 	 * 
-	 * For {@link LogCommand#file(Path, boolean)} with renamed file path and follow argument set to false, 
+	 * For {@link HgLogCommand#file(Path, boolean)} with renamed file path and follow argument set to false, 
 	 * {@link #copy(FileRevision, FileRevision)} would be invoked for the first copy/rename in the history of the file, but not 
 	 * followed by any changesets. 
 	 *

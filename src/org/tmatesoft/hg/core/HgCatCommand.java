@@ -26,35 +26,35 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.ByteChannel;
 
 /**
- * Command to obtain content of a 
+ * Command to obtain content of a file, 'hg cat' counterpart. 
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class CatCommand {
+public class HgCatCommand {
 
 	private final HgRepository repo;
 	private Path file;
 	private int localRevision = TIP;
 	private Nodeid revision;
 
-	public CatCommand(HgRepository hgRepo) {
+	public HgCatCommand(HgRepository hgRepo) {
 		repo = hgRepo;
 	}
 
-	public CatCommand file(Path fname) {
+	public HgCatCommand file(Path fname) {
 		file = fname;
 		return this;
 	}
 
 	// rev can't be WORKING_COPY (if allowed, need to implement in #execute())
-	public CatCommand revision(int rev) {
+	public HgCatCommand revision(int rev) {
 		localRevision = rev;
 		revision = null;
 		return this;
 	}
 	
-	public CatCommand revision(Nodeid nodeid) {
+	public HgCatCommand revision(Nodeid nodeid) {
 		revision = nodeid;
 		localRevision = BAD_REVISION;
 		return this;

@@ -34,7 +34,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgStatus;
 import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.core.StatusCommand;
+import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -104,7 +104,7 @@ public class TestStatus {
 	
 	@Test
 	public void testStatusCommand() throws Exception {
-		final StatusCommand sc = new StatusCommand(repo).all();
+		final HgStatusCommand sc = new HgStatusCommand(repo).all();
 		StatusCollector r;
 		statusParser.reset();
 		eh.run("hg", "status", "-A");
@@ -125,7 +125,7 @@ public class TestStatus {
 		// TODO check not -A, but defaults()/custom set of modifications 
 	}
 	
-	private static class StatusCollector implements StatusCommand.Handler {
+	private static class StatusCollector implements HgStatusCommand.Handler {
 		private final Map<HgStatus.Kind, List<Path>> map = new TreeMap<HgStatus.Kind, List<Path>>();
 
 		public void handleStatus(HgStatus s) {
@@ -170,7 +170,7 @@ public class TestStatus {
 		final long start2 = System.currentTimeMillis();
 		for (int i = 0; i < runs; i++) {
 			StatusCollector r = new StatusCollector();
-			new StatusCommand(repo).all().base(3).revision(80).execute(r);
+			new HgStatusCommand(repo).all().base(3).revision(80).execute(r);
 		}
 		final long end = System.currentTimeMillis();
 		System.out.printf("'hg status -A --rev 3:80', %d runs:  Native client total %d (%d per run), Java client %d (%d)\n", runs, start2-start1, (start2-start1)/runs, end-start2, (end-start2)/runs);

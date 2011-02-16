@@ -23,18 +23,19 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.PathPool;
 
 
 /**
- *
+ * Gives access to list of files in each revision (Mercurial manifest information), 'hg manifest' counterpart.
+ *  
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class RepositoryTreeWalker {
+public class HgManifestCommand {
 	
 	private final HgRepository repo;
 	private Path.Matcher matcher;
@@ -44,21 +45,21 @@ public class RepositoryTreeWalker {
 	
 	private final Mediator mediator = new Mediator();
 
-	public RepositoryTreeWalker(HgRepository hgRepo) {
+	public HgManifestCommand(HgRepository hgRepo) {
 		repo = hgRepo;
 	}
 
-	public RepositoryTreeWalker range(int rev1, int rev2) {
+	public HgManifestCommand range(int rev1, int rev2) {
 		// if manifest range is different from that of changelog, need conversion utils (external?)
 		throw HgRepository.notImplemented();
 	}
 	
-	public RepositoryTreeWalker revision(int rev) {
+	public HgManifestCommand revision(int rev) {
 		startRev = endRev = rev;
 		return this;
 	}
 	
-	public RepositoryTreeWalker dirs(boolean include) {
+	public HgManifestCommand dirs(boolean include) {
 		// XXX whether directories with directories only are include or not
 		// now lists only directories with files
 		needDirs = include;
@@ -70,7 +71,7 @@ public class RepositoryTreeWalker {
 	 * @param pathMatcher - filter, pass <code>null</code> to clear.
 	 * @return <code>this</code> instance for convenience
 	 */
-	public RepositoryTreeWalker match(Path.Matcher pathMatcher) {
+	public HgManifestCommand match(Path.Matcher pathMatcher) {
 		matcher = pathMatcher;
 		return this;
 	}

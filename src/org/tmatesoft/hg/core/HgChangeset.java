@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgChangelog.Changeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -28,7 +28,8 @@ import org.tmatesoft.hg.util.PathPool;
 
 
 /**
- * TODO rename to Changeset along with original Changeset moved to .repo and renamed to HgChangeset?
+ * Record in the Mercurial changelog, describing single commit.
+ * 
  * Not thread-safe, don't try to read from different threads
  * 
  * @author Artem Tikhomirov

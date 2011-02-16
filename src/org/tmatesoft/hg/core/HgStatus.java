@@ -21,6 +21,12 @@ import java.util.Date;
 import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.repo.HgChangelog.Changeset;
 
+/**
+ * Repository file status and extra handy information.
+ *
+ * @author Artem Tikhomirov
+ * @author TMate Software Ltd.
+ */
 public class HgStatus {
 
 	public enum Kind {

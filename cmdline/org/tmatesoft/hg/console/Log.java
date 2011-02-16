@@ -21,8 +21,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgChangeset;
-import org.tmatesoft.hg.core.LogCommand;
-import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgLogCommand;
+import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -48,7 +48,7 @@ public class Log {
 		dump.complete = true; //cmdLineOpts;
 		dump.verbose = false; //cmdLineOpts;
 		dump.reverseOrder = true;
-		LogCommand cmd = new LogCommand(hgRepo);
+		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		if (cmdLineOpts.users != null) {
 			for (String u : cmdLineOpts.users) {
 				cmd.user(u);
@@ -115,7 +115,7 @@ public class Log {
 		return rv;
 	}
 
-	private static final class Dump implements LogCommand.FileHistoryHandler {
+	private static final class Dump implements HgLogCommand.FileHistoryHandler {
 		// params
 		boolean complete = false; // roughly --debug
 		boolean reverseOrder = false;

@@ -81,7 +81,12 @@ File access:
   - CommandContext
   - Data access - not bytes, but ByteChannel
   - HgRepository constants (TIP, BAD, WC) to HgRevisions enum
-  - RevisionMap to replace TreeMap<Integer, ?> 
+  - RevisionMap to replace TreeMap<Integer, ?>
+  + .core.* rename to Hg*
+  + RepositoryTreeWalker to ManifestCommand to match other command classes 
+
+* defects
+  - ConfigFile to strip comments from values (#)
 
 <<<<<
 

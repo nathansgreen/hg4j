@@ -19,7 +19,7 @@ package org.tmatesoft.hg.test;
 import java.util.Arrays;
 
 import org.junit.Assert;
-import org.tmatesoft.hg.core.RepositoryFacade;
+import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.repo.HgDataFile;
 
@@ -31,7 +31,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
 public class TestByteChannel {
 
 	public static void main(String[] args) throws Exception {
-		RepositoryFacade rf = new RepositoryFacade();
+		HgRepoFacade rf = new HgRepoFacade();
 		rf.init();
 		HgDataFile file = rf.getRepository().getFileNode("src/org/tmatesoft/hg/internal/KeywordFilter.java");
 		for (int i = file.getRevisionCount() - 1; i >= 0; i--) {

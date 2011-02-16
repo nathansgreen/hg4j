@@ -30,10 +30,10 @@ import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
-import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.core.RepositoryTreeWalker;
+import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 
@@ -52,7 +52,7 @@ public class TestManifest {
 	private ManifestOutputParser manifestParser;
 	private ExecHelper eh;
 	final LinkedList<FileRevision> revisions = new LinkedList<FileRevision>();
-	private RepositoryTreeWalker.Handler handler  = new RepositoryTreeWalker.Handler() {
+	private HgManifestCommand.Handler handler  = new HgManifestCommand.Handler() {
 		
 		public void file(FileRevision fileRevision) {
 			revisions.add(fileRevision);
@@ -104,7 +104,7 @@ public class TestManifest {
 		manifestParser.reset();
 		eh.run("hg", "manifest", "--debug", "--rev", String.valueOf(rev));
 		revisions.clear();
-		new RepositoryTreeWalker(repo).revision(rev).walk(handler);
+		new HgManifestCommand(repo).revision(rev).walk(handler);
 		report("manifest " + (rev == TIP ? "TIP:" : "--rev " + rev));
 	}
 

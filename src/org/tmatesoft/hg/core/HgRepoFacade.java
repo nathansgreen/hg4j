@@ -22,14 +22,15 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgLookup;
 
 /**
- *
+ * Starting point for the library.
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class RepositoryFacade {
+public class HgRepoFacade {
 	private HgRepository repo;
 
-	public RepositoryFacade() {
+	public HgRepoFacade() {
 	}
 
 	public boolean init() throws Exception /*FIXME RepoInitException*/ {
@@ -49,19 +50,19 @@ public class RepositoryFacade {
 		return repo;
 	}
 
-	public LogCommand createLogCommand() {
-		return new LogCommand(repo/*, getCommandContext()*/);
+	public HgLogCommand createLogCommand() {
+		return new HgLogCommand(repo/*, getCommandContext()*/);
 	}
 
-	public StatusCommand createStatusCommand() {
-		return new StatusCommand(repo/*, getCommandContext()*/);
+	public HgStatusCommand createStatusCommand() {
+		return new HgStatusCommand(repo/*, getCommandContext()*/);
 	}
 
-	public CatCommand createCatCommand() {
-		return new CatCommand(repo);
+	public HgCatCommand createCatCommand() {
+		return new HgCatCommand(repo);
 	}
 
-	public RepositoryTreeWalker createManifestCommand() {
-		return new RepositoryTreeWalker(repo);
+	public HgManifestCommand createManifestCommand() {
+		return new HgManifestCommand(repo);
 	}
 }

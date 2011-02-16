@@ -18,10 +18,10 @@ package org.tmatesoft.hg.console;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
-import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.core.RepositoryTreeWalker;
+import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 
@@ -43,7 +43,7 @@ public class Manifest {
 		System.out.println(hgRepo.getLocation());
 		hgRepo.getManifest().walk(0, TIP, new Dump());
 		//
-		new RepositoryTreeWalker(hgRepo).dirs(true).walk(new RepositoryTreeWalker.Handler() {
+		new HgManifestCommand(hgRepo).dirs(true).walk(new HgManifestCommand.Handler() {
 			
 			public void begin(Nodeid manifestRevision) {
 				System.out.println(">> " + manifestRevision);

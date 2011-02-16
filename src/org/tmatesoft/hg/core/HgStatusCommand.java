@@ -29,11 +29,12 @@ import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 
 /**
- *
+ * Command to obtain file status information, 'hg status' counterpart. 
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class StatusCommand {
+public class HgStatusCommand {
 	private final HgRepository repo;
 
 	private int startRevision = TIP;
@@ -42,18 +43,18 @@ public class StatusCommand {
 	
 	private final Mediator mediator = new Mediator();
 
-	public StatusCommand(HgRepository hgRepo) { 
+	public HgStatusCommand(HgRepository hgRepo) { 
 		repo = hgRepo;
 		defaults();
 	}
 
-	public StatusCommand defaults() {
+	public HgStatusCommand defaults() {
 		final Mediator m = mediator;
 		m.needModified = m.needAdded = m.needRemoved = m.needUnknown = m.needMissing = true;
 		m.needCopies = m.needClean = m.needIgnored = false;
 		return this;
 	}
-	public StatusCommand all() {
+	public HgStatusCommand all() {
 		final Mediator m = mediator;
 		m.needModified = m.needAdded = m.needRemoved = m.needUnknown = m.needMissing = true;
 		m.needCopies = m.needClean = m.needIgnored = true;
@@ -61,31 +62,31 @@ public class StatusCommand {
 	}
 	
 
-	public StatusCommand modified(boolean include) {
+	public HgStatusCommand modified(boolean include) {
 		mediator.needModified = include;
 		return this;
 	}
-	public StatusCommand added(boolean include) {
+	public HgStatusCommand added(boolean include) {
 		mediator.needAdded = include;
 		return this;
 	}
-	public StatusCommand removed(boolean include) {
+	public HgStatusCommand removed(boolean include) {
 		mediator.needRemoved = include;
 		return this;
 	}
-	public StatusCommand deleted(boolean include) {
+	public HgStatusCommand deleted(boolean include) {
 		mediator.needMissing = include;
 		return this;
 	}
-	public StatusCommand unknown(boolean include) {
+	public HgStatusCommand unknown(boolean include) {
 		mediator.needUnknown = include;
 		return this;
 	}
-	public StatusCommand clean(boolean include) {
+	public HgStatusCommand clean(boolean include) {
 		mediator.needClean = include;
 		return this;
 	}
-	public StatusCommand ignored(boolean include) {
+	public HgStatusCommand ignored(boolean include) {
 		mediator.needIgnored = include;
 		return this;
 	}
@@ -97,7 +98,7 @@ public class StatusCommand {
 	 * @return
 	 */
 	
-	public StatusCommand base(int revision) {
+	public HgStatusCommand base(int revision) {
 		if (revision == WORKING_COPY) {
 			throw new IllegalArgumentException();
 		}
@@ -114,7 +115,7 @@ public class StatusCommand {
 	 * @param revision
 	 * @return
 	 */
-	public StatusCommand revision(int revision) {
+	public HgStatusCommand revision(int revision) {
 		if (revision == BAD_REVISION) {
 			revision = WORKING_COPY;
 		}
@@ -124,12 +125,12 @@ public class StatusCommand {
 	}
 	
 	// pass null to reset
-	public StatusCommand match(Path.Matcher pathMatcher) {
+	public HgStatusCommand match(Path.Matcher pathMatcher) {
 		mediator.matcher = pathMatcher;
 		return this;
 	}
 
-	public StatusCommand subrepo(boolean visit) {
+	public HgStatusCommand subrepo(boolean visit) {
 		visitSubRepo  = visit;
 		throw HgRepository.notImplemented();
 	}

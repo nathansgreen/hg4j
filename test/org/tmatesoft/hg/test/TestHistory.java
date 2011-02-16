@@ -29,10 +29,10 @@ import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgChangeset;
-import org.tmatesoft.hg.core.LogCommand;
-import org.tmatesoft.hg.core.LogCommand.CollectHandler;
-import org.tmatesoft.hg.core.LogCommand.FileHistoryHandler;
-import org.tmatesoft.hg.core.LogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgLogCommand;
+import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
+import org.tmatesoft.hg.core.HgLogCommand.FileHistoryHandler;
+import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -74,7 +74,7 @@ public class TestHistory {
 	public void testCompleteLog() throws Exception {
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug");
-		List<HgChangeset> r = new LogCommand(repo).execute();
+		List<HgChangeset> r = new HgLogCommand(repo).execute();
 		report("hg log - COMPLETE REPO HISTORY", r, true); 
 	}
 	
@@ -95,7 +95,7 @@ public class TestHistory {
 					}
 				};
 				H h = new H();
-				new LogCommand(repo).file(f, true).execute(h);
+				new HgLogCommand(repo).file(f, true).execute(h);
 				String what = "hg log - FOLLOW FILE HISTORY";
 				errorCollector.checkThat(what + "#copyReported ", h.copyReported, is(true));
 				errorCollector.checkThat(what + "#copyFromMatched", h.fromMatched, is(true));
@@ -144,7 +144,7 @@ public class TestHistory {
 		}
 		final long start2 = System.currentTimeMillis();
 		for (int i = 0; i < runs; i++) {
-			new LogCommand(repo).execute();
+			new HgLogCommand(repo).execute();
 		}
 		final long end = System.currentTimeMillis();
 		System.out.printf("'hg log --debug', %d runs: Native client total %d (%d per run), Java client %d (%d)\n", runs, start2-start1, (start2-start1)/runs, end-start2, (end-start2)/runs);
