@@ -17,6 +17,8 @@
 package org.tmatesoft.hg.repo;
 
 import java.io.File;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 import org.tmatesoft.hg.internal.ConfigFile;
 
@@ -57,5 +59,28 @@ public class HgInternals {
 	
 	public ConfigFile getRepoConfig() {
 		return repo.getConfigFile();
+	}
+
+	// in fact, need a setter for this anyway, shall move to internal.Internals perhaps?
+	public String getNextCommitUsername() {
+		String hgUser = System.getenv("HGUSER");
+		if (hgUser != null && hgUser.trim().length() > 0) {
+			return hgUser.trim();
+		}
+		String configValue = getRepoConfig().getString("ui", "username", null);
+		if (configValue != null) {
+			return configValue;
+		}
+		String email = System.getenv("EMAIL");
+		if (email != null && email.trim().length() > 0) {
+			return email;
+		}
+		String username = System.getProperty("user.name");
+		try {
+			String hostname = InetAddress.getLocalHost().getHostName();
+			return username + '@' + hostname; 
+		} catch (UnknownHostException ex) {
+			return username;
+		}
 	}
 }

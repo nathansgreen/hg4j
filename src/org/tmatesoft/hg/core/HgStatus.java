@@ -12,9 +12,14 @@
  *
  * For information on how to redistribute this software under
  * the terms of a license other than GNU General Public License
- * contact TMate Software at support@svnkit.com
+ * contact TMate Software at support@hg4j.com
  */
 package org.tmatesoft.hg.core;
+
+import java.util.Date;
+
+import org.tmatesoft.hg.internal.ChangelogHelper;
+import org.tmatesoft.hg.repo.Changeset;
 
 public class HgStatus {
 
@@ -25,15 +30,17 @@ public class HgStatus {
 	private final HgStatus.Kind kind;
 	private final Path path;
 	private final Path origin;
+	private final ChangelogHelper logHelper;
 		
-	HgStatus(HgStatus.Kind kind, Path path) {
-		this(kind, path, null);
+	HgStatus(HgStatus.Kind kind, Path path, ChangelogHelper changelogHelper) {
+		this(kind, path, null, changelogHelper);
 	}
 
-	HgStatus(HgStatus.Kind kind, Path path, Path copyOrigin) {
+	HgStatus(HgStatus.Kind kind, Path path, Path copyOrigin, ChangelogHelper changelogHelper) {
 		this.kind = kind;
 		this.path  = path;
 		origin = copyOrigin;
+		logHelper = changelogHelper;
 	}
 
 	public HgStatus.Kind getKind() {
@@ -51,10 +58,29 @@ public class HgStatus {
 	public boolean isCopy() {
 		return origin != null;
 	}
-		
-//	public String getModificationAuthor() {
-//	}
-//
-//	public Date getModificationDate() {
-//	}
+
+	/**
+	 * @return <code>null</code> if author for the change can't be deduced (e.g. for clean files it's senseless)
+	 */
+	public String getModificationAuthor() {
+		Changeset cset = logHelper.findLatestChangeWith(path);
+		if (cset == null) {
+			if (kind == Kind.Modified || kind == Kind.Added || kind == Kind.Removed /*&& RightBoundary is TIP*/) {
+				return logHelper.getNextCommitUsername();
+			}
+		} else {
+			return cset.user();
+		}
+		return null;
+	}
+
+	public Date getModificationDate() {
+		Changeset cset = logHelper.findLatestChangeWith(path);
+		if (cset == null) {
+			// FIXME check dirstate and/or local file for tstamp
+			return new Date(); // what's correct 
+		} else {
+			return cset.date();
+		}
+	}
 }

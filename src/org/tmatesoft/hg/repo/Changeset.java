@@ -202,6 +202,7 @@ public class Changeset implements Cloneable /*for those that would like to keep 
 		String _comment;
 		try {
 			_comment = new String(data, breakIndex4+2, bufferEndIndex - breakIndex4 - 2, "UTF-8");
+			// FIXME respect ui.fallbackencoding and try to decode if set 
 		} catch (UnsupportedEncodingException ex) {
 			_comment = "";
 			throw new IllegalStateException("Could hardly happen");

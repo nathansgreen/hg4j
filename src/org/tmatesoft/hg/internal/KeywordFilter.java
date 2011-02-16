@@ -268,6 +268,7 @@ public class KeywordFilter implements Filter {
 	
 	private Changeset getChangeset() {
 		if (latestFileCset == null) {
+			// XXX consider use of ChangelogHelper
 			int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);
 			latestFileCset = repo.getChangelog().range(csetRev, csetRev).get(0);
 		}

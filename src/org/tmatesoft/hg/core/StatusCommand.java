@@ -22,6 +22,7 @@ import static org.tmatesoft.hg.repo.HgRepository.*;
 import java.util.ConcurrentModificationException;
 
 import org.tmatesoft.hg.core.Path.Matcher;
+import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
@@ -39,7 +40,6 @@ public class StatusCommand {
 	private int endRevision = WORKING_COPY; 
 	private boolean visitSubRepo = true;
 	
-	private Handler handler;
 	private final Mediator mediator = new Mediator();
 
 	public StatusCommand(HgRepository hgRepo) { 
@@ -145,16 +145,15 @@ public class StatusCommand {
 		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}
-		if (handler != null) {
+		if (mediator.busy()) {
 			throw new ConcurrentModificationException();
 		}
-		handler = statusHandler;
 		HgStatusCollector sc = new HgStatusCollector(repo); // TODO from CommandContext
 //		PathPool pathHelper = new PathPool(repo.getPathHelper()); // TODO from CommandContext
 		try {
 			// XXX if I need a rough estimation (for ProgressMonitor) of number of work units,
 			// I may use number of files in either rev1 or rev2 manifest edition
-			mediator.start();
+			mediator.start(statusHandler, new ChangelogHelper(repo, startRevision));
 			if (endRevision == WORKING_COPY) {
 				HgWorkingCopyStatusCollector wcsc = new HgWorkingCopyStatusCollector(repo);
 				wcsc.setBaseRevisionCollector(sc);
@@ -168,7 +167,6 @@ public class StatusCommand {
 			}
 		} finally {
 			mediator.done();
-			handler = null;
 		}
 	}
 
@@ -186,69 +184,79 @@ public class StatusCommand {
 		boolean needIgnored;
 		boolean needCopies;
 		Matcher matcher;
+		Handler handler;
+		private ChangelogHelper logHelper;
 
 		Mediator() {
 		}
 		
-		public void start() {
-			
+		public void start(Handler h, ChangelogHelper changelogHelper) {
+			handler = h;
+			logHelper = changelogHelper;
 		}
+
 		public void done() {
+			handler = null;
+			logHelper = null;
+		}
+		
+		public boolean busy() {
+			return handler != null;
 		}
 
 		public void modified(Path fname) {
 			if (needModified) {
 				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Modified, fname));
+					handler.handleStatus(new HgStatus(Modified, fname, logHelper));
 				}
 			}
 		}
 		public void added(Path fname) {
 			if (needAdded) {
 				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Added, fname));
+					handler.handleStatus(new HgStatus(Added, fname, logHelper));
 				}
 			}
 		}
 		public void removed(Path fname) {
 			if (needRemoved) {
 				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Removed, fname));
+					handler.handleStatus(new HgStatus(Removed, fname, logHelper));
 				}
 			}
 		}
 		public void copied(Path fnameOrigin, Path fnameAdded) {
 			if (needCopies) {
 				if (matcher == null || matcher.accept(fnameAdded)) {
-					handler.handleStatus(new HgStatus(Added, fnameAdded, fnameOrigin));
+					handler.handleStatus(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
 				}
 			}
 		}
 		public void missing(Path fname) {
 			if (needMissing) {
 				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Missing, fname));
+					handler.handleStatus(new HgStatus(Missing, fname, logHelper));
 				}
 			}
 		}
 		public void unknown(Path fname) {
 			if (needUnknown) {
 				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Unknown, fname));
+					handler.handleStatus(new HgStatus(Unknown, fname, logHelper));
 				}
 			}
 		}
 		public void clean(Path fname) {
 			if (needClean) {
 				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Clean, fname));
+					handler.handleStatus(new HgStatus(Clean, fname, logHelper));
 				}
 			}
 		}
 		public void ignored(Path fname) {
 			if (needIgnored) {
 				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Ignored, fname));
+					handler.handleStatus(new HgStatus(Ignored, fname, logHelper));
 				}
 			}
 		}

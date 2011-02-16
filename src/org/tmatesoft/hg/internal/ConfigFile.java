@@ -84,6 +84,11 @@ public class ConfigFile {
 		}
 		return false;
 	}
+	
+	public String getString(String sectionName, String key, String defaultValue) {
+		String value = getSection(sectionName).get(key);
+		return value == null ? defaultValue : value;
+	}
 
 	// TODO handle %include and %unset directives
 	// TODO "" and lists
