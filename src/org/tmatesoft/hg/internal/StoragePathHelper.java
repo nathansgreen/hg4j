@@ -43,7 +43,6 @@ class StoragePathHelper implements PathRewrite {
 	// FIXME document what path argument is, whether it includes .i or .d, and whether it's 'normalized' (slashes) or not.
 	// since .hg/store keeps both .i files and files without extension (e.g. fncache), guees, for data == false 
 	// we shall assume path has extension
-	// FIXME much more to be done, see store.py:_hybridencode
 	public String rewrite(String path) {
 		final String STR_STORE = "store/";
 		final String STR_DATA = "data/";
