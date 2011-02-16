@@ -43,7 +43,7 @@ public class HgDataFile extends Revlog {
 	// slashes, unix-style?
 	// repo location agnostic, just to give info to user, not to access real storage
 	private final Path path;
-	private Metadata metadata;
+	private Metadata metadata; // get initialized on first access to file content.
 	
 	/*package-local*/HgDataFile(HgRepository hgRepo, Path filePath, RevlogStream content) {
 		super(hgRepo, content);
@@ -100,11 +100,20 @@ public class HgDataFile extends Revlog {
 			revision = content.revisionCount() - 1; // FIXME maxRevision.
 		}
 		byte[] data = super.content(revision);
-		if (data.length < 4 || (data[0] != 1 && data[1] != 10)) {
+		if (metadata == null) {
+			metadata = new Metadata();
+		}
+		if (metadata.none(revision)) {
+			// although not very reasonable when data is byte array, this check might
+			// get handy when there's a stream/channel to avoid useless reads and rewinds.
 			return data;
 		}
 		int toSkip = 0;
-		if (metadata == null || !metadata.known(revision)) {
+		if (!metadata.known(revision)) {
+			if (data.length < 4 || (data[0] != 1 && data[1] != 10)) {
+				metadata.recordNone(revision);
+				return data;
+			}
 			int lastEntryStart = 2;
 			int lastColon = -1;
 			ArrayList<MetadataEntry> _metadata = new ArrayList<MetadataEntry>();
@@ -133,9 +142,6 @@ public class HgDataFile extends Revlog {
 				}
 			}
 			_metadata.trimToSize();
-			if (metadata == null) {
-				metadata = new Metadata();
-			}
 			metadata.add(revision, lastEntryStart, _metadata);
 			toSkip = lastEntryStart;
 		} else {
@@ -187,10 +193,11 @@ public class HgDataFile extends Revlog {
 	}
 
 	public boolean isCopy() {
-		if (metadata == null) {
+		if (metadata == null || !metadata.checked(0)) {
+			// content() always initializes metadata.
 			content(0); // FIXME expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
 		}
-		if (metadata == null || !metadata.known(0)) {
+		if (!metadata.known(0)) {
 			return false;
 		}
 		return metadata.find(0, "copy") != null;
@@ -229,9 +236,10 @@ public class HgDataFile extends Revlog {
 		/*package-local*/boolean matchKey(String key) {
 			return key.length() == valueStart && entry.startsWith(key);
 		}
-		public String key() {
-			return entry.substring(0, valueStart);
-		}
+//		uncomment once/if needed
+//		public String key() {
+//			return entry.substring(0, valueStart);
+//		}
 		public String value() {
 			return entry.substring(valueStart);
 		}
@@ -241,14 +249,44 @@ public class HgDataFile extends Revlog {
 		// XXX sparse array needed
 		private final TreeMap<Integer, Integer> offsets = new TreeMap<Integer, Integer>();
 		private final TreeMap<Integer, MetadataEntry[]> entries = new TreeMap<Integer, MetadataEntry[]>();
+		
+		private final Integer NONE = new Integer(-1); // do not duplicate -1 integers at least within single file (don't want statics)
+
+		// true when there's metadata for given revision
 		boolean known(int revision) {
+			Integer i = offsets.get(revision);
+			return i != null && NONE != i;
+		}
+
+		// true when revision has been checked for metadata presence.
+		public boolean checked(int revision) {
 			return offsets.containsKey(revision);
 		}
+
+		// true when revision has been checked and found not having any metadata
+		boolean none(int revision) {
+			Integer i = offsets.get(revision);
+			return i == NONE;
+		}
+
+		// mark revision as having no metadata.
+		void recordNone(int revision) {
+			Integer i = offsets.get(revision);
+			if (i == NONE) {
+				return; // already there
+			} 
+			if (i != null) {
+				throw new IllegalStateException(String.format("Trying to override Metadata state for revision %d (known offset: %d)", revision, i));
+			}
+			offsets.put(revision, NONE);
+		}
+
 		// since this is internal class, callers are supposed to ensure arg correctness (i.e. ask known() before)
 		int dataOffset(int revision) {
 			return offsets.get(revision);
 		}
 		void add(int revision, int dataOffset, Collection<MetadataEntry> e) {
+			assert !offsets.containsKey(revision);
 			offsets.put(revision, dataOffset);
 			entries.put(revision, e.toArray(new MetadataEntry[e.size()]));
 		}
