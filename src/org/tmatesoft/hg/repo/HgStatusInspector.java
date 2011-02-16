@@ -16,7 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
-import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * Callback to get file status information

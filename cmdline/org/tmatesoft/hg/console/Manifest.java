@@ -20,10 +20,10 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Path;
 
 
 /**

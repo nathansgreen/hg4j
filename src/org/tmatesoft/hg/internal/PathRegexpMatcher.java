@@ -19,8 +19,8 @@ package org.tmatesoft.hg.internal;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import org.tmatesoft.hg.core.Path;
-import org.tmatesoft.hg.core.Path.Matcher;
+import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.Path.Matcher;
 
 /**
  *

@@ -23,8 +23,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 

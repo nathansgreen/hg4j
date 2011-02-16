@@ -32,10 +32,10 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Path;
 
 
 /**

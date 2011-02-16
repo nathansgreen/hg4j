@@ -33,12 +33,12 @@ import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgStatus;
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
+import org.tmatesoft.hg.util.Path;
 
 
 /**

@@ -31,6 +31,7 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 
 

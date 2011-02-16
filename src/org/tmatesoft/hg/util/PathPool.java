@@ -19,7 +19,6 @@ package org.tmatesoft.hg.util;
 import java.lang.ref.SoftReference;
 import java.util.WeakHashMap;
 
-import org.tmatesoft.hg.core.Path;
 
 /**
  *

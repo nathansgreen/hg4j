@@ -29,7 +29,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 

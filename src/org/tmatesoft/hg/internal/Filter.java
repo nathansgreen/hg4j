@@ -18,8 +18,8 @@ package org.tmatesoft.hg.internal;
 
 import java.nio.ByteBuffer;
 
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Path;
 
 /**
  *

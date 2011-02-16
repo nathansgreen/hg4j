@@ -24,10 +24,10 @@ import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Path;
 
 
 /**

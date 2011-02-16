@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusInspector;
@@ -32,6 +31,7 @@ import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusCollector.Record;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
+import org.tmatesoft.hg.util.Path;
 
 /**
  *

@@ -24,13 +24,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.FileWalker;
+import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 
 

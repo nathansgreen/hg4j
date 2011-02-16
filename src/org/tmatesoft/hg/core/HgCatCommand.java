@@ -24,6 +24,7 @@ import java.io.FileNotFoundException;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * Command to obtain content of a file, 'hg cat' counterpart. 

@@ -21,12 +21,13 @@ import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.util.ConcurrentModificationException;
 
-import org.tmatesoft.hg.core.Path.Matcher;
 import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
+import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.Path.Matcher;
 
 /**
  * Command to obtain file status information, 'hg status' counterpart. 

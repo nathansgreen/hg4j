@@ -33,10 +33,10 @@ import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
 import org.tmatesoft.hg.core.HgLogCommand.FileHistoryHandler;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
+import org.tmatesoft.hg.util.Path;
 
 
 /**

@@ -20,6 +20,7 @@ import java.util.Date;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.repo.HgChangelog.Changeset;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * Repository file status and extra handy information.

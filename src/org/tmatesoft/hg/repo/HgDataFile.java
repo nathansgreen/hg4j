@@ -24,10 +24,10 @@ import java.util.Collection;
 import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.Path;
 
 
 

@@ -31,11 +31,11 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.FileWalker;
+import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 

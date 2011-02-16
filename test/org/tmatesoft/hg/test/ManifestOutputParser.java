@@ -22,7 +22,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.Path;
+import org.tmatesoft.hg.util.Path;
 
 
 /**

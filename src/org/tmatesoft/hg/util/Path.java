@@ -14,7 +14,7 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.core;
+package org.tmatesoft.hg.util;
 
 /**
  * Identify repository files (not String nor io.File). Convenient for pattern matching. Memory-friendly.
@@ -75,6 +75,10 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 		Path rv = new Path(path);
 		return rv;
 	}
+
+	/**
+	 * Path filter.
+	 */
 	public interface Matcher {
 		public boolean accept(Path path);
 	}
