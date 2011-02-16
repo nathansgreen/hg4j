@@ -103,7 +103,7 @@ public class HgManifestCommand {
 		void end(Nodeid manifestRevision);
 	}
 
-	// I'd rather let RepositoryTreeWalker implement HgManifest.Inspector directly, but this pollutes API alot
+	// I'd rather let HgManifestCommand implement HgManifest.Inspector directly, but this pollutes API alot
 	private class Mediator implements HgManifest.Inspector {
 		private PathPool pathPool;
 		private List<FileRevision> manifestContent;
