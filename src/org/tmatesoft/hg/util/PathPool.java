@@ -21,11 +21,12 @@ import java.util.WeakHashMap;
 
 
 /**
- *
+ * Produces path from strings and caches result for reuse
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class PathPool {
+public class PathPool implements Path.Source {
 	private final WeakHashMap<String, SoftReference<Path>> cache;
 	private final PathRewrite pathRewrite;
 	
@@ -36,13 +37,17 @@ public class PathPool {
 
 	public Path path(String p) {
 		p = pathRewrite.rewrite(p);
-		SoftReference<Path> sr = cache.get(p);
-		Path path = sr == null ? null : sr.get();
-		if (path == null) {
-			path = Path.create(p);
-			cache.put(p, new SoftReference<Path>(path));
+		return get(p, true);
+	}
+
+	// pipes path object through cache to reuse instance, if possible
+	public Path path(Path p) {
+		String s = pathRewrite.rewrite(p.toString());
+		Path cached = get(s, false);
+		if (cached == null) {
+			cache.put(s, new SoftReference<Path>(cached = p));
 		}
-		return path;
+		return cached;
 	}
 
 	// XXX what would be parent of an empty path?

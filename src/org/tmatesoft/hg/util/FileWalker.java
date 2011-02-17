@@ -25,16 +25,18 @@ import java.util.NoSuchElementException;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class FileWalker {
+public class FileWalker implements FileIterator {
 
 	private final File startDir;
+	private final Path.Source pathHelper;
 	private final LinkedList<File> dirQueue;
 	private final LinkedList<File> fileQueue;
 	private File nextFile;
-	private String nextPath;
+	private Path nextPath;
 
-	public FileWalker(File startDir) {
-		this.startDir = startDir;
+	public FileWalker(File dir, Path.Source pathFactory) {
+		startDir = dir;
+		pathHelper = pathFactory;
 		dirQueue = new LinkedList<File>();
 		fileQueue = new LinkedList<File>();
 		reset();
@@ -57,10 +59,10 @@ public class FileWalker {
 			throw new NoSuchElementException();
 		}
 		nextFile = fileQueue.removeFirst();
-		nextPath = path(nextFile);
+		nextPath = pathHelper.path(nextFile.getPath());
 	}
 
-	public String name() {
+	public Path name() {
 		return nextPath;
 	}
 	
@@ -68,12 +70,6 @@ public class FileWalker {
 		return nextFile;
 	}
 	
-	private String path(File f) {
-		// XXX LocalHgRepo#normalize
-		String p = f.getPath().substring(startDir.getPath().length() + 1);
-		return p.replace('\\', '/').replace("//", "/");
-	}
-
 	private File[] listFiles(File f) {
 		// in case we need to solve os-related file issues (mac with some encodings?)
 		return f.listFiles();

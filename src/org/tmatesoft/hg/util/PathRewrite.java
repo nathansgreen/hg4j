@@ -26,6 +26,7 @@ import java.util.List;
  */
 public interface PathRewrite {
 
+	// XXX think over CharSequence use instead of String
 	public String rewrite(String path);
 	
 	public static class Empty implements PathRewrite {

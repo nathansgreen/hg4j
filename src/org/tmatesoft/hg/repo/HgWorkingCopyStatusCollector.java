@@ -34,7 +34,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.ByteChannel;
-import org.tmatesoft.hg.util.FileWalker;
+import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -47,7 +47,7 @@ import org.tmatesoft.hg.util.PathRewrite;
 public class HgWorkingCopyStatusCollector {
 
 	private final HgRepository repo;
-	private final FileWalker repoWalker;
+	private final FileIterator repoWalker;
 	private HgDirstate dirstate;
 	private HgStatusCollector baseRevisionCollector;
 	private PathPool pathPool;
@@ -56,7 +56,7 @@ public class HgWorkingCopyStatusCollector {
 		this(hgRepo, hgRepo.createWorkingDirWalker());
 	}
 
-	HgWorkingCopyStatusCollector(HgRepository hgRepo, FileWalker hgRepoWalker) {
+	HgWorkingCopyStatusCollector(HgRepository hgRepo, FileIterator hgRepoWalker) {
 		this.repo = hgRepo;
 		this.repoWalker = hgRepoWalker;
 	}
@@ -122,11 +122,11 @@ public class HgWorkingCopyStatusCollector {
 		final PathPool pp = getPathPool();
 		while (repoWalker.hasNext()) {
 			repoWalker.next();
-			String fname = repoWalker.name();
+			Path fname = repoWalker.name();
 			File f = repoWalker.file();
 			if (hgIgnore.isIgnored(fname)) {
 				inspector.ignored(pp.path(fname));
-			} else if (knownEntries.remove(fname)) {
+			} else if (knownEntries.remove(fname.toString())) {
 				// modified, added, removed, clean
 				if (collect != null) { // need to check against base revision, not FS file
 					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, baseRevision, fname, f, inspector);
@@ -167,7 +167,7 @@ public class HgWorkingCopyStatusCollector {
 	//********************************************
 
 	
-	private void checkLocalStatusAgainstFile(String fname, File f, HgStatusInspector inspector) {
+	private void checkLocalStatusAgainstFile(Path fname, File f, HgStatusInspector inspector) {
 		HgDirstate.Record r;
 		if ((r = getDirstate().checkNormal(fname)) != null) {
 			// either clean or modified
@@ -194,17 +194,17 @@ public class HgWorkingCopyStatusCollector {
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevisionInspector collect, int baseRevision, String fname, File f, HgStatusInspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevisionInspector collect, int baseRevision, Path fname, File f, HgStatusInspector inspector) {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
-		Nodeid nid1 = collect.nodeid(fname);
-		String flags = collect.flags(fname);
+		Nodeid nid1 = collect.nodeid(fname.toString());
+		String flags = collect.flags(fname.toString());
 		HgDirstate.Record r;
 		if (nid1 == null) {
 			// normal: added?
 			// added: not known at the time of baseRevision, shall report
 			// merged: was not known, report as added?
 			if ((r = getDirstate().checkNormal(fname)) != null) {
-				String origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
+				Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
 				if (origin != null) {
 					inspector.copied(getPathPool().path(origin), getPathPool().path(fname));
 					return;
@@ -301,7 +301,7 @@ public class HgWorkingCopyStatusCollector {
 		return false;
 	}
 
-	private static String todoGenerateFlags(String fname) {
+	private static String todoGenerateFlags(Path fname) {
 		// FIXME implement
 		return null;
 	}

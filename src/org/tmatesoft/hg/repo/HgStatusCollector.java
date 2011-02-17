@@ -161,11 +161,12 @@ public class HgStatusCollector {
 					inspector.modified(pp.path(fname));
 				}
 			} else {
-				String copyOrigin = getOriginIfCopy(repo, fname, r1Files, rev1);
+				Path copyTarget = pp.path(fname);
+				Path copyOrigin = getOriginIfCopy(repo, copyTarget, r1Files, rev1);
 				if (copyOrigin != null) {
-					inspector.copied(pp.path(copyOrigin), pp.path(fname));
+					inspector.copied(pp.path(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
 				} else {
-					inspector.added(pp.path(fname));
+					inspector.added(copyTarget);
 				}
 			}
 		}
@@ -180,7 +181,7 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
-	/*package-local*/static String getOriginIfCopy(HgRepository hgRepo, String fname, Collection<String> originals, int originalChangelogRevision) {
+	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<String> originals, int originalChangelogRevision) {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		while (df.isCopy()) {
 			Path original = df.getCopySourceName();
@@ -192,7 +193,7 @@ public class HgStatusCollector {
 					// (both r1Files.contains is true and original was created earlier than rev1)
 					// without r1Files.contains changelogRevision <= rev1 won't suffice as the file
 					// might get removed somewhere in between (changelogRevision < R < rev1)
-					return original.toString();
+					return original;
 				}
 				break; // copy/rename done later
 			} 

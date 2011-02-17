@@ -25,7 +25,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.tmatesoft.hg.util.Path;
+
 /**
+ * Handling of ignored paths according to .hgignore configuration
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -119,8 +122,8 @@ public class HgIgnore {
 		return sb.toString();
 	}
 
-	// TODO use Path and PathGlobMatcher
-	public boolean isIgnored(String path) {
+	// TODO use PathGlobMatcher
+	public boolean isIgnored(Path path) {
 		for (Pattern p : entries) {
 			if (p.matcher(path).find()) {
 				return true;

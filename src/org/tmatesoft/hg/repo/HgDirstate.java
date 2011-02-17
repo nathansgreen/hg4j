@@ -25,6 +25,7 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.util.Path;
 
 
 /**
@@ -38,6 +39,7 @@ class HgDirstate {
 
 	private final DataAccessProvider accessProvider;
 	private final File dirstateFile;
+	// deliberate String, not Path as it seems useless to keep Path here
 	private Map<String, Record> normal;
 	private Map<String, Record> added;
 	private Map<String, Record> removed;
@@ -126,18 +128,21 @@ class HgDirstate {
 		return rv;
 	}
 	
-	/*package-local*/ Record checkNormal(String fname) {
-		return normal.get(fname);
+	/*package-local*/ Record checkNormal(Path fname) {
+		return normal.get(fname.toString());
 	}
 
-	/*package-local*/ Record checkAdded(String fname) {
-		return added.get(fname);
+	/*package-local*/ Record checkAdded(Path fname) {
+		return added.get(fname.toString());
+	}
+	/*package-local*/ Record checkRemoved(Path fname) {
+		return removed.get(fname.toString());
 	}
 	/*package-local*/ Record checkRemoved(String fname) {
 		return removed.get(fname);
 	}
-	/*package-local*/ Record checkMerged(String fname) {
-		return merged.get(fname);
+	/*package-local*/ Record checkMerged(Path fname) {
+		return merged.get(fname.toString());
 	}
 
 

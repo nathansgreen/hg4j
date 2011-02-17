@@ -80,6 +80,31 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 	 * Path filter.
 	 */
 	public interface Matcher {
-		public boolean accept(Path path);
+		boolean accept(Path path);
+	}
+
+	/**
+	 * Factory for paths
+	 */
+	public interface Source {
+		Path path(String p);
+	}
+
+	/**
+	 * Straightforward {@link Source} implementation that creates new Path instance for each supplied string
+	 */
+	public static class SimpleSource implements Source {
+		private final PathRewrite normalizer;
+
+		public SimpleSource(PathRewrite pathRewrite) {
+			if (pathRewrite == null) {
+				throw new IllegalArgumentException();
+			}
+			normalizer = pathRewrite;
+		}
+
+		public Path path(String p) {
+			return Path.create(normalizer.rewrite(p));
+		}
 	}
 }
