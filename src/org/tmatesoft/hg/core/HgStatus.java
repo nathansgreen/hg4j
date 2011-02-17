@@ -31,7 +31,8 @@ import org.tmatesoft.hg.util.Path;
 public class HgStatus {
 
 	public enum Kind {
-		Modified, Added, Removed, Unknown, Missing, Clean, Ignored
+		Modified, Added, Removed, Missing, Unknown, Clean, Ignored
+		// I'd refrain from changing order of these constants, just in case someone (erroneously, of course ;), uses .ordinal()
 	};
 
 	private final HgStatus.Kind kind;

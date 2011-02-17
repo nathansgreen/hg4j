@@ -19,9 +19,8 @@ package org.tmatesoft.hg.console;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
-import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.HgManifestCommand;
-import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
@@ -40,43 +39,29 @@ public class Manifest {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		System.out.println(hgRepo.getLocation());
-		hgRepo.getManifest().walk(0, TIP, new Dump());
-		//
-		new HgManifestCommand(hgRepo).dirs(true).walk(new HgManifestCommand.Handler() {
+		final boolean debug = cmdLineOpts.getBoolean("--debug");
+		final boolean verbose = cmdLineOpts.getBoolean("-v", "--verbose");
+		HgManifestCommand.Handler h = new HgManifestCommand.Handler() {
 			
 			public void begin(Nodeid manifestRevision) {
-				System.out.println(">> " + manifestRevision);
 			}
 			public void dir(Path p) {
-				System.out.println(p);
 			}
 			public void file(FileRevision fileRevision) {
-				System.out.print(fileRevision.getRevision());;
-				System.out.print("   ");
+				if (debug) {
+					System.out.print(fileRevision.getRevision());;
+				}
+				if (debug || verbose) {
+					System.out.print(" 644"); // FIXME real flags!
+					System.out.print("   ");
+				}
 				System.out.println(fileRevision.getPath());
 			}
 			
 			public void end(Nodeid manifestRevision) {
-				System.out.println();
 			}
-		}); 
-	}
-
-	public static final class Dump implements HgManifest.Inspector {
-		public boolean begin(int revision, Nodeid nid) {
-			System.out.printf("%d : %s\n", revision, nid);
-			return true;
-		}
-
-		public boolean next(Nodeid nid, String fname, String flags) {
-			System.out.println(nid + "\t" + fname + "\t\t" + flags);
-			return true;
-		}
-
-		public boolean end(int revision) {
-			System.out.println();
-			return true;
-		}
+		};
+		int rev = cmdLineOpts.getSingleInt(TIP, "-r", "--rev");
+		new HgManifestCommand(hgRepo).dirs(false).revision(rev).execute(h); 
 	}
 }

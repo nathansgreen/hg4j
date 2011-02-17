@@ -120,9 +120,22 @@ public class HgStatusCommand {
 		if (revision == BAD_REVISION) {
 			revision = WORKING_COPY;
 		}
-		// XXX negative values, except for predefined constants, shall throw IAE.
+		if (revision != TIP && revision != WORKING_COPY && revision < 0) {
+			throw new IllegalArgumentException(String.valueOf(revision));
+		}
 		endRevision = revision;
 		return this;
+	}
+	
+	/**
+	 * Shorthand for {@link #base(int) cmd.base(BAD_REVISION)}{@link #change(int) .revision(revision)}
+	 *  
+	 * @param revision compare given revision against its parent
+	 * @return
+	 */
+	public HgStatusCommand change(int revision) {
+		base(BAD_REVISION);
+		return revision(revision);
 	}
 	
 	// pass null to reset

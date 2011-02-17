@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.core;
 
+import static org.tmatesoft.hg.repo.HgRepository.*;
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.ConcurrentModificationException;
@@ -52,8 +54,16 @@ public class HgManifestCommand {
 	}
 
 	public HgManifestCommand range(int rev1, int rev2) {
-		// if manifest range is different from that of changelog, need conversion utils (external?)
-		throw HgRepository.notImplemented();
+		// XXX if manifest range is different from that of changelog, need conversion utils (external?)
+		boolean badArgs = rev1 == BAD_REVISION || rev2 == BAD_REVISION || rev1 == WORKING_COPY || rev2 == WORKING_COPY;
+		badArgs |= rev2 != TIP && rev2 < rev1; // range(3, 1);
+		badArgs |= rev1 == TIP && rev2 != TIP; // range(TIP, 2), although this may be legitimate when TIP points to 2
+		if (badArgs) {
+			throw new IllegalArgumentException(String.format("Bad range: [%d, %d]", rev1, rev2));
+		}
+		startRev = rev1;
+		endRev = rev2;
+		return this;
 	}
 	
 	public HgManifestCommand revision(int rev) {
@@ -78,7 +88,7 @@ public class HgManifestCommand {
 		return this;
 	}
 	
-	public void walk(Handler handler) {
+	public void execute(Handler handler) {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}

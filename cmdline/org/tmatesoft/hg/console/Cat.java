@@ -16,10 +16,14 @@
  */
 package org.tmatesoft.hg.console;
 
-import org.tmatesoft.hg.internal.DigestHelper;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
+
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.util.ByteChannel;
 
 
 /**
@@ -35,32 +39,34 @@ public class Cat {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		HgInternals debug = new HgInternals(hgRepo);
-		String[] toCheck = new String[] {"design.txt", "src/com/tmate/hgkit/ll/Changelog.java", "src/Extras.java", "bin/com/tmate/hgkit/ll/Changelog.class"};
-		boolean[] checkResult = debug.checkIgnored(toCheck);
-		for (int i = 0; i < toCheck.length; i++) {
-			System.out.println("Ignored " + toCheck[i] + ": " + checkResult[i]);
-		}
-		DigestHelper dh = new DigestHelper();
-		for (String fname : cmdLineOpts.files) {
+		int rev = cmdLineOpts.getSingleInt(TIP, "-r", "--rev");
+		OutputStreamChannel out = new OutputStreamChannel(System.out);
+		for (String fname : cmdLineOpts.getList("")) {
 			System.out.println(fname);
 			HgDataFile fn = hgRepo.getFileNode(fname);
 			if (fn.exists()) {
-				int total = fn.getRevisionCount();
-				System.out.printf("Total revisions: %d\n", total);
-				for (int i = 0; i < total; i++) {
-					byte[] content = fn.content(i);
-					System.out.println("==========>");
-					System.out.println(new String(content));
-					int[] parentRevisions = new int[2];
-					byte[] parent1 = new byte[20];
-					byte[] parent2 = new byte[20];
-					fn.parents(i, parentRevisions, parent1, parent2);
-					System.out.println(dh.sha1(parent1, parent2, content).asHexString());
-				}
+				fn.content(rev, out, true);
+				System.out.println();
 			} else {
-				System.out.println(">>>Not found!");
+				System.out.printf("%s not found!\n", fname);
 			}
+		}
+	}
+
+	private static class OutputStreamChannel implements ByteChannel {
+
+		private final OutputStream stream;
+
+		public OutputStreamChannel(OutputStream out) {
+			stream = out;
+		}
+
+		public int write(ByteBuffer buffer) throws Exception {
+			int count = buffer.remaining();
+			while(buffer.hasRemaining()) {
+				stream.write(buffer.get());
+			}
+			return count;
 		}
 	}
 }

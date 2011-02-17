@@ -32,6 +32,14 @@ public class HgRepoFacade {
 
 	public HgRepoFacade() {
 	}
+	
+	public boolean init(HgRepository hgRepo) {
+		if (hgRepo == null) {
+			throw new IllegalArgumentException();
+		}
+		repo = hgRepo;
+		return !repo.isInvalid();
+	}
 
 	public boolean init() throws Exception /*FIXME RepoInitException*/ {
 		repo = new HgLookup().detectFromWorkingDir();

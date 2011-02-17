@@ -26,13 +26,11 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
-import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
-import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.HgManifestCommand;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
@@ -104,7 +102,7 @@ public class TestManifest {
 		manifestParser.reset();
 		eh.run("hg", "manifest", "--debug", "--rev", String.valueOf(rev));
 		revisions.clear();
-		new HgManifestCommand(repo).revision(rev).walk(handler);
+		new HgManifestCommand(repo).revision(rev).execute(handler);
 		report("manifest " + (rev == TIP ? "TIP:" : "--rev " + rev));
 	}
 

@@ -16,33 +16,69 @@
  */
 package org.tmatesoft.hg.console;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRepository;
 
 /**
- * Parse command-line options
+ * Parse command-line options. Primitive implementation that recognizes options with 0 or 1 argument.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 class Options {
 
-	public String repoLocation;
-	public List<String> files;
-	public int limit = -1;
-	public Set<String> users;
-	public Set<String> branches;
+	public final Map<String,List<String>> opt2values = new HashMap<String, List<String>>();
+
+	public boolean getBoolean(String... aliases) {
+		return getBoolean(false, aliases);
+	}
+
+	public boolean getBoolean(boolean def, String... aliases) {
+		for (String s : aliases) {
+			if (opt2values.containsKey(s)) {
+				return true;
+			}
+		}
+		return def;
+	}
+
+	public String getSingle(String... aliases) {
+		String rv = null;
+		for (String s : aliases) {
+			List<String> values = opt2values.get(s);
+			if (values != null && values.size() > 0) {
+				rv = values.get(values.size() - 1); // take last one, most recent
+			}
+		}
+		return rv;
+	}
+	
+	public int getSingleInt(int def, String... aliases) {
+		String r = getSingle(aliases);
+		if (r == null) {
+			return def;
+		}
+		return Integer.parseInt(r);
+	}
+
+	public List<String> getList(String... aliases) {
+		LinkedList<String> rv = new LinkedList<String>();
+		for (String s : aliases) {
+			List<String> values = opt2values.get(s);
+			if (values != null) {
+				rv.addAll(values);
+			}
+		}
+		return rv;
+	}
 	
 	public HgRepository findRepository() throws Exception {
+		String repoLocation = getSingle("-R", "--repository");
 		if (repoLocation != null) {
 			return new HgLookup().detect(repoLocation);
 		}
@@ -52,54 +88,23 @@ class Options {
 
 	public static Options parse(String[] commandLineArgs) {
 		Options rv = new Options();
-		List<String> args = Arrays.asList(commandLineArgs);
-		LinkedList<String> files = new LinkedList<String>();
-		for (Iterator<String> it = args.iterator(); it.hasNext(); ) {
-			String arg = it.next();
+		List<String> values = new LinkedList<String>();
+		rv.opt2values.put("", values); // values with no options
+		for (String arg : commandLineArgs) {
 			if (arg.charAt(0) == '-') {
 				// option
 				if (arg.length() == 1) {
 					throw new IllegalArgumentException("Bad option: -");
 				}
-				switch ((int) arg.charAt(1)) {
-					case (int) 'R' : {
-						if (! it.hasNext()) {
-							throw new IllegalArgumentException("Need repo location");
-						}
-						rv.repoLocation = it.next();
-						break;
-					}
-					case (int) 'l' : {
-						if (!it.hasNext()) {
-							throw new IllegalArgumentException();
-						}
-						rv.limit = Integer.parseInt(it.next());
-						break;
-					}
-					case (int) 'u' : {
-						if (rv.users == null) {
-							rv.users = new LinkedHashSet<String>();
-						}
-						rv.users.add(it.next());
-						break;
-					}
-					case (int) 'b' : {
-						if (rv.branches == null) {
-							rv.branches = new LinkedHashSet<String>();
-						}
-						rv.branches.add(it.next());
-						break;
-					}
+				values = rv.opt2values.get(arg);
+				if (values == null) {
+					rv.opt2values.put(arg, values = new LinkedList<String>());
 				}
+				// next value, if any, gets into the values list for arg option.
 			} else {
-				// filename
-				files.add(arg);
+				values.add(arg);
+				values = rv.opt2values.get("");
 			}
-		}
-		if (!files.isEmpty()) {
-			rv.files = new ArrayList<String>(files);
-		} else {
-			rv.files = Collections.emptyList();
 		}
 		return rv;
 	}

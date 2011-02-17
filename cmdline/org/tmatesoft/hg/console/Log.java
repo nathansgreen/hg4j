@@ -42,35 +42,31 @@ public class Log {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		System.out.println(hgRepo.getLocation());
 		final Dump dump = new Dump(hgRepo);
-		dump.complete = true; //cmdLineOpts;
-		dump.verbose = false; //cmdLineOpts;
+		dump.complete = cmdLineOpts.getBoolean("--debug");
+		dump.verbose = cmdLineOpts.getBoolean("-v", "--verbose");
 		dump.reverseOrder = true;
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
-		if (cmdLineOpts.users != null) {
-			for (String u : cmdLineOpts.users) {
-				cmd.user(u);
-			}
+		for (String u : cmdLineOpts.getList("-u", "--user")) {
+			cmd.user(u);
 		}
-		if (cmdLineOpts.branches != null) {
-			for (String b : cmdLineOpts.branches) {
-				cmd.branch(b);
-			}
+		for (String b : cmdLineOpts.getList("-b", "--branches")) {
+			cmd.branch(b);
 		}
-		if (cmdLineOpts.limit != -1) {
-			cmd.limit(cmdLineOpts.limit);
-			
+		int limit = cmdLineOpts.getSingleInt(-1, "-l", "--limit");
+		if (limit != -1) {
+			cmd.limit(limit);
 		}
-		if (cmdLineOpts.files.isEmpty()) {
-			if (cmdLineOpts.limit == -1) {
+		List<String> files = cmdLineOpts.getList("");
+		if (files.isEmpty()) {
+			if (limit == -1) {
 				// no revisions and no limit
 				cmd.execute(dump);
 			} else {
 				// in fact, external (to dump inspector) --limit processing yelds incorrect results when other args
 				// e.g. -u or -b are used (i.e. with -u shall give <limit> csets with user, not check last <limit> csets for user 
 				int[] r = new int[] { 0, hgRepo.getChangelog().getRevisionCount() };
-				if (fixRange(r, dump.reverseOrder, cmdLineOpts.limit) == 0) {
+				if (fixRange(r, dump.reverseOrder, limit) == 0) {
 					System.out.println("No changes");
 					return;
 				}
@@ -78,14 +74,14 @@ public class Log {
 			}
 			dump.complete();
 		} else {
-			for (String fname : cmdLineOpts.files) {
+			for (String fname : files) {
 				HgDataFile f1 = hgRepo.getFileNode(fname);
 				System.out.println("History of the file: " + f1.getPath());
-				if (cmdLineOpts.limit == -1) {
+				if (limit == -1) {
 					cmd.file(f1.getPath(), true).execute(dump);
 				} else {
 					int[] r = new int[] { 0, f1.getRevisionCount() };
-					if (fixRange(r, dump.reverseOrder, cmdLineOpts.limit) == 0) {
+					if (fixRange(r, dump.reverseOrder, limit) == 0) {
 						System.out.println("No changes");
 						continue;
 					}
