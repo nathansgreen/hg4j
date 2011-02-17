@@ -20,7 +20,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- *
+ * File names often need transformations, like Windows-style path to Unix or human-readable data file name to storage location.  
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -40,8 +41,8 @@ public interface PathRewrite {
 
 		public Composite(PathRewrite... e) {
 			LinkedList<PathRewrite> r = new LinkedList<PathRewrite>();
-			for (int i = (e == null ? -1 : e.length); i >=0; i--) {
-				r.addFirst(e[i]);
+			for (int i = 0; e != null && i < e.length; i++) {
+				r.addLast(e[i]);
 			}
 			chain = r;
 		}

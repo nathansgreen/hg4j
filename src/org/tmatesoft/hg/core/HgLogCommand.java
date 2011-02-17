@@ -33,6 +33,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
+import org.tmatesoft.hg.util.PathRewrite;
 
 
 /**
@@ -148,6 +149,13 @@ public class HgLogCommand implements HgChangelog.Inspector {
 		followHistory = followCopyRename;
 		return this;
 	}
+	
+	/**
+	 * Handy analog of {@link #file(Path, boolean)} when clients' paths come from filesystem and need conversion to repository's 
+	 */
+	public HgLogCommand file(String file, boolean followCopyRename) {
+		return file(Path.create(repo.getToRepoPathHelper().rewrite(file)), followCopyRename);
+	}
 
 	/**
 	 * Similar to {@link #execute(org.tmatesoft.hg.repo.Changeset.Inspector)}, collects and return result as a list.
@@ -174,7 +182,12 @@ public class HgLogCommand implements HgChangelog.Inspector {
 		try {
 			delegate = handler;
 			count = 0;
-			changeset = new HgChangeset(new HgStatusCollector(repo), new PathPool(repo.getPathHelper()));
+			HgStatusCollector statusCollector = new HgStatusCollector(repo);
+			// files listed in a changeset don't need their names to be rewritten (they are normalized already)
+			PathPool pp = new PathPool(new PathRewrite.Empty());
+			// #file(String, boolean) above may utilize PathPool as well. CommandContext?
+			statusCollector.setPathPool(pp);
+			changeset = new HgChangeset(statusCollector, pp);
 			if (file == null) {
 				repo.getChangelog().range(startRev, endRev, this);
 			} else {

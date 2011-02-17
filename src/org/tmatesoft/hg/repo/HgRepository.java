@@ -57,17 +57,7 @@ public final class HgRepository {
 	private final File repoDir; // .hg folder
 	private final String repoLocation;
 	private final DataAccessProvider dataAccess;
-	private final PathRewrite normalizePath = new PathRewrite() {
-		
-		public String rewrite(String path) {
-			// TODO handle . and .. (although unlikely to face them from GUI client)
-			path = path.replace('\\', '/').replace("//", "/");
-			if (path.startsWith("/")) {
-				path = path.substring(1);
-			}
-			return path;
-		}
-	};
+	private final PathRewrite normalizePath;
 	private final PathRewrite dataPathHelper;
 	private final PathRewrite repoPathHelper;
 
@@ -86,6 +76,7 @@ public final class HgRepository {
 		repoLocation = repositoryPath;
 		dataAccess = null;
 		dataPathHelper = repoPathHelper = null;
+		normalizePath = null;
 	}
 	
 	HgRepository(File repositoryRoot) throws IOException {
@@ -93,6 +84,22 @@ public final class HgRepository {
 		repoDir = repositoryRoot;
 		repoLocation = repositoryRoot.getParentFile().getCanonicalPath();
 		dataAccess = new DataAccessProvider();
+		final boolean runningOnWindows = System.getProperty("os.name").indexOf("Windows") != -1;
+		if (runningOnWindows) {
+			normalizePath = new PathRewrite() {
+					
+					public String rewrite(String path) {
+						// TODO handle . and .. (although unlikely to face them from GUI client)
+						path = path.replace('\\', '/').replace("//", "/");
+						if (path.startsWith("/")) {
+							path = path.substring(1);
+						}
+						return path;
+					}
+				};
+		} else {
+			normalizePath = new PathRewrite.Empty(); // or strip leading slash, perhaps? 
+		}
 		parseRequires();
 		dataPathHelper = impl.buildDataFilesHelper();
 		repoPathHelper = impl.buildRepositoryFilesHelper();
@@ -158,7 +165,8 @@ public final class HgRepository {
 		return new HgDataFile(this, path, content);
 	}
 
-	public PathRewrite getPathHelper() { // Really need to be public?
+	/* clients need to rewrite path from their FS to a repository-friendly paths, and, perhaps, vice versa*/
+	public PathRewrite getToRepoPathHelper() {
 		return normalizePath;
 	}
 
@@ -194,7 +202,7 @@ public final class HgRepository {
 	// FIXME not sure repository shall create walkers
 	/*package-local*/ FileIterator createWorkingDirWalker() {
 		File repoRoot = repoDir.getParentFile();
-		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), getPathHelper()));
+		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), getToRepoPathHelper()));
 		// Impl note: simple source is enough as files in the working dir are all unique
 		// even if they might get reused (i.e. after FileIterator#reset() and walking once again),
 		// path caching is better to be done in the code which knows that path are being reused 

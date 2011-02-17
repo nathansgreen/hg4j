@@ -130,7 +130,7 @@ public class HgWorkingCopyStatusCollector {
 				// modified, added, removed, clean
 				if (collect != null) { // need to check against base revision, not FS file
 					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, baseRevision, fname, f, inspector);
-					baseRevFiles.remove(fname);
+					baseRevFiles.remove(fname.toString());
 				} else {
 					checkLocalStatusAgainstFile(fname, f, inspector);
 				}

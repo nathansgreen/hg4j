@@ -25,7 +25,6 @@ import org.tmatesoft.hg.repo.HgChangelog.Changeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.PathPool;
 
 
 /**
@@ -38,7 +37,7 @@ import org.tmatesoft.hg.util.PathPool;
  */
 public class HgChangeset implements Cloneable {
 	private final HgStatusCollector statusHelper;
-	private final PathPool pathHelper;
+	private final Path.Source pathHelper;
 
 	//
 	private Changeset changeset;
@@ -51,9 +50,9 @@ public class HgChangeset implements Cloneable {
 
 	// XXX consider CommandContext with StatusCollector, PathPool etc. Commands optionally get CC through a cons or create new
 	// and pass it around
-	/*package-local*/HgChangeset(HgStatusCollector statusCollector, PathPool pathPool) {
+	/*package-local*/HgChangeset(HgStatusCollector statusCollector, Path.Source pathFactory) {
 		statusHelper = statusCollector;
-		pathHelper = pathPool;
+		pathHelper = pathFactory;
 	}
 	
 	/*package-local*/

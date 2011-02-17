@@ -79,6 +79,9 @@ public class HgStatusCollector {
 		return pathPool;
 	}
 
+	/**
+	 * Allows sharing of a common path cache 
+	 */
 	public void setPathPool(PathPool pathPool) {
 		this.pathPool = pathPool;
 	}

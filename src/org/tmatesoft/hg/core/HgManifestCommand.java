@@ -28,6 +28,7 @@ import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
+import org.tmatesoft.hg.util.PathRewrite;
 
 
 /**
@@ -106,12 +107,16 @@ public class HgManifestCommand {
 
 	// I'd rather let HgManifestCommand implement HgManifest.Inspector directly, but this pollutes API alot
 	private class Mediator implements HgManifest.Inspector {
+		// file names are likely to repeat in each revision, hence caching of Paths.
+		// However, once HgManifest.Inspector switches to Path objects, perhaps global Path pool
+		// might be more effective?
 		private PathPool pathPool;
 		private List<FileRevision> manifestContent;
 		private Nodeid manifestNodeid;
 		
 		public void start() {
-			pathPool = new PathPool(repo.getPathHelper());
+			// Manifest keeps normalized paths
+			pathPool = new PathPool(new PathRewrite.Empty());
 		}
 		
 		public void done() {

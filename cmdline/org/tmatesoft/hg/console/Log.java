@@ -24,7 +24,6 @@ import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
@@ -82,16 +81,15 @@ public class Log {
 			for (String fname : cmdLineOpts.files) {
 				HgDataFile f1 = hgRepo.getFileNode(fname);
 				System.out.println("History of the file: " + f1.getPath());
-				String normalizesName = hgRepo.getPathHelper().rewrite(fname);
 				if (cmdLineOpts.limit == -1) {
-					cmd.file(Path.create(normalizesName), true).execute(dump);
+					cmd.file(f1.getPath(), true).execute(dump);
 				} else {
 					int[] r = new int[] { 0, f1.getRevisionCount() };
 					if (fixRange(r, dump.reverseOrder, cmdLineOpts.limit) == 0) {
 						System.out.println("No changes");
 						continue;
 					}
-					cmd.range(r[0], r[1]).file(Path.create(normalizesName), true).execute(dump);
+					cmd.range(r[0], r[1]).file(f1.getPath(), true).execute(dump);
 				}
 				dump.complete();
 			}
@@ -123,12 +121,12 @@ public class Log {
 		// own
 		private LinkedList<String> l = new LinkedList<String>();
 		private final HgRepository repo;
-		private HgChangelog.ParentWalker changelogWalker;
+//		private HgChangelog.ParentWalker changelogWalker;
 		private final int tip ;
 
 		public Dump(HgRepository hgRepo) {
 			repo = hgRepo;
-			tip = hgRepo.getChangelog().getRevisionCount() - 1;
+			tip = hgRepo.getChangelog().getLastRevision();
 		}
 		
 		public void copy(FileRevision from, FileRevision to) {
@@ -155,7 +153,7 @@ public class Log {
 				System.out.print(s);
 			}
 			l.clear();
-			changelogWalker = null;
+//			changelogWalker = null;
 		}
 
 		private String print(HgChangeset cset) {

@@ -21,6 +21,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 import org.tmatesoft.hg.internal.ConfigFile;
+import org.tmatesoft.hg.util.Path;
 
 
 /**
@@ -48,7 +49,7 @@ public class HgInternals {
 		HgIgnore ignore = repo.getIgnore();
 		boolean[] rv = new boolean[toCheck.length];
 		for (int i = 0; i < toCheck.length; i++) {
-			rv[i] = ignore.isIgnored(toCheck[i]);
+			rv[i] = ignore.isIgnored(Path.create(toCheck[i]));
 		}
 		return rv;
 	}
