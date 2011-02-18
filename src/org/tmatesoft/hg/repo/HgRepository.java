@@ -105,6 +105,10 @@ public final class HgRepository {
 		repoPathHelper = impl.buildRepositoryFilesHelper();
 	}
 
+	@Override
+	public String toString() {
+		return getClass().getSimpleName() + "[" + getLocation() + (isInvalid() ? "(BAD)" : "") + "]";
+	}                         
 	
 	public String getLocation() {
 		return repoLocation;
