@@ -19,6 +19,7 @@ package org.tmatesoft.hg.repo;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Formatter;
@@ -26,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.RevlogStream;
@@ -106,7 +108,7 @@ public class HgChangelog extends Revlog {
 			private String comment;
 			private List<String> files; // unmodifiable collection (otherwise #files() and implicit #clone() shall be revised)
 			private Date time;
-			private int timezone; // not sure it's of any use
+			private int timezone;
 			private Map<String, String> extras;
 
 			/**
@@ -149,9 +151,17 @@ public class HgChangelog extends Revlog {
 					}
 
 					public String dateString() {
+						// XXX keep once formatted? Perhaps, there's faster way to set up calendar/time zone?
 						StringBuilder sb = new StringBuilder(30);
 						Formatter f = new Formatter(sb, Locale.US);
-						f.format("%ta %<tb %<td %<tH:%<tM:%<tS %<tY %<tz", time);
+						TimeZone tz = TimeZone.getTimeZone("GMT");
+						// apparently timezone field records number of seconds time differs from UTC,
+						// i.e. value to substract from time to get UTC time. Calendar seems to add 
+						// timezone offset to UTC, instead, hence sign change.
+						tz.setRawOffset(timezone * -1000);
+						Calendar c = Calendar.getInstance(tz, Locale.US);
+						c.setTime(time);
+						f.format("%ta %<tb %<td %<tH:%<tM:%<tS %<tY %<tz", c);
 						return sb.toString();
 					}
 
