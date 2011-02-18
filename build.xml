@@ -16,46 +16,62 @@
  contact TMate Software at support@hg4j.com
 -->
 <project name="hg4j" default="samples">
-    <description>
+	<description>
             Build, test and showcase hg4j 
     </description>
-	
-	<property name="junit.jar" value="lib/junit-4.8.2.jar"/>
-	<property name="ver.qualifier" value=".rc1"/>
-	<property name="version.lib" value="0.0.9"/>
-	<property name="version.jar" value="${version.lib}${ver.qualifier}"/>
-	
-	<property name="hg4j.jar" value="hg4j_${version.jar}.jar"/>
-	<property name="hg4j-tests.jar" value="hg4j-tests_${version.jar}.jar"/>
-	<property name="hg4j-console.jar" value="hg4j-console_${version.jar}.jar"/>
 
-    <target name="samples" depends="build-cmdline">
-    	<path id="path.cmdline" path="${hg4j.jar};${hg4j-console.jar}"/>
-    	
-    	<echo message="History of a specific file(s)"/>
-    	<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Log">
-    		<arg line="design.txt .classpath src/com/tmate/hgkit/ll/LocalHgRepo.java"/>
-    	</java>
-    	
-    	<echo message="Whole repo log"/>
-    	<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Log"/>
-    	
-    	<echo message="Content of a file"/>
-    	<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Cat">
-    		<arg line="src/com/tmate/hgkit/ll/Revlog.java"/>
-    	</java>
+	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
+	<property name="ver.qualifier" value=".rc1" />
+	<property name="version.lib" value="0.0.9" />
+	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
 
-    </target>
-	
+	<property name="hg4j.jar" value="hg4j_${version.jar}.jar" />
+	<property name="hg4j-tests.jar" value="hg4j-tests_${version.jar}.jar" />
+	<property name="hg4j-console.jar" value="hg4j-console_${version.jar}.jar" />
+
+	<target name="samples" depends="build-cmdline">
+		<path id="path.cmdline" path="${hg4j.jar};${hg4j-console.jar}" />
+
+		<echo message="History of a specific file(s)" />
+		<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Log">
+			<arg line="design.txt .classpath src/org/tmatesoft/hg/core/HgRepoFacade.java" />
+		</java>
+
+		<echo message="${line.separator}>>>Latest commit" />
+		<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Log">
+			<arg line="--debug --limit 1" />
+		</java>
+
+		<echo message="${line.separator}>>>Content of a file" />
+		<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Cat">
+			<arg line="src/org/tmatesoft/hg/core/HgRepoFacade.java --rev 1" />
+		</java>
+
+		<echo message="${line.separator}>>>Status between two revisions" />
+		<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Status">
+			<arg line="--rev 140 --rev 142" />
+		</java>
+
+		<echo message="${line.separator}>>>Status, working copy, all" />
+		<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Status">
+			<arg line="-A" />
+		</java>
+
+		<echo message="${line.separator}>>>Manifest" />
+		<java classpathref="path.cmdline" classname="org.tmatesoft.hg.console.Manifest">
+			<arg line="--debug" />
+		</java>
+	</target>
+
 	<target name="tests" depends="build-tests">
 		<junit>
-			<classpath path="${hg4j.jar};${hg4j-tests.jar};${junit.jar}"/>
-			<formatter type="xml"/>
-			<formatter type="plain" usefile="no"/>
-			<test name="org.tmatesoft.hg.test.TestHistory"/>
-			<test name="org.tmatesoft.hg.test.TestManifest"/>
-			<test name="org.tmatesoft.hg.test.TestStatus"/>
-			<test name="org.tmatesoft.hg.test.TestStorePath"/>
+			<classpath path="${hg4j.jar};${hg4j-tests.jar};${junit.jar}" />
+			<formatter type="xml" />
+			<formatter type="plain" usefile="no" />
+			<test name="org.tmatesoft.hg.test.TestHistory" />
+			<test name="org.tmatesoft.hg.test.TestManifest" />
+			<test name="org.tmatesoft.hg.test.TestStatus" />
+			<test name="org.tmatesoft.hg.test.TestStorePath" />
 		</junit>
 		<!--
 		<java classpath="hg4j.jar;hg4j-tests.jar" classname="org.tmatesoft.hg.test.TestHistory"/>
@@ -64,29 +80,29 @@
 		-->
 	</target>
 
-    <target name="build">
-    	<mkdir dir="bin"/>
-    	<javac srcdir="src" destdir="bin"/>
-    	<jar destfile="${hg4j.jar}">
-    		<fileset dir="bin/">
-    			<include name="org/tmatesoft/hg/core/**" />
-    			<include name="org/tmatesoft/hg/util/**" />
-    			<include name="org/tmatesoft/hg/repo/**" />
-    			<include name="org/tmatesoft/hg/internal/**" />
-    		</fileset>
-    	</jar>
-    </target>
+	<target name="build">
+		<mkdir dir="bin" />
+		<javac srcdir="src" destdir="bin" />
+		<jar destfile="${hg4j.jar}">
+			<fileset dir="bin/">
+				<include name="org/tmatesoft/hg/core/**" />
+				<include name="org/tmatesoft/hg/util/**" />
+				<include name="org/tmatesoft/hg/repo/**" />
+				<include name="org/tmatesoft/hg/internal/**" />
+			</fileset>
+		</jar>
+	</target>
 
-    <target name="build-tests" depends="build">
-    	<mkdir dir="bin"/>
-    	<javac srcdir="test" destdir="bin"/>
-    	<jar destfile="${hg4j-tests.jar}" basedir="bin" includes="org/tmatesoft/hg/test/**"/>
-    </target>
+	<target name="build-tests" depends="build">
+		<mkdir dir="bin" />
+		<javac srcdir="test" destdir="bin" />
+		<jar destfile="${hg4j-tests.jar}" basedir="bin" includes="org/tmatesoft/hg/test/**" />
+	</target>
 
-    <target name="build-cmdline" depends="build">
-    	<mkdir dir="bin"/>
-    	<javac srcdir="cmdline" destdir="bin"/>
-    	<jar destfile="${hg4j-console.jar}" basedir="bin" includes="org/tmatesoft/hg/console/**"/>
-    </target>
+	<target name="build-cmdline" depends="build">
+		<mkdir dir="bin" />
+		<javac srcdir="cmdline" destdir="bin" />
+		<jar destfile="${hg4j-console.jar}" basedir="bin" includes="org/tmatesoft/hg/console/**" />
+	</target>
 
 </project>
