@@ -18,6 +18,7 @@ package org.tmatesoft.hg.test;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -25,7 +26,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgChangeset;
@@ -49,8 +49,8 @@ public class TestHistory {
 	@Rule
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 
-	private final HgRepository repo;
-	private ExecHelper eh;
+	private HgRepository repo;
+	private final ExecHelper eh;
 	private LogOutputParser changelogParser;
 	
 	public static void main(String[] args) throws Throwable {
@@ -58,7 +58,12 @@ public class TestHistory {
 		th.testCompleteLog();
 		th.testFollowHistory();
 		th.errorCollector.verify();
-		th.testPerformance();
+//		th.testPerformance();
+		th.testOriginalTestLogRepo();
+		th.testUsernames();
+		th.testBranches();
+		//
+		th.errorCollector.verify();
 	}
 	
 	public TestHistory() throws Exception {
@@ -68,6 +73,7 @@ public class TestHistory {
 	private TestHistory(HgRepository hgRepo) {
 		repo = hgRepo;
 		eh = new ExecHelper(changelogParser = new LogOutputParser(true), null);
+		
 	}
 
 	@Test
@@ -121,15 +127,15 @@ public class TestHistory {
 		if (reverseConsoleResults) {
 			Collections.reverse(consoleResult);
 		}
-		Iterator<LogOutputParser.Record> consoleResultItr = consoleResult.iterator();
+		Iterator<Record> consoleResultItr = consoleResult.iterator();
 		for (HgChangeset cs : r) {
-			LogOutputParser.Record cr = consoleResultItr.next();
+			Record cr = consoleResultItr.next();
 			int x = cs.getRevision() == cr.changesetIndex ? 0x1 : 0;
 			x |= cs.getDate().equals(cr.date) ? 0x2 : 0;
 			x |= cs.getNodeid().toString().equals(cr.changesetNodeid) ? 0x4 : 0;
 			x |= cs.getUser().equals(cr.user) ? 0x8 : 0;
 			x |= cs.getComment().equals(cr.description) ? 0x10 : 0;
-			errorCollector.checkThat(String.format(what + ". Error in %d:%d. ", cs.getRevision(), cr.changesetIndex), x, equalTo(0x1f));
+			errorCollector.checkThat(String.format(what + ". Error in %d hg4j rev comparing to %d cmdline's.", cs.getRevision(), cr.changesetIndex), x, equalTo(0x1f));
 			consoleResultItr.remove();
 		}
 		errorCollector.checkThat(what + ". Insufficient results from Java ", consoleResultItr.hasNext(), equalTo(false));
@@ -148,5 +154,74 @@ public class TestHistory {
 		}
 		final long end = System.currentTimeMillis();
 		System.out.printf("'hg log --debug', %d runs: Native client total %d (%d per run), Java client %d (%d)\n", runs, start2-start1, (start2-start1)/runs, end-start2, (end-start2)/runs);
+	}
+
+	@Test
+	public void testOriginalTestLogRepo() throws Exception {
+		repo = Configuration.get().find("log-1");
+		HgLogCommand cmd = new HgLogCommand(repo);
+		// funny enough, but hg log -vf a -R c:\temp\hg\test-log\a doesn't work, while --cwd <same> works fine
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "a", "--cwd", repo.getLocation());
+		report("log a", cmd.file("a", false).execute(), true);
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-f", "a", "--cwd", repo.getLocation());
+		List<HgChangeset> r = cmd.file("a", true).execute();
+		report("log -f a", r, true);
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-f", "e", "--cwd", repo.getLocation());
+		report("log -f e", cmd.file("e", true).execute(), false /*#1, below*/);
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "dir/b", "--cwd", repo.getLocation());
+		report("log dir/b", cmd.file("dir/b", false).execute(), true);
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-f", "dir/b", "--cwd", repo.getLocation());
+		report("log -f dir/b", cmd.file("dir/b", true).execute(), false /*#1, below*/);
+		/*
+		 * #1: false works because presently commands dispatches history of the queried file, and then history
+		 * of it's origin. With history comprising of renames only, this effectively gives reversed (newest to oldest) 
+		 * order of revisions. 
+		 */
+	}
+
+	@Test
+	public void testUsernames() throws Exception {
+		repo = Configuration.get().find("log-users");
+		final String user1 = "User One <user1@example.org>";
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-u", user1, "--cwd", repo.getLocation());
+		report("log -u " + user1, new HgLogCommand(repo).user(user1).execute(), true);
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-u", "user1", "-u", "user2", "--cwd", repo.getLocation());
+		report("log -u user1 -u user2", new HgLogCommand(repo).user("user1").user("user2").execute(), true);
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-u", "user3", "--cwd", repo.getLocation());
+		report("log -u user3", new HgLogCommand(repo).user("user3").execute(), true);
+	}
+
+	@Test
+	public void testBranches() throws Exception {
+		repo = Configuration.get().find("log-branches");
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-b", "default", "--cwd", repo.getLocation());
+		report("log -b default" , new HgLogCommand(repo).branch("default").execute(), true);
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-b", "test", "--cwd", repo.getLocation());
+		report("log -b test" , new HgLogCommand(repo).branch("test").execute(), true);
+		//
+		assertTrue("log -b dummy shall yeild empty result", new HgLogCommand(repo).branch("dummy").execute().isEmpty());
+		//
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-b", "default", "-b", "test", "--cwd", repo.getLocation());
+		report("log -b default -b test" , new HgLogCommand(repo).branch("default").branch("test").execute(), true);
 	}
 }

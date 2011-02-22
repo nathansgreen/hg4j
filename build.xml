@@ -64,20 +64,19 @@
 	</target>
 
 	<target name="tests" depends="build-tests">
+		<property name="test-repos-root" value="${java.io.tmpdir}/hg4j-tests/"/>
+		<delete dir="${test-repos-root}" quiet="yes"/>
+		<unjar src="test-repos.jar" dest="${test-repos-root}"/>
 		<junit>
 			<classpath path="${hg4j.jar};${hg4j-tests.jar};${junit.jar}" />
 			<formatter type="xml" />
 			<formatter type="plain" usefile="no" />
+			<sysproperty key="hg4j.tests.repos" value="${test-repos-root}"/>
 			<test name="org.tmatesoft.hg.test.TestHistory" />
 			<test name="org.tmatesoft.hg.test.TestManifest" />
 			<test name="org.tmatesoft.hg.test.TestStatus" />
 			<test name="org.tmatesoft.hg.test.TestStorePath" />
 		</junit>
-		<!--
-		<java classpath="hg4j.jar;hg4j-tests.jar" classname="org.tmatesoft.hg.test.TestHistory"/>
-		<java classpath="hg4j.jar;hg4j-tests.jar" classname="org.tmatesoft.hg.test.TestManifest"/>
-		<java classpath="hg4j.jar;hg4j-tests.jar" classname="org.tmatesoft.hg.test.TestStatus"/>
-		-->
 	</target>
 
 	<target name="build">
@@ -90,19 +89,26 @@
 				<include name="org/tmatesoft/hg/repo/**" />
 				<include name="org/tmatesoft/hg/internal/**" />
 			</fileset>
+			<fileset file="COPYING"/>
 		</jar>
 	</target>
 
 	<target name="build-tests" depends="build">
 		<mkdir dir="bin" />
 		<javac srcdir="test" destdir="bin" />
-		<jar destfile="${hg4j-tests.jar}" basedir="bin" includes="org/tmatesoft/hg/test/**" />
+		<jar destfile="${hg4j-tests.jar}">
+			<fileset dir="bin" includes="org/tmatesoft/hg/test/**"/>
+			<fileset file="COPYING"/>
+		</jar>
 	</target>
 
 	<target name="build-cmdline" depends="build">
 		<mkdir dir="bin" />
 		<javac srcdir="cmdline" destdir="bin" />
-		<jar destfile="${hg4j-console.jar}" basedir="bin" includes="org/tmatesoft/hg/console/**" />
+		<jar destfile="${hg4j-console.jar}">
+			<fileset dir="bin/" includes="org/tmatesoft/hg/console/**"/>
+			<fileset file="COPYING"/>
+		</jar>
 	</target>
 
 </project>

@@ -159,6 +159,10 @@ public class TestStatus {
 	 * 'hg status -A': Native client total 953 (95 per run), Java client 94 (9)
 	 * 'hg status -A --rev 3:80': Native client total 1828 (182 per run), Java client 235 (23)
 	 * 'hg log --debug', 10 runs: Native client total 1766 (176 per run), Java client 78 (7)
+	 * 
+	 * 18.02.2011
+	 * 'hg status -A --rev 3:80', 10 runs:  Native client total 2000 (200 per run), Java client 250 (25)
+	 * 'hg log --debug', 10 runs: Native client total 2297 (229 per run), Java client 125 (12)
 	 */
 	public void testPerformance() throws Exception {
 		final int runs = 10;
