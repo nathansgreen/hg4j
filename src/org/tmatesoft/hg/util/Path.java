@@ -31,6 +31,17 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 		path = p;
 	}
 
+	/**
+	 * Check if this is directory's path. 
+	 * Note, this method doesn't perform any file system operation.
+	 * 
+	 * @return true when this path points to a directory 
+	 */
+	public boolean isDirectory() {
+		// XXX simple logic for now. Later we may decide to have an explicit factory method to create directory paths
+		return path.charAt(path.length() - 1) == '/';
+	}
+
 	public int length() {
 		return path.length();
 	}

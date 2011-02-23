@@ -16,10 +16,12 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 
 import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.CancelledException;
 
 /**
  *
@@ -38,7 +40,7 @@ public class FilterByteChannel implements ByteChannel {
 		filters = filtersToApply.toArray(new Filter[filtersToApply.size()]);
 	}
 
-	public int write(ByteBuffer buffer) throws Exception {
+	public int write(ByteBuffer buffer) throws IOException, CancelledException {
 		final int srcPos = buffer.position();
 		ByteBuffer processed = buffer;
 		for (Filter f : filters) {

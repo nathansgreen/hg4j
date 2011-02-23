@@ -262,7 +262,7 @@ public class HgWorkingCopyStatusCollector {
 				ByteChannel check = new ByteChannel() {
 					int x = 0;
 					final boolean debug = false; // XXX may want to add global variable to allow clients to turn 
-					public int write(ByteBuffer buffer) throws Exception {
+					public int write(ByteBuffer buffer) {
 						for (int i = buffer.remaining(); i > 0; i--, x++) {
 							if (data[x] != buffer.get()) {
 								if (debug) {

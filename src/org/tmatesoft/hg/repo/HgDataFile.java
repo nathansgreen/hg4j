@@ -16,18 +16,26 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.repo.HgInternals.wrongLocalRevision;
+import static org.tmatesoft.hg.repo.HgRepository.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.TreeMap;
 
+import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 
 
@@ -75,21 +83,28 @@ public class HgDataFile extends Revlog {
 	}
 	
 	/*XXX not sure applyFilters is the best way to do, perhaps, callers shall add filters themselves?*/
-	public void content(int revision, ByteChannel sink, boolean applyFilters) throws /*TODO typed*/Exception {
+	public void content(int revision, ByteChannel sink, boolean applyFilters) throws HgDataStreamException, IOException, CancelledException {
 		byte[] content = content(revision);
+		final CancelSupport cancelSupport = CancelSupport.Factory.get(sink);
+		final ProgressSupport progressSupport = ProgressSupport.Factory.get(sink);
 		ByteBuffer buf = ByteBuffer.allocate(512);
 		int left = content.length;
+		progressSupport.start(left);
 		int offset = 0;
+		cancelSupport.checkCancelled();
 		ByteChannel _sink = applyFilters ? new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())) : sink;
 		do {
 			buf.put(content, offset, Math.min(left, buf.remaining()));
 			buf.flip();
+			cancelSupport.checkCancelled();
 			// XXX I may not rely on returned number of bytes but track change in buf position instead.
 			int consumed = _sink.write(buf);
 			buf.compact();
 			offset += consumed;
 			left -= consumed;
+			progressSupport.worked(consumed);
 		} while (left > 0);
+		progressSupport.done(); // XXX shall specify whether #done() is invoked always or only if completed successfully.
 	}
 
 	// for data files need to check heading of the file content for possible metadata
@@ -98,6 +113,9 @@ public class HgDataFile extends Revlog {
 	public byte[] content(int revision) {
 		if (revision == TIP) {
 			revision = getLastRevision();
+		}
+		if (wrongLocalRevision(revision) || revision == BAD_REVISION || revision == WORKING_COPY) {
+			throw new IllegalArgumentException(String.valueOf(revision));
 		}
 		byte[] data = super.content(revision);
 		if (metadata == null) {

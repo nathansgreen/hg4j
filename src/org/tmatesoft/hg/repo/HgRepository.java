@@ -45,6 +45,7 @@ import org.tmatesoft.hg.util.PathRewrite;
  */
 public final class HgRepository {
 
+	// if new constants added, consider fixing HgInternals#badLocalRevision
 	public static final int TIP = -1;
 	public static final int BAD_REVISION = Integer.MIN_VALUE;
 	public static final int WORKING_COPY = -2;
@@ -53,7 +54,7 @@ public final class HgRepository {
 	public static IllegalStateException notImplemented() {
 		return new IllegalStateException("Not implemented");
 	}
-
+	
 	private final File repoDir; // .hg folder
 	private final String repoLocation;
 	private final DataAccessProvider dataAccess;
@@ -79,10 +80,12 @@ public final class HgRepository {
 		normalizePath = null;
 	}
 	
-	HgRepository(File repositoryRoot) throws IOException {
+	HgRepository(String repositoryPath, File repositoryRoot) {
 		assert ".hg".equals(repositoryRoot.getName()) && repositoryRoot.isDirectory();
+		assert repositoryPath != null; 
+		assert repositoryRoot != null;
 		repoDir = repositoryRoot;
-		repoLocation = repositoryRoot.getParentFile().getCanonicalPath();
+		repoLocation = repositoryPath;
 		dataAccess = new DataAccessProvider();
 		final boolean runningOnWindows = System.getProperty("os.name").indexOf("Windows") != -1;
 		if (runningOnWindows) {

@@ -157,14 +157,14 @@ public class HgChangeset implements Cloneable {
 		for (Path s : r.getModified()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
-				throw new IllegalArgumentException();
+				throw new HgBadStateException();
 			}
 			modified.add(new FileRevision(repo, nid, s));
 		}
 		for (Path s : r.getAdded()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
-				throw new IllegalArgumentException();
+				throw new HgBadStateException();
 			}
 			added.add(new FileRevision(repo, nid, s));
 		}

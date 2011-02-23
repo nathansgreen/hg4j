@@ -14,22 +14,15 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.util;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
+package org.tmatesoft.hg.core;
 
 /**
- * Much like {@link java.nio.channels.WritableByteChannel} except for thrown exception 
- * 
- * XXX Perhaps, we'll add CharChannel in the future to deal with character conversions/encodings 
+ * hg4j's own internal error or unexpected state.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public interface ByteChannel {
-	// XXX does int return value makes any sense given buffer keeps its read state
-	// not clear what retvalue should be in case some filtering happened inside write - i.e. return
-	// number of bytes consumed in 
-	int write(ByteBuffer buffer) throws IOException, CancelledException;
+@SuppressWarnings("serial")
+public class HgBadStateException extends RuntimeException {
+
 }

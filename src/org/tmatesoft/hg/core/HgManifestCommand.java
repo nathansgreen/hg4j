@@ -53,6 +53,13 @@ public class HgManifestCommand {
 		repo = hgRepo;
 	}
 
+	/**
+	 * Parameterize command to visit revisions <code>[rev1..rev2]</code>.
+	 * @param rev1 - local revision number to start from. Non-negative. May be {@link HgRepository#TIP} (rev2 argument shall be {@link HgRepository#TIP} as well, then) 
+	 * @param rev2 - local revision number to end with, inclusive. Non-negative, greater or equal to rev1. May be {@link HgRepository#TIP}.
+	 * @return <code>this</code> for convenience.
+	 * @throws IllegalArgumentException if revision arguments are incorrect (see above).
+	 */
 	public HgManifestCommand range(int rev1, int rev2) {
 		// XXX if manifest range is different from that of changelog, need conversion utils (external?)
 		boolean badArgs = rev1 == BAD_REVISION || rev2 == BAD_REVISION || rev1 == WORKING_COPY || rev2 == WORKING_COPY;
@@ -88,6 +95,12 @@ public class HgManifestCommand {
 		return this;
 	}
 	
+	/**
+	 * Runs the command.
+	 * @param handler - callback to get the outcome
+	 * @throws IllegalArgumentException if handler is <code>null</code>
+	 * @throws ConcurrentModificationException if this command is already in use (running)
+	 */
 	public void execute(Handler handler) {
 		if (handler == null) {
 			throw new IllegalArgumentException();

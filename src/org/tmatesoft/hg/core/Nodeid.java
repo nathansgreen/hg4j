@@ -41,7 +41,8 @@ public final class Nodeid {
 
 	/**
 	 * @param binaryRepresentation - array of exactly 20 bytes
-	 * @param shallClone - true if array is subject to future modification and shall be copied, not referenced 
+	 * @param shallClone - true if array is subject to future modification and shall be copied, not referenced
+	 * @throws IllegalArgumentException if supplied binary representation doesn't correspond to 20 bytes of sha1 digest 
 	 */
 	public Nodeid(byte[] binaryRepresentation, boolean shallClone) {
 		// 5 int fields => 32 bytes
@@ -98,8 +99,14 @@ public final class Nodeid {
 		return binaryData.clone();
 	}
 
-	// primary difference with cons is handling of NULL id (this method returns constant)
-	// always makes a copy of an array passed
+	/**
+	 * Factory for {@link Nodeid Nodeids}.
+	 * Primary difference with cons is handling of NULL id (this method returns constant) and control over array 
+	 * duplication - this method always makes a copy of an array passed
+	 * @param binaryRepresentation - byte array of a length at least offset + 20
+	 * @param offset - index in the array to start from
+	 * @throws IllegalArgumentException when arguments don't select 20 bytes
+	 */
 	public static Nodeid fromBinary(byte[] binaryRepresentation, int offset) {
 		if (binaryRepresentation == null || binaryRepresentation.length - offset < 20) {
 			throw new IllegalArgumentException();
@@ -117,6 +124,13 @@ public final class Nodeid {
 		return new Nodeid(b, false);
 	}
 
+	/**
+	 * Parse encoded representation.
+	 * 
+	 * @param asciiRepresentation - encoded form of the Nodeid.
+	 * @return object representation
+	 * @throws IllegalArgumentException when argument doesn't match encoded form of 20-bytes sha1 digest. 
+	 */
 	public static Nodeid fromAscii(String asciiRepresentation) {
 		if (asciiRepresentation.length() != 40) {
 			throw new IllegalArgumentException();
@@ -124,6 +138,10 @@ public final class Nodeid {
 		// XXX is better impl for String possible?
 		return fromAscii(asciiRepresentation.getBytes(), 0, 40);
 	}
+
+	/**
+	 * Parse encoded representation. Similar to {@link #fromAscii(String)}.
+	 */
 	public static Nodeid fromAscii(byte[] asciiRepresentation, int offset, int length) {
 		if (length != 40) {
 			throw new IllegalArgumentException();

@@ -66,9 +66,11 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	}
 
 	/**
-	 * Limit search to specified user. Multiple user names may be specified.
+	 * Limit search to specified user. Multiple user names may be specified. Once set, user names can't be 
+	 * cleared, use new command instance in such cases.
 	 * @param user - full or partial name of the user, case-insensitive, non-null.
 	 * @return <code>this</code> instance for convenience
+	 * @throws IllegalArgumentException when argument is null
 	 */
 	public HgLogCommand user(String user) {
 		if (user == null) {
@@ -83,9 +85,11 @@ public class HgLogCommand implements HgChangelog.Inspector {
 
 	/**
 	 * Limit search to specified branch. Multiple branch specification possible (changeset from any of these 
-	 * would be included in result). If unspecified, all branches are considered.
+	 * would be included in result). If unspecified, all branches are considered. There's no way to clean branch selection 
+	 * once set, create fresh new command instead.
 	 * @param branch - branch name, case-sensitive, non-null.
 	 * @return <code>this</code> instance for convenience
+	 * @throws IllegalArgumentException when branch argument is null
 	 */
 	public HgLogCommand branch(String branch) {
 		if (branch == null) {
@@ -120,8 +124,8 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	/**
 	 * Limit to specified subset of Changelog, [min(rev1,rev2), max(rev1,rev2)], inclusive.
 	 * Revision may be specified with {@link HgRepository#TIP}  
-	 * @param rev1
-	 * @param rev2
+	 * @param rev1 - local revision number
+	 * @param rev2 - local revision number
 	 * @return <code>this</code> instance for convenience
 	 */
 	public HgLogCommand range(int rev1, int rev2) {
@@ -291,7 +295,8 @@ public class HgLogCommand implements HgChangelog.Inspector {
 		
 		/*package-local*/FileRevision(HgRepository hgRepo, Nodeid rev, Path p) {
 			if (hgRepo == null || rev == null || p == null) {
-				throw new IllegalArgumentException();
+				// since it's package local, it is our code to blame for non validated arguments
+				throw new HgBadStateException();
 			}
 			repo = hgRepo;
 			revision = rev;

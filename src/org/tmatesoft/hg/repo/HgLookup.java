@@ -17,24 +17,28 @@
 package org.tmatesoft.hg.repo;
 
 import java.io.File;
+import java.io.IOException;
+
+import org.tmatesoft.hg.core.HgException;
 
 /**
+ * Utility methods to find Mercurial repository at a given location
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 public class HgLookup {
 
-	public HgRepository detectFromWorkingDir() throws Exception {
+	public HgRepository detectFromWorkingDir() throws HgException {
 		return detect(System.getProperty("user.dir"));
 	}
 
-	public HgRepository detect(String location) throws Exception /*FIXME Exception type, RepoInitException? */ {
+	public HgRepository detect(String location) throws HgException {
 		return detect(new File(location));
 	}
 
 	// look up in specified location and above
-	public HgRepository detect(File location) throws Exception {
+	public HgRepository detect(File location) throws HgException {
 		File dir = location;
 		File repository;
 		do {
@@ -50,6 +54,11 @@ public class HgLookup {
 			// return invalid repository
 			return new HgRepository(location.getPath());
 		}
-		return new HgRepository(repository);
+		try {
+			String repoPath = repository.getParentFile().getCanonicalPath();
+			return new HgRepository(repoPath, repository);
+		} catch (IOException ex) {
+			throw new HgException(location.toString(), ex);
+		}
 	}
 }

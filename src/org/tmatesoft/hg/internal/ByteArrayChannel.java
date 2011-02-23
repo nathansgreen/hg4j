@@ -49,7 +49,7 @@ public class ByteArrayChannel implements ByteChannel {
 	}
 
 	// TODO document what happens on write after toArray() in each case
-	public int write(ByteBuffer buffer) throws Exception {
+	public int write(ByteBuffer buffer) {
 		int rv = buffer.remaining();
 		if (buffers == null) {
 			target.put(buffer);

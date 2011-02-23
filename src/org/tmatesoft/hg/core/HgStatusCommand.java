@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.core;
 
 import static org.tmatesoft.hg.core.HgStatus.Kind.*;
+import static org.tmatesoft.hg.repo.HgInternals.wrongLocalRevision;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.util.ConcurrentModificationException;
@@ -93,15 +94,15 @@ public class HgStatusCommand {
 	}
 	
 	/**
-	 * if set, either base:revision or base:workingdir
+	 * If set, either base:revision or base:workingdir
 	 * to unset, pass {@link HgRepository#TIP} or {@link HgRepository#BAD_REVISION}
-	 * @param revision
-	 * @return
+	 * @param revision - local revision number to base status from
+	 * @return <code>this</code> for convenience
+	 * @throws IllegalArgumentException when revision is negative or {@link HgRepository#WORKING_COPY} 
 	 */
-	
 	public HgStatusCommand base(int revision) {
-		if (revision == WORKING_COPY) {
-			throw new IllegalArgumentException();
+		if (revision == WORKING_COPY || wrongLocalRevision(revision)) {
+			throw new IllegalArgumentException(String.valueOf(revision));
 		}
 		if (revision == BAD_REVISION) {
 			revision = TIP;
@@ -113,14 +114,15 @@ public class HgStatusCommand {
 	/**
 	 * Revision without base == --change
 	 * Pass {@link HgRepository#WORKING_COPY} or {@link HgRepository#BAD_REVISION} to reset
-	 * @param revision
-	 * @return
+	 * @param revision - non-negative local revision number, or any of {@link HgRepository#BAD_REVISION}, {@link HgRepository#WORKING_COPY} or {@link HgRepository#TIP}  
+	 * @return <code>this</code> for convenience
+	 * @throws IllegalArgumentException if local revision number doesn't specify legitimate revision. 
 	 */
 	public HgStatusCommand revision(int revision) {
 		if (revision == BAD_REVISION) {
 			revision = WORKING_COPY;
 		}
-		if (revision != TIP && revision != WORKING_COPY && revision < 0) {
+		if (wrongLocalRevision(revision)) {
 			throw new IllegalArgumentException(String.valueOf(revision));
 		}
 		endRevision = revision;
@@ -131,14 +133,19 @@ public class HgStatusCommand {
 	 * Shorthand for {@link #base(int) cmd.base(BAD_REVISION)}{@link #change(int) .revision(revision)}
 	 *  
 	 * @param revision compare given revision against its parent
-	 * @return
+	 * @return <code>this</code> for convenience
 	 */
 	public HgStatusCommand change(int revision) {
 		base(BAD_REVISION);
 		return revision(revision);
 	}
 	
-	// pass null to reset
+	/**
+	 * Limit status operation to certain sub-tree.
+	 * 
+	 * @param pathMatcher - matcher to use,  pass <code>null/<code> to reset
+	 * @return <code>this</code> for convenience
+	 */
 	public HgStatusCommand match(Path.Matcher pathMatcher) {
 		mediator.matcher = pathMatcher;
 		return this;

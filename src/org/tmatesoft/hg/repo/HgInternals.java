@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.repo.HgRepository.*;
+
 import java.io.File;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -83,5 +85,10 @@ public class HgInternals {
 		} catch (UnknownHostException ex) {
 			return username;
 		}
+	}
+
+	// Convenient check of local revision number for validity (not all negative values are wrong as long as we use negative constants)
+	public static boolean wrongLocalRevision(int rev) {
+		return rev < 0 && rev != TIP && rev != WORKING_COPY && rev != BAD_REVISION; 
 	}
 }

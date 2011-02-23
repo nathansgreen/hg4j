@@ -23,6 +23,14 @@ import org.tmatesoft.hg.repo.HgLookup;
 
 /**
  * Starting point for the library.
+ * <p>Sample use:
+ * <pre>
+ *  HgRepoFacade f = new HgRepoFacade();
+ *  f.initFrom(System.getenv("whatever.repo.location"));
+ *  HgStatusCommand statusCmd = f.createStatusCommand();
+ *  HgStatusCommand.Handler handler = ...;
+ *  statusCmd.execute(handler);
+ * </pre>
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -33,6 +41,11 @@ public class HgRepoFacade {
 	public HgRepoFacade() {
 	}
 	
+	/**
+	 * @param hgRepo
+	 * @return true on successful initialization
+	 * @throws IllegalArgumentException when argument is null 
+	 */
 	public boolean init(HgRepository hgRepo) {
 		if (hgRepo == null) {
 			throw new IllegalArgumentException();
@@ -41,13 +54,29 @@ public class HgRepoFacade {
 		return !repo.isInvalid();
 	}
 
-	public boolean init() throws Exception /*FIXME RepoInitException*/ {
+	/**
+	 * Tries to find repository starting from the current working directory.
+	 * @return <code>true</code> if found valid repository
+	 * @throws HgException in case of errors during repository initialization
+	 */
+	public boolean init() throws HgException {
 		repo = new HgLookup().detectFromWorkingDir();
 		return repo != null && !repo.isInvalid();
 	}
 	
-	public boolean initFrom(File repoLocation) throws Exception {
-		repo = new HgLookup().detect(repoLocation.getCanonicalPath());
+	/**
+	 * Looks up Mercurial repository starting from specified location and up to filesystem root.
+	 * 
+	 * @param repoLocation path to any folder within structure of a Mercurial repository.
+	 * @return <code>true</code> if found valid repository 
+	 * @throws HgException if there are errors accessing specified location
+	 * @throws IllegalArgumentException if argument is <code>null</code>
+	 */
+	public boolean initFrom(File repoLocation) throws HgException {
+		if (repoLocation == null) {
+			throw new IllegalArgumentException();
+		}
+		repo = new HgLookup().detect(repoLocation);
 		return repo != null && !repo.isInvalid();
 	}
 	
