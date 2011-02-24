@@ -53,7 +53,6 @@ public class Remote {
 	 cmd=branchmap
 	 */
 	public static void main(String[] args) throws Exception {
-		String nid = "d6d2a630f4a6d670c90a5ca909150f2b426ec88f";
 		ConfigFile cfg = new Internals().newConfigFile();
 		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		String svnkitServer = cfg.getSection("paths").get("svnkit");

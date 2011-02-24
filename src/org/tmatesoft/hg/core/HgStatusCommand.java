@@ -41,7 +41,6 @@ public class HgStatusCommand {
 
 	private int startRevision = TIP;
 	private int endRevision = WORKING_COPY; 
-	private boolean visitSubRepo = true;
 	
 	private final Mediator mediator = new Mediator();
 
@@ -152,7 +151,6 @@ public class HgStatusCommand {
 	}
 
 	public HgStatusCommand subrepo(boolean visit) {
-		visitSubRepo  = visit;
 		throw HgRepository.notImplemented();
 	}
 

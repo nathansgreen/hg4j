@@ -37,7 +37,6 @@ public class LogOutputParser implements OutputParser {
 	private Pattern pattern4;
 	
 	public LogOutputParser(boolean outputWithDebug) {
-		String p;
 		if (outputWithDebug) {
 			pattern1 = Pattern.compile("^changeset:\\s+(\\d+):([a-f0-9]{40})\n(^tag:(.+)$)?", Pattern.MULTILINE);
 			pattern2 = Pattern.compile("^parent:\\s+(-?\\d+):([a-f0-9]{40})\n", Pattern.MULTILINE);
@@ -97,11 +96,5 @@ public class LogOutputParser implements OutputParser {
 		public String user;
 		public String date;
 		public String description;
-	}
-
-	private static void a(Matcher m) {
-		for (int i = 1; i <= m.groupCount(); i++) {
-			System.out.println("" + i + ":" + m.group(i));
-		}
 	}
 }

@@ -18,6 +18,7 @@ package org.tmatesoft.hg.console;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
@@ -61,7 +62,7 @@ public class Cat {
 			stream = out;
 		}
 
-		public int write(ByteBuffer buffer) throws Exception {
+		public int write(ByteBuffer buffer) throws IOException {
 			int count = buffer.remaining();
 			while(buffer.hasRemaining()) {
 				stream.write(buffer.get());

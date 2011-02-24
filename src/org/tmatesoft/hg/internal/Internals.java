@@ -32,7 +32,6 @@ import org.tmatesoft.hg.util.PathRewrite;
  */
 public class Internals {
 	
-	private int revlogVersion = 0;
 	private int requiresFlags = 0;
 	private List<Filter.Factory> filterFactories;
 	
@@ -41,7 +40,6 @@ public class Internals {
 	}
 
 	public/*for tests, otherwise pkg*/ void setStorageConfig(int version, int flags) {
-		revlogVersion = version;
 		requiresFlags = flags;
 	}
 
