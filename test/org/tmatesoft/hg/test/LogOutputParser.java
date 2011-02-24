@@ -35,13 +35,15 @@ public class LogOutputParser implements OutputParser {
 	private Pattern pattern2;
 	private Pattern pattern3;
 	private Pattern pattern4;
+	private Pattern pattern5;
 	
 	public LogOutputParser(boolean outputWithDebug) {
 		if (outputWithDebug) {
 			pattern1 = Pattern.compile("^changeset:\\s+(\\d+):([a-f0-9]{40})\n(^tag:(.+)$)?", Pattern.MULTILINE);
 			pattern2 = Pattern.compile("^parent:\\s+(-?\\d+):([a-f0-9]{40})\n", Pattern.MULTILINE);
 			pattern3 = Pattern.compile("^manifest:\\s+(\\d+):([a-f0-9]{40})\nuser:\\s+(\\S.+)\ndate:\\s+(\\S.+)\n", Pattern.MULTILINE);
-			pattern4 = Pattern.compile("^description:\n^(.+)\n\n", Pattern.MULTILINE);
+			pattern4 = Pattern.compile("^description:\\n", Pattern.MULTILINE);
+			pattern5 = Pattern.compile("\\n\\n");
 			//p = "^manifest:\\s+(\\d+):([a-f0-9]{40})\nuser:(.+)$";
 		} else {
 			throw HgRepository.notImplemented();
@@ -79,7 +81,11 @@ public class LogOutputParser implements OutputParser {
 			}
 			m.usePattern(pattern4);
 			if (m.find()) {
-				r.description = m.group(1);
+				int commentStart = m.end();
+				m.usePattern(pattern5);
+				if (m.find()) {
+					r.description = seq.subSequence(commentStart, m.start()).toString();
+				}
 			}
 			result.add(r);
 			m.usePattern(pattern1);
