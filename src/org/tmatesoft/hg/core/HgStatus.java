@@ -19,7 +19,7 @@ package org.tmatesoft.hg.core;
 import java.util.Date;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
-import org.tmatesoft.hg.repo.HgChangelog.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -71,7 +71,7 @@ public class HgStatus {
 	 * @return <code>null</code> if author for the change can't be deduced (e.g. for clean files it's senseless)
 	 */
 	public String getModificationAuthor() {
-		Changeset cset = logHelper.findLatestChangeWith(path);
+		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			if (kind == Kind.Modified || kind == Kind.Added || kind == Kind.Removed /*&& RightBoundary is TIP*/) {
 				// perhaps, also for Kind.Missing?
@@ -84,7 +84,7 @@ public class HgStatus {
 	}
 
 	public Date getModificationDate() {
-		Changeset cset = logHelper.findLatestChangeWith(path);
+		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			// FIXME check dirstate and/or local file for tstamp
 			return new Date(); // what's correct 

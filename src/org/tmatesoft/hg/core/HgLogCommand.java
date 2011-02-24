@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.repo.HgChangelog.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -162,7 +162,7 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	}
 
 	/**
-	 * Similar to {@link #execute(org.tmatesoft.hg.repo.Changeset.Inspector)}, collects and return result as a list.
+	 * Similar to {@link #execute(org.tmatesoft.hg.repo.RawChangeset.Inspector)}, collects and return result as a list.
 	 */
 	public List<HgChangeset> execute() {
 		CollectHandler collector = new CollectHandler();
@@ -224,7 +224,7 @@ public class HgLogCommand implements HgChangelog.Inspector {
 
 	//
 	
-	public void next(int revisionNumber, Nodeid nodeid, Changeset cset) {
+	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
 		if (limit > 0 && count >= limit) {
 			return;
 		}

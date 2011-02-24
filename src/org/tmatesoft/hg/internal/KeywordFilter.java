@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.TreeMap;
 
-import org.tmatesoft.hg.repo.HgChangelog.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
@@ -37,7 +37,7 @@ public class KeywordFilter implements Filter {
 	private final TreeMap<String,String> keywords;
 	private final int minBufferLen;
 	private final Path path;
-	private Changeset latestFileCset;
+	private RawChangeset latestFileCset;
 
 	/**
 	 * 
@@ -266,7 +266,7 @@ public class KeywordFilter implements Filter {
 		return String.format("%tY/%<tm/%<td %<tH:%<tM:%<tS", getChangeset().date());
 	}
 	
-	private Changeset getChangeset() {
+	private RawChangeset getChangeset() {
 		if (latestFileCset == null) {
 			// XXX consider use of ChangelogHelper
 			int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);

@@ -52,7 +52,7 @@ public class HgChangelog extends Revlog {
 		RevlogStream.Inspector i = new RevlogStream.Inspector() {
 
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
-				Changeset cset = Changeset.parse(data, 0, data.length);
+				RawChangeset cset = RawChangeset.parse(data, 0, data.length);
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 			}
@@ -60,12 +60,12 @@ public class HgChangelog extends Revlog {
 		content.iterate(start, end, true, i);
 	}
 
-	public List<Changeset> range(int start, int end) {
-		final ArrayList<Changeset> rv = new ArrayList<Changeset>(end - start + 1);
+	public List<RawChangeset> range(int start, int end) {
+		final ArrayList<RawChangeset> rv = new ArrayList<RawChangeset>(end - start + 1);
 		RevlogStream.Inspector i = new RevlogStream.Inspector() {
 
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
-				Changeset cset = Changeset.parse(data, 0, data.length);
+				RawChangeset cset = RawChangeset.parse(data, 0, data.length);
 				rv.add(cset);
 			}
 		};
@@ -81,7 +81,7 @@ public class HgChangelog extends Revlog {
 
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
 				if (Arrays.binarySearch(revisions, revisionNumber) >= 0) {
-					Changeset cset = Changeset.parse(data, 0, data.length);
+					RawChangeset cset = RawChangeset.parse(data, 0, data.length);
 					inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 				}
 			}
@@ -92,13 +92,13 @@ public class HgChangelog extends Revlog {
 
 	public interface Inspector {
 		// TODO describe whether cset is new instance each time
-		void next(int revisionNumber, Nodeid nodeid, Changeset cset);
+		void next(int revisionNumber, Nodeid nodeid, RawChangeset cset);
 	}
 
 	/**
 	 * Entry in the Changelog
 	 */
-	public static class Changeset implements Cloneable /* for those that would like to keep a copy */{
+	public static class RawChangeset implements Cloneable /* for those that would like to keep a copy */{
 		// TODO immutable
 		private/* final */Nodeid manifest;
 		private String user;
@@ -124,7 +124,7 @@ public class HgChangelog extends Revlog {
 		 *         changelog v0 doesn't use extra
 		 * </pre>
 		 */
-		private Changeset() {
+		private RawChangeset() {
 		}
 
 		public Nodeid manifest() {
@@ -190,16 +190,16 @@ public class HgChangelog extends Revlog {
 		}
 
 		@Override
-		public Changeset clone() {
+		public RawChangeset clone() {
 			try {
-				return (Changeset) super.clone();
+				return (RawChangeset) super.clone();
 			} catch (CloneNotSupportedException ex) {
 				throw new InternalError(ex.toString());
 			}
 		}
 
-		public static Changeset parse(byte[] data, int offset, int length) {
-			Changeset rv = new Changeset();
+		public static RawChangeset parse(byte[] data, int offset, int length) {
+			RawChangeset rv = new RawChangeset();
 			rv.init(data, offset, length);
 			return rv;
 		}

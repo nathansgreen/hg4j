@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
-import org.tmatesoft.hg.repo.HgChangelog.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.Path;
@@ -40,7 +40,7 @@ public class HgChangeset implements Cloneable {
 	private final Path.Source pathHelper;
 
 	//
-	private Changeset changeset;
+	private RawChangeset changeset;
 	private Nodeid nodeid;
 
 	//
@@ -56,7 +56,7 @@ public class HgChangeset implements Cloneable {
 	}
 	
 	/*package-local*/
-	void init(int localRevNumber, Nodeid nid, Changeset rawChangeset) {
+	void init(int localRevNumber, Nodeid nid, RawChangeset rawChangeset) {
 		revNumber = localRevNumber;
 		nodeid = nid;
 		changeset = rawChangeset;

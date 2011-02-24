@@ -26,7 +26,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.RevlogStream;
-import org.tmatesoft.hg.repo.HgChangelog.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 
 
 /**
@@ -69,7 +69,7 @@ public class HgBundle {
 				if (!ge.node().equalsTo(dh.asBinary())) {
 					throw new IllegalStateException("Integrity check failed on " + bundleFile + ", node:" + ge.node());
 				}
-				Changeset cs = Changeset.parse(csetContent, 0, csetContent.length);
+				RawChangeset cs = RawChangeset.parse(csetContent, 0, csetContent.length);
 				System.out.println(cs.toString());
 				baseRevContent = csetContent;
 			}

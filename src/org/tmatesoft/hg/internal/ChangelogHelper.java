@@ -18,7 +18,7 @@ package org.tmatesoft.hg.internal;
 
 import java.util.TreeMap;
 
-import org.tmatesoft.hg.repo.HgChangelog.Changeset;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -32,7 +32,7 @@ import org.tmatesoft.hg.util.Path;
 public class ChangelogHelper {
 	private final int leftBoundary;
 	private final HgRepository repo;
-	private final TreeMap<Integer, Changeset> cache = new TreeMap<Integer, Changeset>();
+	private final TreeMap<Integer, RawChangeset> cache = new TreeMap<Integer, RawChangeset>();
 	private String nextCommitAuthor;
 
 	/**
@@ -58,13 +58,13 @@ public class ChangelogHelper {
 	 * @return changeset where specified file is mentioned among affected files, or 
 	 * <code>null</code> if none found up to leftBoundary 
 	 */
-	public Changeset findLatestChangeWith(Path file) {
+	public RawChangeset findLatestChangeWith(Path file) {
 		HgDataFile df = repo.getFileNode(file);
 		int changelogRev = df.getChangesetLocalRevision(HgRepository.TIP);
 		if (changelogRev >= leftBoundary) {
 			// the method is likely to be invoked for different files, 
 			// while changesets might be the same. Cache 'em not to read too much. 
-			Changeset cs = cache.get(changelogRev);
+			RawChangeset cs = cache.get(changelogRev);
 			if (cs == null) {
 				cs = repo.getChangelog().range(changelogRev, changelogRev).get(0);
 				cache.put(changelogRev, cs);
