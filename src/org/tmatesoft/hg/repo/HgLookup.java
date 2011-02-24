@@ -39,7 +39,7 @@ public class HgLookup {
 
 	// look up in specified location and above
 	public HgRepository detect(File location) throws HgException {
-		File dir = location;
+		File dir = location.getAbsoluteFile();
 		File repository;
 		do {
 			repository = new File(dir, ".hg");
