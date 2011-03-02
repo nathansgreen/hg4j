@@ -18,7 +18,9 @@ package org.tmatesoft.hg.console;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -56,7 +58,9 @@ public class Remote {
 		ConfigFile cfg = new Internals().newConfigFile();
 		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		String svnkitServer = cfg.getSection("paths").get("svnkit");
-		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=a78c980749e3ccebb47138b547e9b644a22797a9");
+//		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=a78c980749e3ccebb47138b547e9b644a22797a9");
+//		URL url = new URL("http://localhost:8000/" + "?cmd=stream_out");
+		URL url = new URL(svnkitServer + "?cmd=stream_out");
 	
 		SSLContext sslContext = SSLContext.getInstance("SSL");
 		class TrustEveryone implements X509TrustManager {
@@ -70,7 +74,7 @@ public class Remote {
 				return new X509Certificate[0];
 			}
 		}
-		//
+		// Hack to get Base64-encoded credentials
 		Preferences tempNode = Preferences.userRoot().node("xxx");
 		tempNode.putByteArray("xxx", url.getUserInfo().getBytes());
 		String authInfo = tempNode.get("xxx", null);
@@ -90,11 +94,28 @@ public class Remote {
 		}
 		System.out.printf("Content type is %s and its length is %d\n", urlConnection.getContentType(), urlConnection.getContentLength());
 		InputStream is = urlConnection.getInputStream();
-//		int b;
-//		while ((b =is.read()) != -1) {
-//			System.out.print((char) b);
-//		}
-//		System.out.println();
+		//
+		dump(is, -1); // simple dump, any cmd
+//		writeBundle(is); // cmd=changegroup
+		//
+		urlConnection.disconnect();
+		//
+	}
+
+	private static void dump(InputStream is, int limit) throws IOException {
+		int b;
+		while ((b =is.read()) != -1) {
+			System.out.print((char) b);
+			if (limit != -1) {
+				if (--limit < 0) {
+					break;
+				}
+			}
+		}
+		System.out.println();
+	}
+	
+	private static void writeBundle(InputStream is) throws IOException {
 		InflaterInputStream zipStream = new InflaterInputStream(is);
 		File tf = File.createTempFile("hg-bundle-", null);
 		FileOutputStream fos = new FileOutputStream(tf);
@@ -106,8 +127,5 @@ public class Remote {
 		fos.close();
 		zipStream.close();
 		System.out.println(tf);
-		
-		urlConnection.disconnect();
-		//
 	}
 }
