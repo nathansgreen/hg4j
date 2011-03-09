@@ -23,6 +23,8 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
+import org.tmatesoft.hg.core.HgBadStateException;
+
 /**
  * 
  * @author Artem Tikhomirov
@@ -48,16 +50,20 @@ public class DataAccessProvider {
 		}
 		try {
 			FileChannel fc = new FileInputStream(f).getChannel();
-			if (fc.size() > mapioMagicBoundary) {
+			int flen = (int) fc.size();
+			if (fc.size() - flen != 0) {
+				throw new HgBadStateException("Files greater than 2Gb are not yet supported");
+			}
+			if (flen > mapioMagicBoundary) {
 				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
-				return new MemoryMapFileAccess(fc, fc.size(), mapioMagicBoundary);
+				return new MemoryMapFileAccess(fc, flen, mapioMagicBoundary);
 			} else {
 				// XXX once implementation is more or less stable,
 				// may want to try ByteBuffer.allocateDirect() to see
 				// if there's any performance gain. 
 				boolean useDirectBuffer = false;
-				// TESTS: bufferSize of 100 was used to check buffer underflow states when readBytes reads chunks bigger than bufSize 
-				return new FileAccess(fc, fc.size(), bufferSize, useDirectBuffer);
+				// TESTS: bufferSize of 100 was used to check buffer underflow states when readBytes reads chunks bigger than bufSize
+				return new FileAccess(fc, flen, bufferSize, useDirectBuffer);
 			}
 		} catch (IOException ex) {
 			// unlikely to happen, we've made sure file exists.
@@ -69,12 +75,12 @@ public class DataAccessProvider {
 	// DOESN'T WORK YET 
 	private static class MemoryMapFileAccess extends DataAccess {
 		private FileChannel fileChannel;
-		private final long size;
+		private final int size;
 		private long position = 0; // always points to buffer's absolute position in the file
 		private final int memBufferSize;
 		private MappedByteBuffer buffer;
 
-		public MemoryMapFileAccess(FileChannel fc, long channelSize, int /*long?*/ bufferSize) {
+		public MemoryMapFileAccess(FileChannel fc, int channelSize, int /*long?*/ bufferSize) {
 			fileChannel = fc;
 			size = channelSize;
 			memBufferSize = bufferSize;
@@ -86,7 +92,7 @@ public class DataAccessProvider {
 		}
 		
 		@Override
-		public long length() {
+		public int length() {
 			return size;
 		}
 		
@@ -97,7 +103,7 @@ public class DataAccessProvider {
 		}
 		
 		@Override
-		public void seek(long offset) {
+		public void seek(int offset) {
 			assert offset >= 0;
 			// offset may not necessarily be further than current position in the file (e.g. rewind) 
 			if (buffer != null && /*offset is within buffer*/ offset >= position && (offset - position) < buffer.limit()) {
@@ -181,14 +187,14 @@ public class DataAccessProvider {
 	// (almost) regular file access - FileChannel and buffers.
 	private static class FileAccess extends DataAccess {
 		private FileChannel fileChannel;
-		private final long size;
+		private final int size;
 		private ByteBuffer buffer;
-		private long bufferStartInFile = 0; // offset of this.buffer in the file.
+		private int bufferStartInFile = 0; // offset of this.buffer in the file.
 
-		public FileAccess(FileChannel fc, long channelSize, int bufferSizeHint, boolean useDirect) {
+		public FileAccess(FileChannel fc, int channelSize, int bufferSizeHint, boolean useDirect) {
 			fileChannel = fc;
 			size = channelSize;
-			final int capacity = size < bufferSizeHint ? (int) size : bufferSizeHint;
+			final int capacity = size < bufferSizeHint ? size : bufferSizeHint;
 			buffer = useDirect ? ByteBuffer.allocateDirect(capacity) : ByteBuffer.allocate(capacity);
 			buffer.flip(); // or .limit(0) to indicate it's empty
 		}
@@ -199,7 +205,7 @@ public class DataAccessProvider {
 		}
 		
 		@Override
-		public long length() {
+		public int length() {
 			return size;
 		}
 		
@@ -210,7 +216,7 @@ public class DataAccessProvider {
 		}
 		
 		@Override
-		public void seek(long offset) throws IOException {
+		public void seek(int offset) throws IOException {
 			if (offset > size) {
 				throw new IllegalArgumentException();
 			}

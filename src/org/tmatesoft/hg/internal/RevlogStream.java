@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgRepository;
 
@@ -77,7 +78,7 @@ public class RevlogStream {
 			revision = indexSize - 1;
 		}
 		try {
-			int recordOffset = inline ? (int) index.get(revision).offset : revision * REVLOGV1_RECORD_SIZE;
+			int recordOffset = inline ? index.get(revision).getIntOffset() : revision * REVLOGV1_RECORD_SIZE;
 			daIndex.seek(recordOffset + 12); // 6+2+4
 			int actualLen = daIndex.readInt();
 			return actualLen; 
@@ -99,7 +100,7 @@ public class RevlogStream {
 		}
 		DataAccess daIndex = getIndexStream();
 		try {
-			int recordOffset = inline ? (int) index.get(revision).offset : revision * REVLOGV1_RECORD_SIZE;
+			int recordOffset = inline ? index.get(revision).getIntOffset() : revision * REVLOGV1_RECORD_SIZE;
 			daIndex.seek(recordOffset + 32);
 			byte[] rv = new byte[20];
 			daIndex.readBytes(rv, 0, 20);
@@ -122,7 +123,7 @@ public class RevlogStream {
 		}
 		DataAccess daIndex = getIndexStream();
 		try {
-			int recordOffset = inline ? (int) index.get(revision).offset : revision * REVLOGV1_RECORD_SIZE;
+			int recordOffset = inline ? index.get(revision).getIntOffset() : revision * REVLOGV1_RECORD_SIZE;
 			daIndex.seek(recordOffset + 20);
 			int linkRev = daIndex.readInt();
 			return linkRev;
@@ -208,11 +209,11 @@ public class RevlogStream {
 				i = start;
 			}
 			
-			daIndex.seek(inline ? index.get(i).offset : i * REVLOGV1_RECORD_SIZE);
+			daIndex.seek(inline ? index.get(i).getIntOffset() : i * REVLOGV1_RECORD_SIZE);
 			for (; i <= end; i++ ) {
 				if (inline && needData) {
 					// inspector reading data (though FilterDataAccess) may have affected index position
-					daIndex.seek(index.get(i).offset);
+					daIndex.seek(index.get(i).getIntOffset());
 				}
 				long l = daIndex.readLong(); // 0
 				@SuppressWarnings("unused")
@@ -231,7 +232,7 @@ public class RevlogStream {
 				DataAccess userDataAccess = null;
 				if (needData) {
 					final byte firstByte;
-					long streamOffset = index.get(i).offset;
+					int streamOffset = index.get(i).getIntOffset();
 					DataAccess streamDataAccess;
 					if (inline) {
 						streamDataAccess = daIndex;
@@ -240,9 +241,10 @@ public class RevlogStream {
 						streamDataAccess = daData;
 						daData.seek(streamOffset);
 					}
+					final boolean patchToPrevious = baseRevision != i; // XXX not sure if this is the right way to detect a patch
 					firstByte = streamDataAccess.readByte();
 					if (firstByte == 0x78 /* 'x' */) {
-						userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen);
+						userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen);
 					} else if (firstByte == 0x75 /* 'u' */) {
 						userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
 					} else {
@@ -251,7 +253,7 @@ public class RevlogStream {
 						userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
 					}
 					// XXX 
-					if (baseRevision != i) { // XXX not sure if this is the right way to detect a patch
+					if (patchToPrevious) {
 						// this is a patch
 						LinkedList<PatchRecord> patches = new LinkedList<PatchRecord>();
 						while (!userDataAccess.isEmpty()) {
@@ -281,7 +283,7 @@ public class RevlogStream {
 				}
 			}
 		} catch (IOException ex) {
-			throw new IllegalStateException(ex); // FIXME need better handling
+			throw new HgBadStateException(ex); // FIXME need better handling
 		} finally {
 			daIndex.done();
 			if (daData != null) {
@@ -345,13 +347,22 @@ public class RevlogStream {
 	// perhaps, package-local or protected, if anyone else from low-level needs them
 	// XXX think over if we should keep offset in case of separate data file - we read the field anyway. Perhaps, distinct entry classes for Inline and non-inline indexes?
 	private static class IndexEntry {
-		public final long offset; // for separate .i and .d - copy of index record entry, for inline index - actual offset of the record in the .i file (record entry + revision * record size))
+		private final int/*long*/ offset; // for separate .i and .d - copy of index record entry, for inline index - actual offset of the record in the .i file (record entry + revision * record size))
 		//public final int length; // data past fixed record (need to decide whether including header size or not), and whether length is of compressed data or not
 		public final int baseRevision;
 
 		public IndexEntry(long o, int baseRev) {
-			offset = o;
+			offset = (int) o;
+			// Index file stores offsets as long, but since DataAccess doesn't support long length() and others yet, 
+			// no reason to operate with long offsets 
+			if (o != offset) {
+				throw new HgBadStateException("Data too big, offset didn't fit to sizeof(int)");
+			}
 			baseRevision = baseRev;
+		}
+
+		public int getIntOffset() {
+			return offset;
 		}
 	}
 
@@ -360,7 +371,7 @@ public class RevlogStream {
 	public/*for HgBundle; until moved to better place*/static byte[] apply(DataAccess baseRevisionContent, int outcomeLen, List<PatchRecord> patch) throws IOException {
 		int last = 0, destIndex = 0;
 		if (outcomeLen == -1) {
-			outcomeLen = (int) baseRevisionContent.length();
+			outcomeLen = baseRevisionContent.length();
 			for (PatchRecord pr : patch) {
 				outcomeLen += pr.start - last + pr.len;
 				last = pr.end;

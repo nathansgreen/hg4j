@@ -320,7 +320,7 @@ public class HgDataFile extends Revlog {
 
 		@Override
 		protected void prepare(int revisionNumber, DataAccess da) throws HgException, IOException {
-			long daLength = da.length();
+			final int daLength = da.length();
 			if (daLength < 4 || da.readByte() != 1 || da.readByte() != 10) {
 				metadata.recordNone(revisionNumber);
 				da.reset();

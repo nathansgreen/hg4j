@@ -28,11 +28,11 @@ import java.io.IOException;
  */
 public class FilterDataAccess extends DataAccess {
 	private final DataAccess dataAccess;
-	private final long offset;
+	private final int offset;
 	private final int length;
 	private int count;
 
-	public FilterDataAccess(DataAccess dataAccess, long offset, int length) {
+	public FilterDataAccess(DataAccess dataAccess, int offset, int length) {
 		this.dataAccess = dataAccess;
 		this.offset = offset;
 		this.length = length;
@@ -55,12 +55,12 @@ public class FilterDataAccess extends DataAccess {
 	}
 	
 	@Override
-	public long length() {
+	public int length() {
 		return length;
 	}
 
 	@Override
-	public void seek(long localOffset) throws IOException {
+	public void seek(int localOffset) throws IOException {
 		if (localOffset < 0 || localOffset > length) {
 			throw new IllegalArgumentException();
 		}

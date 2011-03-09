@@ -76,7 +76,9 @@ public class Main {
 		System.out.println(f1.isCopy());
 		System.out.println(f2.isCopy());
 		ByteArrayChannel bac = new ByteArrayChannel();
-		f1.content(0, bac);
+		f1.content(1, bac); // 0: 1151, 1: 1139
+		System.out.println(bac.toArray().length);
+		f2.content(0, bac = new ByteArrayChannel()); // 0: 14269
 		System.out.println(bac.toArray().length);
 	}
 	

@@ -64,11 +64,11 @@ public class ByteArrayDataAccess extends DataAccess {
 		return this;
 	}
 	@Override
-	public long length() {
+	public int length() {
 		return length;
 	}
 	@Override
-	public void seek(long offset) {
+	public void seek(int offset) {
 		pos = (int) offset;
 	}
 	@Override

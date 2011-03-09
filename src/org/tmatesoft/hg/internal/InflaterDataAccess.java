@@ -22,6 +22,8 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 import java.util.zip.ZipException;
 
+import org.tmatesoft.hg.core.HgBadStateException;
+
 
 /**
  * DataAccess counterpart for InflaterInputStream.
@@ -36,15 +38,20 @@ public class InflaterDataAccess extends FilterDataAccess {
 	private final byte[] buffer;
 	private final byte[] singleByte = new byte[1];
 	private int decompressedPos = 0;
-	private int decompressedLength = -1;
+	private int decompressedLength;
 
-	public InflaterDataAccess(DataAccess dataAccess, long offset, int length) {
-		this(dataAccess, offset, length, new Inflater(), 512);
+	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength) {
+		this(dataAccess, offset, compressedLength, -1, new Inflater(), 512);
 	}
 
-	public InflaterDataAccess(DataAccess dataAccess, long offset, int length, Inflater inflater, int bufSize) {
-		super(dataAccess, offset, length);
+	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength, int actualLength) {
+		this(dataAccess, offset, compressedLength, actualLength, new Inflater(), 512);
+	}
+
+	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength, int actualLength, Inflater inflater, int bufSize) {
+		super(dataAccess, offset, compressedLength);
 		this.inflater = inflater;
+		this.decompressedLength = actualLength;
 		buffer = new byte[bufSize];
 	}
 	
@@ -58,39 +65,53 @@ public class InflaterDataAccess extends FilterDataAccess {
 	
 	@Override
 	protected int available() {
-		throw new IllegalStateException("Can't tell how much uncompressed data left");
+		return length() - decompressedPos;
 	}
 	
 	@Override
 	public boolean isEmpty() {
-		return super.available() <= 0 && inflater.finished(); // and/or inflater.getRemaining() <= 0 ?
+		// can't use super.available() <= 0 because even when 0 < super.count < 6(?)
+		// decompressedPos might be already == length() 
+		return available() <= 0;
 	}
 	
 	@Override
-	public long length() {
+	public int length() {
 		if (decompressedLength != -1) {
 			return decompressedLength;
 		}
+		decompressedLength = 0; // guard to avoid endless loop in case length() would get invoked from below. 
 		int c = 0;
 		try {
 			int oldPos = decompressedPos;
-			while (!isEmpty()) {
-				readByte();
-				c++;
+			byte[] dummy = new byte[buffer.length];
+			int toRead;
+			while ((toRead = super.available()) > 0) {
+				if (toRead > buffer.length) {
+					toRead = buffer.length;
+				}
+				super.readBytes(buffer, 0, toRead);
+				inflater.setInput(buffer, 0, toRead);
+				try {
+					while (!inflater.needsInput()) {
+						c += inflater.inflate(dummy, 0, dummy.length);
+					}
+				} catch (DataFormatException ex) {
+					throw new HgBadStateException(ex);
+				}
 			}
 			decompressedLength = c + oldPos;
 			reset();
 			seek(oldPos);
 			return decompressedLength;
 		} catch (IOException ex) {
-			ex.printStackTrace(); // FIXME log error
 			decompressedLength = -1; // better luck next time?
-			return 0;
+			throw new HgBadStateException(ex); // XXX perhaps, checked exception
 		}
 	}
 	
 	@Override
-	public void seek(long localOffset) throws IOException {
+	public void seek(int localOffset) throws IOException {
 		if (localOffset < 0 /* || localOffset >= length() */) {
 			throw new IllegalArgumentException();
 		}

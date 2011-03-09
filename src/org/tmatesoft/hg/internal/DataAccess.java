@@ -32,7 +32,7 @@ public class DataAccess {
 	public boolean isEmpty() {
 		return true;
 	}
-	public long length() {
+	public int length() {
 		return 0;
 	}
 	/**
@@ -45,7 +45,7 @@ public class DataAccess {
 		return this;
 	}
 	// absolute positioning
-	public void seek(long offset) throws IOException {
+	public void seek(int offset) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 	// relative positioning
@@ -95,7 +95,7 @@ public class DataAccess {
 	// FIXME exception handling is not right, just for the sake of quick test
 	public byte[] byteArray() throws IOException {
 		reset();
-		byte[] rv = new byte[(int) length()];
+		byte[] rv = new byte[length()];
 		readBytes(rv, 0, rv.length);
 		return rv;
 	}
