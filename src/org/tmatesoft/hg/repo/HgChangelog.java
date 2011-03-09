@@ -108,6 +108,7 @@ public class HgChangelog extends Revlog {
 		private List<String> files; // unmodifiable collection (otherwise #files() and implicit #clone() shall be revised)
 		private Date time;
 		private int timezone;
+		// http://mercurial.selenic.com/wiki/PruningDeadBranches - Closing changesets can be identified by close=1 in the changeset's extra field.
 		private Map<String, String> extras;
 
 		/**
