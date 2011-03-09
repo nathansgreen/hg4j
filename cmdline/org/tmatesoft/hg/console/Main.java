@@ -26,6 +26,7 @@ import java.util.Map;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -59,13 +60,24 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.dumpIgnored();
-		m.dumpDirstate();
-		m.testStatusInternals();
-		m.catCompleteHistory();
-		m.dumpCompleteManifestLow();
-		m.dumpCompleteManifestHigh();
-		m.bunchOfTests();
+		m.inflaterLengthException();
+//		m.dumpIgnored();
+//		m.dumpDirstate();
+//		m.testStatusInternals();
+//		m.catCompleteHistory();
+//		m.dumpCompleteManifestLow();
+//		m.dumpCompleteManifestHigh();
+//		m.bunchOfTests();
+	}
+	
+	private void inflaterLengthException() throws Exception {
+		HgDataFile f1 = hgRepo.getFileNode("src/com/tmate/hgkit/console/Bundle.java");
+		HgDataFile f2 = hgRepo.getFileNode("test-repos.jar");
+		System.out.println(f1.isCopy());
+		System.out.println(f2.isCopy());
+		ByteArrayChannel bac = new ByteArrayChannel();
+		f1.content(0, bac);
+		System.out.println(bac.toArray().length);
 	}
 	
 	private void dumpIgnored() {
@@ -82,7 +94,7 @@ public class Main {
 	}
 
 	
-	private void catCompleteHistory() {
+	private void catCompleteHistory() throws Exception {
 		DigestHelper dh = new DigestHelper();
 		for (String fname : cmdLineOpts.getList("")) {
 			System.out.println(fname);
@@ -91,8 +103,10 @@ public class Main {
 				int total = fn.getRevisionCount();
 				System.out.printf("Total revisions: %d\n", total);
 				for (int i = 0; i < total; i++) {
-					byte[] content = fn.content(i);
+					ByteArrayChannel sink = new ByteArrayChannel();
+					fn.content(i, sink);
 					System.out.println("==========>");
+					byte[] content = sink.toArray();
 					System.out.println(new String(content));
 					int[] parentRevisions = new int[2];
 					byte[] parent1 = new byte[20];

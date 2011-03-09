@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,6 +31,7 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.RevlogStream;
 
 /**
@@ -51,8 +53,8 @@ public class HgChangelog extends Revlog {
 	public void range(int start, int end, final HgChangelog.Inspector inspector) {
 		RevlogStream.Inspector i = new RevlogStream.Inspector() {
 
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
-				RawChangeset cset = RawChangeset.parse(data, 0, data.length);
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
+				RawChangeset cset = RawChangeset.parse(da);
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 			}
@@ -64,8 +66,8 @@ public class HgChangelog extends Revlog {
 		final ArrayList<RawChangeset> rv = new ArrayList<RawChangeset>(end - start + 1);
 		RevlogStream.Inspector i = new RevlogStream.Inspector() {
 
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
-				RawChangeset cset = RawChangeset.parse(data, 0, data.length);
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
+				RawChangeset cset = RawChangeset.parse(da);
 				rv.add(cset);
 			}
 		};
@@ -79,9 +81,9 @@ public class HgChangelog extends Revlog {
 		}
 		RevlogStream.Inspector i = new RevlogStream.Inspector() {
 
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 				if (Arrays.binarySearch(revisions, revisionNumber) >= 0) {
-					RawChangeset cset = RawChangeset.parse(data, 0, data.length);
+					RawChangeset cset = RawChangeset.parse(da);
 					inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 				}
 			}
@@ -198,10 +200,15 @@ public class HgChangelog extends Revlog {
 			}
 		}
 
-		public static RawChangeset parse(byte[] data, int offset, int length) {
-			RawChangeset rv = new RawChangeset();
-			rv.init(data, offset, length);
-			return rv;
+		public static RawChangeset parse(DataAccess da) {
+			try {
+				byte[] data = da.byteArray();
+				RawChangeset rv = new RawChangeset();
+				rv.init(data, 0, data.length);
+				return rv;
+			} catch (IOException ex) {
+				throw new IllegalArgumentException(ex); // FIXME better handling of IOExc
+			}
 		}
 
 		/* package-local */void init(byte[] data, int offset, int length) {

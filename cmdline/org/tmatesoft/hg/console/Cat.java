@@ -46,7 +46,7 @@ public class Cat {
 			System.out.println(fname);
 			HgDataFile fn = hgRepo.getFileNode(fname);
 			if (fn.exists()) {
-				fn.content(rev, out, true);
+				fn.contentWithFilters(rev, out);
 				System.out.println();
 			} else {
 				System.out.printf("%s not found!\n", fname);

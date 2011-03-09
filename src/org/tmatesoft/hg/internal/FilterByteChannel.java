@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 
@@ -28,7 +29,7 @@ import org.tmatesoft.hg.util.CancelledException;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class FilterByteChannel implements ByteChannel {
+public class FilterByteChannel implements ByteChannel, Adaptable {
 	private final Filter[] filters;
 	private final ByteChannel delegate;
 	
@@ -52,4 +53,14 @@ public class FilterByteChannel implements ByteChannel {
 		return buffer.position() - srcPos; // consumed as much from original buffer
 	}
 
+	// adapters or implemented interfaces of the original class shall not be obfuscated by filter
+	public <T> T getAdapter(Class<T> adapterClass) {
+		if (delegate instanceof Adaptable) {
+			return ((Adaptable) delegate).getAdapter(adapterClass);
+		}
+		if (adapterClass != null && adapterClass.isInstance(delegate)) {
+			return adapterClass.cast(delegate);
+		}
+		return null;
+	}
 }

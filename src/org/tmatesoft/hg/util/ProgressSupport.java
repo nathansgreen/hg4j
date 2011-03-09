@@ -24,7 +24,7 @@ package org.tmatesoft.hg.util;
  */
 public interface ProgressSupport {
 
-	public void start(int totalUnits);
+	public void start(long totalUnits);
 	public void worked(int units);
 	public void done();
 
@@ -45,7 +45,7 @@ public interface ProgressSupport {
 				}
 			}
 			return new ProgressSupport() {
-				public void start(int totalUnits) {
+				public void start(long totalUnits) {
 				}
 				public void worked(int units) {
 				}

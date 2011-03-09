@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
@@ -164,12 +165,18 @@ public class HgStatusCollector {
 					inspector.modified(pp.path(fname));
 				}
 			} else {
-				Path copyTarget = pp.path(fname);
-				Path copyOrigin = getOriginIfCopy(repo, copyTarget, r1Files, rev1);
-				if (copyOrigin != null) {
-					inspector.copied(pp.path(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
-				} else {
-					inspector.added(copyTarget);
+				try {
+					Path copyTarget = pp.path(fname);
+					Path copyOrigin = getOriginIfCopy(repo, copyTarget, r1Files, rev1);
+					if (copyOrigin != null) {
+						inspector.copied(pp.path(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
+					} else {
+						inspector.added(copyTarget);
+					}
+				} catch (HgDataStreamException ex) {
+					ex.printStackTrace();
+					// FIXME perhaps, shall record this exception to dedicated mediator and continue
+					// for a single file not to be irresolvable obstacle for a status operation
 				}
 			}
 		}
@@ -184,7 +191,7 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
-	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<String> originals, int originalChangelogRevision) {
+	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<String> originals, int originalChangelogRevision) throws HgDataStreamException {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		while (df.isCopy()) {
 			Path original = df.getCopySourceName();

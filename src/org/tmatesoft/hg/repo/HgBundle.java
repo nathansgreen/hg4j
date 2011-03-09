@@ -21,12 +21,16 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.util.CancelledException;
 
 
 /**
@@ -45,7 +49,7 @@ public class HgBundle {
 		bundleFile = bundle;
 	}
 
-	public void changes(HgRepository hgRepo) throws IOException {
+	public void changes(HgRepository hgRepo) throws HgException, IOException {
 		DataAccess da = accessProvider.create(bundleFile);
 		DigestHelper dh = new DigestHelper();
 		try {
@@ -62,17 +66,23 @@ public class HgBundle {
 			// BundleFormat wiki says:
 			// Each Changelog entry patches the result of all previous patches 
 			// (the previous, or parent patch of a given patch p is the patch that has a node equal to p's p1 field)
-			byte[] baseRevContent = hgRepo.getChangelog().content(base);
+			ByteArrayChannel bac = new ByteArrayChannel();
+			hgRepo.getChangelog().rawContent(base, bac); // FIXME get DataAccess directly, to avoid
+			// extra byte[] (inside ByteArrayChannel) duplication just for the sake of subsequent ByteArrayDataChannel wrap.
+			ByteArrayDataAccess baseRevContent = new ByteArrayDataAccess(bac.toArray());
 			for (GroupElement ge : changelogGroup) {
 				byte[] csetContent = RevlogStream.apply(baseRevContent, -1, ge.patches);
 				dh = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
 				if (!ge.node().equalsTo(dh.asBinary())) {
 					throw new IllegalStateException("Integrity check failed on " + bundleFile + ", node:" + ge.node());
 				}
-				RawChangeset cs = RawChangeset.parse(csetContent, 0, csetContent.length);
+				ByteArrayDataAccess csetDataAccess = new ByteArrayDataAccess(csetContent);
+				RawChangeset cs = RawChangeset.parse(csetDataAccess);
 				System.out.println(cs.toString());
-				baseRevContent = csetContent;
+				baseRevContent = csetDataAccess.reset();
 			}
+		} catch (CancelledException ex) {
+			System.out.println("Operation cancelled");
 		} finally {
 			da.done();
 		}

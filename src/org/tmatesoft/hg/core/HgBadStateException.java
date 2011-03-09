@@ -25,4 +25,16 @@ package org.tmatesoft.hg.core;
 @SuppressWarnings("serial")
 public class HgBadStateException extends RuntimeException {
 
+	// FIXME quick-n-dirty fix, don't allow exceptions without a cause
+	public HgBadStateException() {
+		super("Internal error");
+	}
+
+	public HgBadStateException(String message) {
+		super(message);
+	}
+
+	public HgBadStateException(Throwable cause) {
+		super(cause);
+	}
 }

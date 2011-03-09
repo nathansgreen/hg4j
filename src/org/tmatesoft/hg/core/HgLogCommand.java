@@ -18,6 +18,7 @@ package org.tmatesoft.hg.core;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.io.IOException;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -31,6 +32,8 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -164,7 +167,7 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	/**
 	 * Similar to {@link #execute(org.tmatesoft.hg.repo.RawChangeset.Inspector)}, collects and return result as a list.
 	 */
-	public List<HgChangeset> execute() {
+	public List<HgChangeset> execute() throws HgException {
 		CollectHandler collector = new CollectHandler();
 		execute(collector);
 		return collector.getChanges();
@@ -176,7 +179,7 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	 * @throws IllegalArgumentException when inspector argument is null
 	 * @throws ConcurrentModificationException if this log command instance is already running
 	 */
-	public void execute(Handler handler) {
+	public void execute(Handler handler) throws HgException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -309,9 +312,10 @@ public class HgLogCommand implements HgChangelog.Inspector {
 		public Nodeid getRevision() {
 			return revision;
 		}
-		public byte[] getContent() {
-			// XXX Content wrapper, to allow formats other than byte[], e.g. Stream, DataAccess, etc?
-			return repo.getFileNode(path).content(revision);
+		public void putContentTo(ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
+			HgDataFile fn = repo.getFileNode(path);
+			int localRevision = fn.getLocalRevision(revision);
+			fn.contentWithFilters(localRevision, sink);
 		}
 	}
 }

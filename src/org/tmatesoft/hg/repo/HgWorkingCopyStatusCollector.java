@@ -30,10 +30,14 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.core.HgDataStreamException;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
@@ -176,7 +180,7 @@ public class HgWorkingCopyStatusCollector {
 			} else {
 				// check actual content to avoid false modified files
 				HgDataFile df = repo.getFileNode(fname);
-				if (!areTheSame(f, df.content(), df.getPath())) {
+				if (!areTheSame(f, df, HgRepository.TIP)) {
 					inspector.modified(df.getPath());
 				}
 			}
@@ -204,10 +208,15 @@ public class HgWorkingCopyStatusCollector {
 			// added: not known at the time of baseRevision, shall report
 			// merged: was not known, report as added?
 			if ((r = getDirstate().checkNormal(fname)) != null) {
-				Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
-				if (origin != null) {
-					inspector.copied(getPathPool().path(origin), getPathPool().path(fname));
-					return;
+				try {
+					Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
+					if (origin != null) {
+						inspector.copied(getPathPool().path(origin), getPathPool().path(fname));
+						return;
+					}
+				} catch (HgDataStreamException ex) {
+					ex.printStackTrace();
+					// FIXME report to a mediator, continue status collection
 				}
 			} else if ((r = getDirstate().checkAdded(fname)) != null) {
 				if (r.name2 != null && baseRevNames.contains(r.name2)) {
@@ -232,8 +241,7 @@ public class HgWorkingCopyStatusCollector {
 					inspector.modified(getPathPool().path(fname));
 				} else {
 					// check actual content to see actual changes
-					// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
-					if (areTheSame(f, fileNode.content(nid1), fileNode.getPath())) {
+					if (areTheSame(f, fileNode, fileNode.getLocalRevision(nid1))) {
 						inspector.clean(getPathPool().path(fname));
 					} else {
 						inspector.modified(getPathPool().path(fname));
@@ -251,6 +259,24 @@ public class HgWorkingCopyStatusCollector {
 		// The question is whether original Hg treats this case (same content, different parents and hence nodeids) as 'modified' or 'clean'
 	}
 
+	private boolean areTheSame(File f, HgDataFile dataFile, int localRevision) {
+		// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
+		ByteArrayChannel bac = new ByteArrayChannel();
+		boolean ioFailed = false;
+		try {
+			// need content with metadata striped off - although theoretically chances are metadata may be different,
+			// WC doesn't have it anyway 
+			dataFile.content(localRevision, bac);
+		} catch (CancelledException ex) {
+			// silently ignore - can't happen, ByteArrayChannel is not cancellable
+		} catch (IOException ex) {
+			ioFailed = true;
+		} catch (HgException ex) {
+			ioFailed = true;
+		}
+		return !ioFailed && areTheSame(f, bac.toArray(), dataFile.getPath());
+	}
+	
 	private boolean areTheSame(File f, final byte[] data, Path p) {
 		FileInputStream fis = null;
 		try {

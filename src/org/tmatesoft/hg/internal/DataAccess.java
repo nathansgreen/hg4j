@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 TMate Software Ltd
+ * Copyright (c) 2010-2011 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.internal;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * relevant parts of DataInput, non-stream nature (seek operation), explicit check for end of data.
@@ -30,6 +31,18 @@ import java.io.IOException;
 public class DataAccess {
 	public boolean isEmpty() {
 		return true;
+	}
+	public long length() {
+		return 0;
+	}
+	/**
+	 * get this instance into initial state
+	 * @throws IOException
+	 * @return <code>this</code> for convenience
+	 */
+	public DataAccess reset() throws IOException {
+		// nop, empty instance is always in the initial state
+		return this;
 	}
 	// absolute positioning
 	public void seek(long offset) throws IOException {
@@ -58,7 +71,32 @@ public class DataAccess {
 	public void readBytes(byte[] buf, int offset, int length) throws IOException {
 		throw new UnsupportedOperationException();
 	}
+	// reads bytes into ByteBuffer, up to its limit or total data length, whichever smaller
+	// FIXME perhaps, in DataAccess paradigm (when we read known number of bytes, we shall pass specific byte count to read) 
+	public void readBytes(ByteBuffer buf) throws IOException {
+//		int toRead = Math.min(buf.remaining(), (int) length());
+//		if (buf.hasArray()) {
+//			readBytes(buf.array(), buf.arrayOffset(), toRead);
+//		} else {
+//			byte[] bb = new byte[toRead];
+//			readBytes(bb, 0, bb.length);
+//			buf.put(bb);
+//		}
+		// FIXME optimize to read as much as possible at once
+		while (!isEmpty() && buf.hasRemaining()) {
+			buf.put(readByte());
+		}
+	}
 	public byte readByte() throws IOException {
 		throw new UnsupportedOperationException();
+	}
+
+	// XXX decide whether may or may not change position in the DataAccess
+	// FIXME exception handling is not right, just for the sake of quick test
+	public byte[] byteArray() throws IOException {
+		reset();
+		byte[] rv = new byte[(int) length()];
+		readBytes(rv, 0, rv.length);
+		return rv;
 	}
 }

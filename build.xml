@@ -76,6 +76,7 @@
 			<test name="org.tmatesoft.hg.test.TestManifest" />
 			<test name="org.tmatesoft.hg.test.TestStatus" />
 			<test name="org.tmatesoft.hg.test.TestStorePath" />
+			<test name="org.tmatesoft.hg.test.TestByteChannel" />
 		</junit>
 	</target>
 

@@ -48,7 +48,7 @@ public class Status {
 		}
 		//
 		HgStatusCommand cmd = hgRepo.createStatusCommand();
-		if (cmdLineOpts.getBoolean("-A", "-all")) {
+		if (cmdLineOpts.getBoolean("-A", "--all")) {
 			cmd.all();
 		} else {
 			// default: mardu

@@ -18,9 +18,8 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgInternals.wrongLocalRevision;
 import static org.tmatesoft.hg.repo.HgRepository.*;
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
-import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -28,14 +27,14 @@ import java.util.Collection;
 import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
-import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.ProgressSupport;
 
 
 
@@ -71,106 +70,86 @@ public class HgDataFile extends Revlog {
 
 	// human-readable (i.e. "COPYING", not "store/data/_c_o_p_y_i_n_g.i")
 	public Path getPath() {
-		return path; // hgRepo.backresolve(this) -> name?
+		return path; // hgRepo.backresolve(this) -> name? In this case, what about hashed long names?
 	}
 
 	public int length(Nodeid nodeid) {
 		return content.dataLength(getLocalRevision(nodeid));
 	}
 
-	public byte[] content() {
-		return content(TIP);
+	public void workingCopy(ByteChannel sink) throws IOException, CancelledException {
+		throw HgRepository.notImplemented();
 	}
 	
-	/*XXX not sure applyFilters is the best way to do, perhaps, callers shall add filters themselves?*/
-	public void content(int revision, ByteChannel sink, boolean applyFilters) throws HgDataStreamException, IOException, CancelledException {
-		byte[] content = content(revision);
-		final CancelSupport cancelSupport = CancelSupport.Factory.get(sink);
-		final ProgressSupport progressSupport = ProgressSupport.Factory.get(sink);
-		ByteBuffer buf = ByteBuffer.allocate(512);
-		int left = content.length;
-		progressSupport.start(left);
-		int offset = 0;
-		cancelSupport.checkCancelled();
-		ByteChannel _sink = applyFilters ? new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())) : sink;
-		do {
-			buf.put(content, offset, Math.min(left, buf.remaining()));
-			buf.flip();
-			cancelSupport.checkCancelled();
-			// XXX I may not rely on returned number of bytes but track change in buf position instead.
-			int consumed = _sink.write(buf);
-			buf.compact();
-			offset += consumed;
-			left -= consumed;
-			progressSupport.worked(consumed);
-		} while (left > 0);
-		progressSupport.done(); // XXX shall specify whether #done() is invoked always or only if completed successfully.
+//	public void content(int revision, ByteChannel sink, boolean applyFilters) throws HgDataStreamException, IOException, CancelledException {
+//		byte[] content = content(revision);
+//		final CancelSupport cancelSupport = CancelSupport.Factory.get(sink);
+//		final ProgressSupport progressSupport = ProgressSupport.Factory.get(sink);
+//		ByteBuffer buf = ByteBuffer.allocate(512);
+//		int left = content.length;
+//		progressSupport.start(left);
+//		int offset = 0;
+//		cancelSupport.checkCancelled();
+//		ByteChannel _sink = applyFilters ? new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())) : sink;
+//		do {
+//			buf.put(content, offset, Math.min(left, buf.remaining()));
+//			buf.flip();
+//			cancelSupport.checkCancelled();
+//			// XXX I may not rely on returned number of bytes but track change in buf position instead.
+//			int consumed = _sink.write(buf);
+//			buf.compact();
+//			offset += consumed;
+//			left -= consumed;
+//			progressSupport.worked(consumed);
+//		} while (left > 0);
+//		progressSupport.done(); // XXX shall specify whether #done() is invoked always or only if completed successfully.
+//	}
+	
+	/*XXX not sure distinct method contentWithFilters() is the best way to do, perhaps, callers shall add filters themselves?*/
+	public void contentWithFilters(int revision, ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
+		content(revision, new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())));
 	}
 
 	// for data files need to check heading of the file content for possible metadata
 	// @see http://mercurial.selenic.com/wiki/FileFormats#data.2BAC8-
-	@Override
-	public byte[] content(int revision) {
+	public void content(int revision, ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
 		if (revision == TIP) {
 			revision = getLastRevision();
 		}
-		if (wrongLocalRevision(revision) || revision == BAD_REVISION || revision == WORKING_COPY) {
+		if (revision == WORKING_COPY) {
+			workingCopy(sink);
+			return;
+		}
+		if (wrongLocalRevision(revision) || revision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.valueOf(revision));
 		}
-		byte[] data = super.content(revision);
+		if (sink == null) {
+			throw new IllegalArgumentException();
+		}
 		if (metadata == null) {
 			metadata = new Metadata();
 		}
+		ContentPipe insp;
 		if (metadata.none(revision)) {
-			// although not very reasonable when data is byte array, this check might
-			// get handy when there's a stream/channel to avoid useless reads and rewinds.
-			return data;
-		}
-		int toSkip = 0;
-		if (!metadata.known(revision)) {
-			if (data.length < 4 || (data[0] != 1 && data[1] != 10)) {
-				metadata.recordNone(revision);
-				return data;
-			}
-			int lastEntryStart = 2;
-			int lastColon = -1;
-			ArrayList<MetadataEntry> _metadata = new ArrayList<MetadataEntry>();
-			String key = null, value = null;
-			for (int i = 2; i < data.length; i++) {
-				if (data[i] == (int) ':') {
-					key = new String(data, lastEntryStart, i - lastEntryStart);
-					lastColon = i;
-				} else if (data[i] == '\n') {
-					if (key == null || lastColon == -1 || i <= lastColon) {
-						throw new IllegalStateException(); // FIXME log instead and record null key in the metadata. Ex just to fail fast during dev
-					}
-					value = new String(data, lastColon + 1, i - lastColon - 1).trim();
-					_metadata.add(new MetadataEntry(key, value));
-					key = value = null;
-					lastColon = -1;
-					lastEntryStart = i+1;
-				} else if (data[i] == 1 && i + 1 < data.length && data[i+1] == 10) {
-					if (key != null && lastColon != -1 && i > lastColon) {
-						// just in case last entry didn't end with newline
-						value = new String(data, lastColon + 1, i - lastColon - 1);
-						_metadata.add(new MetadataEntry(key, value));
-					}
-					lastEntryStart = i+1;
-					break;
-				}
-			}
-			_metadata.trimToSize();
-			metadata.add(revision, lastEntryStart, _metadata);
-			toSkip = lastEntryStart;
+			insp = new ContentPipe(sink, 0);
+		} else if (metadata.known(revision)) {
+			insp = new ContentPipe(sink, metadata.dataOffset(revision));
 		} else {
-			toSkip = metadata.dataOffset(revision);
+			// do not know if there's metadata
+			insp = new MetadataContentPipe(sink, metadata);
 		}
-		// XXX copy of an array may be memory-hostile, a wrapper with baseOffsetShift(lastEntryStart) would be more convenient
-		byte[] rv = new byte[data.length - toSkip];
-		System.arraycopy(data, toSkip, rv, 0, rv.length);
-		return rv;
+		insp.checkCancelled();
+		super.content.iterate(revision, revision, true, insp);
+		try {
+			insp.checkFailed();
+		} catch (HgDataStreamException ex) {
+			throw ex;
+		} catch (HgException ex) {
+			// shall not happen, unless we changed ContentPipe or its subclass
+			throw new HgDataStreamException(ex.getClass().getName(), ex);
+		}
 	}
-
+	
 	public void history(HgChangelog.Inspector inspector) {
 		history(0, getLastRevision(), inspector);
 	}
@@ -192,7 +171,7 @@ public class HgDataFile extends Revlog {
 		RevlogStream.Inspector insp = new RevlogStream.Inspector() {
 			int count = 0;
 			
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 				commitRevisions[count++] = linkRevision;
 			}
 		};
@@ -210,10 +189,22 @@ public class HgDataFile extends Revlog {
 		return getRepo().getChangelog().getRevision(changelogRevision);
 	}
 
-	public boolean isCopy() {
+	public boolean isCopy() throws HgDataStreamException {
 		if (metadata == null || !metadata.checked(0)) {
 			// content() always initializes metadata.
-			content(0); // FIXME expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
+			 // FIXME this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
+			try {
+				content(0, new ByteChannel() { // No-op channel
+					public int write(ByteBuffer buffer) throws IOException {
+						// pretend we consumed whole buffer
+						int rv = buffer.remaining();
+						buffer.position(buffer.limit());
+						return rv;
+					}
+				});
+			} catch (Exception ex) {
+				throw new HgDataStreamException("Can't initialize metadata", ex);
+			}
 		}
 		if (!metadata.known(0)) {
 			return false;
@@ -221,14 +212,14 @@ public class HgDataFile extends Revlog {
 		return metadata.find(0, "copy") != null;
 	}
 
-	public Path getCopySourceName() {
+	public Path getCopySourceName() throws HgDataStreamException {
 		if (isCopy()) {
 			return Path.create(metadata.find(0, "copy"));
 		}
 		throw new UnsupportedOperationException(); // XXX REVISIT, think over if Exception is good (clients would check isCopy() anyway, perhaps null is sufficient?)
 	}
 	
-	public Nodeid getCopySourceRevision() {
+	public Nodeid getCopySourceRevision() throws HgDataStreamException {
 		if (isCopy()) {
 			return Nodeid.fromAscii(metadata.find(0, "copyrev")); // XXX reuse/cache Nodeid
 		}
@@ -315,6 +306,78 @@ public class HgDataFile extends Revlog {
 				}
 			}
 			return null;
+		}
+	}
+
+	private static class MetadataContentPipe extends ContentPipe {
+
+		private final Metadata metadata;
+
+		public MetadataContentPipe(ByteChannel sink, Metadata _metadata) {
+			super(sink, 0);
+			metadata = _metadata;
+		}
+
+		@Override
+		protected void prepare(int revisionNumber, DataAccess da) throws HgException, IOException {
+			long daLength = da.length();
+			if (daLength < 4 || da.readByte() != 1 || da.readByte() != 10) {
+				metadata.recordNone(revisionNumber);
+				da.reset();
+				return;
+			}
+			int lastEntryStart = 2;
+			int lastColon = -1;
+			ArrayList<MetadataEntry> _metadata = new ArrayList<MetadataEntry>();
+			// XXX in fact, need smth like ByteArrayBuilder, similar to StringBuilder,
+			// which can't be used here because we can't convert bytes to chars as we read them
+			// (there might be multi-byte encoding), and we need to collect all bytes before converting to string 
+			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			String key = null, value = null;
+			boolean byteOne = false;
+			for (int i = 2; i < daLength; i++) {
+				byte b = da.readByte();
+				if (b == '\n') {
+					if (byteOne) { // i.e. \n follows 1
+						lastEntryStart = i+1;
+						// XXX is it possible to have here incomplete key/value (i.e. if last pair didn't end with \n)
+						break;
+					}
+					if (key == null || lastColon == -1 || i <= lastColon) {
+						throw new IllegalStateException(); // FIXME log instead and record null key in the metadata. Ex just to fail fast during dev
+					}
+					value = new String(bos.toByteArray()).trim();
+					bos.reset();
+					_metadata.add(new MetadataEntry(key, value));
+					key = value = null;
+					lastColon = -1;
+					lastEntryStart = i+1;
+					continue;
+				} 
+				// byteOne has to be consumed up to this line, if not jet, consume it
+				if (byteOne) {
+					// insert 1 we've read on previous step into the byte builder
+					bos.write(1);
+					// fall-through to consume current byte
+					byteOne = false;
+				}
+				if (b == (int) ':') {
+					assert value == null;
+					key = new String(bos.toByteArray());
+					bos.reset();
+					lastColon = i;
+				} else if (b == 1) {
+					byteOne = true;
+				} else {
+					bos.write(b);
+				}
+			}
+			_metadata.trimToSize();
+			metadata.add(revisionNumber, lastEntryStart, _metadata);
+			if (da.isEmpty() || !byteOne) {
+				throw new HgDataStreamException(String.format("Metadata for revision %d is not closed properly", revisionNumber), null);
+			}
+			// da is in prepared state (i.e. we consumed all bytes up to metadata end).
 		}
 	}
 }

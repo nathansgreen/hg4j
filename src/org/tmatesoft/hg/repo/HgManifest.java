@@ -16,7 +16,11 @@
  */
 package org.tmatesoft.hg.repo;
 
+import java.io.IOException;
+
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.RevlogStream;
 
 
@@ -36,38 +40,43 @@ public class HgManifest extends Revlog {
 
 			private boolean gtg = true; // good to go
 
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, byte[] data) {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 				if (!gtg) {
 					return;
 				}
-				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true));
-				int i;
-				String fname = null;
-				String flags = null;
-				Nodeid nid = null;
-				for (i = 0; gtg && i < actualLen; i++) {
-					int x = i;
-					for( ; data[i] != '\n' && i < actualLen; i++) {
-						if (fname == null && data[i] == 0) {
-							fname = new String(data, x, i - x);
-							x = i+1;
+				try {
+					gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true));
+					int i;
+					String fname = null;
+					String flags = null;
+					Nodeid nid = null;
+					byte[] data = da.byteArray();
+					for (i = 0; gtg && i < actualLen; i++) {
+						int x = i;
+						for( ; data[i] != '\n' && i < actualLen; i++) {
+							if (fname == null && data[i] == 0) {
+								fname = new String(data, x, i - x);
+								x = i+1;
+							}
 						}
-					}
-					if (i < actualLen) {
-						assert data[i] == '\n'; 
-						int nodeidLen = i - x < 40 ? i-x : 40;
-						nid = Nodeid.fromAscii(data, x, nodeidLen);
-						if (nodeidLen + x < i) {
-							// 'x' and 'l' for executable bits and symlinks?
-							// hg --debug manifest shows 644 for each regular file in my repo
-							flags = new String(data, x + nodeidLen, i-x-nodeidLen);
+						if (i < actualLen) {
+							assert data[i] == '\n'; 
+							int nodeidLen = i - x < 40 ? i-x : 40;
+							nid = Nodeid.fromAscii(data, x, nodeidLen);
+							if (nodeidLen + x < i) {
+								// 'x' and 'l' for executable bits and symlinks?
+								// hg --debug manifest shows 644 for each regular file in my repo
+								flags = new String(data, x + nodeidLen, i-x-nodeidLen);
+							}
+							gtg = gtg && inspector.next(nid, fname, flags);
 						}
-						gtg = gtg && inspector.next(nid, fname, flags);
+						nid = null;
+						fname = flags = null;
 					}
-					nid = null;
-					fname = flags = null;
+					gtg = gtg && inspector.end(revisionNumber);
+				} catch (IOException ex) {
+					throw new HgBadStateException(ex);
 				}
-				gtg = gtg && inspector.end(revisionNumber);
 			}
 		};
 		content.iterate(start, end, true, insp);

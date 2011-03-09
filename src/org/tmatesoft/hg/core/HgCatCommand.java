@@ -118,6 +118,6 @@ public class HgCatCommand {
 		} else {
 			revToExtract = localRevision;
 		}
-		dataFile.content(revToExtract, sink, true);
+		dataFile.contentWithFilters(revToExtract, sink);
 	}
 }

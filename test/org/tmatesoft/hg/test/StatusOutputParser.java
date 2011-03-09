@@ -64,42 +64,45 @@ public class StatusOutputParser implements OutputParser {
 
 	public void parse(CharSequence seq) {
 		Matcher m = pattern.matcher(seq);
-		Path lastAdded = null;
+		Path lastEntry = null;
 		while (m.find()) {
-			String fname = m.group(2);
+			Path fname = pathHelper.path(m.group(2));
 			switch ((int) m.group(1).charAt(0)) {
 			case (int) 'M' : {
-				result.modified(pathHelper.path(fname));
+				result.modified(fname);
+				lastEntry = fname; // for files modified through merge there's also 'copy' source 
 				break;
 			}
 			case (int) 'A' : {
-				result.added(lastAdded = pathHelper.path(fname));
+				result.added(fname);
+				lastEntry = fname;
 				break;
 			}
 			case (int) 'R' : {
-				result.removed(pathHelper.path(fname));
+				result.removed(fname);
 				break;
 			}
 			case (int) '?' : {
-				result.unknown(pathHelper.path(fname));
+				result.unknown(fname);
 				break;
 			}
 			case (int) 'I' : {
-				result.ignored(pathHelper.path(fname));
+				result.ignored(fname);
 				break;
 			}
 			case (int) 'C' : {
-				result.clean(pathHelper.path(fname));
+				result.clean(fname);
 				break;
 			}
 			case (int) '!' : {
-				result.missing(pathHelper.path(fname));
+				result.missing(fname);
 				break;
 			}
 			case (int) ' ' : {
 				// last added is copy destination
 				// to get or to remove it - depends on what StatusCollector does in this case
-				result.copied(pathHelper.path(fname), lastAdded);
+				result.copied(fname, lastEntry);
+				lastEntry = null;
 				break;
 			}
 			}
