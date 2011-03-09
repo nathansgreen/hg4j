@@ -163,6 +163,11 @@ public class TestStatus {
 	 * 18.02.2011
 	 * 'hg status -A --rev 3:80', 10 runs:  Native client total 2000 (200 per run), Java client 250 (25)
 	 * 'hg log --debug', 10 runs: Native client total 2297 (229 per run), Java client 125 (12)
+	 * 
+	 * 9.3.2011 (DataAccess instead of byte[] in ReflogStream.Inspector
+	 * 'hg status -A',				10 runs:  Native client total 1516 (151 per run), Java client 219 (21)
+	 * 'hg status -A --rev 3:80',	10 runs:  Native client total 1875 (187 per run), Java client 3187 (318) (!!! ???)
+	 * 'hg log --debug',			10 runs: Native client total 2484 (248 per run), Java client 344 (34)
 	 */
 	public void testPerformance() throws Exception {
 		final int runs = 10;
