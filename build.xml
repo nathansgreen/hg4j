@@ -17,7 +17,11 @@
 -->
 <project name="hg4j" default="samples">
 	<description>
-            Build, test and showcase hg4j 
+        Build, test and showcase hg4j
+		Targets:
+		  * build - compile and jar binary and source bundles
+		  * tests - run tests with JUnit
+		  * samples - few command-line counterparts to demonstrate basic capabiliites 
     </description>
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
@@ -28,6 +32,7 @@
 	<property name="hg4j.jar" value="hg4j_${version.jar}.jar" />
 	<property name="hg4j-tests.jar" value="hg4j-tests_${version.jar}.jar" />
 	<property name="hg4j-console.jar" value="hg4j-console_${version.jar}.jar" />
+	<property name="hg4j-src.jar" value="hg4j-src_${version.jar}.jar" />
 
 	<target name="samples" depends="build-cmdline">
 		<path id="path.cmdline" path="${hg4j.jar};${hg4j-console.jar}" />
@@ -80,7 +85,17 @@
 		</junit>
 	</target>
 
-	<target name="build">
+	<!-- -->
+	<target name="build" depends="build-lib, build-cmdline, build-tests">
+		<jar destfile="${hg4j-src.jar}">
+			<fileset dir="src/" includes="org/tmatesoft/hg/**" />
+			<fileset dir="test/" includes="org/tmatesoft/hg/**" />
+			<fileset dir="cmdline/" includes="org/tmatesoft/hg/**" />
+			<fileset file="COPYING"/>
+		</jar>
+	</target>
+
+	<target name="build-lib">
 		<mkdir dir="bin" />
 		<javac srcdir="src" destdir="bin" />
 		<jar destfile="${hg4j.jar}">
@@ -94,7 +109,7 @@
 		</jar>
 	</target>
 
-	<target name="build-tests" depends="build">
+	<target name="build-tests" depends="build-lib">
 		<mkdir dir="bin" />
 		<javac srcdir="test" destdir="bin" />
 		<jar destfile="${hg4j-tests.jar}">
@@ -103,7 +118,7 @@
 		</jar>
 	</target>
 
-	<target name="build-cmdline" depends="build">
+	<target name="build-cmdline" depends="build-lib">
 		<mkdir dir="bin" />
 		<javac srcdir="cmdline" destdir="bin" />
 		<jar destfile="${hg4j-console.jar}">
@@ -111,5 +126,5 @@
 			<fileset file="COPYING"/>
 		</jar>
 	</target>
-
+	
 </project>
