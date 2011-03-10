@@ -192,16 +192,23 @@ public class HgDataFile extends Revlog {
 	public boolean isCopy() throws HgDataStreamException {
 		if (metadata == null || !metadata.checked(0)) {
 			// content() always initializes metadata.
-			 // FIXME this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
+			// FIXME this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
+			// Alternatively, may parameterize MetadataContentPipe to do prepare only.
+			// For reference, when throwing CancelledException, hg status -A --rev 3:80 takes 70 ms
+			// however, if we just consume buffer instead (buffer.position(buffer.limit()), same command takes ~320ms
+			// (compared to command-line counterpart of 190ms)
 			try {
 				content(0, new ByteChannel() { // No-op channel
-					public int write(ByteBuffer buffer) throws IOException {
+					public int write(ByteBuffer buffer) throws IOException, CancelledException {
 						// pretend we consumed whole buffer
-						int rv = buffer.remaining();
-						buffer.position(buffer.limit());
-						return rv;
+//						int rv = buffer.remaining();
+//						buffer.position(buffer.limit());
+//						return rv;
+						throw new CancelledException();
 					}
 				});
+			} catch (CancelledException ex) {
+				// it's ok, we did that
 			} catch (Exception ex) {
 				throw new HgDataStreamException("Can't initialize metadata", ex);
 			}
