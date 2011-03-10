@@ -248,6 +248,7 @@ public class HgStatusCommand {
 		public void copied(Path fnameOrigin, Path fnameAdded) {
 			if (needCopies) {
 				if (matcher == null || matcher.accept(fnameAdded)) {
+					// FIXME in fact, merged files may report 'copied from' as well, correct status kind thus may differ from Added
 					handler.handleStatus(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
 				}
 			}
