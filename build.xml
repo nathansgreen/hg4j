@@ -25,8 +25,8 @@
     </description>
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
-	<property name="ver.qualifier" value=".rc1" />
-	<property name="version.lib" value="0.0.9" />
+	<property name="ver.qualifier" value="" />
+	<property name="version.lib" value="0.1.0" />
 	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
 
 	<property name="hg4j.jar" value="hg4j_${version.jar}.jar" />
