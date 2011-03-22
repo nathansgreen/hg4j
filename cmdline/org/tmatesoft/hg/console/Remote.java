@@ -34,6 +34,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Internals;
 
@@ -58,9 +59,9 @@ public class Remote {
 		ConfigFile cfg = new Internals().newConfigFile();
 		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		String svnkitServer = cfg.getSection("paths").get("svnkit");
-//		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=a78c980749e3ccebb47138b547e9b644a22797a9");
+		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=" + Nodeid.NULL.toString());
 //		URL url = new URL("http://localhost:8000/" + "?cmd=stream_out");
-		URL url = new URL(svnkitServer + "?cmd=stream_out");
+//		URL url = new URL(svnkitServer + "?cmd=stream_out");
 	
 		SSLContext sslContext = SSLContext.getInstance("SSL");
 		class TrustEveryone implements X509TrustManager {
@@ -95,8 +96,9 @@ public class Remote {
 		System.out.printf("Content type is %s and its length is %d\n", urlConnection.getContentType(), urlConnection.getContentLength());
 		InputStream is = urlConnection.getInputStream();
 		//
-		dump(is, -1); // simple dump, any cmd
-//		writeBundle(is); // cmd=changegroup
+//		dump(is, -1); // simple dump, any cmd
+		writeBundle(is, false, "HG10GZ"); // cmd=changegroup
+		//writeBundle(is, true, "" or "HG10UN");
 		//
 		urlConnection.disconnect();
 		//
@@ -115,10 +117,11 @@ public class Remote {
 		System.out.println();
 	}
 	
-	private static void writeBundle(InputStream is) throws IOException {
-		InflaterInputStream zipStream = new InflaterInputStream(is);
+	private static void writeBundle(InputStream is, boolean decompress, String header) throws IOException {
+		InputStream zipStream = decompress ? new InflaterInputStream(is) : is;
 		File tf = File.createTempFile("hg-bundle-", null);
 		FileOutputStream fos = new FileOutputStream(tf);
+		fos.write(header.getBytes());
 		int r;
 		byte[] buf = new byte[8*1024];
 		while ((r = zipStream.read(buf)) != -1) {
