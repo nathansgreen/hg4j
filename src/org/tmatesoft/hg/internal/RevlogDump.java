@@ -73,7 +73,10 @@ public class RevlogDump {
 			int parent2Revision = di.readInt();
 			byte[] buf = new byte[32];
 			di.readFully(buf, 12, 20);
-			dis.skip(12);
+			dis.skipBytes(12); 
+			// CAN'T USE skip() here without extra precautions. E.g. I ran into situation when 
+			// buffer was 8192 and BufferedInputStream was at position 8182 before attempt to skip(12). 
+			// BIS silently skips available bytes and leaves me two extra bytes that ruin the rest of the code.
 			System.out.printf("%4d:%14d %6X %10d %10d %10d %10d %8d %8d     %040x\n", entryCount, offset, flags, compressedLen, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, new BigInteger(buf));
 			if (inlineData) {
 				String resultString;
