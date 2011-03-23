@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.internal.DataAccessProvider;
 
 /**
  * Utility methods to find Mercurial repository at a given location
@@ -60,5 +61,12 @@ public class HgLookup {
 		} catch (IOException ex) {
 			throw new HgException(location.toString(), ex);
 		}
+	}
+	
+	public HgBundle loadBundle(File location) throws HgException {
+		if (location == null || !location.canRead()) {
+			throw new IllegalArgumentException();
+		}
+		return new HgBundle(new DataAccessProvider(), location);
 	}
 }

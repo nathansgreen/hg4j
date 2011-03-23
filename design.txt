@@ -37,11 +37,15 @@ then would like to see what changeset this file came from)?
 +repo.status - use same collector class twice, difference as external code. add external walker that keeps collected maps and use it in Log operation to give files+,files-  
 + strip \1\n metadata out from RevlogStream
 + hash/digest long names for fncache
++Strip off metadata from beg of the stream - DataAccess (with rebase/moveBaseOffset(int)) would be handy
++ hg status, compare revision and local file with kw expansion and eol extension
+
+write code to convert inlined revlog to .i and .d
 
 delta merge
 DataAccess - collect debug info (buffer misses, file size/total read operations) to find out better strategy to buffer size detection. Compare performance.
 
-Strip off metadata from beg of the stream - DataAccess (with rebase/moveBaseOffset(int)) would be handy
+
 Parameterize StatusCollector to produce copy only when needed. And HgDataFile.metadata perhaps should be moved to cacheable place?
 
 Status operation from GUI - guess, usually on a file/subfolder, hence API should allow for starting path (unlike cmdline, seems useless to implement include/exclide patterns - GUI users hardly enter them, ever)
@@ -54,7 +58,6 @@ Status operation from GUI - guess, usually on a file/subfolder, hence API should
 ??? http://mercurial.selenic.com/wiki/Manifest says "Multiple changesets may refer to the same manifest revision". To me, each changeset 
 changes repository, hence manifest should update nodeids of the files it lists, effectively creating new manifest revision.
 
-? hg status, compare revision and local file with kw expansion and eol extension
 ? subrepos in log, status (-S) and manifest commands
 
 
