@@ -241,7 +241,7 @@ public class RevlogStream {
 						streamDataAccess = daData;
 						daData.seek(streamOffset);
 					}
-					final boolean patchToPrevious = baseRevision != i; // XXX not sure if this is the right way to detect a patch
+					final boolean patchToPrevious = baseRevision != i; // the only way I found to tell if it's a patch
 					firstByte = streamDataAccess.readByte();
 					if (firstByte == 0x78 /* 'x' */) {
 						userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen);
@@ -300,7 +300,7 @@ public class RevlogStream {
 		DataAccess da = getIndexStream();
 		try {
 			int versionField = da.readInt();
-			da.readInt(); // just to skip next 2 bytes of offset + flags
+			da.readInt(); // just to skip next 4 bytes of offset + flags
 			final int INLINEDATA = 1 << 16;
 			inline = (versionField & INLINEDATA) != 0;
 			long offset = 0; // first offset is always 0, thus Hg uses it for other purposes

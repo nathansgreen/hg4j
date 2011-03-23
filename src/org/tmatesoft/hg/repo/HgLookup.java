@@ -18,6 +18,7 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.internal.DataAccessProvider;
@@ -68,5 +69,12 @@ public class HgLookup {
 			throw new IllegalArgumentException();
 		}
 		return new HgBundle(new DataAccessProvider(), location);
+	}
+
+	public HgRemoteRepository detect(URL url) throws HgException {
+		if (Boolean.FALSE.booleanValue()) {
+			throw HgRepository.notImplemented();
+		}
+		return null;
 	}
 }

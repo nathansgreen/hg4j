@@ -30,7 +30,7 @@ import java.util.Arrays;
  * @author TMate Software Ltd.
  *
  */
-public final class Nodeid {
+public final class Nodeid implements Comparable<Nodeid> {
 	
 	/**
 	 * <b>nullid</b>, empty root revision.
@@ -70,6 +70,18 @@ public final class Nodeid {
 
 	public boolean equalsTo(byte[] buf) {
 		return Arrays.equals(this.binaryData, buf);
+	}
+	
+	public int compareTo(Nodeid o) {
+		if (this == o) {
+			return 0;
+		}
+		for (int i = 0; i < 20; i++) {
+			if (binaryData[i] != o.binaryData[i]) {
+				return binaryData[i] < o.binaryData[i] ? -1 : 1;
+			}
+		}
+		return 0;
 	}
 	
 	@Override

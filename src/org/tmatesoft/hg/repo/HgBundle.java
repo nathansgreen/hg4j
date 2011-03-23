@@ -148,6 +148,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 					}
 					RawChangeset cs = RawChangeset.parse(csetDataAccess);
 					System.out.println(cs.toString());
+					prevRevContent.done();
 					prevRevContent = csetDataAccess.reset();
 				} catch (CancelledException ex) {
 					return false;
@@ -190,8 +191,8 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		void fileEnd(String name);
 
 		/**
-		 * @param element
-		 *            data element, instance might be reused
+		 * XXX desperately need exceptions here
+		 * @param element data element, instance might be reused, don't keep a reference to it or its raw data
 		 * @return <code>true</code> to continue
 		 */
 		boolean element(GroupElement element);
@@ -349,6 +350,9 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			// regardless whether that slice has read it or not.
 			GroupElement ge = new GroupElement(nb, slice);
 			good2go = inspector.element(ge);
+			slice.done(); // BADA doesn't implement done(), but it could (e.g. free array) 
+			/// and we'd better tell it we are not going to use it any more. However, it's important to ensure Inspector
+			// implementations out there do not retain GroupElement.rawData()
 			len = da.isEmpty() ? 0 : da.readInt();
 		}
 		// need to skip up to group end if inspector told he don't want to continue with the group, 
