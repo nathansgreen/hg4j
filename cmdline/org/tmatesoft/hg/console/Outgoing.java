@@ -18,6 +18,8 @@ package org.tmatesoft.hg.console;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
 
+import java.io.File;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -25,6 +27,8 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ConfigFile;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
@@ -48,7 +52,14 @@ public class Outgoing {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		HgRemoteRepository hgRemote = new HgLookup().detect(new URL("hg4j-gc"));
+		String key = "hg4j-gc";
+		ConfigFile cfg = new Internals().newConfigFile();
+		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
+		String server = cfg.getSection("paths").get(key);
+		if (server == null) {
+			throw new HgException(String.format("Can't find server %s specification in the config", key));
+		}
+		HgRemoteRepository hgRemote = new HgLookup().detect(new URL(server));
 
 		HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
 		pw.init();

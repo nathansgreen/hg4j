@@ -38,7 +38,8 @@ public class HgRemoteRepository {
 	}
 	
 	public List<Nodeid> heads() {
-		return Collections.emptyList();
+		return Collections.singletonList(Nodeid.fromAscii("71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d"));
+//		return Collections.emptyList();
 	}
 	
 	public List<Nodeid> between(Nodeid base, Nodeid tip) {

@@ -18,13 +18,10 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URL;
 
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
-import org.tmatesoft.hg.internal.Internals;
 
 /**
  * Utility methods to find Mercurial repository at a given location
@@ -80,21 +77,6 @@ public class HgLookup {
 		}
 		if (Boolean.FALSE.booleanValue()) {
 			throw HgRepository.notImplemented();
-		}
-		if (url.getProtocol() == null) {
-			// try configuration keys
-			String key = url.getHost();
-			ConfigFile cfg = new Internals().newConfigFile();
-			cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
-			String server = cfg.getSection("paths").get(key);
-			if (server == null) {
-				throw new HgException(String.format("Can't find server %s specification in the config", key));
-			}
-			try {
-				url = new URL(server);
-			} catch (MalformedURLException ex) {
-				throw new HgException(ex);
-			}
 		}
 		return new HgRemoteRepository(url);
 	}
