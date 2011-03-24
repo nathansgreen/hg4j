@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -34,7 +33,6 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
-import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Internals;
 
@@ -54,12 +52,49 @@ public class Remote {
 	 cmd=heads gives space-separated list of nodeids (or just one)
 	 nodeids are in hex (printable) format, need to convert fromAscii()
 	 cmd=branchmap
+	 cmd=between needs argument pairs, with first element in the pair to be head(!), second to be root of the branch (
+	 	i.e. (newer-older), not (older-newer) as one might expect. Returned list of nodes comes in reversed order (from newer
+	 	to older) as well
+
+	cmd=branches&nodes=d6d2a630f4a6d670c90a5ca909150f2b426ec88f+
+	head, root, first parent, second parent
+	received: d6d2a630f4a6d670c90a5ca909150f2b426ec88f dbd663faec1f0175619cf7668bddc6350548b8d6 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000
+	
+	Sequence, for actual state with merged/closed branch, where 157:d5268ca7715b8d96204fc62abc632e8f55761547 is merge revision of 156 and 53 
+	>branches, 170:71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d
+	 71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d d5268ca7715b8d96204fc62abc632e8f55761547 643ddec3be36246fc052cf22ece503fa60cafe22 a6f39e595b2b54f56304470269a936ead77f5725
+
+	>branches, 156:643ddec3be36246fc052cf22ece503fa60cafe22
+	 643ddec3be36246fc052cf22ece503fa60cafe22 ade65afe0906febafbf8a2e41002052e0e446471 08754fce5778a3409476ecdb3cec6b5172c34367 40d04c4f771ebbd599eb229145252732a596740a
+	>branches, 53:a6f39e595b2b54f56304470269a936ead77f5725
+	 a6f39e595b2b54f56304470269a936ead77f5725 a6f39e595b2b54f56304470269a936ead77f5725 9429c7bd1920fab164a9d2b621d38d57bcb49ae0 30bd389788464287cee22ccff54c330a4b715de5
+
+	>branches, 84:08754fce5778a3409476ecdb3cec6b5172c34367  (p1:82) 
+	 08754fce5778a3409476ecdb3cec6b5172c34367 dbd663faec1f0175619cf7668bddc6350548b8d6 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000
+	>branches, 83:40d04c4f771ebbd599eb229145252732a596740a (p1:80)
+	 40d04c4f771ebbd599eb229145252732a596740a dbd663faec1f0175619cf7668bddc6350548b8d6 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000
+
+	>branches, 51:9429c7bd1920fab164a9d2b621d38d57bcb49ae0 (wrap-data-access branch)
+	 9429c7bd1920fab164a9d2b621d38d57bcb49ae0 dbd663faec1f0175619cf7668bddc6350548b8d6 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000
+	>branches, 52:30bd389788464287cee22ccff54c330a4b715de5 (p1:50)
+	 30bd389788464287cee22ccff54c330a4b715de5 dbd663faec1f0175619cf7668bddc6350548b8d6 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000
+
+
+	cmd=between&pairs=71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d-d5268ca7715b8d96204fc62abc632e8f55761547+40d04c4f771ebbd599eb229145252732a596740a-dbd663faec1f0175619cf7668bddc6350548b8d6
+	 8c8e3f372fa1fbfcf92b004b6f2ada2dbaf60028 dd525ca65de8e78cb133919de57ea0a6e6454664 1d0654be1466d522994f8bead510e360fbeb8d79 c17a08095e4420202ac1b2d939ef6d5f8bebb569
+	 4222b04f34ee885bc1ad547c7ef330e18a51afc1 5f9635c016819b322ae05a91b3378621b538c933 c677e159391925a50b9a23f557426b2246bc9c5d 0d279bcc44427cb5ae2f3407c02f21187ccc8aea e21df6259f8374ac136767321e837c0c6dd21907 b01500fe2604c2c7eadf44349cce9f438484474b 865bf07f381ff7d1b742453568def92576af80b6
+
+	Between two subsequent revisions (i.e. direct child in remote of a local root) 
+	cmd=between&pairs=71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d-8c8e3f372fa1fbfcf92b004b6f2ada2dbaf60028
+	 empty result
 	 */
 	public static void main(String[] args) throws Exception {
 		ConfigFile cfg = new Internals().newConfigFile();
 		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		String svnkitServer = cfg.getSection("paths").get("svnkit");
-		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=" + Nodeid.NULL.toString());
+//		URL url = new URL(svnkitServer + "?cmd=branches&nodes=30bd389788464287cee22ccff54c330a4b715de5");
+		URL url = new URL(svnkitServer + "?cmd=between&pairs=71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d-8c8e3f372fa1fbfcf92b004b6f2ada2dbaf60028"); 
+//		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=" + Nodeid.NULL.toString());
 //		URL url = new URL("http://localhost:8000/" + "?cmd=stream_out");
 //		URL url = new URL(svnkitServer + "?cmd=stream_out");
 	
@@ -88,6 +123,7 @@ public class Remote {
 		urlConnection.addRequestProperty("Authorization", "Basic " + authInfo);
 		urlConnection.setSSLSocketFactory(sslContext.getSocketFactory());
 		urlConnection.connect();
+		System.out.println("Query:" + url.getQuery());
 		System.out.println("Response headers:");
 		final Map<String, List<String>> headerFields = urlConnection.getHeaderFields();
 		for (String s : headerFields.keySet()) {
@@ -96,8 +132,8 @@ public class Remote {
 		System.out.printf("Content type is %s and its length is %d\n", urlConnection.getContentType(), urlConnection.getContentLength());
 		InputStream is = urlConnection.getInputStream();
 		//
-//		dump(is, -1); // simple dump, any cmd
-		writeBundle(is, false, "HG10GZ"); // cmd=changegroup
+		dump(is, -1); // simple dump, any cmd
+//		writeBundle(is, false, "HG10GZ"); // cmd=changegroup
 		//writeBundle(is, true, "" or "HG10UN");
 		//
 		urlConnection.disconnect();

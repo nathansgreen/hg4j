@@ -25,7 +25,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -199,11 +202,10 @@ abstract class Revlog {
 	public final class ParentWalker {
 		private Map<Nodeid, Nodeid> firstParent;
 		private Map<Nodeid, Nodeid> secondParent;
-		private Set<Nodeid> allNodes;
+		private final LinkedHashSet<Nodeid> allNodes = new LinkedHashSet<Nodeid>(); // childrenOf rely on ordering
 
 		public ParentWalker() {
 			firstParent = secondParent = Collections.emptyMap();
-			allNodes = Collections.emptySet();
 		}
 		
 		public void init() {
@@ -211,7 +213,6 @@ abstract class Revlog {
 			final int revisionCount = stream.revisionCount();
 			firstParent = new HashMap<Nodeid, Nodeid>(revisionCount);
 			secondParent = new HashMap<Nodeid, Nodeid>(firstParent.size() >> 1); // assume branches/merges are less frequent
-			allNodes = new LinkedHashSet<Nodeid>();
 			
 			RevlogStream.Inspector insp = new RevlogStream.Inspector() {
 				final Nodeid[] sequentialRevisionNodeids = new Nodeid[revisionCount];
@@ -278,6 +279,36 @@ abstract class Revlog {
 				}
 			}
 			return modified;
+		}
+
+		// XXX alternative (and perhaps more reliable) approach would be to make a copy of allNodes and remove 
+		// nodes, their parents and so on.
+		
+		// @return ordered collection of all children rooted at supplied nodes. Nodes shall not be descendants of each other! 
+		public List<Nodeid> childrenOf(List<Nodeid> nodes) {
+			HashSet<Nodeid> parents = new HashSet<Nodeid>();
+			LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
+			LinkedList<Nodeid> orderedResult = new LinkedList<Nodeid>();
+			for(Nodeid next : allNodes) {
+				// i assume allNodes is sorted, hence do not check any parents unless we hit any common known node first 
+				if (nodes.contains(next)) {
+					parents.add(next);
+				} else {
+					if (parents.isEmpty()) {
+						// didn't scroll up to any known yet
+						continue;
+					}
+					// record each and every node reported after first common known node hit  
+					orderedResult.addLast(next);
+					if (parents.contains(firstParent(next)) || parents.contains(secondParent(next))) {
+						result.add(next);
+						parents.add(next); // to find next's children
+					}
+				}
+			}
+			// leave only those of interest in ordered sequence 
+			orderedResult.retainAll(result);
+			return orderedResult;
 		}
 	}
 

@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.console;
 
+import static org.tmatesoft.hg.core.Nodeid.NULL;
+
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -24,6 +26,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
 import org.tmatesoft.hg.repo.HgRepository;
 
 
@@ -141,34 +144,12 @@ public class Incoming {
 		
 	}
 
-	static final class RemoteBranch {
-		public Nodeid head, root, p1, p2;
-
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj) {
-				return true;
-			}
-			if (false == obj instanceof RemoteBranch) {
-				return false;
-			}
-			RemoteBranch o = (RemoteBranch) obj;
-			return head.equals(o.head) && root.equals(o.root) && (p1 == null && o.p1 == null || p1.equals(o.p1)) && (p2 == null && o.p2 == null || p2.equals(o.p2));
-		}
-	}
 
 	private static void remoteBranches(Collection<Nodeid> unknownRemoteHeads, List<RemoteBranch> remoteBranches) {
-		// discovery.findcommonincoming:
-		// unknown = remote.branches(remote.heads); 
-		// sent: cmd=branches&roots=d6d2a630f4a6d670c90a5ca909150f2b426ec88f+
-		// received: d6d2a630f4a6d670c90a5ca909150f2b426ec88f dbd663faec1f0175619cf7668bddc6350548b8d6 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000
-		// head, root, first parent, second parent
 		//
 		// TODO implement this with remote access
 		//
-		RemoteBranch rb = new RemoteBranch();
-		rb.head = unknownRemoteHeads.iterator().next();
-		rb.root = Nodeid.fromAscii("dbd663faec1f0175619cf7668bddc6350548b8d6".getBytes(), 0, 40);
+		RemoteBranch rb = new RemoteBranch(unknownRemoteHeads.iterator().next(), Nodeid.fromAscii("dbd663faec1f0175619cf7668bddc6350548b8d6"), NULL, NULL);
 		remoteBranches.add(rb);
 	}
 

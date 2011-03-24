@@ -16,19 +16,25 @@
  */
 package org.tmatesoft.hg.console;
 
+import static org.tmatesoft.hg.core.Nodeid.NULL;
+
+import java.net.URL;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRemoteRepository;
+import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
 import org.tmatesoft.hg.repo.HgRepository;
 
 
 /**
  * WORK IN PROGRESS, DO NOT USE
- * hg out
+ * hg outgoing
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -42,42 +48,100 @@ public class Outgoing {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		// FIXME detection of 
-		List<Nodeid> base = new LinkedList<Nodeid>();
-		base.add(Nodeid.fromAscii("d6d2a630f4a6d670c90a5ca909150f2b426ec88f".getBytes(), 0, 40));
-		//
-		// fill with all known
+		HgRemoteRepository hgRemote = new HgLookup().detect(new URL("hg4j-gc"));
+
 		HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
 		pw.init();
-		LinkedHashSet<Nodeid> sendToRemote = new LinkedHashSet<Nodeid>(pw.allNodes());
-		dump("initial state", sendToRemote);
-		// remove base and its parents
-		LinkedList<Nodeid> queueToClean = new LinkedList<Nodeid>(base);
-		while (!queueToClean.isEmpty()) {
-			Nodeid nid = queueToClean.removeFirst();
-			if (sendToRemote.remove(nid)) {
-				pw.appendParentsOf(nid, queueToClean);
+		
+		List<Nodeid> commonKnown = findCommonWithRemote(pw, hgRemote);
+		dump("Nodes known to be both locally and at remote server", commonKnown);
+		// sanity check
+		for (Nodeid n : commonKnown) {
+			if (!pw.knownNode(n)) {
+				throw new HgException("Unknown node reported as common:" + n);
 			}
 		}
-		dump("Clean from known parents", sendToRemote);
-		// XXX I think sendToRemote is what we actually need here - everything local, missing from remote
-		// however, if we need to send only a subset of these, need to proceed.
-		LinkedList<Nodeid> result = new LinkedList<Nodeid>();
-		// find among left those without parents
-		for (Nodeid nid : sendToRemote) {
-			Nodeid p1 = pw.firstParent(nid);
-			// in fact, we may assume nulls are never part of sendToRemote
-			if (p1 != null && !sendToRemote.contains(p1)) {
-				Nodeid p2 = pw.secondParent(nid);
-				if (p2 == null || !sendToRemote.contains(p2)) {
-					result.add(nid);
+		// find all local children of commonKnown
+		List<Nodeid> result = pw.childrenOf(commonKnown);
+		dump("Result", result);
+	}
+	
+	private static List<Nodeid> findCommonWithRemote(HgChangelog.ParentWalker pwLocal, HgRemoteRepository hgRemote) {
+		List<Nodeid> remoteHeads = hgRemote.heads();
+		LinkedList<Nodeid> common = new LinkedList<Nodeid>(); // these remotes are known in local
+		LinkedList<Nodeid> toQuery = new LinkedList<Nodeid>(); // these need further queries to find common
+		for (Nodeid rh : remoteHeads) {
+			if (pwLocal.knownNode(rh)) {
+				common.add(rh);
+			} else {
+				toQuery.add(rh);
+			}
+		}
+		if (toQuery.isEmpty()) {
+			return common; 
+		}
+		LinkedList<RemoteBranch> checkUp2Head = new LinkedList<RemoteBranch>(); // branch.root and branch.head are of interest only.
+		// these are branches with unknown head but known root, which might not be the last common known,
+		// i.e. there might be children changeset that are also available at remote, [..?..common-head..remote-head] - need to 
+		// scroll up to common head.
+		while (!toQuery.isEmpty()) {
+			List<RemoteBranch> remoteBranches = hgRemote.branches(toQuery);	//head, root, first parent, second parent
+			toQuery.clear();
+			while(!remoteBranches.isEmpty()) {
+				RemoteBranch rb = remoteBranches.remove(0);
+				// I assume branches remote call gives branches with head equal to what I pass there, i.e.
+				// that I don't need to check whether rb.head is unknown.
+				if (pwLocal.knownNode(rb.root)) {
+					// we known branch start, common head is somewhere in its descendants line  
+					checkUp2Head.add(rb);
+				} else {
+					// dig deeper in the history, if necessary
+					if (!NULL.equals(rb.p1) && !pwLocal.knownNode(rb.p1)) {
+						toQuery.add(rb.p1);
+					}
+					if (!NULL.equals(rb.p2) && !pwLocal.knownNode(rb.p2)) {
+						toQuery.add(rb.p2);
+					}
 				}
 			}
 		}
-		dump("Result", result);
-		// final outcome is the collection of nodes between(lastresult and revision/tip)
-		//
-		System.out.println("TODO: nodes between result and tip");
+		// can't check nodes between checkUp2Head element and local heads, remote might have distinct descendants sequence
+		for (RemoteBranch rb : checkUp2Head) {
+			// rb.root is known locally
+			List<Nodeid> remoteRevisions = hgRemote.between(rb.root, rb.head);
+			if (remoteRevisions.isEmpty()) {
+				// head is immediate child
+				common.add(rb.root);
+			} else {
+				Nodeid root = rb.root;
+				while(!remoteRevisions.isEmpty()) {
+					Nodeid n = remoteRevisions.remove(0);
+					if (pwLocal.knownNode(n)) {
+						if (remoteRevisions.isEmpty()) {
+							// this is the last known node before an unknown
+							common.add(n);
+							break;
+						}
+						if (remoteRevisions.size() == 1) {
+							// there's only one left between known n and unknown head
+							// this check is to save extra between query, not really essential
+							Nodeid last = remoteRevisions.remove(0);
+							common.add(pwLocal.knownNode(last) ? last : n);
+							break;
+						}
+						// might get handy for next between query, to narrow search down
+						root = n;
+					} else {
+						remoteRevisions = hgRemote.between(root, n);
+						if (remoteRevisions.isEmpty()) {
+							common.add(root);
+						}
+					}
+				}
+			}
+		}
+		// TODO ensure unique elements in the list
+		return common;
 	}
 
 	private static void dump(String s, Collection<Nodeid> c) {

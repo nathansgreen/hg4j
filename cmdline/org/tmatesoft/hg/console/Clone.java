@@ -92,7 +92,7 @@ public class Clone {
 		// //////// 4. process manifest, using map from step 3, collect manifest nodeids
 		// //////// 5. process every file, using map from 3, and consult set from step 4 to ensure repo is correct
 		// access source
-		HgRemoteRepository remoteRepo = new HgRemoteRepository();// new HgLookup().detect(new URL("https://asd/hg/"));
+		HgRemoteRepository remoteRepo = new HgLookup().detect(new URL("https://asd/hg/"));
 		// discover changes
 		HgBundle completeChanges = remoteRepo.getChanges(Collections.singletonList(NULL));
 		WriteDownMate mate = new WriteDownMate(destDir);
