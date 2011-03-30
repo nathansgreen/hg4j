@@ -30,8 +30,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 
-import junit.framework.Assert;
-
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
@@ -307,7 +305,9 @@ public class Incoming {
 			for (int i = 1, x = 0; root+i < head; i = i << 1, x++) {
 				int value = data[x];
 				int value_check = root+i;
-				Assert.assertEquals(value, value_check);
+				if (value != value_check) {
+					throw new IllegalStateException();
+				}
 				int wordIx = (root + i) >>> 5;
 				int bitIx = (root + i) & 0x1f;
 				finalSequence[wordIx] |= 1 << (31-bitIx);

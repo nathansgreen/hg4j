@@ -17,12 +17,12 @@
 -->
 <project name="hg4j" default="samples">
 	<description>
-        Build, test and showcase hg4j
+		Build, test and showcase hg4j
 		Targets:
 		  * build - compile and jar binary and source bundles
 		  * tests - run tests with JUnit
 		  * samples - few command-line counterparts to demonstrate basic capabiliites 
-    </description>
+	</description>
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
 	<property name="ver.qualifier" value="" />
@@ -111,7 +111,12 @@
 
 	<target name="build-tests" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="test" destdir="bin" />
+		<javac srcdir="test" destdir="bin">
+			<classpath>
+				<pathelement location="${hg4j.jar}"/>
+				<pathelement location="${junit.jar}"/>
+			</classpath>
+		</javac>
 		<jar destfile="${hg4j-tests.jar}">
 			<fileset dir="bin" includes="org/tmatesoft/hg/test/**"/>
 			<fileset file="COPYING"/>
@@ -120,7 +125,7 @@
 
 	<target name="build-cmdline" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="cmdline" destdir="bin" />
+		<javac srcdir="cmdline" destdir="bin"/>
 		<jar destfile="${hg4j-console.jar}">
 			<fileset dir="bin/" includes="org/tmatesoft/hg/console/**"/>
 			<fileset file="COPYING"/>
