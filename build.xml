@@ -34,7 +34,7 @@
 	<property name="hg4j-console.jar" value="hg4j-console_${version.jar}.jar" />
 	<property name="hg4j-src.jar" value="hg4j-src_${version.jar}.jar" />
 
-	<target name="samples" depends="build-cmdline">
+	<target name="samples" depends="build-cmdline" description="Run sample command-line tools">
 		<path id="path.cmdline" path="${hg4j.jar};${hg4j-console.jar}" />
 
 		<echo message="History of a specific file(s)" />
@@ -68,7 +68,7 @@
 		</java>
 	</target>
 
-	<target name="tests" depends="build-tests">
+	<target name="tests" depends="build-tests" description="Launch tests with JUnit">
 		<property name="test-repos-root" value="${java.io.tmpdir}/hg4j-tests/"/>
 		<delete dir="${test-repos-root}" quiet="yes"/>
 		<unjar src="test-data/test-repos.jar" dest="${test-repos-root}"/>
@@ -86,7 +86,7 @@
 	</target>
 
 	<!-- -->
-	<target name="build" depends="build-lib, build-cmdline, build-tests">
+	<target name="build" depends="build-lib, build-cmdline, build-tests" description="Compile and bundle all jars">
 		<jar destfile="${hg4j-src.jar}">
 			<fileset dir="src/" includes="org/tmatesoft/hg/**" />
 			<fileset dir="test/" includes="org/tmatesoft/hg/**" />
