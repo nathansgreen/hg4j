@@ -18,8 +18,10 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.StreamTokenizer;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
@@ -27,6 +29,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -39,6 +42,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 
@@ -106,33 +110,9 @@ public class HgRemoteRepository {
 	}
 	
 	public List<Nodeid> between(Nodeid tip, Nodeid base) throws HgException {
-		try {
-			LinkedList<Nodeid> rv = new LinkedList<Nodeid>();
-			URL u = new URL(url, url.getPath() + "?cmd=between&pairs=" + tip.toString() + '-' + base.toString());
-			URLConnection c = setupConnection(u.openConnection());
-			c.connect();
-			System.out.println("Query:" + u.getQuery());
-			System.out.println("Response headers:");
-			final Map<String, List<String>> headerFields = c.getHeaderFields();
-			for (String s : headerFields.keySet()) {
-				System.out.printf("%s: %s\n", s, c.getHeaderField(s));
-			}
-			InputStream is = c.getInputStream();
-			StreamTokenizer st = new StreamTokenizer(is);
-			st.ordinaryChars('0', '9');
-			st.wordChars('0', '9');
-			while (st.nextToken() != StreamTokenizer.TT_EOF) {
-				System.out.println(st.sval);
-				Nodeid nid = Nodeid.fromAscii(st.sval);
-				rv.addLast(nid);
-			}
-			is.close();
-			return rv;
-		} catch (MalformedURLException ex) {
-			throw new HgException(ex);
-		} catch (IOException ex) {
-			throw new HgException(ex);
-		}
+		Range r = new Range(base, tip);
+		// XXX shall handle errors like no range key in the returned map, not sure how.
+		return between(Collections.singletonList(r)).get(r);
 	}
 
 	/**
@@ -141,13 +121,96 @@ public class HgRemoteRepository {
 	 * @throws HgException 
 	 */
 	public Map<Range, List<Nodeid>> between(Collection<Range> ranges) throws HgException {
+		if (ranges.isEmpty()) {
+			return Collections.emptyMap();
+		}
 		// if fact, shall do other way round, this method shall send 
 		LinkedHashMap<Range, List<Nodeid>> rv = new LinkedHashMap<HgRemoteRepository.Range, List<Nodeid>>(ranges.size() * 4 / 3);
+		StringBuilder sb = new StringBuilder(20 + ranges.size() * 82);
+		sb.append("pairs=");
 		for (Range r : ranges) {
-			List<Nodeid> between = between(r.end, r.start);
-			rv.put(r, between);
+			sb.append(r.end.toString());
+			sb.append('-');
+			sb.append(r.start.toString());
+			sb.append('+');
 		}
-		return rv;
+		if (sb.charAt(sb.length() - 1) == '+') {
+			// strip last space 
+			sb.setLength(sb.length() - 1);
+		}
+		try {
+			boolean usePOST = ranges.size() > 3;
+			URL u = new URL(url, url.getPath() + "?cmd=between" + (usePOST ? "" : '&' + sb.toString()));
+			HttpURLConnection c = setupConnection(u.openConnection());
+			if (usePOST) {
+				c.setRequestMethod("POST");
+				c.setRequestProperty("Content-Length", String.valueOf(sb.length()/*nodeids are ASCII, bytes == characters */));
+				c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+				c.setDoOutput(true);
+				c.connect();
+				OutputStream os = c.getOutputStream();
+				os.write(sb.toString().getBytes());
+				os.flush();
+				os.close();
+			} else {
+				c.connect();
+			}
+			System.out.printf("%d ranges, method:%s \n", ranges.size(), c.getRequestMethod());
+			System.out.printf("Query (%d bytes):%s\n", u.getQuery().length(), u.getQuery());
+			System.out.println("Response headers:");
+			final Map<String, List<String>> headerFields = c.getHeaderFields();
+			for (String s : headerFields.keySet()) {
+				System.out.printf("%s: %s\n", s, c.getHeaderField(s));
+			}
+			InputStreamReader is = new InputStreamReader(c.getInputStream(), "US-ASCII");
+			StreamTokenizer st = new StreamTokenizer(is);
+			st.ordinaryChars('0', '9');
+			st.wordChars('0', '9');
+			st.eolIsSignificant(true);
+			Iterator<Range> rangeItr = ranges.iterator();
+			LinkedList<Nodeid> currRangeList = null;
+			Range currRange = null;
+			boolean possiblyEmptyNextLine = true;
+			while (st.nextToken() != StreamTokenizer.TT_EOF) {
+				if (st.ttype == StreamTokenizer.TT_EOL) {
+					if (possiblyEmptyNextLine) {
+						// newline follows newline;
+						assert currRange == null;
+						assert currRangeList == null;
+						if (!rangeItr.hasNext()) {
+							throw new HgBadStateException();
+						}
+						rv.put(rangeItr.next(), Collections.<Nodeid>emptyList());
+					} else {
+						if (currRange == null || currRangeList == null) {
+							throw new HgBadStateException();
+						}
+						// indicate next range value is needed
+						currRange = null;
+						currRangeList = null;
+						possiblyEmptyNextLine = true;
+					}
+				} else {
+					possiblyEmptyNextLine = false;
+					if (currRange == null) {
+						if (!rangeItr.hasNext()) {
+							throw new HgBadStateException();
+						}
+						currRange = rangeItr.next();
+						currRangeList = new LinkedList<Nodeid>();
+						rv.put(currRange, currRangeList);
+					}
+					Nodeid nid = Nodeid.fromAscii(st.sval);
+					currRangeList.addLast(nid);
+				}
+			}
+			is.close();
+			return rv;
+		} catch (MalformedURLException ex) {
+			throw new HgException(ex);
+		} catch (IOException ex) {
+			throw new HgException(ex);
+		}
 	}
 
 	public List<RemoteBranch> branches(List<Nodeid> nodes) {
@@ -159,8 +222,8 @@ public class HgRemoteRepository {
 		return new HgLookup().loadBundle(new File("/temp/hg/hg-bundle-000000000000-gz.tmp"));
 	}
 	
-	private URLConnection setupConnection(URLConnection urlConnection) {
-		urlConnection.addRequestProperty("User-Agent", "hg4j/0.5.0");
+	private HttpURLConnection setupConnection(URLConnection urlConnection) {
+		urlConnection.setRequestProperty("User-Agent", "hg4j/0.5.0");
 		urlConnection.addRequestProperty("Accept", "application/mercurial-0.1");
 		if (authInfo != null) {
 			urlConnection.addRequestProperty("Authorization", "Basic " + authInfo);
@@ -168,7 +231,7 @@ public class HgRemoteRepository {
 		if (sslContext != null) {
 			((HttpsURLConnection) urlConnection).setSSLSocketFactory(sslContext.getSocketFactory());
 		}
-		return urlConnection;
+		return (HttpURLConnection) urlConnection;
 	}
 
 	public static final class Range {

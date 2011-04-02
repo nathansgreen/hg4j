@@ -23,11 +23,13 @@ import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import org.tmatesoft.hg.core.HgBadStateException;
@@ -38,6 +40,7 @@ import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
+import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
 import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
 import org.tmatesoft.hg.repo.HgRepository;
 
@@ -133,6 +136,9 @@ public class Incoming {
 		int totalQueries = 1;
 		HashSet<Nodeid> queried = new HashSet<Nodeid>();
 		while(!datas.isEmpty()) {
+			// keep record of those planned to be queried next time we call between()
+			// although may keep these in queried, if really don't want separate collection
+			HashSet<Nodeid> scheduled = new HashSet<Nodeid>();  
 			do {
 				DataEntry de = datas.removeFirst();
 				// populate result with discovered elements between de.qiueryRoot and branch's head
@@ -149,9 +155,10 @@ public class Incoming {
 					for (int i =1, j = 0; j < de.entries.size(); i = i<<1, j++) {
 						int idx = de.headIndex + i;
 						Nodeid x = de.entries.get(j);
-						if (!queried.contains(x) && (rootIndex == -1 || rootIndex - de.headIndex > 1)) {
+						if (!queried.contains(x) && !scheduled.contains(x) && (rootIndex == -1 || rootIndex - de.headIndex > 1)) {
 							/*queries for elements right before head is senseless, but unless we know head's index, do it anyway*/
 							toQuery.add(new DataEntry(x, idx, null));
+							scheduled.add(x);
 						}
 					}
 				}
@@ -159,19 +166,31 @@ public class Incoming {
 			if (!toQuery.isEmpty()) {
 				totalQueries++;
 			}
+			// for each query, create an between request range, keep record Range->DataEntry to know range's start index  
+			LinkedList<HgRemoteRepository.Range> betweenBatch = new LinkedList<HgRemoteRepository.Range>();
+			HashMap<HgRemoteRepository.Range, DataEntry> rangeToEntry = new HashMap<HgRemoteRepository.Range, DataEntry>();
 			for (DataEntry de : toQuery) {
-				if (!queried.contains(de.queryHead)) {
-					queried.add(de.queryHead);
-					List<Nodeid> between = hgRemote.between(de.queryHead, rb.root);
-					if (rootIndex == -1 && between.size() == 1) {
+				queried.add(de.queryHead);
+				HgRemoteRepository.Range r = new HgRemoteRepository.Range(rb.root, de.queryHead);
+				betweenBatch.add(r);
+				rangeToEntry.put(r, de);
+			}
+			if (!betweenBatch.isEmpty()) {
+				Map<Range, List<Nodeid>> between = hgRemote.between(betweenBatch);
+				for (Entry<Range, List<Nodeid>> e : between.entrySet()) {
+					DataEntry de = rangeToEntry.get(e.getKey());
+					assert de != null;
+					de.entries = e.getValue();
+					if (rootIndex == -1 && de.entries.size() == 1) {
 						// returned sequence of length 1 means we used element from [head-2] as root
 						int numberOfElementsExcludingRootAndHead = de.headIndex + 1;
 						rootIndex = numberOfElementsExcludingRootAndHead + 1;
 						System.out.printf("On query %d found out exact number of missing elements: %d\n", totalQueries, numberOfElementsExcludingRootAndHead);
 					}
-					de.entries = between;
 					datas.add(de); // queue up to record result and construct further requests
 				}
+				betweenBatch.clear();
+				rangeToEntry.clear();
 			}
 			toQuery.clear();
 		}
@@ -189,6 +208,7 @@ public class Incoming {
 			}
 			fromRootToHead.addFirst(n); // reverse order
 		}
+		System.out.println("Total queries:" + totalQueries);
 		if (!resultOk) {
 			throw new HgBadStateException("See console for details"); // FIXME
 		}

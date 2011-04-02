@@ -20,6 +20,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -93,9 +95,9 @@ public class Remote {
 		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		String svnkitServer = cfg.getSection("paths").get("svnkit");
 //		URL url = new URL(svnkitServer + "?cmd=branches&nodes=30bd389788464287cee22ccff54c330a4b715de5");
-		URL url = new URL(svnkitServer + "?cmd=between&pairs=71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d-8c8e3f372fa1fbfcf92b004b6f2ada2dbaf60028"); 
+		URL url = new URL(svnkitServer + "?cmd=between"); 
 //		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=" + Nodeid.NULL.toString());
-//		URL url = new URL("http://localhost:8000/" + "?cmd=stream_out");
+//		URL url = new URL("http://localhost:8000/" + "?cmd=between");
 //		URL url = new URL(svnkitServer + "?cmd=stream_out");
 	
 		SSLContext sslContext = SSLContext.getInstance("SSL");
@@ -118,11 +120,22 @@ public class Remote {
 		//
 		sslContext.init(null, new TrustManager[] { new TrustEveryone() }, null);
 		HttpsURLConnection urlConnection = (HttpsURLConnection) url.openConnection();
-		urlConnection.addRequestProperty("User-Agent", "jhg/0.1.0");
-		urlConnection.addRequestProperty("Accept", "application/mercurial-0.1");
-		urlConnection.addRequestProperty("Authorization", "Basic " + authInfo);
+//		HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+		urlConnection.setRequestProperty("User-Agent", "jhg/0.1.0");
+		urlConnection.setRequestProperty("Accept", "application/mercurial-0.1");
+		urlConnection.setRequestProperty("Authorization", "Basic " + authInfo);
 		urlConnection.setSSLSocketFactory(sslContext.getSocketFactory());
-		urlConnection.connect();
+		byte[] body = "pairs=30bd389788464287cee22ccff54c330a4b715de5-dbd663faec1f0175619cf7668bddc6350548b8d6".getBytes();
+		urlConnection.setRequestMethod("POST");
+		urlConnection.setRequestProperty("Content-Length", String.valueOf(body.length));
+		urlConnection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+		urlConnection.setDoOutput(true);
+		urlConnection.setDoInput(true);
+//		urlConnection.connect();
+		OutputStream os = urlConnection.getOutputStream();
+		os.write(body);
+		os.flush();
+		os.close();
 		System.out.println("Query:" + url.getQuery());
 		System.out.println("Response headers:");
 		final Map<String, List<String>> headerFields = urlConnection.getHeaderFields();
