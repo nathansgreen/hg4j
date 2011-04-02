@@ -18,20 +18,26 @@ package org.tmatesoft.hg.console;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
 
+import java.io.File;
+import java.net.URL;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 
+import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ConfigFile;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
 import org.tmatesoft.hg.repo.HgRepository;
 
@@ -46,7 +52,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 public class Incoming {
 
 	public static void main(String[] args) throws Exception {
-		if (Boolean.TRUE.booleanValue()) {
+		if (Boolean.FALSE.booleanValue()) {
 			new SequenceConstructor().test();
 			return;
 		}
@@ -56,136 +62,137 @@ public class Incoming {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
+		String key = "svnkit";
+		ConfigFile cfg = new Internals().newConfigFile();
+		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
+		String server = cfg.getSection("paths").get(key);
+		if (server == null) {
+			throw new HgException(String.format("Can't find server %s specification in the config", key));
+		}
+		HgRemoteRepository hgRemote = new HgLookup().detect(new URL(server));
+		//
 		// in fact, all we need from changelog is set of all nodeids. However, since ParentWalker reuses same Nodeids, it's not too expensive
 		// to reuse it here, XXX although later this may need to be refactored
 		final HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
 		pw.init();
 		//
-		HashSet<Nodeid> base = new HashSet<Nodeid>();
-		HashSet<Nodeid> unknownRemoteHeads = new HashSet<Nodeid>();
-		// imagine empty repository - any nodeid from remote heads would be unknown
-		unknownRemoteHeads.add(Nodeid.fromAscii("382cfe9463db0484a14136e4b38407419525f0c0".getBytes(), 0, 40));
-		//
-		LinkedList<RemoteBranch> remoteBranches = new LinkedList<RemoteBranch>();
-		remoteBranches(unknownRemoteHeads, remoteBranches);
-		//
-		HashSet<Nodeid> visited = new HashSet<Nodeid>();
-		HashSet<RemoteBranch> processed = new HashSet<RemoteBranch>();
-		LinkedList<Nodeid[]> toScan = new LinkedList<Nodeid[]>();
-		LinkedHashSet<Nodeid> toFetch = new LinkedHashSet<Nodeid>();
-		// next one seems to track heads we've asked (or plan to ask) remote.branches for
-		HashSet<Nodeid> unknownHeads /*req*/ = new HashSet<Nodeid>(unknownRemoteHeads);
-		while (!remoteBranches.isEmpty()) {
-			LinkedList<Nodeid> toQueryRemote = new LinkedList<Nodeid>();
-			while (!remoteBranches.isEmpty()) {
-				RemoteBranch next = remoteBranches.removeFirst();
-				if (visited.contains(next.head) || processed.contains(next)) {
-					continue;
-				}
-				if (Nodeid.NULL.equals(next.head)) {
-					// it's discovery.py that expects next.head to be nullid here, I can't imagine how this may happen, hence this exception
-					throw new IllegalStateException("I wonder if null if may ever get here with remote branches");
-				} else if (pw.knownNode(next.root)) {
-					// root of the remote change is known locally, analyze to find exact missing changesets
-					toScan.addLast(new Nodeid[] { next.head, next.root });
-					processed.add(next);
-				} else {
-					if (!visited.contains(next.root) && !toFetch.contains(next.root)) {
-						// if parents are locally known, this is new branch (sequence of changes) (sequence sprang out of known parents) 
-						if ((next.p1 == null || pw.knownNode(next.p1)) && (next.p2 == null || pw.knownNode(next.p2))) {
-							toFetch.add(next.root);
-						}
-						// XXX perhaps, may combine this parent processing below (I don't understand what this code is exactly about)
-						if (pw.knownNode(next.p1)) {
-							base.add(next.p1);
-						}
-						if (pw.knownNode(next.p2)) {
-							base.add(next.p2);
-						}
-					}
-					if (next.p1 != null && !pw.knownNode(next.p1) && !unknownHeads.contains(next.p1)) {
-						toQueryRemote.add(next.p1);
-						unknownHeads.add(next.p1);
-					}
-					if (next.p2 != null && !pw.knownNode(next.p2) && !unknownHeads.contains(next.p2)) {
-						toQueryRemote.add(next.p2);
-						unknownHeads.add(next.p2);
-					}
-				}
-				visited.add(next.head);
-			}
-			if (!toQueryRemote.isEmpty()) {
-				// discovery.py in fact does this in batches of 10 revisions a time.
-				// however, this slicing may be done in remoteBranches call instead (if needed)
-				remoteBranches(toQueryRemote, remoteBranches);
-			}
+		List<RemoteBranch> missingBranches = calculateMissingBranches(hgRepo, hgRemote);
+		LinkedList<Nodeid> missing = new LinkedList<Nodeid>();
+		for (RemoteBranch rb : missingBranches) {
+			List<Nodeid> completeBranch = completeBranch(hgRemote, rb);
+			// FIXME ensure topologically sorted result
+			missing.addAll(completeBranch);
 		}
-		while (!toScan.isEmpty()) {
-			Nodeid[] head_root = toScan.removeFirst();
-			List<Nodeid> nodesBetween = remoteBetween(head_root[0], head_root[1], new LinkedList<Nodeid>());
-			nodesBetween.add(head_root[1]);
-			int x = 1;
-			Nodeid p = head_root[0];
-			for (Nodeid i : nodesBetween) {
-				System.out.println("narrowing " + x + ":" + nodesBetween.size() + " " + i.shortNotation());
-				if (pw.knownNode(i)) {
-					if (x <= 2) {
-						toFetch.add(p);
-						base.add(i);
-					} else {
-						// XXX original discovery.py collects new elements to scan separately
-						// likely to "batch" calls to server
-						System.out.println("narrowed branch search to " + p.shortNotation() + ":" + i.shortNotation());
-						toScan.addLast(new Nodeid[] { p, i });
-					}
-					break;
-				}
-				x = x << 1;
-				p = i;
-			}
-		}
-		for (Nodeid n : toFetch) {
+		// Collections.reverse(missing); // useful to test output, from newer to older
+		for (Nodeid n : missing) {
 			if (pw.knownNode(n)) {
 				System.out.println("Erroneous to fetch:" + n);
 			} else {
 				System.out.println(n);
 			}
 		}
-		
+	}
+	
+	private static List<RemoteBranch> calculateMissingBranches(HgRepository hgRepo, HgRemoteRepository hgRemote) {
+		// FIXME implement
+		//
+		// sample 0..52
+		Nodeid head = Nodeid.fromAscii("30bd389788464287cee22ccff54c330a4b715de5");
+		Nodeid root = Nodeid.fromAscii("dbd663faec1f0175619cf7668bddc6350548b8d6");
+		Nodeid p1 = NULL, p2 = NULL;
+		RemoteBranch fake = new RemoteBranch(head, root, p1, p2);
+		return Collections.singletonList(fake);
 	}
 
+	// RemoteBranch not necessarily a 'true' remote branch. I use this structure to keep root, head, and root's parents, any
+	// of them can be known locally, parent might be only one (when I split 'true' RemoteBranch in between because of locally known node 
+	private static List<Nodeid> completeBranch(HgRemoteRepository hgRemote, RemoteBranch rb) throws HgException {
+		class DataEntry {
+			public final Nodeid queryHead;
+			public final int headIndex;
+			public List<Nodeid> entries;
 
-	private static void remoteBranches(Collection<Nodeid> unknownRemoteHeads, List<RemoteBranch> remoteBranches) {
-		//
-		// TODO implement this with remote access
-		//
-		RemoteBranch rb = new RemoteBranch(unknownRemoteHeads.iterator().next(), Nodeid.fromAscii("dbd663faec1f0175619cf7668bddc6350548b8d6"), NULL, NULL);
-		remoteBranches.add(rb);
-	}
+			public DataEntry(Nodeid head, int index, List<Nodeid> data) {
+				queryHead = head;
+				headIndex = index;
+				entries = data;
+			}
+		};
 
-	private static List<Nodeid> remoteBetween(Nodeid nodeid1, Nodeid nodeid2, List<Nodeid> list) {
-		// sent: cmd=between&pairs=d6d2a630f4a6d670c90a5ca909150f2b426ec88f-dbd663faec1f0175619cf7668bddc6350548b8d6
-		// received: a78c980749e3ccebb47138b547e9b644a22797a9 286d221f6c28cbfce25ea314e1f46a23b7f979d3 fc265ddeab262ff5c34b4cf4e2522d8d41f1f05b a3576694a4d1edaa681cab15b89d6b556b02aff4
-		// 1st, 2nd, fourth and eights of total 8 changes between rev9 and rev0
+		List<Nodeid> initial = hgRemote.between(rb.head, rb.root);
+		Nodeid[] result = new Nodeid[1 << initial.size()];
+		result[0] = rb.head;
+		int rootIndex = -1; // index in the result, where to place branche's root.
+		LinkedList<DataEntry> datas = new LinkedList<DataEntry>();
+		// DataEntry in datas has entries list filled with 'between' data, whereas 
+		// DataEntry in toQuery keeps only nodeid and its index, with entries to be initialized before 
+		// moving to datas. 
+		LinkedList<DataEntry> toQuery = new LinkedList<DataEntry>();
 		//
-		//
-		//           a78c980749e3ccebb47138b547e9b644a22797a9 286d221f6c28cbfce25ea314e1f46a23b7f979d3 fc265ddeab262ff5c34b4cf4e2522d8d41f1f05b a3576694a4d1edaa681cab15b89d6b556b02aff4
-		//d6d2a630f4a6d670c90a5ca909150f2b426ec88f a78c980749e3ccebb47138b547e9b644a22797a9 5abe5af181bd6a6d3e94c378376c901f0f80da50 08db726a0fb7914ac9d27ba26dc8bbf6385a0554
-
-		// TODO implement with remote access
-		String response = null;
-		if (nodeid1.equals(Nodeid.fromAscii("382cfe9463db0484a14136e4b38407419525f0c0".getBytes(), 0, 40)) && nodeid2.equals(Nodeid.fromAscii("dbd663faec1f0175619cf7668bddc6350548b8d6".getBytes(), 0, 40))) {
-			response = "d6d2a630f4a6d670c90a5ca909150f2b426ec88f a78c980749e3ccebb47138b547e9b644a22797a9 5abe5af181bd6a6d3e94c378376c901f0f80da50 08db726a0fb7914ac9d27ba26dc8bbf6385a0554";
-		} else if (nodeid1.equals(Nodeid.fromAscii("a78c980749e3ccebb47138b547e9b644a22797a9".getBytes(), 0, 40)) && nodeid2.equals(Nodeid.fromAscii("5abe5af181bd6a6d3e94c378376c901f0f80da50".getBytes(), 0, 40))) {
-			response = "286d221f6c28cbfce25ea314e1f46a23b7f979d3";
+		datas.add(new DataEntry(rb.head, 0, initial));
+		int totalQueries = 1;
+		HashSet<Nodeid> queried = new HashSet<Nodeid>();
+		while(!datas.isEmpty()) {
+			do {
+				DataEntry de = datas.removeFirst();
+				// populate result with discovered elements between de.qiueryRoot and branch's head
+				for (int i = 1, j = 0; j < de.entries.size(); i = i << 1, j++) {
+					int idx = de.headIndex + i;
+					result[idx] = de.entries.get(j);
+				}
+				// form next query entries from new unknown elements
+				if (de.entries.size() > 1) {
+					/* when entries has only one element, it means de.queryRoot was at head-2 position, and thus
+					 * no new information can be obtained. E.g. when it's 2, it might be case of [0..4] query with
+					 * [1,2] result, and we need one more query to get element 3.   
+					 */
+					for (int i =1, j = 0; j < de.entries.size(); i = i<<1, j++) {
+						int idx = de.headIndex + i;
+						Nodeid x = de.entries.get(j);
+						if (!queried.contains(x) && (rootIndex == -1 || rootIndex - de.headIndex > 1)) {
+							/*queries for elements right before head is senseless, but unless we know head's index, do it anyway*/
+							toQuery.add(new DataEntry(x, idx, null));
+						}
+					}
+				}
+			} while (!datas.isEmpty());
+			if (!toQuery.isEmpty()) {
+				totalQueries++;
+			}
+			for (DataEntry de : toQuery) {
+				if (!queried.contains(de.queryHead)) {
+					queried.add(de.queryHead);
+					List<Nodeid> between = hgRemote.between(de.queryHead, rb.root);
+					if (rootIndex == -1 && between.size() == 1) {
+						// returned sequence of length 1 means we used element from [head-2] as root
+						int numberOfElementsExcludingRootAndHead = de.headIndex + 1;
+						rootIndex = numberOfElementsExcludingRootAndHead + 1;
+						System.out.printf("On query %d found out exact number of missing elements: %d\n", totalQueries, numberOfElementsExcludingRootAndHead);
+					}
+					de.entries = between;
+					datas.add(de); // queue up to record result and construct further requests
+				}
+			}
+			toQuery.clear();
 		}
-		if (response == null) {
-			throw HgRepository.notImplemented();
+		if (rootIndex == -1) {
+			throw new HgBadStateException("Shall not happen, provided between output is correct"); // FIXME
 		}
-		for (String s : response.split(" ")) {
-			list.add(Nodeid.fromAscii(s.getBytes(), 0, 40));
+		result[rootIndex] = rb.root;
+		boolean resultOk = true;
+		LinkedList<Nodeid> fromRootToHead = new LinkedList<Nodeid>();
+		for (int i = 0; i <= rootIndex; i++) {
+			Nodeid n = result[i];
+			if (n == null) {
+				System.out.printf("ERROR: element %d wasn't found\n",i);
+				resultOk = false;
+			}
+			fromRootToHead.addFirst(n); // reverse order
 		}
-		return list;
+		if (!resultOk) {
+			throw new HgBadStateException("See console for details"); // FIXME
+		}
+		return fromRootToHead;
 	}
 
 	private static class SequenceConstructor {
@@ -206,11 +213,11 @@ public class Incoming {
 		}
 
 		public void test() {
-			int root = 0, head = 1000;
-			int[] data = between(root, head); // max number of elements to recover is 2**(1+data.length)-1, need room for 
-			// as much elements, hence 2**(data.length+1). In worst case, when there are onlu 2**data.length + 1 missing element,
-			// almost half of the finalSequence would be empty
-			int[] finalSequence = new int[1 << (data.length+1) >>> 5]; // div 32 - total bits to integers
+			int root = 0, head = 126;
+			int[] data = between(root, head); // max number of elements to recover is 2**data.length-1, when head is exactly
+			// 2**data.length element of the branch.  
+			// In such case, total number of elements in the branch (including head and root, would be 2**data.length+1
+			int[] finalSequence = new int[1 + (1 << data.length >>> 5)]; // div 32 - total bits to integers, +1 for possible modulus
 			int exactNumberOfElements = -1; // exact number of meaningful bits in finalSequence
 			LinkedHashMap<Integer, int[]> datas = new LinkedHashMap<Integer, int[]>();
 			datas.put(root, data);
@@ -241,9 +248,10 @@ public class Incoming {
 						}
 						System.out.println(match ? "Match, on query:" + totalQueries : "Didn't match");
 					}
-					if (data.length > 2) { 
+					if (data.length > 1) { 
+						/*queries for elements next to head is senseless, hence data.length check above and head-x below*/
 						for (int x : data) {
-							if (!queried.contains(x) && head - x > 1) { /*queries for neighboring elements is senseless*/
+							if (!queried.contains(x) && head - x > 1) { 
 								toQuery.add(new int[] {x, head});
 							}
 						}

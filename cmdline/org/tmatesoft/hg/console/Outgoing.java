@@ -19,9 +19,9 @@ package org.tmatesoft.hg.console;
 import static org.tmatesoft.hg.core.Nodeid.NULL;
 
 import java.io.File;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -77,7 +77,7 @@ public class Outgoing {
 		dump("Result", result);
 	}
 	
-	private static List<Nodeid> findCommonWithRemote(HgChangelog.ParentWalker pwLocal, HgRemoteRepository hgRemote) {
+	private static List<Nodeid> findCommonWithRemote(HgChangelog.ParentWalker pwLocal, HgRemoteRepository hgRemote) throws HgException {
 		List<Nodeid> remoteHeads = hgRemote.heads();
 		LinkedList<Nodeid> common = new LinkedList<Nodeid>(); // these remotes are known in local
 		LinkedList<Nodeid> toQuery = new LinkedList<Nodeid>(); // these need further queries to find common
@@ -119,7 +119,9 @@ public class Outgoing {
 		// can't check nodes between checkUp2Head element and local heads, remote might have distinct descendants sequence
 		for (RemoteBranch rb : checkUp2Head) {
 			// rb.root is known locally
-			List<Nodeid> remoteRevisions = hgRemote.between(rb.root, rb.head);
+			List<Nodeid> remoteRevisions = hgRemote.between(rb.head, rb.root);
+				// between gives result from head to root, I'd like to go in reverse direction
+			Collections.reverse(remoteRevisions);
 			if (remoteRevisions.isEmpty()) {
 				// head is immediate child
 				common.add(rb.root);
@@ -143,7 +145,8 @@ public class Outgoing {
 						// might get handy for next between query, to narrow search down
 						root = n;
 					} else {
-						remoteRevisions = hgRemote.between(root, n);
+						remoteRevisions = hgRemote.between(n, root);
+						Collections.reverse(remoteRevisions);
 						if (remoteRevisions.isEmpty()) {
 							common.add(root);
 						}
