@@ -125,7 +125,7 @@ public class Remote {
 		urlConnection.setRequestProperty("Accept", "application/mercurial-0.1");
 		urlConnection.setRequestProperty("Authorization", "Basic " + authInfo);
 		urlConnection.setSSLSocketFactory(sslContext.getSocketFactory());
-		byte[] body = "pairs=30bd389788464287cee22ccff54c330a4b715de5-dbd663faec1f0175619cf7668bddc6350548b8d6".getBytes();
+		byte[] body = "pairs=f5aed108754e817d2ca374d1a4f6daf1218dcc91-9429c7bd1920fab164a9d2b621d38d57bcb49ae0".getBytes();
 		urlConnection.setRequestMethod("POST");
 		urlConnection.setRequestProperty("Content-Length", String.valueOf(body.length));
 		urlConnection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");

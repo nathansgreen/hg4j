@@ -27,6 +27,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -59,6 +60,7 @@ public class HgRemoteRepository {
 	private final URL url;
 	private final SSLContext sslContext;
 	private final String authInfo;
+	private final boolean debug = Boolean.FALSE.booleanValue();
 
 	HgRemoteRepository(URL url) throws HgException {
 		if (url == null) {
@@ -104,9 +106,29 @@ public class HgRemoteRepository {
 		}
 	}
 	
-	public List<Nodeid> heads() {
-		return Collections.singletonList(Nodeid.fromAscii("71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d"));
-//		return Collections.emptyList();
+	public List<Nodeid> heads() throws HgException {
+		try {
+			URL u = new URL(url, url.getPath() + "?cmd=heads");
+			HttpURLConnection c = setupConnection(u.openConnection());
+			c.connect();
+			if (debug) {
+				dumpResponseHeader(u, c);
+			}
+			InputStreamReader is = new InputStreamReader(c.getInputStream(), "US-ASCII");
+			StreamTokenizer st = new StreamTokenizer(is);
+			st.ordinaryChars('0', '9');
+			st.wordChars('0', '9');
+			st.eolIsSignificant(false);
+			LinkedList<Nodeid> parseResult = new LinkedList<Nodeid>();
+			while (st.nextToken() != StreamTokenizer.TT_EOF) {
+				parseResult.add(Nodeid.fromAscii(st.sval));
+			}
+			return parseResult;
+		} catch (MalformedURLException ex) {
+			throw new HgException(ex);
+		} catch (IOException ex) {
+			throw new HgException(ex);
+		}
 	}
 	
 	public List<Nodeid> between(Nodeid tip, Nodeid base) throws HgException {
@@ -155,12 +177,9 @@ public class HgRemoteRepository {
 			} else {
 				c.connect();
 			}
-			System.out.printf("%d ranges, method:%s \n", ranges.size(), c.getRequestMethod());
-			System.out.printf("Query (%d bytes):%s\n", u.getQuery().length(), u.getQuery());
-			System.out.println("Response headers:");
-			final Map<String, List<String>> headerFields = c.getHeaderFields();
-			for (String s : headerFields.keySet()) {
-				System.out.printf("%s: %s\n", s, c.getHeaderField(s));
+			if (debug) {
+				System.out.printf("%d ranges, method:%s \n", ranges.size(), c.getRequestMethod());
+				dumpResponseHeader(u, c);
 			}
 			InputStreamReader is = new InputStreamReader(c.getInputStream(), "US-ASCII");
 			StreamTokenizer st = new StreamTokenizer(is);
@@ -213,8 +232,47 @@ public class HgRemoteRepository {
 		}
 	}
 
-	public List<RemoteBranch> branches(List<Nodeid> nodes) {
-		return Collections.emptyList();
+	public List<RemoteBranch> branches(List<Nodeid> nodes) throws HgException {
+		StringBuilder sb = new StringBuilder(20 + nodes.size() * 41);
+		sb.append("nodes=");
+		for (Nodeid n : nodes) {
+			sb.append(n.toString());
+			sb.append('+');
+		}
+		if (sb.charAt(sb.length() - 1) == '+') {
+			// strip last space 
+			sb.setLength(sb.length() - 1);
+		}
+		try {
+			URL u = new URL(url, url.getPath() + "?cmd=branches&" + sb.toString());
+			HttpURLConnection c = setupConnection(u.openConnection());
+			c.connect();
+			if (debug) {
+				dumpResponseHeader(u, c);
+			}
+			InputStreamReader is = new InputStreamReader(c.getInputStream(), "US-ASCII");
+			StreamTokenizer st = new StreamTokenizer(is);
+			st.ordinaryChars('0', '9');
+			st.wordChars('0', '9');
+			st.eolIsSignificant(false);
+			ArrayList<Nodeid> parseResult = new ArrayList<Nodeid>(nodes.size() * 4);
+			while (st.nextToken() != StreamTokenizer.TT_EOF) {
+				parseResult.add(Nodeid.fromAscii(st.sval));
+			}
+			if (parseResult.size() != nodes.size() * 4) {
+				throw new HgException(String.format("Bad number of nodeids in result (shall be factor 4), expected %d, got %d", nodes.size()*4, parseResult.size()));
+			}
+			ArrayList<RemoteBranch> rv = new ArrayList<RemoteBranch>(nodes.size());
+			for (int i = 0; i < nodes.size(); i++) {
+				RemoteBranch rb = new RemoteBranch(parseResult.get(i*4), parseResult.get(i*4 + 1), parseResult.get(i*4 + 2), parseResult.get(i*4 + 3));
+				rv.add(rb);
+			}
+			return rv;
+		} catch (MalformedURLException ex) {
+			throw new HgException(ex);
+		} catch (IOException ex) {
+			throw new HgException(ex);
+		}
 	}
 
 	// WireProtocol wiki: roots = a list of the latest nodes on every service side changeset branch that both the client and server know about. 
@@ -232,6 +290,15 @@ public class HgRemoteRepository {
 			((HttpsURLConnection) urlConnection).setSSLSocketFactory(sslContext.getSocketFactory());
 		}
 		return (HttpURLConnection) urlConnection;
+	}
+
+	private void dumpResponseHeader(URL u, HttpURLConnection c) {
+		System.out.printf("Query (%d bytes):%s\n", u.getQuery().length(), u.getQuery());
+		System.out.println("Response headers:");
+		final Map<String, List<String>> headerFields = c.getHeaderFields();
+		for (String s : headerFields.keySet()) {
+			System.out.printf("%s: %s\n", s, c.getHeaderField(s));
+		}
 	}
 
 	public static final class Range {

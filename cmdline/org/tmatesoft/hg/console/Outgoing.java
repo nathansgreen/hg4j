@@ -120,12 +120,12 @@ public class Outgoing {
 		for (RemoteBranch rb : checkUp2Head) {
 			// rb.root is known locally
 			List<Nodeid> remoteRevisions = hgRemote.between(rb.head, rb.root);
-				// between gives result from head to root, I'd like to go in reverse direction
-			Collections.reverse(remoteRevisions);
 			if (remoteRevisions.isEmpty()) {
 				// head is immediate child
 				common.add(rb.root);
 			} else {
+				// between gives result from head to root, I'd like to go in reverse direction
+				Collections.reverse(remoteRevisions);
 				Nodeid root = rb.root;
 				while(!remoteRevisions.isEmpty()) {
 					Nodeid n = remoteRevisions.remove(0);
