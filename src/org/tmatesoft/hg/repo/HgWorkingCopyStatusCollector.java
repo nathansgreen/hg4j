@@ -182,6 +182,8 @@ public class HgWorkingCopyStatusCollector {
 				HgDataFile df = repo.getFileNode(fname);
 				if (!areTheSame(f, df, HgRepository.TIP)) {
 					inspector.modified(df.getPath());
+				} else {
+					inspector.clean(df.getPath());
 				}
 			}
 		} else if ((r = getDirstate().checkAdded(fname)) != null) {
