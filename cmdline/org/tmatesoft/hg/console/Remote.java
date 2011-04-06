@@ -95,8 +95,8 @@ public class Remote {
 		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		String svnkitServer = cfg.getSection("paths").get("svnkit");
 //		URL url = new URL(svnkitServer + "?cmd=branches&nodes=30bd389788464287cee22ccff54c330a4b715de5");
-		URL url = new URL(svnkitServer + "?cmd=between"); 
-//		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=" + Nodeid.NULL.toString());
+//		URL url = new URL(svnkitServer + "?cmd=between"); 
+		URL url = new URL(svnkitServer + "?cmd=changegroup&roots=71ddbf8603e8e09d54ac9c5fe4bb5ae824589f1d");
 //		URL url = new URL("http://localhost:8000/" + "?cmd=between");
 //		URL url = new URL(svnkitServer + "?cmd=stream_out");
 	
@@ -125,17 +125,17 @@ public class Remote {
 		urlConnection.setRequestProperty("Accept", "application/mercurial-0.1");
 		urlConnection.setRequestProperty("Authorization", "Basic " + authInfo);
 		urlConnection.setSSLSocketFactory(sslContext.getSocketFactory());
-		byte[] body = "pairs=f5aed108754e817d2ca374d1a4f6daf1218dcc91-9429c7bd1920fab164a9d2b621d38d57bcb49ae0".getBytes();
-		urlConnection.setRequestMethod("POST");
-		urlConnection.setRequestProperty("Content-Length", String.valueOf(body.length));
-		urlConnection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-		urlConnection.setDoOutput(true);
-		urlConnection.setDoInput(true);
-//		urlConnection.connect();
-		OutputStream os = urlConnection.getOutputStream();
-		os.write(body);
-		os.flush();
-		os.close();
+//		byte[] body = "pairs=f5aed108754e817d2ca374d1a4f6daf1218dcc91-9429c7bd1920fab164a9d2b621d38d57bcb49ae0".getBytes();
+//		urlConnection.setRequestMethod("POST");
+//		urlConnection.setRequestProperty("Content-Length", String.valueOf(body.length));
+//		urlConnection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+//		urlConnection.setDoOutput(true);
+//		urlConnection.setDoInput(true);
+		urlConnection.connect();
+//		OutputStream os = urlConnection.getOutputStream();
+//		os.write(body);
+//		os.flush();
+//		os.close();
 		System.out.println("Query:" + url.getQuery());
 		System.out.println("Response headers:");
 		final Map<String, List<String>> headerFields = urlConnection.getHeaderFields();
@@ -145,8 +145,8 @@ public class Remote {
 		System.out.printf("Content type is %s and its length is %d\n", urlConnection.getContentType(), urlConnection.getContentLength());
 		InputStream is = urlConnection.getInputStream();
 		//
-		dump(is, -1); // simple dump, any cmd
-//		writeBundle(is, false, "HG10GZ"); // cmd=changegroup
+//		dump(is, -1); // simple dump, any cmd
+		writeBundle(is, false, "HG10GZ"); // cmd=changegroup
 		//writeBundle(is, true, "" or "HG10UN");
 		//
 		urlConnection.disconnect();

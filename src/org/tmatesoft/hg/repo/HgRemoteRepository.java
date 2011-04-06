@@ -17,7 +17,9 @@
 package org.tmatesoft.hg.repo;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StreamTokenizer;
@@ -37,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
+import java.util.zip.InflaterInputStream;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -277,7 +280,30 @@ public class HgRemoteRepository {
 
 	// WireProtocol wiki: roots = a list of the latest nodes on every service side changeset branch that both the client and server know about. 
 	public HgBundle getChanges(List<Nodeid> roots) throws HgException {
-		return new HgLookup().loadBundle(new File("/temp/hg/hg-bundle-000000000000-gz.tmp"));
+		StringBuilder sb = new StringBuilder(20 + roots.size() * 41);
+		sb.append("roots=");
+		for (Nodeid n : roots) {
+			sb.append(n.toString());
+			sb.append('+');
+		}
+		if (sb.charAt(sb.length() - 1) == '+') {
+			// strip last space 
+			sb.setLength(sb.length() - 1);
+		}
+		try {
+			URL u = new URL(url, url.getPath() + "?cmd=changegroup&" + sb.toString());
+			HttpURLConnection c = setupConnection(u.openConnection());
+			c.connect();
+			if (debug) {
+				dumpResponseHeader(u, c);
+			}
+			File tf = writeBundle(c.getInputStream(), false, "HG10GZ" /*didn't see any other that zip*/);
+			return new HgLookup().loadBundle(tf);
+		} catch (MalformedURLException ex) {
+			throw new HgException(ex);
+		} catch (IOException ex) {
+			throw new HgException(ex);
+		}
 	}
 	
 	private HttpURLConnection setupConnection(URLConnection urlConnection) {
@@ -300,6 +326,22 @@ public class HgRemoteRepository {
 			System.out.printf("%s: %s\n", s, c.getHeaderField(s));
 		}
 	}
+	
+	private static File writeBundle(InputStream is, boolean decompress, String header) throws IOException {
+		InputStream zipStream = decompress ? new InflaterInputStream(is) : is;
+		File tf = File.createTempFile("hg-bundle-", null);
+		FileOutputStream fos = new FileOutputStream(tf);
+		fos.write(header.getBytes());
+		int r;
+		byte[] buf = new byte[8*1024];
+		while ((r = zipStream.read(buf)) != -1) {
+			fos.write(buf, 0, r);
+		}
+		fos.close();
+		zipStream.close();
+		return tf;
+	}
+
 
 	public static final class Range {
 		/**
