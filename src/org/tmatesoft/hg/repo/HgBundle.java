@@ -75,16 +75,21 @@ public class HgBundle {
 		return da;
 	}
 
-	// shows changes recorded in the bundle that are missing from the supplied repository 
-	public void changes(final HgRepository hgRepo) throws HgException, IOException {
-		Inspector insp = new Inspector() {
+	/**
+	 * Get changes recorded in the bundle that are missing from the supplied repository.
+	 * @param hgRepo repository that shall possess base revision for this bundle
+	 * @param inspector callback to get each changeset found 
+	 */
+	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgException, IOException {
+		Inspector bundleInsp = new Inspector() {
 			DigestHelper dh = new DigestHelper();
 			boolean emptyChangelog = true;
 			private DataAccess prevRevContent;
+			private int revisionIndex;
 
 			public void changelogStart() {
 				emptyChangelog = true;
-				
+				revisionIndex = 0;
 			}
 
 			public void changelogEnd() {
@@ -141,13 +146,8 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 						throw new IllegalStateException("Integrity check failed on " + bundleFile + ", node:" + ge.node());
 					}
 					ByteArrayDataAccess csetDataAccess = new ByteArrayDataAccess(csetContent);
-					if (changelog.isKnown(ge.node())) {
-						System.out.print("+");
-					} else {
-						System.out.print("-");
-					}
 					RawChangeset cs = RawChangeset.parse(csetDataAccess);
-					System.out.println(cs.toString());
+					inspector.next(revisionIndex++, ge.node(), cs);
 					prevRevContent.done();
 					prevRevContent = csetDataAccess.reset();
 				} catch (CancelledException ex) {
@@ -164,7 +164,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			public void fileEnd(String name) {}
 
 		};
-		inspectChangelog(insp);
+		inspectChangelog(bundleInsp);
 	}
 
 	public void dump() throws IOException {
@@ -239,12 +239,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 		DataAccess da = getDataStream();
 		try {
-			if (da.isEmpty()) {
-				return;
-			}
-			inspector.changelogStart();
-			readGroup(da, inspector);
-			inspector.changelogEnd();
+			internalInspectChangelog(da, inspector);
 		} finally {
 			da.done();
 		}
@@ -260,11 +255,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 				return;
 			}
 			skipGroup(da); // changelog
-			if (!da.isEmpty()) {
-				inspector.manifestStart();
-				readGroup(da, inspector);
-				inspector.manifestEnd();
-			}
+			internalInspectManifest(da, inspector);
 		} finally {
 			da.done();
 		}
@@ -276,24 +267,15 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 		DataAccess da = getDataStream();
 		try {
-			if (!da.isEmpty()) {
-				skipGroup(da); // changelog
+			if (da.isEmpty()) {
+				return;
 			}
-			if (!da.isEmpty()) {
-				skipGroup(da); // manifest
+			skipGroup(da); // changelog
+			if (da.isEmpty()) {
+				return;
 			}
-			while (!da.isEmpty()) {
-				int fnameLen = da.readInt();
-				if (fnameLen <= 4) {
-					break; // null chunk, the last one.
-				}
-				byte[] nameBuf = new byte[fnameLen - 4];
-				da.readBytes(nameBuf, 0, nameBuf.length);
-				String fname = new String(nameBuf);
-				inspector.fileStart(fname);
-				readGroup(da, inspector);
-				inspector.fileEnd(fname);
-			}
+			skipGroup(da); // manifest
+			internalInspectFiles(da, inspector);
 		} finally {
 			da.done();
 		}
@@ -305,34 +287,44 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 		DataAccess da = getDataStream();
 		try {
-			if (da.isEmpty()) {
-				return;
-			}
-			inspector.changelogStart();
-			readGroup(da, inspector);
-			inspector.changelogEnd();
-			//
-			if (da.isEmpty()) {
-				return;
-			}
-			inspector.manifestStart();
-			readGroup(da, inspector);
-			inspector.manifestEnd();
-			//
-			while (!da.isEmpty()) {
-				int fnameLen = da.readInt();
-				if (fnameLen <= 4) {
-					break; // null chunk, the last one.
-				}
-				byte[] fnameBuf = new byte[fnameLen - 4];
-				da.readBytes(fnameBuf, 0, fnameBuf.length);
-				String name = new String(fnameBuf);
-				inspector.fileStart(name);
-				readGroup(da, inspector);
-				inspector.fileEnd(name);
-			}
+			internalInspectChangelog(da, inspector);
+			internalInspectManifest(da, inspector);
+			internalInspectFiles(da, inspector);
 		} finally {
 			da.done();
+		}
+	}
+
+	private void internalInspectChangelog(DataAccess da, Inspector inspector) throws IOException {
+		if (da.isEmpty()) {
+			return;
+		}
+		inspector.changelogStart();
+		readGroup(da, inspector);
+		inspector.changelogEnd();
+	}
+
+	private void internalInspectManifest(DataAccess da, Inspector inspector) throws IOException {
+		if (da.isEmpty()) {
+			return;
+		}
+		inspector.manifestStart();
+		readGroup(da, inspector);
+		inspector.manifestEnd();
+	}
+
+	private void internalInspectFiles(DataAccess da, Inspector inspector) throws IOException {
+		while (!da.isEmpty()) {
+			int fnameLen = da.readInt();
+			if (fnameLen <= 4) {
+				break; // null chunk, the last one.
+			}
+			byte[] fnameBuf = new byte[fnameLen - 4];
+			da.readBytes(fnameBuf, 0, fnameBuf.length);
+			String name = new String(fnameBuf);
+			inspector.fileStart(name);
+			readGroup(da, inspector);
+			inspector.fileEnd(name);
 		}
 	}
 

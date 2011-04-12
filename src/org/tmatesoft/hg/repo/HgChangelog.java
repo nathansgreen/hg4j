@@ -94,6 +94,7 @@ public class HgChangelog extends Revlog {
 
 	public interface Inspector {
 		// TODO describe whether cset is new instance each time
+		// describe what revisionNumber is when Inspector is used with HgBundle (BAD_REVISION or bundle's local order?) 
 		void next(int revisionNumber, Nodeid nodeid, RawChangeset cset);
 	}
 

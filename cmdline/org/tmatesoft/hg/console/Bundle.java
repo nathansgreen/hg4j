@@ -18,9 +18,12 @@ package org.tmatesoft.hg.console;
 
 import java.io.File;
 
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgBundle;
+import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 
 
 /**
@@ -32,12 +35,12 @@ import org.tmatesoft.hg.repo.HgRepository;
 public class Bundle {
 	public static void main(String[] args) throws Exception {
 		Options cmdLineOpts = Options.parse(args);
-		HgRepository hgRepo = cmdLineOpts.findRepository();
+		final HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		File bundleFile = new File("/temp/hg/hg-bundle-000000000000-gz.tmp");
+		File bundleFile = new File("/temp/hg/hg-bundle-a78c980749e3.tmp");
 		HgBundle hgBundle = new HgLookup().loadBundle(bundleFile);
 //		hgBundle.dump();
 		/* pass -R <path-to-repo-with-less-revisions-than-bundle>, e.g. for bundle with tip=168 and -R \temp\hg4j-50 with tip:159
@@ -46,7 +49,18 @@ public class Bundle {
 		-Changeset {User: ..., Comment: Correct project name...}
 		-Changeset {User: ..., Comment: Record possible...}
 		*/
-		hgBundle.changes(hgRepo);
+		hgBundle.changes(hgRepo, new HgChangelog.Inspector() {
+			private final HgChangelog changelog = hgRepo.getChangelog();
+			
+			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+				if (changelog.isKnown(nodeid)) {
+					System.out.print("+");
+				} else {
+					System.out.print("-");
+				}
+				System.out.printf("%d:%s\n%s\n", revisionNumber, nodeid.shortNotation(), cset.toString());
+			}
+		});
 	}
 
 /*

@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.console;
 
-import java.io.File;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -32,8 +30,6 @@ import java.util.Map.Entry;
 
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.ConfigFile;
-import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
 import org.tmatesoft.hg.repo.HgChangelog;
