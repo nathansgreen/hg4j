@@ -16,34 +16,29 @@
  */
 package org.tmatesoft.hg.console;
 
-import static org.tmatesoft.hg.core.Nodeid.NULL;
-
 import java.io.File;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Map;
 import java.util.Map.Entry;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.RepositoryComparator;
+import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
-import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
-import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
 import org.tmatesoft.hg.repo.HgRepository;
 
 
@@ -67,25 +62,24 @@ public class Incoming {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		String key = "svnkit";
-		ConfigFile cfg = new Internals().newConfigFile();
-		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
-		String server = cfg.getSection("paths").get(key);
-		if (server == null) {
-			throw new HgException(String.format("Can't find server %s specification in the config", key));
+		HgRemoteRepository hgRemote = new HgLookup().detectRemote("svnkit", hgRepo);
+		if (hgRemote.isInvalid()) {
+			System.err.printf("Remote repository %s is not valid", hgRemote.getLocation());
+			return;
 		}
-		HgRemoteRepository hgRemote = new HgLookup().detect(new URL(server));
 		//
 		// in fact, all we need from changelog is set of all nodeids. However, since ParentWalker reuses same Nodeids, it's not too expensive
 		// to reuse it here, XXX although later this may need to be refactored
 		final HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
 		pw.init();
 		//
-		List<BranchChain> missingBranches0 = calculateMissingBranches(pw, hgRemote);
+		RepositoryComparator repoCompare = new RepositoryComparator(pw, hgRemote);
+		repoCompare.compare(null);
+		List<BranchChain> missingBranches0 = repoCompare.calculateMissingBranches();
 		for (BranchChain bc : missingBranches0) {
 			bc.dump();
 			
-			List<Nodeid> missing = visitBranches(hgRemote, bc);
+			List<Nodeid> missing = visitBranches(repoCompare, bc);
 			// Collections.reverse(missing); // useful to test output, from newer to older
 			for (Nodeid n : missing) {
 				if (pw.knownNode(n)) {
@@ -99,60 +93,17 @@ public class Incoming {
 		
 	}
 	
-	private static class BranchChain {
-		// when we construct a chain, we know head which is missing locally, hence init it right away.
-		// as for root (branch unknown start), we might happen to have one locally, and need further digging to find out right branch start  
-		public final Nodeid branchHead;
-		public Nodeid branchRoot;
-		// either of these can be null, or both.
-		// although RemoteBranch has either both parents null, or both non-null, when we construct a chain
-		// we might encounter that we locally know one of branch's parent, hence in the chain corresponding field will be blank.
-		public BranchChain p1;
-		public BranchChain p2;
-
-		public BranchChain(Nodeid head) {
-			assert head != null;
-			branchHead = head;
-		}
-		public boolean isTerminal() {
-			return p1 == null || p2 == null;
-		}
-		
-		@Override
-		public String toString() {
-			return String.format("BranchChain [%s, %s]", branchRoot, branchHead);
-		}
-		void dump() {
-			System.out.println(toString());
-			internalDump("  ");
-		}
-		void internalDump(String prefix) {
-			if (p1 != null) {
-				System.out.println(prefix + p1.toString());
-			}
-			if (p2 != null) {
-				System.out.println(prefix + p2.toString());
-			}
-			prefix += "  ";
-			if (p1 != null) {
-				p1.internalDump(prefix);
-			}
-			if (p2 != null) {
-				p2.internalDump(prefix);
-			}
-		}
-	}
 	
-	private static List<Nodeid> visitBranches(HgRemoteRepository hgRemote, BranchChain bc) throws HgException {
+	private static List<Nodeid> visitBranches(RepositoryComparator repoCompare, BranchChain bc) throws HgException {
 		if (bc == null) {
 			return Collections.emptyList();
 		}
-		List<Nodeid> mine = completeBranch(hgRemote, bc.branchRoot, bc.branchHead);
+		List<Nodeid> mine = repoCompare.completeBranch(bc.branchRoot, bc.branchHead);
 		if (bc.isTerminal()) {
 			return mine;
 		}
-		List<Nodeid> parentBranch1 = visitBranches(hgRemote, bc.p1);
-		List<Nodeid> parentBranch2 = visitBranches(hgRemote, bc.p2);
+		List<Nodeid> parentBranch1 = visitBranches(repoCompare, bc.p1);
+		List<Nodeid> parentBranch2 = visitBranches(repoCompare, bc.p2);
 		// merge
 		LinkedList<Nodeid> merged = new LinkedList<Nodeid>();
 		ListIterator<Nodeid> i1 = parentBranch1.listIterator(), i2 = parentBranch2.listIterator();
@@ -182,210 +133,7 @@ public class Incoming {
 		rv.addAll(mine);
 		return rv;
 	}
-	
-	// somewhat similar to Outgoing.findCommonWithRemote() 
-	private static List<BranchChain> calculateMissingBranches(HgChangelog.ParentWalker pwLocal, HgRemoteRepository hgRemote) throws HgException {
-		List<Nodeid> remoteHeads = hgRemote.heads();
-		LinkedList<Nodeid> common = new LinkedList<Nodeid>(); // these remotes are known in local
-		LinkedList<Nodeid> toQuery = new LinkedList<Nodeid>(); // these need further queries to find common
-		for (Nodeid rh : remoteHeads) {
-			if (pwLocal.knownNode(rh)) {
-				common.add(rh);
-			} else {
-				toQuery.add(rh);
-			}
-		}
-		if (toQuery.isEmpty()) {
-			return Collections.emptyList(); // no incoming changes
-		}
-		LinkedList<BranchChain> branches2load = new LinkedList<BranchChain>(); // return value
-		// detailed comments are in Outgoing.findCommonWithRemote
-		LinkedList<RemoteBranch> checkUp2Head = new LinkedList<RemoteBranch>();
-		// records relation between branch head and its parent branch, if any
-		HashMap<Nodeid, BranchChain> head2chain = new HashMap<Nodeid, Incoming.BranchChain>();
-		while (!toQuery.isEmpty()) {
-			List<RemoteBranch> remoteBranches = hgRemote.branches(toQuery);	//head, root, first parent, second parent
-			toQuery.clear();
-			while(!remoteBranches.isEmpty()) {
-				RemoteBranch rb = remoteBranches.remove(0);
-				BranchChain chainElement = head2chain.get(rb.head);
-				if (chainElement == null) {
-					chainElement = new BranchChain(rb.head);
-					// record this unknown branch to download later
-					branches2load.add(chainElement);
-				}
-				if (pwLocal.knownNode(rb.root)) {
-					// we known branch start, common head is somewhere in its descendants line  
-					checkUp2Head.add(rb);
-				} else {
-					chainElement.branchRoot = rb.root;
-					// dig deeper in the history, if necessary
-					if (!NULL.equals(rb.p1) && !pwLocal.knownNode(rb.p1)) {
-						toQuery.add(rb.p1);
-						head2chain.put(rb.p1, chainElement.p1 = new BranchChain(rb.p1));
-					}
-					if (!NULL.equals(rb.p2) && !pwLocal.knownNode(rb.p2)) {
-						toQuery.add(rb.p2);
-						head2chain.put(rb.p2, chainElement.p2 = new BranchChain(rb.p2));
-					}
-				}
-			}
-		}
-		for (RemoteBranch rb : checkUp2Head) {
-			Nodeid h = rb.head;
-			Nodeid r = rb.root;
-			int watchdog = 1000;
-			BranchChain bc = head2chain.get(h);
-			assert bc != null;
-			// if we know branch root locally, there could be no parent branch chain elements.
-			assert bc.p1 == null;
-			assert bc.p2 == null;
-			do {
-				List<Nodeid> between = hgRemote.between(h, r);
-				if (between.isEmpty()) {
-					bc.branchRoot = r;
-					break;
-				} else {
-					Collections.reverse(between);
-					for (Nodeid n : between) {
-						if (pwLocal.knownNode(n)) {
-							r = n;
-						} else {
-							h = n;
-							break;
-						}
-					}
-					Nodeid lastInBetween = between.get(between.size() - 1);
-					if (r.equals(lastInBetween)) {
-						bc.branchRoot = r;
-						break;
-					} else if (h.equals(lastInBetween)) { // the only chance for current head pointer to point to the sequence tail
-						// is when r is second from the between list end (iow, head,1,[2],4,8...,root)
-						bc.branchRoot = r;
-						break;
-					}
-				}
-			} while(--watchdog > 0);
-			if (watchdog == 0) {
-				throw new HgBadStateException(String.format("Can't narrow down branch [%s, %s]", rb.head.shortNotation(), rb.root.shortNotation()));
-			}
-		}
-		return branches2load;
-	}
 
-	/**
-	 * @return list of nodeids from branchRoot to branchHead, inclusive. IOW, first element of the list is always root of the branch 
-	 */
-	private static List<Nodeid> completeBranch(HgRemoteRepository hgRemote, final Nodeid branchRoot, final Nodeid branchHead) throws HgException {
-		class DataEntry {
-			public final Nodeid queryHead;
-			public final int headIndex;
-			public List<Nodeid> entries;
-
-			public DataEntry(Nodeid head, int index, List<Nodeid> data) {
-				queryHead = head;
-				headIndex = index;
-				entries = data;
-			}
-		};
-
-		List<Nodeid> initial = hgRemote.between(branchHead, branchRoot);
-		Nodeid[] result = new Nodeid[1 + (1 << initial.size())];
-		result[0] = branchHead;
-		int rootIndex = -1; // index in the result, where to place branche's root.
-		if (initial.isEmpty()) {
-			rootIndex = 1;
-		} else if (initial.size() == 1) {
-			rootIndex = 2;
-		}
-		LinkedList<DataEntry> datas = new LinkedList<DataEntry>();
-		// DataEntry in datas has entries list filled with 'between' data, whereas 
-		// DataEntry in toQuery keeps only nodeid and its index, with entries to be initialized before 
-		// moving to datas. 
-		LinkedList<DataEntry> toQuery = new LinkedList<DataEntry>();
-		//
-		datas.add(new DataEntry(branchHead, 0, initial));
-		int totalQueries = 1;
-		HashSet<Nodeid> queried = new HashSet<Nodeid>();
-		while(!datas.isEmpty()) {
-			// keep record of those planned to be queried next time we call between()
-			// although may keep these in queried, if really don't want separate collection
-			HashSet<Nodeid> scheduled = new HashSet<Nodeid>();  
-			do {
-				DataEntry de = datas.removeFirst();
-				// populate result with discovered elements between de.qiueryRoot and branch's head
-				for (int i = 1, j = 0; j < de.entries.size(); i = i << 1, j++) {
-					int idx = de.headIndex + i;
-					result[idx] = de.entries.get(j);
-				}
-				// form next query entries from new unknown elements
-				if (de.entries.size() > 1) {
-					/* when entries has only one element, it means de.queryRoot was at head-2 position, and thus
-					 * no new information can be obtained. E.g. when it's 2, it might be case of [0..4] query with
-					 * [1,2] result, and we need one more query to get element 3.   
-					 */
-					for (int i =1, j = 0; j < de.entries.size(); i = i<<1, j++) {
-						int idx = de.headIndex + i;
-						Nodeid x = de.entries.get(j);
-						if (!queried.contains(x) && !scheduled.contains(x) && (rootIndex == -1 || rootIndex - de.headIndex > 1)) {
-							/*queries for elements right before head is senseless, but unless we know head's index, do it anyway*/
-							toQuery.add(new DataEntry(x, idx, null));
-							scheduled.add(x);
-						}
-					}
-				}
-			} while (!datas.isEmpty());
-			if (!toQuery.isEmpty()) {
-				totalQueries++;
-			}
-			// for each query, create an between request range, keep record Range->DataEntry to know range's start index  
-			LinkedList<HgRemoteRepository.Range> betweenBatch = new LinkedList<HgRemoteRepository.Range>();
-			HashMap<HgRemoteRepository.Range, DataEntry> rangeToEntry = new HashMap<HgRemoteRepository.Range, DataEntry>();
-			for (DataEntry de : toQuery) {
-				queried.add(de.queryHead);
-				HgRemoteRepository.Range r = new HgRemoteRepository.Range(branchRoot, de.queryHead);
-				betweenBatch.add(r);
-				rangeToEntry.put(r, de);
-			}
-			if (!betweenBatch.isEmpty()) {
-				Map<Range, List<Nodeid>> between = hgRemote.between(betweenBatch);
-				for (Entry<Range, List<Nodeid>> e : between.entrySet()) {
-					DataEntry de = rangeToEntry.get(e.getKey());
-					assert de != null;
-					de.entries = e.getValue();
-					if (rootIndex == -1 && de.entries.size() == 1) {
-						// returned sequence of length 1 means we used element from [head-2] as root
-						int numberOfElementsExcludingRootAndHead = de.headIndex + 1;
-						rootIndex = numberOfElementsExcludingRootAndHead + 1;
-						System.out.printf("On query %d found out exact number of missing elements: %d\n", totalQueries, numberOfElementsExcludingRootAndHead);
-					}
-					datas.add(de); // queue up to record result and construct further requests
-				}
-				betweenBatch.clear();
-				rangeToEntry.clear();
-			}
-			toQuery.clear();
-		}
-		if (rootIndex == -1) {
-			throw new HgBadStateException("Shall not happen, provided between output is correct"); // FIXME
-		}
-		result[rootIndex] = branchRoot;
-		boolean resultOk = true;
-		LinkedList<Nodeid> fromRootToHead = new LinkedList<Nodeid>();
-		for (int i = 0; i <= rootIndex; i++) {
-			Nodeid n = result[i];
-			if (n == null) {
-				System.out.printf("ERROR: element %d wasn't found\n",i);
-				resultOk = false;
-			}
-			fromRootToHead.addFirst(n); // reverse order
-		}
-		System.out.println("Total queries:" + totalQueries);
-		if (!resultOk) {
-			throw new HgBadStateException("See console for details"); // FIXME
-		}
-		return fromRootToHead;
-	}
 
 	private static class SequenceConstructor {
 

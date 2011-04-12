@@ -46,6 +46,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -63,9 +64,9 @@ public class HgRemoteRepository {
 	private final URL url;
 	private final SSLContext sslContext;
 	private final String authInfo;
-	private final boolean debug = Boolean.FALSE.booleanValue();
+	private final boolean debug = Boolean.parseBoolean(System.getProperty("hg4j.remote.debug"));
 
-	HgRemoteRepository(URL url) throws HgException {
+	HgRemoteRepository(URL url) throws HgBadArgumentException {
 		if (url == null) {
 			throw new IllegalArgumentException();
 		}
@@ -86,7 +87,7 @@ public class HgRemoteRepository {
 				};
 				sslContext.init(null, new TrustManager[] { new TrustEveryone() }, null);
 			} catch (Exception ex) {
-				throw new HgException(ex);
+				throw new HgBadArgumentException("Can't initialize secure connection", ex);
 			}
 		} else {
 			sslContext = null;
@@ -109,6 +110,28 @@ public class HgRemoteRepository {
 		}
 	}
 	
+	public boolean isInvalid() throws HgException {
+		// say hello to server, check response
+		if (Boolean.FALSE.booleanValue()) {
+			throw HgRepository.notImplemented();
+		}
+		return false; // FIXME
+	}
+
+	/**
+	 * @return human-readable address of the server, without user credentials or any other security information
+	 */
+	public String getLocation() {
+		if (url.getUserInfo() == null) {
+			return url.toExternalForm();
+		}
+		if (url.getPort() != -1) {
+			return String.format("%s://%s:%d%s", url.getProtocol(), url.getHost(), url.getPort(), url.getPath());
+		} else {
+			return String.format("%s://%s%s", url.getProtocol(), url.getHost(), url.getPath());
+		}
+	}
+
 	public List<Nodeid> heads() throws HgException {
 		try {
 			URL u = new URL(url, url.getPath() + "?cmd=heads");

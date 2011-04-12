@@ -102,4 +102,12 @@ public class HgRepoFacade {
 	public HgManifestCommand createManifestCommand() {
 		return new HgManifestCommand(repo);
 	}
+
+	public HgOutgoingCommand createOutgoingCommand() {
+		return new HgOutgoingCommand(repo);
+	}
+
+	public HgIncomingCommand createIncomingCommand() {
+		return new HgIncomingCommand(repo);
+	}
 }

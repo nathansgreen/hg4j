@@ -18,10 +18,14 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
 
+import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.internal.Internals;
 
 /**
  * Utility methods to find Mercurial repository at a given location
@@ -30,6 +34,8 @@ import org.tmatesoft.hg.internal.DataAccessProvider;
  * @author TMate Software Ltd.
  */
 public class HgLookup {
+
+	private ConfigFile globalCfg;
 
 	public HgRepository detectFromWorkingDir() throws HgException {
 		return detect(System.getProperty("user.dir"));
@@ -70,7 +76,38 @@ public class HgLookup {
 		}
 		return new HgBundle(new DataAccessProvider(), location);
 	}
-
+	
+	/**
+	 * Try to instantiate remote server.
+	 * @param key either URL or a key from configuration file that points to remote server  
+	 * @param hgRepo <em>NOT USED YET<em> local repository that may have extra config, or default remote location
+	 * @return an instance featuring access to remote repository, check {@link HgRemoteRepository#isInvalid()} before actually using it
+	 * @throws HgBadArgumentException if anything is wrong with the remote server's URL
+	 */
+	public HgRemoteRepository detectRemote(String key, HgRepository hgRepo) throws HgBadArgumentException {
+		URL url;
+		Exception toReport;
+		try {
+			url = new URL(key);
+			toReport = null;
+		} catch (MalformedURLException ex) {
+			url = null;
+			toReport = ex;
+		}
+		if (url == null) {
+			String server = getGlobalConfig().getSection("paths").get(key);
+			if (server == null) {
+				throw new HgBadArgumentException(String.format("Can't find server %s specification in the config", key), toReport);
+			}
+			try {
+				url = new URL(server);
+			} catch (MalformedURLException ex) {
+				throw new HgBadArgumentException(String.format("Found %s server spec in the config, but failed to initialize with it", key), ex);
+			}
+		}
+		return new HgRemoteRepository(url);
+	}
+	
 	public HgRemoteRepository detect(URL url) throws HgException {
 		if (url == null) {
 			throw new IllegalArgumentException();
@@ -79,5 +116,13 @@ public class HgLookup {
 			throw HgRepository.notImplemented();
 		}
 		return new HgRemoteRepository(url);
+	}
+
+	private ConfigFile getGlobalConfig() {
+		if (globalCfg == null) {
+			globalCfg = new Internals().newConfigFile();
+			globalCfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
+		}
+		return globalCfg;
 	}
 }
