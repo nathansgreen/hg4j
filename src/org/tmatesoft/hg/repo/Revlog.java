@@ -230,9 +230,9 @@ abstract class Revlog {
 					allNodes.add(nid);
 					if (parent1Revision != -1) {
 						firstParent.put(nid, sequentialRevisionNodeids[parent1Revision]);
-						if (parent2Revision != -1) {
-							secondParent.put(nid, sequentialRevisionNodeids[parent2Revision]);
-						}
+					}
+					if (parent2Revision != -1) { // revlog of DataAccess.java has p2 set when p1 is -1  
+						secondParent.put(nid, sequentialRevisionNodeids[parent2Revision]);
 					}
 				}
 			};
