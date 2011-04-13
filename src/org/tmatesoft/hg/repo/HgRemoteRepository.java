@@ -65,6 +65,7 @@ public class HgRemoteRepository {
 	private final SSLContext sslContext;
 	private final String authInfo;
 	private final boolean debug = Boolean.parseBoolean(System.getProperty("hg4j.remote.debug"));
+	private HgLookup lookupHelper;
 
 	HgRemoteRepository(URL url) throws HgBadArgumentException {
 		if (url == null) {
@@ -301,8 +302,19 @@ public class HgRemoteRepository {
 		}
 	}
 
-	// WireProtocol wiki: roots = a list of the latest nodes on every service side changeset branch that both the client and server know about.
-	// perhaps, shall be named 'changegroup'
+	/*
+	 * WireProtocol wiki: roots = a list of the latest nodes on every service side changeset branch that both the client and server know about.
+	 * 
+	 * Perhaps, shall be named 'changegroup'
+
+	 * Changegroup: 
+	 * http://mercurial.selenic.com/wiki/Merge 
+	 * http://mercurial.selenic.com/wiki/WireProtocol 
+	 * 
+	 * according to latter, bundleformat data is sent through zlib
+	 * (there's no header like HG10?? with the server output, though, 
+	 * as one may expect according to http://mercurial.selenic.com/wiki/BundleFormat)
+	 */
 	public HgBundle getChanges(List<Nodeid> roots) throws HgException {
 		StringBuilder sb = new StringBuilder(20 + roots.size() * 41);
 		sb.append("roots=");
@@ -322,12 +334,19 @@ public class HgRemoteRepository {
 				dumpResponseHeader(u, c);
 			}
 			File tf = writeBundle(c.getInputStream(), false, "HG10GZ" /*didn't see any other that zip*/);
-			return new HgLookup().loadBundle(tf);
+			return getLookupHelper().loadBundle(tf);
 		} catch (MalformedURLException ex) {
 			throw new HgException(ex);
 		} catch (IOException ex) {
 			throw new HgException(ex);
 		}
+	}
+
+	private HgLookup getLookupHelper() {
+		if (lookupHelper == null) {
+			lookupHelper = new HgLookup();
+		}
+		return lookupHelper;
 	}
 	
 	private HttpURLConnection setupConnection(URLConnection urlConnection) {

@@ -74,7 +74,7 @@ public class HgLookup {
 		if (location == null || !location.canRead()) {
 			throw new IllegalArgumentException();
 		}
-		return new HgBundle(new DataAccessProvider(), location);
+		return new HgBundle(new DataAccessProvider(), location).link();
 	}
 	
 	/**

@@ -114,7 +114,6 @@ public class Incoming {
 				System.out.printf("user:       %s\n", cset.user());
 				System.out.printf("date:       %s\n", cset.dateString());
 				System.out.printf("comment:    %s\n\n", cset.comment());
-				
 			}
 		});
 	}

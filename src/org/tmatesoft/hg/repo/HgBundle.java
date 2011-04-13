@@ -75,6 +75,21 @@ public class HgBundle {
 		return da;
 	}
 
+	private int uses = 0;
+	public HgBundle link() {
+		uses++;
+		return this;
+	}
+	public void unlink() {
+		uses--;
+		if (uses == 0 && bundleFile != null) {
+			bundleFile.deleteOnExit();
+		}
+	}
+	public boolean inUse() {
+		return uses > 0;
+	}
+
 	/**
 	 * Get changes recorded in the bundle that are missing from the supplied repository.
 	 * @param hgRepo repository that shall possess base revision for this bundle
