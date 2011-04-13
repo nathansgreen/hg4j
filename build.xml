@@ -21,18 +21,21 @@
 		Targets:
 		  * build - compile and jar binary and source bundles
 		  * tests - run tests with JUnit
-		  * samples - few command-line counterparts to demonstrate basic capabiliites 
+		  * samples - few command-line counterparts to demonstrate basic capabiliites
+		  * rebuild - clean build
 	</description>
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
 	<property name="ver.qualifier" value="" />
 	<property name="version.lib" value="0.1.0" />
 	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
+	<property name="compile-with-debug" value="yes"/>
 
 	<property name="hg4j.jar" value="hg4j_${version.jar}.jar" />
 	<property name="hg4j-tests.jar" value="hg4j-tests_${version.jar}.jar" />
 	<property name="hg4j-console.jar" value="hg4j-console_${version.jar}.jar" />
 	<property name="hg4j-src.jar" value="hg4j-src_${version.jar}.jar" />
+	
 
 	<target name="samples" depends="build-cmdline" description="Run sample command-line tools">
 		<path id="path.cmdline" path="${hg4j.jar};${hg4j-console.jar}" />
@@ -94,10 +97,22 @@
 			<fileset file="COPYING"/>
 		</jar>
 	</target>
+	
+	<target name="rebuild" depends="cleanup, build" description="Clean and build again"/>
+	
+	<target name="cleanup">
+		<delete dir="bin/" description="Compiled classes"/>
+		<delete description="Jars">
+			<fileset dir="." includes="${hg4j-console.jar}, ${hg4j-src.jar}, ${hg4j-tests.jar}, ${hg4j.jar}"/>
+		</delete>
+		<delete description="Tests artifacts">
+			<fileset dir="." includes="TEST-*.xml"/>
+		</delete>
+	</target>
 
 	<target name="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="src" destdir="bin" />
+		<javac srcdir="src" destdir="bin" debug="${compile-with-debug}" />
 		<jar destfile="${hg4j.jar}">
 			<fileset dir="bin/">
 				<include name="org/tmatesoft/hg/core/**" />
@@ -111,7 +126,7 @@
 
 	<target name="build-tests" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="test" destdir="bin">
+		<javac srcdir="test" destdir="bin" debug="${compile-with-debug}" >
 			<classpath>
 				<pathelement location="${hg4j.jar}"/>
 				<pathelement location="${junit.jar}"/>
@@ -125,7 +140,7 @@
 
 	<target name="build-cmdline" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="cmdline" destdir="bin"/>
+		<javac srcdir="cmdline" destdir="bin" debug="${compile-with-debug}" />
 		<jar destfile="${hg4j-console.jar}">
 			<fileset dir="bin/" includes="org/tmatesoft/hg/console/**"/>
 			<fileset file="COPYING"/>
