@@ -301,7 +301,8 @@ public class HgRemoteRepository {
 		}
 	}
 
-	// WireProtocol wiki: roots = a list of the latest nodes on every service side changeset branch that both the client and server know about. 
+	// WireProtocol wiki: roots = a list of the latest nodes on every service side changeset branch that both the client and server know about.
+	// perhaps, shall be named 'changegroup'
 	public HgBundle getChanges(List<Nodeid> roots) throws HgException {
 		StringBuilder sb = new StringBuilder(20 + roots.size() * 41);
 		sb.append("roots=");
@@ -385,6 +386,7 @@ public class HgRemoteRepository {
 			end = to;
 		}
 	}
+
 	public static final class RemoteBranch {
 		public final Nodeid head, root, p1, p2;
 		

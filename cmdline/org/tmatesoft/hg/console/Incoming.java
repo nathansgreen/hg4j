@@ -23,19 +23,23 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map.Entry;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
+import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 
 
 /**
@@ -53,12 +57,12 @@ public class Incoming {
 			return;
 		}
 		Options cmdLineOpts = Options.parse(args);
-		HgRepository hgRepo = cmdLineOpts.findRepository();
+		final HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		HgRemoteRepository hgRemote = new HgLookup().detectRemote("svnkit", hgRepo);
+		HgRemoteRepository hgRemote = new HgLookup().detectRemote(cmdLineOpts.getSingle(""), hgRepo);
 		if (hgRemote.isInvalid()) {
 			System.err.printf("Remote repository %s is not valid", hgRemote.getLocation());
 			return;
@@ -72,11 +76,17 @@ public class Incoming {
 		RepositoryComparator repoCompare = new RepositoryComparator(pw, hgRemote);
 		repoCompare.compare(null);
 		List<BranchChain> missingBranches0 = repoCompare.calculateMissingBranches();
+		final LinkedHashSet<Nodeid> common = new LinkedHashSet<Nodeid>();
+		// XXX common can be obtained from repoCompare, but at the moment it would almost duplicate work of calculateMissingBranches
+		// once I refactor latter, common shall be taken from repoCompare.
 		for (BranchChain bc : missingBranches0) {
 			bc.dump();
-			
+			common.add(bc.branchRoot); // common known node
 			List<Nodeid> missing = visitBranches(repoCompare, bc);
-			// Collections.reverse(missing); // useful to test output, from newer to older
+			assert bc.branchRoot.equals(missing.get(0)); 
+			missing.remove(0);
+			Collections.reverse(missing); // useful to test output, from newer to older
+			System.out.println("Nodes to fetch in this branch:");
 			for (Nodeid n : missing) {
 				if (pw.knownNode(n)) {
 					System.out.println("Erroneous to fetch:" + n);
@@ -86,10 +96,31 @@ public class Incoming {
 			}
 			System.out.println("Branch done");
 		}
-		
+		//
+		// Complete
+		HgBundle changegroup = hgRemote.getChanges(new LinkedList<Nodeid>(common));
+		changegroup.changes(hgRepo, new HgChangelog.Inspector() {
+			private int localIndex;
+			
+			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+				if (pw.knownNode(nodeid)) {
+					if (!common.contains(nodeid)) {
+						throw new HgBadStateException("Bundle shall not report known nodes other than roots we've supplied");
+					}
+					localIndex = hgRepo.getChangelog().getLocalRevision(nodeid);
+					return;
+				}
+				System.out.printf("changeset:  %d:%s\n", ++localIndex, nodeid.toString());
+				System.out.printf("user:       %s\n", cset.user());
+				System.out.printf("date:       %s\n", cset.dateString());
+				System.out.printf("comment:    %s\n\n", cset.comment());
+				
+			}
+		});
 	}
 	
-	
+	// returns in order from branch root to head
+	// for a non-empty BranchChain, shall return modifiable list
 	private static List<Nodeid> visitBranches(RepositoryComparator repoCompare, BranchChain bc) throws HgException {
 		if (bc == null) {
 			return Collections.emptyList();

@@ -181,6 +181,8 @@ public class RepositoryComparator {
 					chainElement = new BranchChain(rb.head);
 					// record this unknown branch to download later
 					branches2load.add(chainElement);
+					// the only chance we'll need chainElement in the head2chain is when we know this branch's root 
+					head2chain.put(rb.head, chainElement);
 				}
 				if (localRepo.knownNode(rb.root)) {
 					// we known branch start, common head is somewhere in its descendants line  
@@ -203,8 +205,9 @@ public class RepositoryComparator {
 			Nodeid h = rb.head;
 			Nodeid r = rb.root;
 			int watchdog = 1000;
+			assert head2chain.containsKey(h);
 			BranchChain bc = head2chain.get(h);
-			assert bc != null;
+			assert bc != null : h.toString();
 			// if we know branch root locally, there could be no parent branch chain elements.
 			assert bc.p1 == null;
 			assert bc.p2 == null;
