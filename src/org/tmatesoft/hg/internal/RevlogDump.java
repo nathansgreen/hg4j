@@ -97,8 +97,8 @@ public class RevlogDump {
 				if (dumpData) { 
 					System.out.println(resultString);
 				}
-				entryCount++;
 			}
+			entryCount++;
 		}
 		dis.close();
 		//
