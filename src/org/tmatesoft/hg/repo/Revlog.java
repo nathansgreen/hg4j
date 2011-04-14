@@ -273,10 +273,10 @@ abstract class Revlog {
 			boolean modified = false;
 			if (p1 != null) {
 				modified = c.add(p1);
-				Nodeid p2 = secondParent(nid);
-				if (p2 != null) {
-					modified = c.add(p2) || modified;
-				}
+			}
+			Nodeid p2 = secondParent(nid);
+			if (p2 != null) {
+				modified = c.add(p2) || modified;
 			}
 			return modified;
 		}
