@@ -40,9 +40,12 @@ public class Bundle {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
-		File bundleFile = new File("/temp/hg/hg-bundle-a78c980749e3.tmp");
+		File bundleFile = new File("/temp/hg/hg-bundle-cpython.tmp");
 		HgBundle hgBundle = new HgLookup().loadBundle(bundleFile);
-//		hgBundle.dump();
+		hgBundle.inspectFiles(new HgBundle.Dump());
+		if (Boolean.parseBoolean("true")) {
+			return;
+		}
 		/* pass -R <path-to-repo-with-less-revisions-than-bundle>, e.g. for bundle with tip=168 and -R \temp\hg4j-50 with tip:159
 		+Changeset {User: ..., Comment: Integer ....}
 		+Changeset {User: ..., Comment: Approach with ...}

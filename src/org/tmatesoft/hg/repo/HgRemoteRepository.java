@@ -334,6 +334,9 @@ public class HgRemoteRepository {
 				dumpResponseHeader(u, c);
 			}
 			File tf = writeBundle(c.getInputStream(), false, "HG10GZ" /*didn't see any other that zip*/);
+			if (debug) {
+				System.out.printf("Wrote bundle %s for roots %s", tf, sb);
+			}
 			return getLookupHelper().loadBundle(tf);
 		} catch (MalformedURLException ex) {
 			throw new HgException(ex);

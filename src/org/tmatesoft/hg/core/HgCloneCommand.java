@@ -109,8 +109,9 @@ public class HgCloneCommand {
 	// 3. process every file, using map from 3, and consult set from step 4 to ensure repo is correct
 	private static class WriteDownMate implements HgBundle.Inspector {
 		private final File hgDir;
-		private FileOutputStream indexFile;
 		private final PathRewrite storagePathHelper;
+		private FileOutputStream indexFile;
+		private String filename; // human-readable name of the file being written, for log/exception purposes 
 
 		private final TreeMap<Nodeid, Integer> changelogIndexes = new TreeMap<Nodeid, Integer>();
 		private boolean collectChangelogIndexes = false;
@@ -152,7 +153,7 @@ public class HgCloneCommand {
 				base = -1;
 				offset = 0;
 				revisionSequence.clear();
-				indexFile = new FileOutputStream(new File(hgDir, "store/00changelog.i"));
+				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00changelog.i"));
 				collectChangelogIndexes = true;
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);
@@ -168,6 +169,7 @@ public class HgCloneCommand {
 				collectChangelogIndexes = false;
 				indexFile.close();
 				indexFile = null;
+				filename = null;
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);
 			}
@@ -178,7 +180,7 @@ public class HgCloneCommand {
 				base = -1;
 				offset = 0;
 				revisionSequence.clear();
-				indexFile = new FileOutputStream(new File(hgDir, "store/00manifest.i"));
+				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00manifest.i"));
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);
 			}
@@ -192,6 +194,7 @@ public class HgCloneCommand {
 				}
 				indexFile.close();
 				indexFile = null;
+				filename = null;
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);
 			}
@@ -204,7 +207,7 @@ public class HgCloneCommand {
 				revisionSequence.clear();
 				fncacheFiles.add("data/" + name + ".i"); // FIXME this is pure guess, 
 				// need to investigate more how filenames are kept in fncache
-				File file = new File(hgDir, storagePathHelper.rewrite(name));
+				File file = new File(hgDir, filename = storagePathHelper.rewrite(name));
 				file.getParentFile().mkdirs();
 				indexFile = new FileOutputStream(file);
 			} catch (IOException ex) {
@@ -220,6 +223,7 @@ public class HgCloneCommand {
 				}
 				indexFile.close();
 				indexFile = null;
+				filename = null;
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);
 			}
@@ -235,7 +239,7 @@ public class HgCloneCommand {
 					}
 				}
 			}
-			throw new HgBadStateException(String.format("Can't find index of %s", p.shortNotation()));
+			throw new HgBadStateException(String.format("Can't find index of %s for file %s", p.shortNotation(), filename));
 		}
 
 		public boolean element(GroupElement ge) {
@@ -252,7 +256,7 @@ public class HgCloneCommand {
 				byte[] calculated = dh.sha1(p1, p2, content).asBinary();
 				final Nodeid node = ge.node();
 				if (!node.equalsTo(calculated)) {
-					throw new HgBadStateException("Checksum failed");
+					throw new HgBadStateException(String.format("Checksum failed: expected %s, calculated %s. File %s", node, calculated, filename));
 				}
 				final int link;
 				if (collectChangelogIndexes) {
@@ -261,7 +265,7 @@ public class HgCloneCommand {
 				} else {
 					Integer csRev = changelogIndexes.get(ge.cset());
 					if (csRev == null) {
-						throw new HgBadStateException(String.format("Changelog doesn't contain revision %s", ge.cset().shortNotation()));
+						throw new HgBadStateException(String.format("Changelog doesn't contain revision %s of %s", ge.cset().shortNotation(), filename));
 					}
 					link = csRev.intValue();
 				}
