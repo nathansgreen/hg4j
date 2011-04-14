@@ -99,8 +99,11 @@ public class FilterDataAccess extends DataAccess {
 
 	@Override
 	public void readBytes(byte[] b, int off, int len) throws IOException {
+		if (len == 0) {
+			return;
+		}
 		if (count <= 0 || len > count) {
-			throw new IllegalArgumentException("Underflow"); // XXX be descriptive
+			throw new IllegalArgumentException(String.format("Underflow. Bytes left: %d, asked to read %d", count, len));
 		}
 		if (count == length) {
 			dataAccess.seek(offset);
