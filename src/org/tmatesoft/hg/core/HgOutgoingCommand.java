@@ -38,6 +38,7 @@ public class HgOutgoingCommand {
 	private HgRemoteRepository remoteRepo;
 	private boolean includeSubrepo;
 	private RepositoryComparator comparator;
+	private HgChangelog.ParentWalker parentHelper;
 	private Set<String> branches;
 
 	public HgOutgoingCommand(HgRepository hgRepo) {
@@ -104,7 +105,7 @@ public class HgOutgoingCommand {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
-		ChangesetTransformer inspector = new ChangesetTransformer(localRepo, handler);
+		ChangesetTransformer inspector = new ChangesetTransformer(localRepo, handler, getParentHelper());
 		inspector.limitBranches(branches);
 		getComparator(handler).visitLocalOnlyRevisions(inspector);
 	}
@@ -114,11 +115,18 @@ public class HgOutgoingCommand {
 			throw new IllegalArgumentException("Shall specify remote repository to compare against");
 		}
 		if (comparator == null) {
-			HgChangelog.ParentWalker pw = localRepo.getChangelog().new ParentWalker();
-			pw.init();
-			comparator = new RepositoryComparator(pw, remoteRepo);
+			comparator = new RepositoryComparator(getParentHelper(), remoteRepo);
 			comparator.compare(context);
 		}
 		return comparator;
 	}
+	
+	private HgChangelog.ParentWalker getParentHelper() {
+		if (parentHelper == null) {
+			parentHelper = localRepo.getChangelog().new ParentWalker();
+			parentHelper.init();
+		}
+		return parentHelper;
+	}
+
 }

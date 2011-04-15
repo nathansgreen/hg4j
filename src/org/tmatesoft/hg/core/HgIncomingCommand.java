@@ -133,7 +133,7 @@ public class HgIncomingCommand {
 				private final HgChangelog changelog;
 				
 				{
-					transformer = new ChangesetTransformer(localRepo, handler);
+					transformer = new ChangesetTransformer(localRepo, handler, getParentHelper());
 					transformer.limitBranches(branches);
 					parentHelper = getParentHelper();
 					changelog = localRepo.getChangelog();

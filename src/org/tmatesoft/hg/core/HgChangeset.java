@@ -16,12 +16,15 @@
  */
 package org.tmatesoft.hg.core;
 
+import static org.tmatesoft.hg.core.Nodeid.NULL;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.Path;
@@ -39,6 +42,8 @@ public class HgChangeset implements Cloneable {
 	private final HgStatusCollector statusHelper;
 	private final Path.Source pathHelper;
 
+	private HgChangelog.ParentWalker parentHelper;
+
 	//
 	private RawChangeset changeset;
 	private Nodeid nodeid;
@@ -47,6 +52,7 @@ public class HgChangeset implements Cloneable {
 	private List<FileRevision> modifiedFiles, addedFiles;
 	private List<Path> deletedFiles;
 	private int revNumber;
+	private byte[] parent1, parent2;
 
 	// XXX consider CommandContext with StatusCollector, PathPool etc. Commands optionally get CC through a cons or create new
 	// and pass it around
@@ -54,15 +60,26 @@ public class HgChangeset implements Cloneable {
 		statusHelper = statusCollector;
 		pathHelper = pathFactory;
 	}
-	
-	/*package-local*/
-	void init(int localRevNumber, Nodeid nid, RawChangeset rawChangeset) {
+
+	/*package-local*/ void init(int localRevNumber, Nodeid nid, RawChangeset rawChangeset) {
 		revNumber = localRevNumber;
 		nodeid = nid;
 		changeset = rawChangeset;
 		modifiedFiles = addedFiles = null;
 		deletedFiles = null;
+		parent1 = parent2 = null;
+		// keep references to parentHelper, statusHelper and pathHelper
 	}
+
+	/*package-local*/ void setParentHelper(HgChangelog.ParentWalker pw) {
+		parentHelper = pw;
+		if (parentHelper != null) {
+			if (parentHelper.getRepo() != statusHelper.getRepo()) {
+				throw new IllegalArgumentException();
+			}
+		}
+	}
+
 	public int getRevision() {
 		return revNumber;
 	}
@@ -119,21 +136,33 @@ public class HgChangeset implements Cloneable {
 	}
 
 	public boolean isMerge() {
-		return !Nodeid.NULL.equals(getSecondParentRevision());
+		// p1 == -1 and p2 != -1 is legitimate case
+		return !NULL.equals(getFirstParentRevision()) && !NULL.equals(getSecondParentRevision()); 
 	}
 	
 	public Nodeid getFirstParentRevision() {
-		// XXX may read once for both p1 and p2 
-		// or use ParentWalker to minimize reads even more.
-		byte[] p1 = new byte[20];
-		statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], p1, null);
-		return Nodeid.fromBinary(p1, 0);
+		if (parentHelper != null) {
+			return parentHelper.safeFirstParent(nodeid);
+		}
+		// read once for both p1 and p2
+		if (parent1 == null) {
+			parent1 = new byte[20];
+			parent2 = new byte[20];
+			statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
+		}
+		return Nodeid.fromBinary(parent1, 0);
 	}
 	
 	public Nodeid getSecondParentRevision() {
-		byte[] p2 = new byte[20];
-		statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], null, p2);
-		return Nodeid.fromBinary(p2, 0);
+		if (parentHelper != null) {
+			return parentHelper.safeSecondParent(nodeid);
+		}
+		if (parent2 == null) {
+			parent1 = new byte[20];
+			parent2 = new byte[20];
+			statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
+		}
+		return Nodeid.fromBinary(parent2, 0);
 	}
 
 	@Override

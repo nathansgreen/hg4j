@@ -36,7 +36,8 @@ import org.tmatesoft.hg.util.PathRewrite;
 	private final HgChangeset changeset;
 	private Set<String> branches;
 
-	public ChangesetTransformer(HgRepository hgRepo, HgLogCommand.Handler delegate) {
+	// repo and delegate can't be null, parent walker can
+	public ChangesetTransformer(HgRepository hgRepo, HgLogCommand.Handler delegate, HgChangelog.ParentWalker pw) {
 		if (hgRepo == null || delegate == null) {
 			throw new IllegalArgumentException();
 		}
@@ -45,6 +46,7 @@ import org.tmatesoft.hg.util.PathRewrite;
 		PathPool pp = new PathPool(new PathRewrite.Empty());
 		statusCollector.setPathPool(pp);
 		changeset = new HgChangeset(statusCollector, pp);
+		changeset.setParentHelper(pw);
 		handler = delegate;
 	}
 	

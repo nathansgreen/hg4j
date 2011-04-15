@@ -113,7 +113,7 @@ public class HgWorkingCopyStatusCollector {
 			if (baseRevisionCollector != null) {
 				collect = baseRevisionCollector.raw(baseRevision);
 			} else {
-				collect = new HgStatusCollector.ManifestRevisionInspector();
+				collect = new HgStatusCollector.ManifestRevisionInspector(null, null);
 				repo.getManifest().walk(baseRevision, baseRevision, collect);
 			}
 			baseRevFiles = new TreeSet<String>(collect.files());

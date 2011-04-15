@@ -59,6 +59,7 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	private Path file;
 	private boolean followHistory; // makes sense only when file != null
 	private ChangesetTransformer csetTransform;
+	private HgChangelog.ParentWalker parentHelper;
 	
 	public HgLogCommand(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -184,9 +185,13 @@ public class HgLogCommand implements HgChangelog.Inspector {
 		}
 		try {
 			count = 0;
+			HgChangelog.ParentWalker pw = parentHelper; // leave it uninitialized unless we iterate whole repo
+			if (file == null) {
+				pw = getParentHelper();
+			}
 			// ChangesetTransfrom creates a blank PathPool, and #file(String, boolean) above 
 			// may utilize it as well. CommandContext? How about StatusCollector there as well?
-			csetTransform = new ChangesetTransformer(repo, handler);
+			csetTransform = new ChangesetTransformer(repo, handler, pw);
 			if (file == null) {
 				repo.getChangelog().range(startRev, endRev, this);
 			} else {
@@ -244,6 +249,15 @@ public class HgLogCommand implements HgChangelog.Inspector {
 		count++;
 		csetTransform.next(revisionNumber, nodeid, cset);
 	}
+	
+	private HgChangelog.ParentWalker getParentHelper() {
+		if (parentHelper == null) {
+			parentHelper = repo.getChangelog().new ParentWalker();
+			parentHelper.init();
+		}
+		return parentHelper;
+	}
+
 
 	public interface Handler {
 		/**
