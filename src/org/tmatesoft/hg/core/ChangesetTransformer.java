@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.core;
 
+import java.util.Set;
+
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -32,12 +34,14 @@ import org.tmatesoft.hg.util.PathRewrite;
 /*package-local*/ class ChangesetTransformer implements HgChangelog.Inspector {
 	private final HgLogCommand.Handler handler;
 	private final HgChangeset changeset;
+	private Set<String> branches;
 
 	public ChangesetTransformer(HgRepository hgRepo, HgLogCommand.Handler delegate) {
 		if (hgRepo == null || delegate == null) {
 			throw new IllegalArgumentException();
 		}
 		HgStatusCollector statusCollector = new HgStatusCollector(hgRepo);
+		// files listed in a changeset don't need their names to be rewritten (they are normalized already)
 		PathPool pp = new PathPool(new PathRewrite.Empty());
 		statusCollector.setPathPool(pp);
 		changeset = new HgChangeset(statusCollector, pp);
@@ -45,7 +49,15 @@ import org.tmatesoft.hg.util.PathRewrite;
 	}
 	
 	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+		if (branches != null && !branches.contains(cset.branch())) {
+			return;
+		}
+
 		changeset.init(revisionNumber, nodeid, cset);
 		handler.next(changeset);
+	}
+	
+	public void limitBranches(Set<String> branches) {
+		this.branches = branches;
 	}
 }

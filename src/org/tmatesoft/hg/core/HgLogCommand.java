@@ -31,12 +31,9 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.PathPool;
-import org.tmatesoft.hg.util.PathRewrite;
 
 
 /**
@@ -58,11 +55,10 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	private Set<String> branches;
 	private int limit = 0, count = 0;
 	private int startRev = 0, endRev = TIP;
-	private Handler delegate;
 	private Calendar date;
 	private Path file;
 	private boolean followHistory; // makes sense only when file != null
-	private HgChangeset changeset;
+	private ChangesetTransformer csetTransform;
 	
 	public HgLogCommand(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -183,18 +179,14 @@ public class HgLogCommand implements HgChangelog.Inspector {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
-		if (delegate != null) {
+		if (csetTransform != null) {
 			throw new ConcurrentModificationException();
 		}
 		try {
-			delegate = handler;
 			count = 0;
-			HgStatusCollector statusCollector = new HgStatusCollector(repo);
-			// files listed in a changeset don't need their names to be rewritten (they are normalized already)
-			PathPool pp = new PathPool(new PathRewrite.Empty());
-			// #file(String, boolean) above may utilize PathPool as well. CommandContext?
-			statusCollector.setPathPool(pp);
-			changeset = new HgChangeset(statusCollector, pp);
+			// ChangesetTransfrom creates a blank PathPool, and #file(String, boolean) above 
+			// may utilize it as well. CommandContext? How about StatusCollector there as well?
+			csetTransform = new ChangesetTransformer(repo, handler);
 			if (file == null) {
 				repo.getChangelog().range(startRev, endRev, this);
 			} else {
@@ -220,8 +212,7 @@ public class HgLogCommand implements HgChangelog.Inspector {
 				}
 			}
 		} finally {
-			delegate = null;
-			changeset = null;
+			csetTransform = null;
 		}
 	}
 
@@ -251,8 +242,7 @@ public class HgLogCommand implements HgChangelog.Inspector {
 			// FIXME
 		}
 		count++;
-		changeset.init(revisionNumber, nodeid, cset);
-		delegate.next(changeset);
+		csetTransform.next(revisionNumber, nodeid, cset);
 	}
 
 	public interface Handler {
