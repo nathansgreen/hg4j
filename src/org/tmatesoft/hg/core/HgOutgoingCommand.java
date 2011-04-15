@@ -17,6 +17,8 @@
 package org.tmatesoft.hg.core;
 
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -36,6 +38,7 @@ public class HgOutgoingCommand {
 	private HgRemoteRepository remoteRepo;
 	private boolean includeSubrepo;
 	private RepositoryComparator comparator;
+	private Set<String> branches;
 
 	public HgOutgoingCommand(HgRepository hgRepo) {
 		localRepo = hgRepo;
@@ -52,13 +55,23 @@ public class HgOutgoingCommand {
 	}
 
 	/**
-	 * PLACEHOLDER, NOT IMPLEMENTED YET.
+	 * Select specific branch to pull. 
+	 * Multiple branch specification possible (changeset from any of these would be included in result).
+	 * Note, {@link #executeLite(Object)} does not respect this setting.
 	 * 
-	 * Select specific branch to pull
+	 * @param branch - branch name, case-sensitive, non-null.
 	 * @return <code>this</code> for convenience
+	 * @throws IllegalArgumentException when branch argument is null
 	 */
 	public HgOutgoingCommand branch(String branch) {
-		throw HgRepository.notImplemented();
+		if (branch == null) {
+			throw new IllegalArgumentException();
+		}
+		if (branches == null) {
+			branches = new TreeSet<String>();
+		}
+		branches.add(branch);
+		return this;
 	}
 	
 	/**
@@ -72,7 +85,8 @@ public class HgOutgoingCommand {
 	}
 
 	/**
-	 * Lightweight check for outgoing changes.
+	 * Lightweight check for outgoing changes. 
+	 * Reported changes are from any branch (limits set by {@link #branch(String)} are not taken into account.
 	 * 
 	 * @param context
 	 * @return list on local nodes known to be missing at remote server 
@@ -90,7 +104,9 @@ public class HgOutgoingCommand {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
-		getComparator(handler).visitLocalOnlyRevisions(new ChangesetTransformer(localRepo, handler));
+		ChangesetTransformer inspector = new ChangesetTransformer(localRepo, handler);
+		inspector.limitBranches(branches);
+		getComparator(handler).visitLocalOnlyRevisions(inspector);
 	}
 
 	private RepositoryComparator getComparator(Object context) throws HgException, CancelledException {

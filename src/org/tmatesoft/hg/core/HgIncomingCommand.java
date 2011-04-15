@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
@@ -45,6 +47,7 @@ public class HgIncomingCommand {
 	private RepositoryComparator comparator;
 	private List<BranchChain> missingBranches;
 	private HgChangelog.ParentWalker parentHelper;
+	private Set<String> branches;
 
 	public HgIncomingCommand(HgRepository hgRepo) {
 	 	localRepo = hgRepo;
@@ -58,13 +61,23 @@ public class HgIncomingCommand {
 	}
 
 	/**
-	 * PLACEHOLDER, NOT IMPLEMENTED YET.
+	 * Select specific branch to push.
+	 * Multiple branch specification possible (changeset from any of these would be included in result).
+	 * Note, {@link #executeLite(Object)} does not respect this setting.
 	 * 
-	 * Select specific branch to pull
+	 * @param branch - branch name, case-sensitive, non-null.
 	 * @return <code>this</code> for convenience
+	 * @throws IllegalArgumentException when branch argument is null
 	 */
 	public HgIncomingCommand branch(String branch) {
-		throw HgRepository.notImplemented();
+		if (branch == null) {
+			throw new IllegalArgumentException();
+		}
+		if (branches == null) {
+			branches = new TreeSet<String>();
+		}
+		branches.add(branch);
+		return this;
 	}
 	
 	/**
@@ -79,7 +92,8 @@ public class HgIncomingCommand {
 	}
 
 	/**
-	 * Lightweight check for incoming changes, gives only list of revisions to pull. 
+	 * Lightweight check for incoming changes, gives only list of revisions to pull.
+	 * Reported changes are from any branch (limits set by {@link #branch(String)} are not taken into account. 
 	 *   
 	 * @param context anything hg4j can use to get progress and/or cancel support
 	 * @return list of nodes present at remote and missing locally
@@ -120,6 +134,7 @@ public class HgIncomingCommand {
 				
 				{
 					transformer = new ChangesetTransformer(localRepo, handler);
+					transformer.limitBranches(branches);
 					parentHelper = getParentHelper();
 					changelog = localRepo.getChangelog();
 				}
