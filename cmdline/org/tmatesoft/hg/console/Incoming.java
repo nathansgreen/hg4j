@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.console;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -26,20 +25,19 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map.Entry;
 
+import org.tmatesoft.hg.console.Outgoing.ChangesetFormatter;
 import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 
 
 /**
@@ -75,14 +73,14 @@ public class Incoming {
 		//
 		RepositoryComparator repoCompare = new RepositoryComparator(pw, hgRemote);
 		repoCompare.compare(null);
-		List<BranchChain> missingBranches0 = repoCompare.calculateMissingBranches();
+		List<BranchChain> missingBranches = repoCompare.calculateMissingBranches();
 		final LinkedHashSet<Nodeid> common = new LinkedHashSet<Nodeid>();
 		// XXX common can be obtained from repoCompare, but at the moment it would almost duplicate work of calculateMissingBranches
 		// once I refactor latter, common shall be taken from repoCompare.
-		for (BranchChain bc : missingBranches0) {
+		for (BranchChain bc : missingBranches) {
 			bc.dump();
 			common.add(bc.branchRoot); // common known node
-			List<Nodeid> missing = visitBranches(repoCompare, bc);
+			List<Nodeid> missing = repoCompare.visitBranches(bc);
 			assert bc.branchRoot.equals(missing.get(0)); 
 			missing.remove(0);
 			Collections.reverse(missing); // useful to test output, from newer to older
@@ -101,6 +99,7 @@ public class Incoming {
 		HgBundle changegroup = hgRemote.getChanges(new LinkedList<Nodeid>(common));
 		changegroup.changes(hgRepo, new HgChangelog.Inspector() {
 			private int localIndex;
+			private final ChangesetFormatter formatter = new ChangesetFormatter();
 			
 			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
 				if (pw.knownNode(nodeid)) {
@@ -110,56 +109,11 @@ public class Incoming {
 					localIndex = hgRepo.getChangelog().getLocalRevision(nodeid);
 					return;
 				}
-				System.out.printf("changeset:  %d:%s\n", ++localIndex, nodeid.toString());
-				System.out.printf("user:       %s\n", cset.user());
-				System.out.printf("date:       %s\n", cset.dateString());
-				System.out.printf("comment:    %s\n\n", cset.comment());
+				System.out.println(formatter.simple(++localIndex, nodeid, cset));
 			}
 		});
 	}
 	
-	// returns in order from branch root to head
-	// for a non-empty BranchChain, shall return modifiable list
-	private static List<Nodeid> visitBranches(RepositoryComparator repoCompare, BranchChain bc) throws HgException {
-		if (bc == null) {
-			return Collections.emptyList();
-		}
-		List<Nodeid> mine = repoCompare.completeBranch(bc.branchRoot, bc.branchHead);
-		if (bc.isTerminal()) {
-			return mine;
-		}
-		List<Nodeid> parentBranch1 = visitBranches(repoCompare, bc.p1);
-		List<Nodeid> parentBranch2 = visitBranches(repoCompare, bc.p2);
-		// merge
-		LinkedList<Nodeid> merged = new LinkedList<Nodeid>();
-		ListIterator<Nodeid> i1 = parentBranch1.listIterator(), i2 = parentBranch2.listIterator();
-		while (i1.hasNext() && i2.hasNext()) {
-			Nodeid n1 = i1.next();
-			Nodeid n2 = i2.next();
-			if (n1.equals(n2)) {
-				merged.addLast(n1);
-			} else {
-				// first different => add both, and continue adding both tails sequentially 
-				merged.add(n2);
-				merged.add(n1);
-				break;
-			}
-		}
-		// copy rest of second parent branch
-		while (i2.hasNext()) {
-			merged.add(i2.next());
-		}
-		// copy rest of first parent branch
-		while (i1.hasNext()) {
-			merged.add(i1.next());
-		}
-		//
-		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(mine.size() + merged.size());
-		rv.addAll(merged);
-		rv.addAll(mine);
-		return rv;
-	}
-
 
 	private static class SequenceConstructor {
 

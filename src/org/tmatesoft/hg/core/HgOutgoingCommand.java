@@ -18,23 +18,42 @@ package org.tmatesoft.hg.core;
 
 import java.util.List;
 
+import org.tmatesoft.hg.internal.RepositoryComparator;
+import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelledException;
 
 /**
- *
+ * Command to find out changes made in a local repository and missing at remote repository. 
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 public class HgOutgoingCommand {
-	private final HgRepository repo;
+
+	private final HgRepository localRepo;
+	private HgRemoteRepository remoteRepo;
 	private boolean includeSubrepo;
+	private RepositoryComparator comparator;
 
 	public HgOutgoingCommand(HgRepository hgRepo) {
-		repo = hgRepo;
+		localRepo = hgRepo;
 	}
 
 	/**
+	 * @param hgRemote remoteRepository to compare against
+	 * @return <code>this</code> for convenience
+	 */
+	public HgOutgoingCommand against(HgRemoteRepository hgRemote) {
+		remoteRepo = hgRemote;
+		comparator = null;
+		return this;
+	}
+
+	/**
+	 * PLACEHOLDER, NOT IMPLEMENTED YET.
+	 * 
 	 * Select specific branch to pull
 	 * @return <code>this</code> for convenience
 	 */
@@ -43,6 +62,7 @@ public class HgOutgoingCommand {
 	}
 	
 	/**
+	 * PLACEHOLDER, NOT IMPLEMENTED YET.
 	 * 
 	 * @return <code>this</code> for convenience
 	 */
@@ -51,11 +71,38 @@ public class HgOutgoingCommand {
 		throw HgRepository.notImplemented();
 	}
 
+	/**
+	 * Lightweight check for outgoing changes.
+	 * 
+	 * @param context
+	 * @return list on local nodes known to be missing at remote server 
+	 */
 	public List<Nodeid> executeLite(Object context) throws HgException, CancelledException {
-		throw HgRepository.notImplemented();
+		return getComparator(context).getLocalOnlyRevisions();
 	}
 
-	public void executeFull(HgLogCommand.Handler handler) throws HgException, CancelledException {
-		throw HgRepository.notImplemented();
+	/**
+	 * Complete information about outgoing changes
+	 * 
+	 * @param handler delegate to process changes
+	 */
+	public void executeFull(final HgLogCommand.Handler handler) throws HgException, CancelledException {
+		if (handler == null) {
+			throw new IllegalArgumentException("Delegate can't be null");
+		}
+		getComparator(handler).visitLocalOnlyRevisions(new ChangesetTransformer(localRepo, handler));
+	}
+
+	private RepositoryComparator getComparator(Object context) throws HgException, CancelledException {
+		if (remoteRepo == null) {
+			throw new IllegalArgumentException("Shall specify remote repository to compare against");
+		}
+		if (comparator == null) {
+			HgChangelog.ParentWalker pw = localRepo.getChangelog().new ParentWalker();
+			pw.init();
+			comparator = new RepositoryComparator(pw, remoteRepo);
+			comparator.compare(context);
+		}
+		return comparator;
 	}
 }

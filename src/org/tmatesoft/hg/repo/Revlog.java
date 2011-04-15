@@ -208,6 +208,10 @@ abstract class Revlog {
 			firstParent = secondParent = Collections.emptyMap();
 		}
 		
+		public HgRepository getRepo() {
+			return Revlog.this.getRepo();
+		}
+		
 		public void init() {
 			final RevlogStream stream = Revlog.this.content;
 			final int revisionCount = stream.revisionCount();
@@ -309,6 +313,16 @@ abstract class Revlog {
 			// leave only those of interest in ordered sequence 
 			orderedResult.retainAll(result);
 			return orderedResult;
+		}
+		
+		/**
+		 * @param node possibly parent node
+		 * @return <code>true</code> if there's any node in this revlog that has specified node as one of its parents. 
+		 */
+		public boolean hasChildren(Nodeid node) {
+			// FIXME containsValue is linear, likely. May want to optimize it with another (Tree|Hash)Set, created on demand
+			// on first use
+			return firstParent.containsValue(node) || secondParent.containsValue(node);
 		}
 	}
 

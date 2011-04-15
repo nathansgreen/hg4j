@@ -18,11 +18,13 @@ package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -59,6 +61,12 @@ public class RepositoryComparator {
 		cancelSupport.checkCancelled();
 		progressSupport.start(10);
 		common = Collections.unmodifiableList(findCommonWithRemote());
+		// sanity check
+		for (Nodeid n : common) {
+			if (!localRepo.knownNode(n)) {
+				throw new HgBadStateException("Unknown node reported as common:" + n);
+			}
+		}
 		progressSupport.done();
 		return this;
 	}
@@ -68,6 +76,45 @@ public class RepositoryComparator {
 			throw new HgBadStateException("Call #compare(Object) first");
 		}
 		return common;
+	}
+	
+	/**
+	 * @return revisions that are children of common entries, i.e. revisions that are present on the local server and not on remote.
+	 */
+	public List<Nodeid> getLocalOnlyRevisions() {
+		return localRepo.childrenOf(getCommon());
+	}
+	
+	/**
+	 * Similar to @link {@link #getLocalOnlyRevisions()}, use this one if you need access to changelog entry content, not 
+	 * only its revision number. 
+	 * @param inspector delegate to analyze changesets, shall not be <code>null</code>
+	 */
+	public void visitLocalOnlyRevisions(HgChangelog.Inspector inspector) {
+		if (inspector == null) {
+			throw new IllegalArgumentException();
+		}
+		// one can use localRepo.childrenOf(getCommon()) and then iterate over nodeids, but there seems to be
+		// another approach to get all changes after common:
+		// find index of earliest revision, and report all that were later
+		final HgChangelog changelog = localRepo.getRepo().getChangelog();
+		int earliestRevision = Integer.MAX_VALUE;
+		List<Nodeid> commonKnown = getCommon();
+		for (Nodeid n : commonKnown) {
+			if (!localRepo.hasChildren(n)) {
+				// there might be (old) nodes, known both locally and remotely, with no children
+				// hence, we don't need to consider their local revision number
+				continue;
+			}
+			int lr = changelog.getLocalRevision(n);
+			if (lr < earliestRevision) {
+				earliestRevision = lr;
+			}
+		}
+		if (earliestRevision < 0 || earliestRevision >= changelog.getLastRevision()) {
+			throw new HgBadStateException(String.format("Invalid index of common known revision: %d in total of %d", earliestRevision, 1+changelog.getLastRevision()));
+		}
+		changelog.range(earliestRevision+1, changelog.getLastRevision(), inspector);
 	}
 
 	private List<Nodeid> findCommonWithRemote() throws HgException {
@@ -403,4 +450,49 @@ public class RepositoryComparator {
 		}
 		return fromRootToHead;
 	}
+
+	/**
+	 *  returns in order from branch root to head
+	 *  for a non-empty BranchChain, shall return modifiable list
+	 */
+	public List<Nodeid> visitBranches(BranchChain bc) throws HgException {
+		if (bc == null) {
+			return Collections.emptyList();
+		}
+		List<Nodeid> mine = completeBranch(bc.branchRoot, bc.branchHead);
+		if (bc.isTerminal()) {
+			return mine;
+		}
+		List<Nodeid> parentBranch1 = visitBranches(bc.p1);
+		List<Nodeid> parentBranch2 = visitBranches(bc.p2);
+		// merge
+		LinkedList<Nodeid> merged = new LinkedList<Nodeid>();
+		ListIterator<Nodeid> i1 = parentBranch1.listIterator(), i2 = parentBranch2.listIterator();
+		while (i1.hasNext() && i2.hasNext()) {
+			Nodeid n1 = i1.next();
+			Nodeid n2 = i2.next();
+			if (n1.equals(n2)) {
+				merged.addLast(n1);
+			} else {
+				// first different => add both, and continue adding both tails sequentially 
+				merged.add(n2);
+				merged.add(n1);
+				break;
+			}
+		}
+		// copy rest of second parent branch
+		while (i2.hasNext()) {
+			merged.add(i2.next());
+		}
+		// copy rest of first parent branch
+		while (i1.hasNext()) {
+			merged.add(i1.next());
+		}
+		//
+		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(mine.size() + merged.size());
+		rv.addAll(merged);
+		rv.addAll(mine);
+		return rv;
+	}
+
 }

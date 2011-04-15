@@ -17,18 +17,15 @@
 package org.tmatesoft.hg.console;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 
 
 /**
@@ -41,6 +38,7 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 public class Outgoing {
 
 	public static void main(String[] args) throws Exception {
+		final boolean debug = true; // perhaps, use hg4j.remote.debug or own property?
 		Options cmdLineOpts = Options.parse(args);
 		HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
@@ -59,45 +57,37 @@ public class Outgoing {
 		
 		RepositoryComparator repoCompare = new RepositoryComparator(pw, hgRemote);
 		repoCompare.compare(null);
-		List<Nodeid> commonKnown = repoCompare.getCommon();
-		dump("Nodes known to be both locally and at remote server", commonKnown);
-		// sanity check
-		for (Nodeid n : commonKnown) {
-			if (!pw.knownNode(n)) {
-				throw new HgException("Unknown node reported as common:" + n);
-			}
+		if (debug) {
+			List<Nodeid> commonKnown = repoCompare.getCommon();
+			dump("Nodes known to be both locally and at remote server", commonKnown);
 		}
 		// find all local children of commonKnown
-		List<Nodeid> result = pw.childrenOf(commonKnown);
+		List<Nodeid> result = repoCompare.getLocalOnlyRevisions();
 		dump("Lite", result);
-		// another approach to get all changes after common:
-		// find index of earliest revision, and report all that were later
-		int earliestRevision = Integer.MAX_VALUE;
-		for (Nodeid n : commonKnown) {
-			if (pw.childrenOf(Collections.singletonList(n)).isEmpty()) {
-				// there might be (old) nodes, known both locally and remotely, with no children
-				// hence, we don't need to consider their local revision number
-				continue;
-			}
-			int lr = changelog.getLocalRevision(n);
-			if (lr < earliestRevision) {
-				earliestRevision = lr;
-			}
-		}
-		if (earliestRevision < 0 || earliestRevision >= changelog.getLastRevision()) {
-			throw new HgBadStateException(String.format("Invalid index of common known revision: %d in total of %d", earliestRevision, 1+changelog.getLastRevision()));
-		}
+		//
+		//
 		System.out.println("Full");
 		// show all, starting from next to common 
-		changelog.range(earliestRevision+1, changelog.getLastRevision(), new HgChangelog.Inspector() {
+		repoCompare.visitLocalOnlyRevisions(new HgChangelog.Inspector() {
+			private final ChangesetFormatter formatter = new ChangesetFormatter();
 			
 			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-				System.out.printf("changeset:  %d:%s\n", revisionNumber, nodeid.toString());
-				System.out.printf("user:       %s\n", cset.user());
-				System.out.printf("date:       %s\n", cset.dateString());
-				System.out.printf("comment:    %s\n\n", cset.comment());
+				System.out.println(formatter.simple(revisionNumber, nodeid, cset));
 			}
 		});
+	}
+
+	public static class ChangesetFormatter {
+		private final StringBuilder sb = new StringBuilder(1024);
+
+		public CharSequence simple(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+			sb.setLength(0);
+			sb.append(String.format("changeset:  %d:%s\n", revisionNumber, nodeid.toString()));
+			sb.append(String.format("user:       %s\n", cset.user()));
+			sb.append(String.format("date:       %s\n", cset.dateString()));
+			sb.append(String.format("comment:    %s\n\n", cset.comment()));
+			return sb;
+		}
 	}
 	
 

@@ -16,26 +16,50 @@
  */
 package org.tmatesoft.hg.core;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 
+import org.tmatesoft.hg.internal.RepositoryComparator;
+import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
+import org.tmatesoft.hg.repo.HgBundle;
+import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelledException;
 
 /**
- *
+ * Command to find out changes available in a remote repository, missing locally.
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 public class HgIncomingCommand {
 
-	private final HgRepository repo;
+	private final HgRepository localRepo;
+	private HgRemoteRepository remoteRepo;
 	private boolean includeSubrepo;
+	private RepositoryComparator comparator;
+	private List<BranchChain> missingBranches;
+	private HgChangelog.ParentWalker parentHelper;
 
 	public HgIncomingCommand(HgRepository hgRepo) {
-	 	repo = hgRepo;
+	 	localRepo = hgRepo;
+	}
+	
+	public HgIncomingCommand against(HgRemoteRepository hgRemote) {
+		remoteRepo = hgRemote;
+		comparator = null;
+		missingBranches = null;
+		return this;
 	}
 
 	/**
+	 * PLACEHOLDER, NOT IMPLEMENTED YET.
+	 * 
 	 * Select specific branch to pull
 	 * @return <code>this</code> for convenience
 	 */
@@ -44,6 +68,8 @@ public class HgIncomingCommand {
 	}
 	
 	/**
+	 * PLACEHOLDER, NOT IMPLEMENTED YET.
+	 * 
 	 * Whether to include sub-repositories when collecting changes, default is <code>true</code> XXX or false?
 	 * @return <code>this</code> for convenience
 	 */
@@ -61,7 +87,16 @@ public class HgIncomingCommand {
 	 * @throws CancelledException
 	 */
 	public List<Nodeid> executeLite(Object context) throws HgException, CancelledException {
-		throw HgRepository.notImplemented();
+		LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
+		RepositoryComparator repoCompare = getComparator(context);
+		for (BranchChain bc : getMissingBranches(context)) {
+			List<Nodeid> missing = repoCompare.visitBranches(bc);
+			assert bc.branchRoot.equals(missing.get(0)); 
+			missing.remove(0);
+			result.addAll(missing);
+		}
+		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(result);
+		return rv;
 	}
 
 	/**
@@ -70,7 +105,74 @@ public class HgIncomingCommand {
 	 * @throws HgException
 	 * @throws CancelledException
 	 */
-	public void executeFull(HgLogCommand.Handler handler) throws HgException, CancelledException {
-		throw HgRepository.notImplemented();
+	public void executeFull(final HgLogCommand.Handler handler) throws HgException, CancelledException {
+		if (handler == null) {
+			throw new IllegalArgumentException("Delegate can't be null");
+		}
+		final List<Nodeid> common = getCommon(handler);
+		HgBundle changegroup = remoteRepo.getChanges(new LinkedList<Nodeid>(common));
+		try {
+			changegroup.changes(localRepo, new HgChangelog.Inspector() {
+				private int localIndex;
+				private final HgChangelog.ParentWalker parentHelper;
+				private final ChangesetTransformer transformer;
+				private final HgChangelog changelog;
+				
+				{
+					transformer = new ChangesetTransformer(localRepo, handler);
+					parentHelper = getParentHelper();
+					changelog = localRepo.getChangelog();
+				}
+				
+				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+					if (parentHelper.knownNode(nodeid)) {
+						if (!common.contains(nodeid)) {
+							throw new HgBadStateException("Bundle shall not report known nodes other than roots we've supplied");
+						}
+						localIndex = changelog.getLocalRevision(nodeid);
+						return;
+					}
+					transformer.next(++localIndex, nodeid, cset);
+				}
+			});
+		} catch (IOException ex) {
+			throw new HgException(ex);
+		}
+	}
+
+	private RepositoryComparator getComparator(Object context) throws HgException, CancelledException {
+		if (remoteRepo == null) {
+			throw new HgBadArgumentException("Shall specify remote repository to compare against", null);
+		}
+		if (comparator == null) {
+			comparator = new RepositoryComparator(getParentHelper(), remoteRepo);
+			comparator.compare(context);
+		}
+		return comparator;
+	}
+	
+	private HgChangelog.ParentWalker getParentHelper() {
+		if (parentHelper == null) {
+			parentHelper = localRepo.getChangelog().new ParentWalker();
+			parentHelper.init();
+		}
+		return parentHelper;
+	}
+	
+	private List<BranchChain> getMissingBranches(Object context) throws HgException, CancelledException {
+		if (missingBranches == null) {
+			missingBranches = getComparator(context).calculateMissingBranches();
+		}
+		return missingBranches;
+	}
+
+	private List<Nodeid> getCommon(Object context) throws HgException, CancelledException {
+		final LinkedHashSet<Nodeid> common = new LinkedHashSet<Nodeid>();
+		// XXX common can be obtained from repoCompare, but at the moment it would almost duplicate work of calculateMissingBranches
+		// once I refactor latter, common shall be taken from repoCompare.
+		for (BranchChain bc : getMissingBranches(context)) {
+			common.add(bc.branchRoot);
+		}
+		return new LinkedList<Nodeid>(common);
 	}
 }
