@@ -64,7 +64,7 @@ public class HgChangeset implements Cloneable {
 	/*package-local*/ void init(int localRevNumber, Nodeid nid, RawChangeset rawChangeset) {
 		revNumber = localRevNumber;
 		nodeid = nid;
-		changeset = rawChangeset;
+		changeset = rawChangeset.clone();
 		modifiedFiles = addedFiles = null;
 		deletedFiles = null;
 		parent1 = parent2 = null;
@@ -169,7 +169,7 @@ public class HgChangeset implements Cloneable {
 	public HgChangeset clone() {
 		try {
 			HgChangeset copy = (HgChangeset) super.clone();
-			copy.changeset = changeset.clone();
+			// copy.changeset references this.changeset, doesn't need own copy
 			return copy;
 		} catch (CloneNotSupportedException ex) {
 			throw new InternalError(ex.toString());

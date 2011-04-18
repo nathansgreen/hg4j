@@ -36,4 +36,18 @@ public class Pool<T> {
 		}
 		return rv;
 	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append(Pool.class.getSimpleName());
+		sb.append('<');
+		if (!unify.isEmpty()) {
+			sb.append(unify.keySet().iterator().next().getClass().getName());
+		}
+		sb.append('>');
+		sb.append(':');
+		sb.append(unify.size());
+		return sb.toString();
+	}
 }

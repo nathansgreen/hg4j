@@ -30,8 +30,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.internal.RevlogStream;
 
 /**
@@ -51,28 +53,16 @@ public class HgChangelog extends Revlog {
 	}
 
 	public void range(int start, int end, final HgChangelog.Inspector inspector) {
-		RevlogStream.Inspector i = new RevlogStream.Inspector() {
-
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
-				RawChangeset cset = RawChangeset.parse(da);
-				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
-				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
-			}
-		};
-		content.iterate(start, end, true, i);
+		if (inspector == null) {
+			throw new IllegalArgumentException();
+		}
+		content.iterate(start, end, true, new RawCsetParser(inspector));
 	}
 
 	public List<RawChangeset> range(int start, int end) {
-		final ArrayList<RawChangeset> rv = new ArrayList<RawChangeset>(end - start + 1);
-		RevlogStream.Inspector i = new RevlogStream.Inspector() {
-
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
-				RawChangeset cset = RawChangeset.parse(da);
-				rv.add(cset);
-			}
-		};
-		content.iterate(start, end, true, i);
-		return rv;
+		final RawCsetCollector c = new RawCsetCollector(end - start + 1);
+		range(start, end, c);
+		return c.result;
 	}
 
 	public void range(final HgChangelog.Inspector inspector, final int... revisions) {
@@ -80,11 +70,11 @@ public class HgChangelog extends Revlog {
 			return;
 		}
 		RevlogStream.Inspector i = new RevlogStream.Inspector() {
+			private final RawCsetParser delegate = new RawCsetParser(inspector);
 
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 				if (Arrays.binarySearch(revisions, revisionNumber) >= 0) {
-					RawChangeset cset = RawChangeset.parse(da);
-					inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
+					delegate.next(revisionNumber, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeid, da);
 				}
 			}
 		};
@@ -206,14 +196,15 @@ public class HgChangelog extends Revlog {
 			try {
 				byte[] data = da.byteArray();
 				RawChangeset rv = new RawChangeset();
-				rv.init(data, 0, data.length);
+				rv.init(data, 0, data.length, null);
 				return rv;
 			} catch (IOException ex) {
-				throw new IllegalArgumentException(ex); // FIXME better handling of IOExc
+				throw new HgBadStateException(ex); // FIXME "Error reading changeset data"
 			}
 		}
 
-		/* package-local */void init(byte[] data, int offset, int length) {
+		// @param usersPool - it's likely user names get repeated again and again throughout repository. can be null
+		/* package-local */void init(byte[] data, int offset, int length, Pool<String> usersPool) {
 			final int bufferEndIndex = offset + length;
 			final byte lineBreak = (byte) '\n';
 			int breakIndex1 = indexOf(data, lineBreak, offset, bufferEndIndex);
@@ -226,6 +217,9 @@ public class HgChangelog extends Revlog {
 				throw new IllegalArgumentException("Bad Changeset data");
 			}
 			String _user = new String(data, breakIndex1 + 1, breakIndex2 - breakIndex1 - 1);
+			if (usersPool != null) {
+				_user = usersPool.unify(_user);
+			}
 			int breakIndex3 = indexOf(data, lineBreak, breakIndex2 + 1, bufferEndIndex);
 			if (breakIndex3 == -1) {
 				throw new IllegalArgumentException("Bad Changeset data");
@@ -312,4 +306,39 @@ public class HgChangelog extends Revlog {
 		}
 	}
 
+	private static class RawCsetCollector implements Inspector {
+		final ArrayList<RawChangeset> result;
+		
+		public RawCsetCollector(int count) {
+			result = new ArrayList<RawChangeset>(count > 0 ? count : 5);
+		}
+
+		public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+			result.add(cset.clone());
+		}
+	}
+
+	private static class RawCsetParser implements RevlogStream.Inspector {
+		
+		private final Inspector inspector;
+		private final Pool<String> usersPool;
+		private final RawChangeset cset = new RawChangeset();
+
+		public RawCsetParser(HgChangelog.Inspector delegate) {
+			assert delegate != null;
+			inspector = delegate;
+			usersPool = new Pool<String>();
+		}
+
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
+			try {
+				byte[] data = da.byteArray();
+				cset.init(data, 0, data.length, usersPool);
+				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
+				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
+			} catch (Exception ex) {
+				throw new HgBadStateException(ex); // FIXME exception handling
+			}
+		}
+	}
 }
