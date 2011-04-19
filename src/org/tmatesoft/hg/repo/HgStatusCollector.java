@@ -51,10 +51,11 @@ public class HgStatusCollector {
 	// no cache limit, no nodeids and fname caching - OOME on changeset 1035
 	// no cache limit, but with cached nodeids and filenames - 1730+
 	// cache limit 100 - 19+ minutes to process 10000, and still working (too long, stopped)
-	private final int cacheMaxSize = 100; // do not keep too much manifest revisions
+	private final int cacheMaxSize = 50; // do not keep too much manifest revisions
 	private PathPool pathPool;
 	private final Pool<Nodeid> cacheNodes;
 	private final Pool<String> cacheFilenames; // XXX in fact, need to think if use of PathPool directly instead is better solution
+	private final ManifestRevisionInspector emptyFakeState;
 	
 
 	public HgStatusCollector(HgRepository hgRepo) {
@@ -62,10 +63,10 @@ public class HgStatusCollector {
 		cache = new TreeMap<Integer, ManifestRevisionInspector>();
 		cacheNodes = new Pool<Nodeid>();
 		cacheFilenames = new Pool<String>();
-		ManifestRevisionInspector emptyFakeState = new ManifestRevisionInspector(null, null);
+
+		emptyFakeState = new ManifestRevisionInspector(null, null);
 		emptyFakeState.begin(-1, null);
-		emptyFakeState.end(-1); // FIXME HgRepo.TIP == -1 as well, need to distinguish fake "prior to first" revision from "the very last" 
-		cache.put(-1, emptyFakeState);
+		emptyFakeState.end(-1);
 	}
 	
 	public HgRepository getRepo() {
@@ -75,7 +76,10 @@ public class HgStatusCollector {
 	private ManifestRevisionInspector get(int rev) {
 		ManifestRevisionInspector i = cache.get(rev);
 		if (i == null) {
-			if (cache.size() > cacheMaxSize) {
+			if (rev == -1) {
+				return emptyFakeState;
+			}
+			while (cache.size() > cacheMaxSize) {
 				// assume usually we go from oldest to newest, hence remove oldest as most likely to be no longer necessary
 				cache.remove(cache.firstKey());
 			}
@@ -84,6 +88,51 @@ public class HgStatusCollector {
 			repo.getManifest().walk(rev, rev, i);
 		}
 		return i;
+	}
+
+	private boolean cached(int revision) {
+		return cache.containsKey(revision) || revision == -1;
+	}
+	
+	private void initCacheRange(int minRev, int maxRev) {
+		while (cache.size() > cacheMaxSize) {
+			// assume usually we go from oldest to newest, hence remove oldest as most likely to be no longer necessary
+			cache.remove(cache.firstKey());
+		}
+		repo.getManifest().walk(minRev, maxRev, new HgManifest.Inspector() {
+			private ManifestRevisionInspector delegate;
+			private boolean cacheHit; // range may include revisions we already know about, do not re-create them
+
+			public boolean begin(int revision, Nodeid nid) {
+				assert delegate == null;
+				if (cache.containsKey(revision)) { // don't need to check emptyFakeState hit as revision never -1 here
+					cacheHit = true;
+				} else {
+					cache.put(revision, delegate = new ManifestRevisionInspector(cacheNodes, cacheFilenames));
+					// cache may grow bigger than max size here, but it's ok as present simplistic cache clearing mechanism may
+					// otherwise remove entries we just added
+					delegate.begin(revision, nid);
+					cacheHit = false;
+				}
+				return true;
+			}
+
+			public boolean next(Nodeid nid, String fname, String flags) {
+				if (!cacheHit) {
+					delegate.next(nid, fname, flags);
+				}
+				return true;
+			}
+			
+			public boolean end(int revision) {
+				if (!cacheHit) {
+					delegate.end(revision);
+				}
+				cacheHit = false;				
+				delegate = null;
+				return true;
+			}
+		});
 	}
 	
 	/*package-local*/ ManifestRevisionInspector raw(int rev) {
@@ -110,10 +159,12 @@ public class HgStatusCollector {
 		repo.getChangelog().parents(rev, parents, null, null);
 		walk(parents[0], rev, inspector);
 	}
-
+	
 	// I assume revision numbers are the same for changelog and manifest - here 
 	// user would like to pass changelog revision numbers, and I use them directly to walk manifest.
 	// if this assumption is wrong, fix this (lookup manifest revisions from changeset).
+	// rev1 and rev2 may be -1 to indicate comparison to empty repository
+	// argument order matters 
 	public void walk(int rev1, int rev2, HgStatusInspector inspector) {
 		if (rev1 == rev2) {
 			throw new IllegalArgumentException();
@@ -124,44 +175,42 @@ public class HgStatusCollector {
 		if (inspector instanceof Record) {
 			((Record) inspector).init(rev1, rev2, this);
 		}
+		final int lastManifestRevision = repo.getManifest().getLastRevision();
 		if (rev1 == TIP) {
-			rev1 = repo.getManifest().getLastRevision();
+			rev1 = lastManifestRevision;
 		}
 		if (rev2 == TIP) {
-			rev2 = repo.getManifest().getLastRevision(); 
+			rev2 = lastManifestRevision; 
 		}
 		// in fact, rev1 and rev2 are often next (or close) to each other,
 		// thus, we can optimize Manifest reads here (manifest.walk(rev1, rev2))
 		ManifestRevisionInspector r1, r2 ;
-		if (!cache.containsKey(rev1) && !cache.containsKey(rev2) && Math.abs(rev1 - rev2) < 5 /*subjective equivalent of 'close enough'*/) {
-			int minRev = rev1 < rev2 ? rev1 : rev2;
-			int maxRev = minRev == rev1 ? rev2 : rev1;
-			if (minRev > 0) {
-				minRev--; // expand range a bit
-				// XXX perhaps, if revlog.baseRevision is cheap, shall expand minRev up to baseRevision
-				// which gonna be read anyway
+		boolean need1 = !cached(rev1), need2 = !cached(rev2);
+		if (need1 || need2) {
+			int minRev, maxRev;
+			if (need1 && need2 && Math.abs(rev1 - rev2) < 5 /*subjective equivalent of 'close enough'*/) {
+				minRev = rev1 < rev2 ? rev1 : rev2;
+				maxRev = minRev == rev1 ? rev2 : rev1;
+				if (minRev > 0) {
+					minRev--; // expand range a bit
+				}
+				initCacheRange(minRev, maxRev);
+				need1 = need2 = false;
 			}
-	
-			repo.getManifest().walk(minRev, maxRev, new HgManifest.Inspector() {
-				private ManifestRevisionInspector delegate;
-
-				public boolean begin(int revision, Nodeid nid) {
-					cache.put(revision, delegate = new ManifestRevisionInspector(cacheNodes, cacheFilenames));
-					delegate.begin(revision, nid);
-					return true;
-				}
-
-				public boolean next(Nodeid nid, String fname, String flags) {
-					delegate.next(nid, fname, flags);
-					return true;
-				}
-				
-				public boolean end(int revision) {
-					delegate.end(revision);
-					delegate = null;
-					return true;
-				}
-			});
+			// either both unknown and far from each other, or just one of them.
+			// read with neighbors to save potential subsequent calls for neighboring elements
+			// XXX perhaps, if revlog.baseRevision is cheap, shall expand minRev up to baseRevision
+			// which going to be read anyway
+			if (need1) {
+				minRev = rev1;
+				maxRev = rev1 < lastManifestRevision-5 ? rev1+5 : lastManifestRevision;
+				initCacheRange(minRev, maxRev);
+			}
+			if (need2) {
+				minRev = rev2;
+				maxRev = rev2 < lastManifestRevision-5 ? rev2+5 : lastManifestRevision;
+				initCacheRange(minRev, maxRev);
+			}
 		}
 		r1 = get(rev1);
 		r2 = get(rev2);
@@ -396,7 +445,11 @@ public class HgStatusCollector {
 				nid = idsPool.unify(nid);
 			}
 			idsMap.put(fname, nid);
-			flagsMap.put(fname, flags);
+			if (flags != null) {
+				// TreeMap$Entry takes 32 bytes. No reason to keep null for such price
+				// Perhaps, Map<String, Pair<Nodeid, String>> might be better solution
+				flagsMap.put(fname, flags);
+			}
 			return true;
 		}
 

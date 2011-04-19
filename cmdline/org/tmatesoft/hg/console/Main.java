@@ -225,6 +225,15 @@ public class Main {
 		}
 	}
 
+	static void force_gc() {
+		Runtime.getRuntime().runFinalization();
+		Runtime.getRuntime().gc();
+		Thread.yield();
+		Runtime.getRuntime().runFinalization();
+		Runtime.getRuntime().gc();
+		Thread.yield();
+	}
+
 	private static class StatusDump implements HgStatusInspector {
 		public boolean hideStatusPrefix = false; // hg status -n option
 		public boolean showCopied = true; // -C

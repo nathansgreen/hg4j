@@ -46,11 +46,23 @@ public final class Nodeid implements Comparable<Nodeid> {
 	 */
 	public Nodeid(byte[] binaryRepresentation, boolean shallClone) {
 		// 5 int fields => 32 bytes
-		// byte[20] => 48 bytes
+		// byte[20] => 48 bytes (16 bytes is Nodeid with one field, 32 bytes for byte[20] 
 		if (binaryRepresentation == null || binaryRepresentation.length != 20) {
 			throw new IllegalArgumentException();
 		}
-		this.binaryData = shallClone ? binaryRepresentation.clone() : binaryRepresentation;
+		/*
+		 * byte[].clone() is not reflected when ran with -agentlib:hprof=heap=sites
+		 * thus not to get puzzled why there are N Nodeids and much less byte[] instances,
+		 * may use following code to see N byte[] as well.
+		 *
+		if (shallClone) {
+			binaryData = new byte[20];
+			System.arraycopy(binaryRepresentation, 0, binaryData, 0, 20);
+		} else {
+			binaryData = binaryRepresentation;
+		}
+		*/
+		binaryData = shallClone ? binaryRepresentation.clone() : binaryRepresentation;
 	}
 
 	@Override

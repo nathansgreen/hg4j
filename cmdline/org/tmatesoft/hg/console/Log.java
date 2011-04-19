@@ -35,6 +35,8 @@ import org.tmatesoft.hg.util.Path;
  */
 public class Log {
 
+	// -agentlib:hprof=heap=sites,depth=10,etc might be handy to debug speed/memory issues
+	
 	public static void main(String[] args) throws Exception {
 		Options cmdLineOpts = Options.parse(args);
 		HgRepository hgRepo = cmdLineOpts.findRepository();
@@ -45,7 +47,7 @@ public class Log {
 		final Dump dump = new Dump(hgRepo);
 		dump.complete = cmdLineOpts.getBoolean("--debug");
 		dump.verbose = cmdLineOpts.getBoolean("-v", "--verbose");
-		dump.reverseOrder = true;
+		dump.reverseOrder = false;
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		for (String u : cmdLineOpts.getList("-u", "--user")) {
 			cmd.user(u);
@@ -58,6 +60,7 @@ public class Log {
 			cmd.limit(limit);
 		}
 		List<String> files = cmdLineOpts.getList("");
+		final long start = System.currentTimeMillis();
 		if (files.isEmpty()) {
 			if (limit == -1) {
 				// no revisions and no limit
@@ -90,8 +93,9 @@ public class Log {
 				dump.complete();
 			}
 		}
-		//
-		// XXX new ChangelogWalker().setFile("hello.c").setRevisionRange(1, 4).accept(new Visitor);
+//		cmd = null;
+		System.out.println("Total time:" + (System.currentTimeMillis() - start));
+//		Main.force_gc();
 	}
 	
 	private static int fixRange(int[] start_end, boolean reverse, int limit) {

@@ -240,7 +240,7 @@ abstract class Revlog {
 					}
 				}
 			};
-			stream.iterate(0, -1, false, insp);
+			stream.iterate(0, TIP, false, insp);
 		}
 		
 		public Set<Nodeid> allNodes() {

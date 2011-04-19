@@ -60,6 +60,7 @@ changes repository, hence manifest should update nodeids of the files it lists, 
 
 ? subrepos in log, status (-S) and manifest commands
 
+? when p1 == -1, and p2 != -1, does HgStatusCollector.change() give correct result?
 
 Commands to get CommandContext where they may share various caches (e.g. StatusCollector)
 Perhaps, abstract classes for all Inspectors (i.e. StatusCollector.Inspector) for users to use as base classes to protect from change?
@@ -90,6 +91,13 @@ File access:
 
 * defects
   + ConfigFile to strip comments from values (#)
+
+<<<<<
+Performance.
+after pooling/caching in HgStatusCollector and HgChangeset
+hg log --debug -r 0:5000 and same via Log/HgLogCommand: approx. 220 seconds vs 279 seconds. Mem. cons. 20 vs 80 mb.
+after further changes in HgStatusCollector (to read ahead 5 elements, 50 max cache, fixed bug with -1) - hg4j dumps 5000 in
+93 seconds, memory consumption about 50-56 Mb
 
 <<<<<
 
