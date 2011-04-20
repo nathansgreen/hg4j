@@ -100,7 +100,7 @@ public class TestManifest {
 
 	private void testRevision(int rev) throws Exception {
 		manifestParser.reset();
-		eh.run("hg", "manifest", "--debug", "--rev", String.valueOf(rev));
+		eh.run("hg", "manifest", "--debug", "--rev", String.valueOf(rev == TIP ? -1 : rev));
 		revisions.clear();
 		new HgManifestCommand(repo).revision(rev).execute(handler);
 		report("manifest " + (rev == TIP ? "TIP:" : "--rev " + rev));
