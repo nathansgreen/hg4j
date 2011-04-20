@@ -23,14 +23,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
@@ -200,12 +195,17 @@ abstract class Revlog {
 	 *  and yes, walker is not a proper name
 	 */
 	public final class ParentWalker {
-		private Map<Nodeid, Nodeid> firstParent;
-		private Map<Nodeid, Nodeid> secondParent;
-		private final LinkedHashSet<Nodeid> allNodes = new LinkedHashSet<Nodeid>(); // childrenOf rely on ordering
+
+		
+		private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
+		private Nodeid[] sorted; // for binary search
+		private int[] sorted2natural;
+		private Nodeid[] firstParent;
+		private Nodeid[] secondParent;
+
+		// Nodeid instances shall be shared between all arrays
 
 		public ParentWalker() {
-			firstParent = secondParent = Collections.emptyMap();
 		}
 		
 		public HgRepository getRepo() {
@@ -215,11 +215,16 @@ abstract class Revlog {
 		public void init() {
 			final RevlogStream stream = Revlog.this.content;
 			final int revisionCount = stream.revisionCount();
-			firstParent = new HashMap<Nodeid, Nodeid>(revisionCount);
-			secondParent = new HashMap<Nodeid, Nodeid>(firstParent.size() >> 1); // assume branches/merges are less frequent
-			
+			firstParent = new Nodeid[revisionCount];
+			// although branches/merges are less frequent, and most of secondParent would be -1/null, some sort of 
+			// SparseOrderedList might be handy, provided its inner structures do not overweight simplicity of an array
+			secondParent = new Nodeid[revisionCount];
+			//
+			sequential = new Nodeid[revisionCount];
+			sorted = new Nodeid[revisionCount];
+		
 			RevlogStream.Inspector insp = new RevlogStream.Inspector() {
-				final Nodeid[] sequentialRevisionNodeids = new Nodeid[revisionCount];
+				
 				int ix = 0;
 				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 					if (ix != revisionNumber) {
@@ -230,31 +235,50 @@ abstract class Revlog {
 						throw new IllegalStateException(); // sanity, revisions are sequential
 					}
 					final Nodeid nid = new Nodeid(nodeid, true);
-					sequentialRevisionNodeids[ix++] = nid;
-					allNodes.add(nid);
+					sequential[ix] = sorted[ix] = nid;
 					if (parent1Revision != -1) {
-						firstParent.put(nid, sequentialRevisionNodeids[parent1Revision]);
+						assert parent1Revision < ix;
+						firstParent[ix] = sequential[parent1Revision];
 					}
-					if (parent2Revision != -1) { // revlog of DataAccess.java has p2 set when p1 is -1  
-						secondParent.put(nid, sequentialRevisionNodeids[parent2Revision]);
+					if (parent2Revision != -1) { // revlog of DataAccess.java has p2 set when p1 is -1
+						assert parent2Revision < ix;
+						secondParent[ix] = sequential[parent2Revision];
 					}
+					ix++;
 				}
 			};
 			stream.iterate(0, TIP, false, insp);
+			Arrays.sort(sorted);
+			sorted2natural = new int[revisionCount];
+			for (int i = 0; i < revisionCount; i++) {
+				Nodeid n = sequential[i];
+				int x = Arrays.binarySearch(sorted, n);
+				assertSortedIndex(x);
+				sorted2natural[x] = i;
+			}
 		}
 		
-		public Set<Nodeid> allNodes() {
-			return Collections.unmodifiableSet(allNodes);
+		private void assertSortedIndex(int x) {
+			if (x < 0) {
+				throw new HgBadStateException();
+			}
 		}
 		
 		// FIXME need to decide whether Nodeid(00 * 20) is always known or not
+		// right now Nodeid.NULL is not recognized as known if passed to this method, 
+		// caller is supposed to make explicit check 
 		public boolean knownNode(Nodeid nid) {
-			return allNodes.contains(nid);
+			return Arrays.binarySearch(sorted, nid) >= 0;
 		}
 
-		// null if none
+		/**
+		 * null if none. only known nodes (as per #knownNode) are accepted as arguments
+		 */
 		public Nodeid firstParent(Nodeid nid) {
-			return firstParent.get(nid);
+			int x = Arrays.binarySearch(sorted, nid);
+			assertSortedIndex(x);
+			int i = sorted2natural[x];
+			return firstParent[i];
 		}
 
 		// never null, Nodeid.NULL if none known
@@ -264,7 +288,10 @@ abstract class Revlog {
 		}
 		
 		public Nodeid secondParent(Nodeid nid) {
-			return secondParent.get(nid);
+			int x = Arrays.binarySearch(sorted, nid);
+			assertSortedIndex(x);
+			int i = sorted2natural[x];
+			return secondParent[i];
 		}
 
 		public Nodeid safeSecondParent(Nodeid nid) {
@@ -273,12 +300,15 @@ abstract class Revlog {
 		}
 
 		public boolean appendParentsOf(Nodeid nid, Collection<Nodeid> c) {
-			Nodeid p1 = firstParent(nid);
+			int x = Arrays.binarySearch(sorted, nid);
+			assertSortedIndex(x);
+			int i = sorted2natural[x];
+			Nodeid p1 = firstParent[i];
 			boolean modified = false;
 			if (p1 != null) {
 				modified = c.add(p1);
 			}
-			Nodeid p2 = secondParent(nid);
+			Nodeid p2 = secondParent[i];
 			if (p2 != null) {
 				modified = c.add(p2) || modified;
 			}
@@ -288,41 +318,55 @@ abstract class Revlog {
 		// XXX alternative (and perhaps more reliable) approach would be to make a copy of allNodes and remove 
 		// nodes, their parents and so on.
 		
-		// @return ordered collection of all children rooted at supplied nodes. Nodes shall not be descendants of each other! 
-		public List<Nodeid> childrenOf(List<Nodeid> nodes) {
+		// @return ordered collection of all children rooted at supplied nodes. Nodes shall not be descendants of each other!
+		// Nodeids shall belong to this revlog
+		public List<Nodeid> childrenOf(List<Nodeid> roots) {
 			HashSet<Nodeid> parents = new HashSet<Nodeid>();
-			LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
-			LinkedList<Nodeid> orderedResult = new LinkedList<Nodeid>();
-			for(Nodeid next : allNodes) {
-				// i assume allNodes is sorted, hence do not check any parents unless we hit any common known node first 
-				if (nodes.contains(next)) {
-					parents.add(next);
-				} else {
-					if (parents.isEmpty()) {
-						// didn't scroll up to any known yet
-						continue;
-					}
-					// record each and every node reported after first common known node hit  
-					orderedResult.addLast(next);
-					if (parents.contains(firstParent(next)) || parents.contains(secondParent(next))) {
-						result.add(next);
-						parents.add(next); // to find next's children
-					}
+			LinkedList<Nodeid> result = new LinkedList<Nodeid>();
+			int earliestRevision = Integer.MAX_VALUE;
+			assert sequential.length == firstParent.length && firstParent.length == secondParent.length;
+			// first, find earliest index of roots in question, as there's  no sense 
+			// to check children among nodes prior to branch's root node
+			for (Nodeid r : roots) {
+				int x = Arrays.binarySearch(sorted, r);
+				assertSortedIndex(x);
+				int i = sorted2natural[x];
+				if (i < earliestRevision) {
+					earliestRevision = i;
+				}
+				parents.add(sequential[i]); // add canonical instance in hope equals() is bit faster when can do a ==
+			}
+			for (int i = earliestRevision + 1; i < sequential.length; i++) {
+				if (parents.contains(firstParent[i]) || parents.contains(secondParent[i])) {
+					parents.add(sequential[i]); // to find next child
+					result.add(sequential[i]);
 				}
 			}
-			// leave only those of interest in ordered sequence 
-			orderedResult.retainAll(result);
-			return orderedResult;
+			return result;
 		}
 		
 		/**
-		 * @param node possibly parent node
+		 * @param nid possibly parent node, shall be {@link #knownNode(Nodeid) known} in this revlog.
 		 * @return <code>true</code> if there's any node in this revlog that has specified node as one of its parents. 
 		 */
-		public boolean hasChildren(Nodeid node) {
-			// FIXME containsValue is linear, likely. May want to optimize it with another (Tree|Hash)Set, created on demand
-			// on first use
-			return firstParent.containsValue(node) || secondParent.containsValue(node);
+		public boolean hasChildren(Nodeid nid) {
+			int x = Arrays.binarySearch(sorted, nid);
+			assertSortedIndex(x);
+			int i = sorted2natural[x];
+			assert firstParent.length == secondParent.length; // just in case later I implement sparse array for secondParent
+			assert firstParent.length == sequential.length;
+			// to use == instead of equals, take the same Nodeid instance we used to fill all the arrays.
+			final Nodeid canonicalNode = sequential[i];
+			i++; // no need to check node itself. child nodes may appear in sequential only after revision in question
+			for (; i < sequential.length; i++) {
+				// FIXME likely, not very effective. 
+				// May want to optimize it with another (Tree|Hash)Set, created on demand on first use, 
+				// however, need to be careful with memory usage
+				if (firstParent[i] == canonicalNode || secondParent[i] == canonicalNode) {
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 

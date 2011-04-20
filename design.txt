@@ -103,6 +103,14 @@ IndexEntry(int offset, int baseRevision) got replaced with int[] arrays (offsets
 for 69338 revisions from cpython repo 1109408 bytes reduced to 277368 bytes with the new int[] version.
 I.e. total for changelog+manifest is 1,5 Mb+ gain   
 
+ParentWalker got arrays (Nodeid[] and int[]) instead of HashMap/LinkedHashSet. This change saves, per revision:
+was: LinkedHashSet$Entry:32 + HashMap$Entry:24 + HashMap.entries[]:4 (in fact, up to 8, given entries size is power of 2, and 69000+ 
+	elements in cpython test repo resulted in entries[131072].
+	total: (2 HashMaps) 32+(24+4)*2 = 88 bytes
+now: Nodeid[]:4 , int[]:4 bytes per entry. arrays of exact revlog size
+	total: (4 Nodeid[], 1 int[]) 4*4 + 4 = 20 bytes
+for cpython test repo with 69338 revisions, 1 387 224 instead of 4 931 512 bytes. Mem usage (TaskManager) ~50 Mb when 10000 revs read
+	
 <<<<<
 
 Tests:
