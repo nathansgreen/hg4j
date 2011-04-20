@@ -47,7 +47,7 @@ public class Log {
 		final Dump dump = new Dump(hgRepo);
 		dump.complete = cmdLineOpts.getBoolean("--debug");
 		dump.verbose = cmdLineOpts.getBoolean("-v", "--verbose");
-		dump.reverseOrder = false;
+		dump.reverseOrder = true;
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		for (String u : cmdLineOpts.getList("-u", "--user")) {
 			cmd.user(u);

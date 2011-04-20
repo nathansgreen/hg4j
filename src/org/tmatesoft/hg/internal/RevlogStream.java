@@ -22,7 +22,6 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -33,7 +32,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 
 /**
  * ? Single RevlogStream per file per repository with accessor to record access session (e.g. with back/forward operations), 
- * or numerous RevlogStream with separate representation of the underlaying data (cached, lazy ChunkStream)?
+ * or numerous RevlogStream with separate representation of the underlying data (cached, lazy ChunkStream)?
  * 
  * @see http://mercurial.selenic.com/wiki/Revlog
  * @see http://mercurial.selenic.com/wiki/RevlogNG
@@ -43,7 +42,16 @@ import org.tmatesoft.hg.repo.HgRepository;
  */
 public class RevlogStream {
 
-	private List<IndexEntry> index; // indexed access highly needed
+	/*
+	 * makes sense for index with inline data only - actual offset of the record in the .i file (record entry + revision * record size))
+	 * 
+	 * long[] in fact (there are 8-bytes field in the revlog)
+	 * However, (a) DataAccess currently doesn't operate with long seek/length
+	 * and, of greater significance, (b) files with inlined data are designated for smaller files,  
+	 * guess, about 130 Kb, and offset there won't ever break int capacity
+	 */
+	private int[] indexRecordOffset;  
+	private int[] baseRevisions;
 	private boolean inline = false;
 	private final File indexFile;
 	private final DataAccessProvider dataAccess;
@@ -66,7 +74,7 @@ public class RevlogStream {
 	
 	public int revisionCount() {
 		initOutline();
-		return index.size();
+		return baseRevisions.length;
 	}
 	
 	public int dataLength(int revision) {
@@ -78,7 +86,7 @@ public class RevlogStream {
 			revision = indexSize - 1;
 		}
 		try {
-			int recordOffset = inline ? index.get(revision).getIntOffset() : revision * REVLOGV1_RECORD_SIZE;
+			int recordOffset = getIndexOffsetInt(revision);
 			daIndex.seek(recordOffset + 12); // 6+2+4
 			int actualLen = daIndex.readInt();
 			return actualLen; 
@@ -100,7 +108,7 @@ public class RevlogStream {
 		}
 		DataAccess daIndex = getIndexStream();
 		try {
-			int recordOffset = inline ? index.get(revision).getIntOffset() : revision * REVLOGV1_RECORD_SIZE;
+			int recordOffset = getIndexOffsetInt(revision);
 			daIndex.seek(recordOffset + 32);
 			byte[] rv = new byte[20];
 			daIndex.readBytes(rv, 0, 20);
@@ -123,7 +131,7 @@ public class RevlogStream {
 		}
 		DataAccess daIndex = getIndexStream();
 		try {
-			int recordOffset = inline ? index.get(revision).getIntOffset() : revision * REVLOGV1_RECORD_SIZE;
+			int recordOffset = getIndexOffsetInt(revision);
 			daIndex.seek(recordOffset + 20);
 			int linkRev = daIndex.readInt();
 			return linkRev;
@@ -174,7 +182,7 @@ public class RevlogStream {
 	// ? boolean needsNodeid
 	public void iterate(int start, int end, boolean needData, Inspector inspector) {
 		initOutline();
-		final int indexSize = index.size();
+		final int indexSize = revisionCount();
 		if (indexSize == 0) {
 			return;
 		}
@@ -202,22 +210,21 @@ public class RevlogStream {
 			DataAccess lastUserData = null;
 			int i;
 			boolean extraReadsToBaseRev = false;
-			if (needData && index.get(start).baseRevision < start) {
-				i = index.get(start).baseRevision;
+			if (needData && getBaseRevision(start) < start) {
+				i = getBaseRevision(start);
 				extraReadsToBaseRev = true;
 			} else {
 				i = start;
 			}
 			
-			daIndex.seek(inline ? index.get(i).getIntOffset() : i * REVLOGV1_RECORD_SIZE);
+			daIndex.seek(getIndexOffsetInt(i));
 			for (; i <= end; i++ ) {
 				if (inline && needData) {
 					// inspector reading data (though FilterDataAccess) may have affected index position
-					daIndex.seek(index.get(i).getIntOffset());
+					daIndex.seek(getIndexOffsetInt(i));
 				}
 				long l = daIndex.readLong(); // 0
-				@SuppressWarnings("unused")
-				long offset = l >>> 16;
+				long offset = i == 0 ? 0 : (l >>> 16);
 				@SuppressWarnings("unused")
 				int flags = (int) (l & 0X0FFFF);
 				int compressedLen = daIndex.readInt(); // +8
@@ -232,12 +239,13 @@ public class RevlogStream {
 				DataAccess userDataAccess = null;
 				if (needData) {
 					final byte firstByte;
-					int streamOffset = index.get(i).getIntOffset();
+					int streamOffset;
 					DataAccess streamDataAccess;
 					if (inline) {
 						streamDataAccess = daIndex;
-						streamOffset += REVLOGV1_RECORD_SIZE; // don't need to do seek as it's actual position in the index stream
+						streamOffset = getIndexOffsetInt(i) + REVLOGV1_RECORD_SIZE; // don't need to do seek as it's actual position in the index stream
 					} else {
+						streamOffset = (int) offset;
 						streamDataAccess = daData;
 						daData.seek(streamOffset);
 					}
@@ -291,12 +299,24 @@ public class RevlogStream {
 			}
 		}
 	}
-	
+
+	private int getBaseRevision(int revision) {
+		return baseRevisions[revision];
+	}
+
+	/**
+	 * @return  offset of the revision's record in the index (.i) stream
+	 */
+	private int getIndexOffsetInt(int revision) {
+		return inline ? indexRecordOffset[revision] : revision * REVLOGV1_RECORD_SIZE;
+	}
+
 	private void initOutline() {
-		if (index != null && !index.isEmpty()) {
+		if (baseRevisions != null && baseRevisions.length > 0) {
 			return;
 		}
-		ArrayList<IndexEntry> res = new ArrayList<IndexEntry>();
+		ArrayList<Integer> resBases = new ArrayList<Integer>();
+		ArrayList<Integer> resOffsets = new ArrayList<Integer>();
 		DataAccess da = getIndexStream();
 		try {
 			int versionField = da.readInt();
@@ -315,17 +335,25 @@ public class RevlogStream {
 //				int parent1Revision = di.readInt();
 //				int parent2Revision = di.readInt();
 //				byte[] nodeid = new byte[32];
+				resBases.add(baseRevision);
 				if (inline) {
-					res.add(new IndexEntry(offset + REVLOGV1_RECORD_SIZE * res.size(), baseRevision));
+					int o = (int) offset;
+					if (o != offset) {
+						// just in case, can't happen, ever, unless HG (or some other bad tool) produces index file 
+						// with inlined data of size greater than 2 Gb.
+						throw new HgBadStateException("Data too big, offset didn't fit to sizeof(int)");
+					}
+					resOffsets.add(o + REVLOGV1_RECORD_SIZE * resOffsets.size());
 					da.skip(3*4 + 32 + compressedLen); // Check: 44 (skip) + 20 (read) = 64 (total RevlogNG record size)
 				} else {
-					res.add(new IndexEntry(offset, baseRevision));
 					da.skip(3*4 + 32);
 				}
 				if (da.isEmpty()) {
 					// fine, done then
-					res.trimToSize();
-					index = res;
+					baseRevisions = toArray(resBases);
+					if (inline) {
+						indexRecordOffset = toArray(resOffsets);
+					}
 					break;
 				} else {
 					// start reading next record
@@ -335,36 +363,21 @@ public class RevlogStream {
 			}
 		} catch (IOException ex) {
 			ex.printStackTrace(); // log error
-			// too bad, no outline then.
-			index = Collections.emptyList();
+			// too bad, no outline then, but don't fail with NPE
+			baseRevisions = new int[0];
 		} finally {
 			da.done();
 		}
-		
 	}
 	
-
-	// perhaps, package-local or protected, if anyone else from low-level needs them
-	// XXX think over if we should keep offset in case of separate data file - we read the field anyway. Perhaps, distinct entry classes for Inline and non-inline indexes?
-	private static class IndexEntry {
-		private final int/*long*/ offset; // for separate .i and .d - copy of index record entry, for inline index - actual offset of the record in the .i file (record entry + revision * record size))
-		//public final int length; // data past fixed record (need to decide whether including header size or not), and whether length is of compressed data or not
-		public final int baseRevision;
-
-		public IndexEntry(long o, int baseRev) {
-			offset = (int) o;
-			// Index file stores offsets as long, but since DataAccess doesn't support long length() and others yet, 
-			// no reason to operate with long offsets 
-			if (o != offset) {
-				throw new HgBadStateException("Data too big, offset didn't fit to sizeof(int)");
-			}
-			baseRevision = baseRev;
+	private static int[] toArray(List<Integer> l) {
+		int[] rv = new int[l.size()];
+		for (int i = 0; i < rv.length; i++) {
+			rv[i] = l.get(i);
 		}
-
-		public int getIntOffset() {
-			return offset;
-		}
+		return rv;
 	}
+	
 
 	// mpatch.c : apply()
 	// FIXME need to implement patch merge (fold, combine, gather and discard from aforementioned mpatch.[c|py]), also see Revlog and Mercurial PDF

@@ -99,6 +99,10 @@ hg log --debug -r 0:5000 and same via Log/HgLogCommand: approx. 220 seconds vs 2
 after further changes in HgStatusCollector (to read ahead 5 elements, 50 max cache, fixed bug with -1) - hg4j dumps 5000 in
 93 seconds, memory consumption about 50-56 Mb
 
+IndexEntry(int offset, int baseRevision) got replaced with int[] arrays (offsets - optional)
+for 69338 revisions from cpython repo 1109408 bytes reduced to 277368 bytes with the new int[] version.
+I.e. total for changelog+manifest is 1,5 Mb+ gain   
+
 <<<<<
 
 Tests:
