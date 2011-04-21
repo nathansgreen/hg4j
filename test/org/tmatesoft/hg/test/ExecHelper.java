@@ -34,6 +34,7 @@ public class ExecHelper {
 
 	private final OutputParser parser;
 	private final File dir;
+	private int exitValue;
 
 	public ExecHelper(OutputParser outParser, File workingDir) {
 		parser = outParser;
@@ -86,6 +87,11 @@ public class ExecHelper {
 		}
 		res.flip();
 		p.waitFor();
+		exitValue = p.exitValue();
 		parser.parse(res);
+	}
+	
+	public int getExitValue() {
+		return exitValue;
 	}
 }

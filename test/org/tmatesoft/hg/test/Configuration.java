@@ -19,8 +19,11 @@ package org.tmatesoft.hg.test;
 import static org.junit.Assert.*;
 
 import java.io.File;
+import java.util.Collections;
+import java.util.List;
 
 import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -60,5 +63,9 @@ public class Configuration {
 		assertNotNull(rv);
 		assertFalse(rv.isInvalid());
 		return rv;
+	}
+
+	public List<HgRemoteRepository> allRemote() throws Exception {
+		return Collections.singletonList(lookup.detectRemote("hg4j-gc", null));
 	}
 }
