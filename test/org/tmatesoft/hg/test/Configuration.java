@@ -19,6 +19,8 @@ package org.tmatesoft.hg.test;
 import static org.junit.Assert.*;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -36,6 +38,8 @@ public class Configuration {
 	private static Configuration inst;
 	private final File root;
 	private final HgLookup lookup;
+	private File tempDir;
+	private List<String> remoteServers;
 	
 	private Configuration(File reposRoot) {
 		root = reposRoot;
@@ -65,7 +69,27 @@ public class Configuration {
 		return rv;
 	}
 
+	// easy override for manual test runs
+	public void remoteServers(String... keys) {
+		remoteServers = Arrays.asList(keys);
+	}
+
 	public List<HgRemoteRepository> allRemote() throws Exception {
-		return Collections.singletonList(lookup.detectRemote("hg4j-gc", null));
+		if (remoteServers == null) {
+			remoteServers = Collections.singletonList("hg4j-gc"); // just a default
+		}
+		ArrayList<HgRemoteRepository> rv = new ArrayList<HgRemoteRepository>(remoteServers.size());
+		for (String key : remoteServers) {
+			rv.add(lookup.detectRemote(key, null));
+		}
+		return rv;
+	}
+
+	public File getTempDir() {
+		if (tempDir == null) {
+			String td = System.getProperty("hg4j.tests.tmpdir", System.getProperty("java.io.tmpdir"));
+			tempDir = new File(td);
+		}
+		return tempDir;
 	}
 }

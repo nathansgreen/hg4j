@@ -18,6 +18,9 @@ package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.internal.RequiresFile.*;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -85,4 +88,24 @@ public class Internals {
 		}
 		return filterFactories;
 	}
+	
+	public void initEmptyRepository(File hgDir) throws IOException {
+		hgDir.mkdir();
+		FileOutputStream requiresFile = new FileOutputStream(new File(hgDir, "requires"));
+		StringBuilder sb = new StringBuilder(40);
+		sb.append("revlogv1\n");
+		if ((requiresFlags & STORE) != 0) {
+			sb.append("store\n");
+		}
+		if ((requiresFlags & FNCACHE) != 0) {
+			sb.append("fncache\n");
+		}
+		if ((requiresFlags & DOTENCODE) != 0) {
+			sb.append("dotencode\n");
+		}
+		requiresFile.write(sb.toString().getBytes());
+		requiresFile.close();
+		new File(hgDir, "store").mkdir(); // with that, hg verify says ok.
+	}
+
 }

@@ -124,7 +124,7 @@ public final class HgRepository {
 	public HgChangelog getChangelog() {
 		if (this.changelog == null) {
 			String storagePath = repoPathHelper.rewrite("00changelog.i");
-			RevlogStream content = resolve(Path.create(storagePath));
+			RevlogStream content = resolve(Path.create(storagePath), true);
 			this.changelog = new HgChangelog(this, content);
 		}
 		return this.changelog;
@@ -132,7 +132,7 @@ public final class HgRepository {
 	
 	public HgManifest getManifest() {
 		if (this.manifest == null) {
-			RevlogStream content = resolve(Path.create(repoPathHelper.rewrite("00manifest.i")));
+			RevlogStream content = resolve(Path.create(repoPathHelper.rewrite("00manifest.i")), true);
 			this.manifest = new HgManifest(this, content);
 		}
 		return this.manifest;
@@ -154,7 +154,7 @@ public final class HgRepository {
 	public HgDataFile getFileNode(String path) {
 		String nPath = normalizePath.rewrite(path);
 		String storagePath = dataPathHelper.rewrite(nPath);
-		RevlogStream content = resolve(Path.create(storagePath));
+		RevlogStream content = resolve(Path.create(storagePath), false);
 		Path p = Path.create(nPath);
 		if (content == null) {
 			return new HgDataFile(this, p);
@@ -164,7 +164,7 @@ public final class HgRepository {
 
 	public HgDataFile getFileNode(Path path) {
 		String storagePath = dataPathHelper.rewrite(path.toString());
-		RevlogStream content = resolve(Path.create(storagePath));
+		RevlogStream content = resolve(Path.create(storagePath), false);
 		// XXX no content when no file? or HgDataFile.exists() to detect that?
 		if (content == null) {
 			return new HgDataFile(this, path);
@@ -220,7 +220,7 @@ public final class HgRepository {
 	 * Perhaps, should be separate interface, like ContentLookup
 	 * path - repository storage path (i.e. one usually with .i or .d)
 	 */
-	/*package-local*/ RevlogStream resolve(Path path) {
+	/*package-local*/ RevlogStream resolve(Path path, boolean shallFakeNonExistent) {
 		final SoftReference<RevlogStream> ref = streamsCache.get(path);
 		RevlogStream cached = ref == null ? null : ref.get();
 		if (cached != null) {
@@ -231,6 +231,16 @@ public final class HgRepository {
 			RevlogStream s = new RevlogStream(dataAccess, f);
 			streamsCache.put(path, new SoftReference<RevlogStream>(s));
 			return s;
+		} else {
+			if (shallFakeNonExistent) {
+				try {
+					File fake = File.createTempFile(f.getName(), null);
+					fake.deleteOnExit();
+					return new RevlogStream(dataAccess, fake);
+				} catch (IOException ex) {
+					ex.printStackTrace(); // FIXME report in debug
+				}
+			}
 		}
 		return null; // XXX empty stream instead?
 	}

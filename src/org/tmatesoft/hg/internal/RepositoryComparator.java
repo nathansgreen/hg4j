@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
@@ -237,13 +238,22 @@ public class RepositoryComparator {
 				} else {
 					chainElement.branchRoot = rb.root;
 					// dig deeper in the history, if necessary
-					if (!NULL.equals(rb.p1) && !localRepo.knownNode(rb.p1)) {
+					boolean hasP1 = !NULL.equals(rb.p1), hasP2 = !NULL.equals(rb.p2);  
+					if (hasP1 && !localRepo.knownNode(rb.p1)) {
 						toQuery.add(rb.p1);
 						head2chain.put(rb.p1, chainElement.p1 = new BranchChain(rb.p1));
 					}
-					if (!NULL.equals(rb.p2) && !localRepo.knownNode(rb.p2)) {
+					if (hasP2 && !localRepo.knownNode(rb.p2)) {
 						toQuery.add(rb.p2);
 						head2chain.put(rb.p2, chainElement.p2 = new BranchChain(rb.p2));
+					}
+					if (!hasP1 && !hasP2) {
+						// special case, when we do incoming against blank repository, chainElement.branchRoot
+						// is first unknown element (revision 0). We need to add another fake BranchChain
+						// to fill the promise that terminal BranchChain has branchRoot that is known both locally and remotely
+						BranchChain fake = new BranchChain(NULL);
+						fake.branchRoot = NULL;
+						chainElement.p1 = chainElement.p2 = fake;
 					}
 				}
 			}
@@ -291,6 +301,11 @@ public class RepositoryComparator {
 		return branches2load;
 	}
 
+	// root and head (and all between) are unknown for each chain element but last (terminal), which has known root (revision
+	// known to be locally and at remote server
+	// alternative would be to keep only unknown elements (so that promise of calculateMissingBranches would be 100% true), but that 
+	// seems to complicate the method, while being useful only for the case when we ask incoming for an empty repository (i.e.
+	// where branch chain return all nodes, -1..tip.
 	public static final class BranchChain {
 		// when we construct a chain, we know head which is missing locally, hence init it right away.
 		// as for root (branch unknown start), we might happen to have one locally, and need further digging to find out right branch start  
@@ -307,9 +322,15 @@ public class RepositoryComparator {
 			branchHead = head;
 		}
 		public boolean isTerminal() {
-			return p1 == null || p2 == null;
+			return p1 == null && p2 == null; // either can be null, see comment above. Terminal is only when no way to descent
 		}
 		
+		// true when this BranchChain is a branch that spans up to very start of the repository
+		// Thus, the only common revision is NULL, recorded in a fake BranchChain object shared between p1 and p2
+		/*package-local*/ boolean isRepoStart() {
+			return p1 == p2 && p1 != null && p1.branchHead == p1.branchRoot && NULL.equals(p1.branchHead);
+		}
+
 		@Override
 		public String toString() {
 			return String.format("BranchChain [%s, %s]", branchRoot, branchHead);
@@ -460,7 +481,7 @@ public class RepositoryComparator {
 			return Collections.emptyList();
 		}
 		List<Nodeid> mine = completeBranch(bc.branchRoot, bc.branchHead);
-		if (bc.isTerminal()) {
+		if (bc.isTerminal() || bc.isRepoStart()) {
 			return mine;
 		}
 		List<Nodeid> parentBranch1 = visitBranches(bc.p1);
@@ -495,4 +516,18 @@ public class RepositoryComparator {
 		return rv;
 	}
 
+	public void collectKnownRoots(BranchChain bc, Set<Nodeid> result) {
+		if (bc == null) {
+			return;
+		}
+		if (bc.isTerminal()) {
+			result.add(bc.branchRoot);
+			return;
+		}
+		if (bc.isRepoStart()) {
+			return;
+		}
+		collectKnownRoots(bc.p1, result);
+		collectKnownRoots(bc.p2, result);
+	}
 }

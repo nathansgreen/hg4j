@@ -22,8 +22,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
-import junit.framework.Assert;
-
+import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.tmatesoft.hg.core.HgCloneCommand;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
@@ -38,9 +37,10 @@ public class TestClone {
 	@Rule
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Throwable {
 		TestClone t = new TestClone();
 		t.testSimpleClone();
+		t.errorCollector.verify();
 	}
 
 	public TestClone() {
@@ -48,7 +48,7 @@ public class TestClone {
 	
 	public void testSimpleClone() throws Exception {
 		int x = 0;
-		final File tempDir = new File(System.getProperty("java.io.tmpdir"));
+		final File tempDir = Configuration.get().getTempDir();
 		for (HgRemoteRepository hgRemote : Configuration.get().allRemote()) {
 			HgCloneCommand cmd = new HgCloneCommand();
 			cmd.source(hgRemote);
@@ -63,21 +63,16 @@ public class TestClone {
 	}
 
 	private void verify(HgRemoteRepository hgRemote, File dest) throws Exception {
-		OutputParser noop = new OutputParser() {
-			public void parse(CharSequence seq) {
-				// no-op
-			}
-		};
-		ExecHelper eh = new ExecHelper(noop, dest);
+		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), dest);
 		eh.run("hg", "verify");
-		Assert.assertEquals(0, eh.getExitValue());
+		errorCollector.checkThat("Verify", eh.getExitValue(), CoreMatchers.equalTo(0));
 		eh.run("hg", "out", hgRemote.getLocation());
-		Assert.assertEquals(1, eh.getExitValue());
+		errorCollector.checkThat("Outgoing", eh.getExitValue(), CoreMatchers.equalTo(1));
 		eh.run("hg", "in", hgRemote.getLocation());
-		Assert.assertEquals(1, eh.getExitValue());
+		errorCollector.checkThat("Incoming", eh.getExitValue(), CoreMatchers.equalTo(1));
 	}
 
-	private static void rmdir(File dest) throws IOException {
+	static void rmdir(File dest) throws IOException {
 		LinkedList<File> queue = new LinkedList<File>();
 		queue.addAll(Arrays.asList(dest.listFiles()));
 		while (!queue.isEmpty()) {

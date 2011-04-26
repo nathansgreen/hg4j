@@ -303,6 +303,9 @@ public class HgRemoteRepository {
 	}
 
 	/*
+	 * XXX need to describe behavior when roots arg is empty; our RepositoryComparator code currently returns empty lists when
+	 * no common elements found, which in turn means we need to query changes starting with NULL nodeid.
+	 * 
 	 * WireProtocol wiki: roots = a list of the latest nodes on every service side changeset branch that both the client and server know about.
 	 * 
 	 * Perhaps, shall be named 'changegroup'
@@ -316,9 +319,10 @@ public class HgRemoteRepository {
 	 * as one may expect according to http://mercurial.selenic.com/wiki/BundleFormat)
 	 */
 	public HgBundle getChanges(List<Nodeid> roots) throws HgException {
-		StringBuilder sb = new StringBuilder(20 + roots.size() * 41);
+		List<Nodeid> _roots = roots.isEmpty() ? Collections.singletonList(Nodeid.NULL) : roots;
+		StringBuilder sb = new StringBuilder(20 + _roots.size() * 41);
 		sb.append("roots=");
-		for (Nodeid n : roots) {
+		for (Nodeid n : _roots) {
 			sb.append(n.toString());
 			sb.append('+');
 		}

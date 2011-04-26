@@ -18,6 +18,8 @@ package org.tmatesoft.hg.core;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -43,6 +45,7 @@ public class HgIncomingCommand {
 
 	private final HgRepository localRepo;
 	private HgRemoteRepository remoteRepo;
+	@SuppressWarnings("unused")
 	private boolean includeSubrepo;
 	private RepositoryComparator comparator;
 	private List<BranchChain> missingBranches;
@@ -105,8 +108,10 @@ public class HgIncomingCommand {
 		RepositoryComparator repoCompare = getComparator(context);
 		for (BranchChain bc : getMissingBranches(context)) {
 			List<Nodeid> missing = repoCompare.visitBranches(bc);
-			assert bc.branchRoot.equals(missing.get(0)); 
-			missing.remove(0);
+			HashSet<Nodeid> common = new HashSet<Nodeid>(); // ordering is irrelevant  
+			repoCompare.collectKnownRoots(bc, common);
+			// missing could only start with common elements. Once non-common, rest is just distinct branch revision trails.
+			for (Iterator<Nodeid> it = missing.iterator(); it.hasNext() && common.contains(it.next()); it.remove()) ; 
 			result.addAll(missing);
 		}
 		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(result);
@@ -124,10 +129,10 @@ public class HgIncomingCommand {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
 		final List<Nodeid> common = getCommon(handler);
-		HgBundle changegroup = remoteRepo.getChanges(new LinkedList<Nodeid>(common));
+		HgBundle changegroup = remoteRepo.getChanges(common);
 		try {
 			changegroup.changes(localRepo, new HgChangelog.Inspector() {
-				private int localIndex;
+				private int localIndex = -1; // in case we start with empty repo and localIndex would not get initialized in regular way
 				private final HgChangelog.ParentWalker parentHelper;
 				private final ChangesetTransformer transformer;
 				private final HgChangelog changelog;
@@ -161,7 +166,7 @@ public class HgIncomingCommand {
 		}
 		if (comparator == null) {
 			comparator = new RepositoryComparator(getParentHelper(), remoteRepo);
-			comparator.compare(context);
+//			comparator.compare(context); // XXX meanwhile we use distinct path to calculate common  
 		}
 		return comparator;
 	}
@@ -182,11 +187,13 @@ public class HgIncomingCommand {
 	}
 
 	private List<Nodeid> getCommon(Object context) throws HgException, CancelledException {
+//		return getComparator(context).getCommon();
 		final LinkedHashSet<Nodeid> common = new LinkedHashSet<Nodeid>();
 		// XXX common can be obtained from repoCompare, but at the moment it would almost duplicate work of calculateMissingBranches
 		// once I refactor latter, common shall be taken from repoCompare.
+		RepositoryComparator repoCompare = getComparator(context);
 		for (BranchChain bc : getMissingBranches(context)) {
-			common.add(bc.branchRoot);
+			repoCompare.collectKnownRoots(bc, common);
 		}
 		return new LinkedList<Nodeid>(common);
 	}

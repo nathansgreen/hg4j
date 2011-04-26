@@ -24,4 +24,10 @@ package org.tmatesoft.hg.test;
 public interface OutputParser {
 
 	public void parse(CharSequence seq);
+
+	public class Stub implements OutputParser {
+		public void parse(CharSequence seq) {
+			// no-op
+		}
+	}
 }

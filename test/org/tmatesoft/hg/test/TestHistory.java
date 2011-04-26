@@ -20,6 +20,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -122,23 +123,35 @@ public class TestHistory {
 		}
 	}
 
-	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResults) {
+	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResult) {
 		final List<Record> consoleResult = changelogParser.getResult();
-		if (reverseConsoleResults) {
+		report(what, r, consoleResult, reverseConsoleResult, errorCollector);
+	}
+	
+	static void report(String what, List<HgChangeset> hg4jResult, List<Record> consoleResult, boolean reverseConsoleResult, ErrorCollectorExt errorCollector) {
+		consoleResult = new ArrayList<Record>(consoleResult); // need a copy in case callee would use result again
+		if (reverseConsoleResult) {
 			Collections.reverse(consoleResult);
 		}
+		errorCollector.checkThat(what + ". Number of changeset reported didn't match", consoleResult.size(), equalTo(hg4jResult.size()));
 		Iterator<Record> consoleResultItr = consoleResult.iterator();
-		for (HgChangeset cs : r) {
+		for (HgChangeset cs : hg4jResult) {
+			if (!consoleResultItr.hasNext()) {
+				errorCollector.addError(new AssertionError("Ran out of console results while there are still hg4j results"));
+				break;
+			}
 			Record cr = consoleResultItr.next();
 			int x = cs.getRevision() == cr.changesetIndex ? 0x1 : 0;
 			x |= cs.getDate().equals(cr.date) ? 0x2 : 0;
 			x |= cs.getNodeid().toString().equals(cr.changesetNodeid) ? 0x4 : 0;
 			x |= cs.getUser().equals(cr.user) ? 0x8 : 0;
-			x |= cs.getComment().equals(cr.description) ? 0x10 : 0;
-			errorCollector.checkThat(String.format(what + ". Error in %d hg4j rev comparing to %d cmdline's.", cs.getRevision(), cr.changesetIndex), x, equalTo(0x1f));
+			// need to do trim() on comment because command-line template does, and there are
+			// repositories that have couple of newlines in the end of the comment (e.g. hello sample repo from the book) 
+			x |= cs.getComment().trim().equals(cr.description) ? 0x10 : 0;
+			errorCollector.checkThat(String.format(what + ". Mismatch (0x%x) in %d hg4j rev comparing to %d cmdline's.", x, cs.getRevision(), cr.changesetIndex), x, equalTo(0x1f));
 			consoleResultItr.remove();
 		}
-		errorCollector.checkThat(what + ". Insufficient results from Java ", consoleResultItr.hasNext(), equalTo(false));
+		errorCollector.checkThat(what + ". Unprocessed results in console left (insufficient from hg4j)", consoleResultItr.hasNext(), equalTo(false));
 	}
 
 	public void testPerformance() throws Exception {

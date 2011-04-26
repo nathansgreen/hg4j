@@ -123,20 +123,17 @@ public class HgCloneCommand {
 		private final ArrayList<Nodeid> revisionSequence = new ArrayList<Nodeid>(); // last visited nodes first
 
 		private final LinkedList<String> fncacheFiles = new LinkedList<String>();
+		private Internals implHelper;
 
 		public WriteDownMate(File destDir) {
 			hgDir = new File(destDir, ".hg");
-			Internals i = new Internals();
-			i.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
-			storagePathHelper = i.buildDataFilesHelper();
+			implHelper = new Internals();
+			implHelper.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
+			storagePathHelper = implHelper.buildDataFilesHelper();
 		}
 
 		public void initEmptyRepository() throws IOException {
-			hgDir.mkdir();
-			FileOutputStream requiresFile = new FileOutputStream(new File(hgDir, "requires"));
-			requiresFile.write("revlogv1\nstore\nfncache\ndotencode\n".getBytes());
-			requiresFile.close();
-			new File(hgDir, "store").mkdir(); // with that, hg verify says ok.
+			implHelper.initEmptyRepository(hgDir);
 		}
 
 		public void complete() throws IOException {

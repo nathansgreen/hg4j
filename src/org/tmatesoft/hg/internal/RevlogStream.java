@@ -319,6 +319,11 @@ public class RevlogStream {
 		ArrayList<Integer> resOffsets = new ArrayList<Integer>();
 		DataAccess da = getIndexStream();
 		try {
+			if (da.isEmpty()) {
+				// do not fail with exception if stream is empty, it's likely intentional
+				baseRevisions = new int[0];
+				return;
+			}
 			int versionField = da.readInt();
 			da.readInt(); // just to skip next 4 bytes of offset + flags
 			final int INLINEDATA = 1 << 16;
