@@ -48,7 +48,6 @@ public class TestOutgoing {
 	}
 
 	public TestOutgoing() {
-		Configuration.get().remoteServers("http://localhost:8000/");
 	}
 
 	@Test

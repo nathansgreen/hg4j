@@ -70,7 +70,7 @@ public class TestIncoming {
 			// hg pull total/2
 			// hg in, hg4j in, compare
 			List<Nodeid> incoming = runAndCompareIncoming(localRepo, hgRemote);
-			Assert.assertTrue("Need remote repository of reasonable size to test incoming command for partially filled case", incoming.size() > 5);
+			Assert.assertTrue("Need remote repository of reasonable size to test incoming command for partially filled case", incoming.size() >= 5);
 			//
 			Nodeid median = incoming.get(incoming.size() / 2); 
 			System.out.println("About to pull up to revision " + median.shortNotation());

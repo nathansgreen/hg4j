@@ -56,6 +56,11 @@ public class HgCloneCommand {
 	public HgCloneCommand() {
 	}
 	
+	/**
+	 * @param folder location to become root of the repository (i.e. where <em>.hg</em> folder would reside). Either 
+	 * shall not exist or be empty otherwise. 
+	 * @return <code>this</code> for convenience
+	 */
 	public HgCloneCommand destination(File folder) {
 		destination = folder;
 		return this;

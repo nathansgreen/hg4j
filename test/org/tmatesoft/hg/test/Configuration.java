@@ -21,7 +21,6 @@ import static org.junit.Assert.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.repo.HgLookup;
@@ -81,7 +80,9 @@ public class Configuration {
 
 	public List<HgRemoteRepository> allRemote() throws Exception {
 		if (remoteServers == null) {
-			remoteServers = Collections.singletonList("hg4j-gc"); // just a default
+			String rr = System.getProperty("hg4j.tests.remote");
+			assertNotNull("System property hg4j.tests.remote is undefined", rr);
+			remoteServers = Arrays.asList(rr.split(" "));
 		}
 		ArrayList<HgRemoteRepository> rv = new ArrayList<HgRemoteRepository>(remoteServers.size());
 		for (String key : remoteServers) {

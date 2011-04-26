@@ -24,6 +24,7 @@ import java.util.List;
 
 import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
+import org.junit.Test;
 import org.tmatesoft.hg.core.HgCloneCommand;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 
@@ -46,6 +47,7 @@ public class TestClone {
 	public TestClone() {
 	}
 	
+	@Test
 	public void testSimpleClone() throws Exception {
 		int x = 0;
 		final File tempDir = Configuration.get().getTempDir();
