@@ -93,12 +93,12 @@ public class TestIncoming {
 		cmd.executeFull(collector);
 		eh.run("hg", "incoming", "--debug", hgRemote.getLocation());
 		List<Nodeid> liteResult = cmd.executeLite(null);
-		report(collector, outParser, liteResult);
+		report(collector, outParser, liteResult, errorCollector);
 		return liteResult;
 	}
 	
-	private void report(HgLogCommand.CollectHandler collector, LogOutputParser outParser, List<Nodeid> liteResult) {
-		TestHistory.report("hg in - against blank repo", collector.getChanges(), outParser.getResult(), false, errorCollector);
+	static void report(HgLogCommand.CollectHandler collector, LogOutputParser outParser, List<Nodeid> liteResult, ErrorCollectorExt errorCollector) {
+		TestHistory.report("hg vs execFull", collector.getChanges(), outParser.getResult(), false, errorCollector);
 		//
 		ArrayList<Nodeid> expected = new ArrayList<Nodeid>(outParser.getResult().size());
 		for (LogOutputParser.Record r : outParser.getResult()) {
@@ -122,13 +122,18 @@ public class TestIncoming {
 		}
 		errorCollector.checkThat(what + " Superfluous cset reported by HgIncomingCommand.execLite", set.isEmpty(), equalTo(true));
 	}
-
-	static File initEmptyTempRepo(String dirName) throws IOException {
+	
+	static File createEmptyDir(String dirName) throws IOException {
 		File dest = new File(Configuration.get().getTempDir(), dirName);
 		if (dest.exists()) {
 			TestClone.rmdir(dest);
 		}
 		dest.mkdirs();
+		return dest;
+	}
+
+	static File initEmptyTempRepo(String dirName) throws IOException {
+		File dest = createEmptyDir(dirName);
 		Internals implHelper = new Internals();
 		implHelper.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
 		implHelper.initEmptyRepository(new File(dest, ".hg"));

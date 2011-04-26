@@ -33,7 +33,7 @@ import java.util.StringTokenizer;
 public class ExecHelper {
 
 	private final OutputParser parser;
-	private final File dir;
+	private File dir;
 	private int exitValue;
 
 	public ExecHelper(OutputParser outParser, File workingDir) {
@@ -93,5 +93,9 @@ public class ExecHelper {
 	
 	public int getExitValue() {
 		return exitValue;
+	}
+
+	public void cwd(File wd) {
+		dir = wd;
 	}
 }

@@ -26,8 +26,18 @@ public interface OutputParser {
 	public void parse(CharSequence seq);
 
 	public class Stub implements OutputParser {
+		private boolean shallDump;
+		public Stub() {
+			this(false);
+		}
+		public Stub(boolean dump) {
+			shallDump = dump;
+		}
 		public void parse(CharSequence seq) {
-			// no-op
+			if (shallDump) {
+				System.out.println(seq);
+			} 
+			// else no-op
 		}
 	}
 }

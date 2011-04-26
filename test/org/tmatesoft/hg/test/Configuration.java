@@ -36,23 +36,28 @@ import org.tmatesoft.hg.repo.HgRepository;
 public class Configuration {
 	
 	private static Configuration inst;
-	private final File root;
+	private File root;
 	private final HgLookup lookup;
 	private File tempDir;
 	private List<String> remoteServers;
 	
-	private Configuration(File reposRoot) {
-		root = reposRoot;
+	private Configuration() {
 		lookup = new HgLookup();
+	}
+	
+	private File getRoot() {
+		if (root == null) {
+			String repo2 = System.getProperty("hg4j.tests.repos");
+			assertNotNull("System property hg4j.tests.repos is undefined", repo2);
+			root = new File(repo2);
+			assertTrue(root.exists());
+		}
+		return root;
 	}
 	
 	public static Configuration get() {
 		if (inst == null) {
-			String repo2 = System.getProperty("hg4j.tests.repos");
-			assertNotNull(repo2);
-			File rr = new File(repo2);
-			assertTrue(rr.exists());
-			inst = new Configuration(rr);
+			inst = new Configuration();
 		}
 		return inst;
 	}
@@ -63,7 +68,7 @@ public class Configuration {
 
 	// fails if repo not found
 	public HgRepository find(String key) throws Exception {
-		HgRepository rv = lookup.detect(new File(root, key));
+		HgRepository rv = lookup.detect(new File(getRoot(), key));
 		assertNotNull(rv);
 		assertFalse(rv.isInvalid());
 		return rv;

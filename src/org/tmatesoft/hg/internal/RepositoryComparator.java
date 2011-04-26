@@ -112,6 +112,13 @@ public class RepositoryComparator {
 				earliestRevision = lr;
 			}
 		}
+		if (earliestRevision == Integer.MAX_VALUE) {
+			// either there are no common nodes (known locally and at remote)
+			// or no local children found (local is up to date). In former case, perhaps I shall bit return silently,
+			// but check for possible wrong repo comparison (hs says 'repository is unrelated' if I try to 
+			// check in/out for a repo that has no common nodes.
+			return;
+		}
 		if (earliestRevision < 0 || earliestRevision >= changelog.getLastRevision()) {
 			throw new HgBadStateException(String.format("Invalid index of common known revision: %d in total of %d", earliestRevision, 1+changelog.getLastRevision()));
 		}

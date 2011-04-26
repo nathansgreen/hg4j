@@ -349,6 +349,11 @@ public class HgRemoteRepository {
 		}
 	}
 
+	@Override
+	public String toString() {
+		return getClass().getSimpleName() + '[' + getLocation() + ']';
+	}
+
 	private HgLookup getLookupHelper() {
 		if (lookupHelper == null) {
 			lookupHelper = new HgLookup();
