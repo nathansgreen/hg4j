@@ -19,9 +19,9 @@ package org.tmatesoft.hg.core;
 import java.util.Set;
 
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
-import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -32,12 +32,12 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author TMate Software Ltd.
  */
 /*package-local*/ class ChangesetTransformer implements HgChangelog.Inspector {
-	private final HgLogCommand.Handler handler;
+	private final HgChangesetHandler handler;
 	private final HgChangeset changeset;
 	private Set<String> branches;
 
 	// repo and delegate can't be null, parent walker can
-	public ChangesetTransformer(HgRepository hgRepo, HgLogCommand.Handler delegate, HgChangelog.ParentWalker pw) {
+	public ChangesetTransformer(HgRepository hgRepo, HgChangesetHandler delegate, HgChangelog.ParentWalker pw) {
 		if (hgRepo == null || delegate == null) {
 			throw new IllegalArgumentException();
 		}

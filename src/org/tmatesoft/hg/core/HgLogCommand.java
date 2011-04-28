@@ -172,11 +172,11 @@ public class HgLogCommand implements HgChangelog.Inspector {
 
 	/**
 	 * 
-	 * @param inspector
+	 * @param handler callback to process changesets.
 	 * @throws IllegalArgumentException when inspector argument is null
 	 * @throws ConcurrentModificationException if this log command instance is already running
 	 */
-	public void execute(Handler handler) throws HgException {
+	public void execute(HgChangesetHandler handler) throws HgException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -259,15 +259,15 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	}
 
 
-	public interface Handler {
-		/**
-		 * @param changeset not necessarily a distinct instance each time, {@link HgChangeset#clone() clone()} if need a copy.
-		 */
-		void next(HgChangeset changeset);
+	/**
+	 * @deprecated Use {@link HgChangesetHandler} instead. This interface is left temporarily for compatibility.
+	 */
+	@Deprecated()
+	public interface Handler extends HgChangesetHandler {
 	}
 	
 	/**
-	 * When {@link HgLogCommand} is executed against file, handler passed to {@link HgLogCommand#execute(Handler)} may optionally
+	 * When {@link HgLogCommand} is executed against file, handler passed to {@link HgLogCommand#execute(HgChangesetHandler)} may optionally
 	 * implement this interface to get information about file renames. Method {@link #copy(FileRevision, FileRevision)} would
 	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #next(HgChangeset)}.
 	 * 
@@ -278,12 +278,12 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	 * @author Artem Tikhomirov
 	 * @author TMate Software Ltd.
 	 */
-	public interface FileHistoryHandler extends Handler {
+	public interface FileHistoryHandler extends HgChangesetHandler {
 		// XXX perhaps, should distinguish copy from rename? And what about merged revisions and following them?
 		void copy(FileRevision from, FileRevision to);
 	}
 	
-	public static class CollectHandler implements Handler {
+	public static class CollectHandler implements HgChangesetHandler {
 		private final List<HgChangeset> result = new LinkedList<HgChangeset>();
 
 		public List<HgChangeset> getChanges() {

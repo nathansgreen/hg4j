@@ -101,7 +101,7 @@ public class HgOutgoingCommand {
 	 * 
 	 * @param handler delegate to process changes
 	 */
-	public void executeFull(final HgLogCommand.Handler handler) throws HgException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}

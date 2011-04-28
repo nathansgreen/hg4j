@@ -20,15 +20,15 @@ Committed:
 
 * hg cat
   + CatCommand. File, revision. 
-  - Cat command line client
+  + Cat command line client
 
 + hgignore
   + glob
   + pattern
 
 + Tests with JUnit
-  - allow to specify repo location (system property)
-  - keep a .zip of repo along with tests 
+  + allow to specify repo location (system property)
+  + keep a .zip of repo along with tests 
 
 * tags
   * Tags are read and can be queried (cmdline Log does)
@@ -43,7 +43,7 @@ Committed:
 
 * API
   - CommandContext
-  - Data access - not bytes, but ByteChannel
+  + Data access - not bytes, but ByteChannel
   - HgRepository constants (TIP, BAD, WC) to HgRevisions enum
 
 Proposed:
@@ -52,15 +52,29 @@ Proposed:
 - LogCommand.match() to specify pattern, no selected file()s only?
 * RepositoryFacade and CommandContext  
 - hgignore: read extra ignore files from config file (ui.ignore)
+- Revlog iteration in reversed order (either support internally in RevlogStream or externally, windowed access)
 
 
 Read-only support, version 1.1
 ==============================
 Committed:
-* http, https and ssh connections:
+* Network protocol/connections:
+  + http
+  * https (respects no certificates)
+  - ssh
   
 * incoming
+  + 'lite' (revisions only)
+  + 'full' (complete changelog)
+  * branches (no tests) 
+  - subrepositories
 
 * outgoing
+  + 'lite' (revisions only)
+  + 'full' (complete changelog access) 
+  * branches (no tests) 
+  - subrepositories
 
-- clone remote repo
+* clone remote repo
+  + into new or empty directory
+  - populate working copy

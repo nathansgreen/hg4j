@@ -65,6 +65,9 @@ changes repository, hence manifest should update nodeids of the files it lists, 
 Commands to get CommandContext where they may share various caches (e.g. StatusCollector)
 Perhaps, abstract classes for all Inspectors (i.e. StatusCollector.Inspector) for users to use as base classes to protect from change?
 
+-cancellation and progress support
+-timestamp check for revlog to recognize external changes
+
 >>>> Effective file read/data access
 ReadOperation, Revlog does: repo.getFileSystem().run(this.file, new ReadOperation(), long start=0, long end = -1)
 ReadOperation gets buffer (of whatever size, as decided by FS impl), parses it and then  reports if needs more data.
