@@ -67,6 +67,9 @@ Perhaps, abstract classes for all Inspectors (i.e. StatusCollector.Inspector) fo
 
 -cancellation and progress support
 -timestamp check for revlog to recognize external changes
+-HgDate or any other better access to time info
+-(low) RepositoryComparator#calculateMissingBranches may query branches for the same head more than once 
+	(when there are few heads that end up with common nodes). e.g hg4j revision 7 against remote hg4j revision 206 
 
 >>>> Effective file read/data access
 ReadOperation, Revlog does: repo.getFileSystem().run(this.file, new ReadOperation(), long start=0, long end = -1)

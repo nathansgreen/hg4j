@@ -249,11 +249,26 @@ public class RepositoryComparator {
 					boolean hasP1 = !NULL.equals(rb.p1), hasP2 = !NULL.equals(rb.p2);  
 					if (hasP1 && !localRepo.knownNode(rb.p1)) {
 						toQuery.add(rb.p1);
-						head2chain.put(rb.p1, chainElement.p1 = new BranchChain(rb.p1));
+						// we might have seen parent node already, and recorded it as a branch chain
+						// we shall reuse existing BC to get it completely initializer (head2chain map
+						// on second put with the same key would leave first BC uninitialized.
+						
+						// It seems there's no reason to be affraid (XXX although shall double-check)
+						// that BC's chain would get corrupt (its p1 and p2 fields assigned twice with different values)
+						// as parents are always the same (and likely, BC that is common would be the last unknown)
+						BranchChain bc = head2chain.get(rb.p1);
+						if (bc == null) {
+							head2chain.put(rb.p1, bc = new BranchChain(rb.p1));
+						}
+						chainElement.p2 = bc;
 					}
 					if (hasP2 && !localRepo.knownNode(rb.p2)) {
 						toQuery.add(rb.p2);
-						head2chain.put(rb.p2, chainElement.p2 = new BranchChain(rb.p2));
+						BranchChain bc = head2chain.get(rb.p2);
+						if (bc == null) {
+							head2chain.put(rb.p2, bc = new BranchChain(rb.p2));
+						}
+						chainElement.p2 = bc;
 					}
 					if (!hasP1 && !hasP2) {
 						// special case, when we do incoming against blank repository, chainElement.branchRoot
