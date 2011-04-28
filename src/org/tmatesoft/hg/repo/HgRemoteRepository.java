@@ -77,10 +77,14 @@ public class HgRemoteRepository {
 				sslContext = SSLContext.getInstance("SSL");
 				class TrustEveryone implements X509TrustManager {
 					public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-						System.out.println("checkClientTrusted " + authType);
+						if (debug) {
+							System.out.println("checkClientTrusted:" + authType);
+						}
 					}
 					public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-						System.out.println("checkServerTrusted" + authType);
+						if (debug) {
+							System.out.println("checkServerTrusted:" + authType);
+						}
 					}
 					public X509Certificate[] getAcceptedIssuers() {
 						return new X509Certificate[0];

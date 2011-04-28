@@ -307,8 +307,8 @@ public class RepositoryComparator {
 			}
 		}
 		if (debug) {
+			System.out.println("calculateMissingBranches:");
 			for (BranchChain bc : branches2load) {
-				System.out.println("calculateMissingBranches:");
 				bc.dump();
 			}
 		}
@@ -456,7 +456,9 @@ public class RepositoryComparator {
 						// returned sequence of length 1 means we used element from [head-2] as root
 						int numberOfElementsExcludingRootAndHead = de.headIndex + 1;
 						rootIndex = numberOfElementsExcludingRootAndHead + 1;
-						System.out.printf("On query %d found out exact number of missing elements: %d\n", totalQueries, numberOfElementsExcludingRootAndHead);
+						if (debug) {
+							System.out.printf("On query %d found out exact number of missing elements: %d\n", totalQueries, numberOfElementsExcludingRootAndHead);
+						}
 					}
 					datas.add(de); // queue up to record result and construct further requests
 				}
@@ -479,7 +481,9 @@ public class RepositoryComparator {
 			}
 			fromRootToHead.addFirst(n); // reverse order
 		}
-		System.out.println("Total queries:" + totalQueries);
+		if (debug) {
+			System.out.println("Total queries:" + totalQueries);
+		}
 		if (!resultOk) {
 			throw new HgBadStateException("See console for details"); // FIXME
 		}
