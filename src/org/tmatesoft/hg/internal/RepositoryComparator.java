@@ -260,7 +260,7 @@ public class RepositoryComparator {
 						if (bc == null) {
 							head2chain.put(rb.p1, bc = new BranchChain(rb.p1));
 						}
-						chainElement.p2 = bc;
+						chainElement.p1 = bc;
 					}
 					if (hasP2 && !localRepo.knownNode(rb.p2)) {
 						toQuery.add(rb.p2);
@@ -373,9 +373,13 @@ public class RepositoryComparator {
 		private void internalDump(String prefix) {
 			if (p1 != null) {
 				System.out.println(prefix + p1.toString());
+			} else if (p2 != null) {
+				System.out.println(prefix + "NONE?!");
 			}
 			if (p2 != null) {
 				System.out.println(prefix + p2.toString());
+			} else if (p1 != null) {
+				System.out.println(prefix + "NONE?!");
 			}
 			prefix += "  ";
 			if (p1 != null) {
