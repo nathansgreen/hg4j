@@ -36,7 +36,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 	// params
 	private boolean complete = false; // roughly --debug
 	private boolean reverseOrder = false;
-	private boolean verbose = true; // roughly -v
+	private boolean verbose = false; // roughly -v
 	// own
 	private LinkedList<String> l = new LinkedList<String>();
 	private final HgRepository repo;

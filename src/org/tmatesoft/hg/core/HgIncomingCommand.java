@@ -132,16 +132,16 @@ public class HgIncomingCommand {
 		HgBundle changegroup = remoteRepo.getChanges(common);
 		try {
 			changegroup.changes(localRepo, new HgChangelog.Inspector() {
-				private int localIndex = -1; // in case we start with empty repo and localIndex would not get initialized in regular way
+				private int localIndex;
 				private final HgChangelog.ParentWalker parentHelper;
 				private final ChangesetTransformer transformer;
-				private final HgChangelog changelog;
-				
+			
 				{
 					transformer = new ChangesetTransformer(localRepo, handler, getParentHelper());
 					transformer.limitBranches(branches);
 					parentHelper = getParentHelper();
-					changelog = localRepo.getChangelog();
+					// new revisions, if any, would be added after all existing, and would get numbered started with last+1
+					localIndex = localRepo.getChangelog().getRevisionCount();
 				}
 				
 				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
@@ -149,10 +149,9 @@ public class HgIncomingCommand {
 						if (!common.contains(nodeid)) {
 							throw new HgBadStateException("Bundle shall not report known nodes other than roots we've supplied");
 						}
-						localIndex = changelog.getLocalRevision(nodeid);
 						return;
 					}
-					transformer.next(++localIndex, nodeid, cset);
+					transformer.next(localIndex++, nodeid, cset);
 				}
 			});
 		} catch (IOException ex) {

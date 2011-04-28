@@ -63,6 +63,7 @@ public class Incoming {
 		List<Nodeid> missing = cmd.executeLite(null);
 		Collections.reverse(missing); // useful to test output, from newer to older
 		Outgoing.dump("Nodes to fetch:", missing);
+		System.out.printf("Total: %d\n\n", missing.size());
 		//
 		// Complete
 		final ChangesetDumpHandler h = new ChangesetDumpHandler(hgRepo.getRepository());
