@@ -47,6 +47,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  */
 public class RepositoryComparator {
 
+	private final boolean debug = Boolean.parseBoolean(System.getProperty("hg4j.remote.debug"));
 	private final HgChangelog.ParentWalker localRepo;
 	private final HgRemoteRepository remoteRepo;
 	private List<Nodeid> common;
@@ -305,6 +306,12 @@ public class RepositoryComparator {
 				throw new HgBadStateException(String.format("Can't narrow down branch [%s, %s]", rb.head.shortNotation(), rb.root.shortNotation()));
 			}
 		}
+		if (debug) {
+			for (BranchChain bc : branches2load) {
+				System.out.println("calculateMissingBranches:");
+				bc.dump();
+			}
+		}
 		return branches2load;
 	}
 
@@ -343,7 +350,7 @@ public class RepositoryComparator {
 			return String.format("BranchChain [%s, %s]", branchRoot, branchHead);
 		}
 
-		public void dump() {
+		void dump() {
 			System.out.println(toString());
 			internalDump("  ");
 		}

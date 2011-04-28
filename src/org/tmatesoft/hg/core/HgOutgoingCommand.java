@@ -36,6 +36,7 @@ public class HgOutgoingCommand {
 
 	private final HgRepository localRepo;
 	private HgRemoteRepository remoteRepo;
+	@SuppressWarnings("unused")
 	private boolean includeSubrepo;
 	private RepositoryComparator comparator;
 	private HgChangelog.ParentWalker parentHelper;

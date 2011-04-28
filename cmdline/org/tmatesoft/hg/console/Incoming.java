@@ -22,27 +22,19 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 
-import org.tmatesoft.hg.console.Outgoing.ChangesetFormatter;
-import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgIncomingCommand;
+import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.RepositoryComparator;
-import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
-import org.tmatesoft.hg.repo.HgBundle;
-import org.tmatesoft.hg.repo.HgChangelog;
-import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
-import org.tmatesoft.hg.repo.HgRepository;
 
 
 /**
- * WORK IN PROGRESS, DO NOT USE
- * hg incoming counterpart
+ * <em>hg incoming</em> counterpart
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -55,66 +47,35 @@ public class Incoming {
 			return;
 		}
 		Options cmdLineOpts = Options.parse(args);
-		final HgRepository hgRepo = cmdLineOpts.findRepository();
-		if (hgRepo.isInvalid()) {
-			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
+		HgRepoFacade hgRepo = new HgRepoFacade();
+		if (!hgRepo.init(cmdLineOpts.findRepository())) {
+			System.err.printf("Can't find repository in: %s\n", hgRepo.getRepository().getLocation());
 			return;
 		}
-		HgRemoteRepository hgRemote = new HgLookup().detectRemote(cmdLineOpts.getSingle(""), hgRepo);
+		HgRemoteRepository hgRemote = new HgLookup().detectRemote(cmdLineOpts.getSingle(""), hgRepo.getRepository());
 		if (hgRemote.isInvalid()) {
 			System.err.printf("Remote repository %s is not valid", hgRemote.getLocation());
 			return;
 		}
+		HgIncomingCommand cmd = hgRepo.createIncomingCommand();
+		cmd.against(hgRemote);
 		//
-		// in fact, all we need from changelog is set of all nodeids. However, since ParentWalker reuses same Nodeids, it's not too expensive
-		// to reuse it here, XXX although later this may need to be refactored
-		final HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
-		pw.init();
-		//
-		RepositoryComparator repoCompare = new RepositoryComparator(pw, hgRemote);
-		repoCompare.compare(null);
-		List<BranchChain> missingBranches = repoCompare.calculateMissingBranches();
-		final LinkedHashSet<Nodeid> common = new LinkedHashSet<Nodeid>();
-		// XXX common can be obtained from repoCompare, but at the moment it would almost duplicate work of calculateMissingBranches
-		// once I refactor latter, common shall be taken from repoCompare.
-		for (BranchChain bc : missingBranches) {
-			bc.dump();
-			common.add(bc.branchRoot); // common known node
-			List<Nodeid> missing = repoCompare.visitBranches(bc);
-			assert bc.branchRoot.equals(missing.get(0)); 
-			missing.remove(0);
-			Collections.reverse(missing); // useful to test output, from newer to older
-			System.out.println("Nodes to fetch in this branch:");
-			for (Nodeid n : missing) {
-				if (pw.knownNode(n)) {
-					System.out.println("Erroneous to fetch:" + n);
-				} else {
-					System.out.println(n);
-				}
-			}
-			System.out.println("Branch done");
-		}
+		List<Nodeid> missing = cmd.executeLite(null);
+		Collections.reverse(missing); // useful to test output, from newer to older
+		Outgoing.dump("Nodes to fetch:", missing);
 		//
 		// Complete
-		HgBundle changegroup = hgRemote.getChanges(new LinkedList<Nodeid>(common));
-		changegroup.changes(hgRepo, new HgChangelog.Inspector() {
-			private int localIndex;
-			private final ChangesetFormatter formatter = new ChangesetFormatter();
-			
-			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-				if (pw.knownNode(nodeid)) {
-					if (!common.contains(nodeid)) {
-						throw new HgBadStateException("Bundle shall not report known nodes other than roots we've supplied");
-					}
-					localIndex = hgRepo.getChangelog().getLocalRevision(nodeid);
-					return;
-				}
-				System.out.println(formatter.simple(++localIndex, nodeid, cset));
-			}
-		});
+		final ChangesetDumpHandler h = new ChangesetDumpHandler(hgRepo.getRepository());
+		h.complete(false); // this option looks up index of parent revision, done via repo.changelog (which doesn't have any of these new revisions)
+		// this can be fixed by tracking all nodeid->revision idx inside ChangesetDumpHandler, and refer to repo.changelog only when that mapping didn't work
+		h.verbose(cmdLineOpts.getBoolean("-v", "--verbose"));
+		cmd.executeFull(h);
 	}
 	
 
+	/*
+	 * This is for investigation purposes only
+	 */
 	private static class SequenceConstructor {
 
 		private int[] between(int root, int head) {
