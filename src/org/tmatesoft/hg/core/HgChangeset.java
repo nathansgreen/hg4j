@@ -95,8 +95,12 @@ public class HgChangeset implements Cloneable {
 	public String getBranch() {
 		return changeset.branch();
 	}
-	public String getDate() {
-		return changeset.dateString();
+
+	/**
+	 * @return used to be String, now {@link HgDate}, use {@link HgDate#toString()} to get same result as before 
+	 */
+	public HgDate getDate() {
+		return new HgDate(changeset.date().getTime(), changeset.timezone());
 	}
 	public Nodeid getManifestRevision() {
 		return changeset.manifest();

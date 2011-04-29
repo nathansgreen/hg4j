@@ -109,7 +109,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 			int mx = repo.getManifest().getLocalRevision(cset.getManifestRevision());
 			f.format("parent:      %d:%s\nparent:      %d:%s\nmanifest:    %d:%s\n", p1x, p1, p2x, p2, mx, cset.getManifestRevision());
 		}
-		f.format("user:        %s\ndate:        %s\n", cset.getUser(), cset.getDate());
+		f.format("user:        %s\ndate:        %s\n", cset.getUser(), cset.getDate().toString());
 		if (!complete && verbose) {
 			final List<Path> files = cset.getAffectedFiles();
 			sb.append("files:      ");

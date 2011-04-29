@@ -140,16 +140,23 @@ public class HgChangelog extends Revlog {
 		public Date date() {
 			return time;
 		}
+		
+		/**
+		 * @return time zone value, as is, positive for Western Hemisphere.
+		 */
+		public int timezone() {
+			return timezone;
+		}
 
 		public String dateString() {
 			// XXX keep once formatted? Perhaps, there's faster way to set up calendar/time zone?
 			StringBuilder sb = new StringBuilder(30);
 			Formatter f = new Formatter(sb, Locale.US);
-			TimeZone tz = TimeZone.getTimeZone("GMT");
+			TimeZone tz = TimeZone.getTimeZone(TimeZone.getAvailableIDs(timezone * 1000)[0]);
 			// apparently timezone field records number of seconds time differs from UTC,
 			// i.e. value to substract from time to get UTC time. Calendar seems to add
 			// timezone offset to UTC, instead, hence sign change.
-			tz.setRawOffset(timezone * -1000);
+//			tz.setRawOffset(timezone * -1000);
 			Calendar c = Calendar.getInstance(tz, Locale.US);
 			c.setTime(time);
 			f.format("%ta %<tb %<td %<tH:%<tM:%<tS %<tY %<tz", c);
