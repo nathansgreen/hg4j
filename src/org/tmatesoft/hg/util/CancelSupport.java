@@ -39,7 +39,7 @@ public interface CancelSupport {
 		/**
 		 * Obtain non-null cancel support object.
 		 * 
-		 * @param target any object (or <code>null</code>) that might have cancel support
+		 * @param target any object (or <code>null</code>) that might have cancel support. For <code>null</code>, returns an instance than never cancels.
 		 * @return target if it's capable checking cancellation status or no-op implementation that never cancels.
 				 */
 		public static CancelSupport get(Object target) {
@@ -57,5 +57,9 @@ public interface CancelSupport {
 				}
 			};
 		}
+	}
+
+	interface Target<T> {
+		T set(CancelSupport cs);
 	}
 }

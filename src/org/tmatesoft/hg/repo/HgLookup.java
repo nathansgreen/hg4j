@@ -70,7 +70,7 @@ public class HgLookup {
 		}
 	}
 	
-	public HgBundle loadBundle(File location) throws HgException {
+	public HgBundle loadBundle(File location) /*XXX perhaps, HgDataStreamException or anything like HgMalformedDataException? Or RuntimeEx is better?*/{
 		if (location == null || !location.canRead()) {
 			throw new IllegalArgumentException();
 		}

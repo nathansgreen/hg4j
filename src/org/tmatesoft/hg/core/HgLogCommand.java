@@ -27,13 +27,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 
 /**
@@ -48,7 +49,7 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgLogCommand implements HgChangelog.Inspector {
+public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgChangelog.Inspector {
 
 	private final HgRepository repo;
 	private Set<String> users;
@@ -164,9 +165,17 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	/**
 	 * Similar to {@link #execute(org.tmatesoft.hg.repo.RawChangeset.Inspector)}, collects and return result as a list.
 	 */
-	public List<HgChangeset> execute() throws HgException {
+	public List<HgChangeset> execute() throws HgDataStreamException {
 		CollectHandler collector = new CollectHandler();
-		execute(collector);
+		try {
+			execute(collector);
+		} catch (HgCallbackTargetException ex) {
+			// can't happen as long as our CollectHandler doesn't throw any exception
+			throw new HgBadStateException(ex.getCause());
+		} catch (CancelledException ex) {
+			// can't happen, see above
+			throw new HgBadStateException(ex);
+		}
 		return collector.getChanges();
 	}
 
@@ -176,13 +185,14 @@ public class HgLogCommand implements HgChangelog.Inspector {
 	 * @throws IllegalArgumentException when inspector argument is null
 	 * @throws ConcurrentModificationException if this log command instance is already running
 	 */
-	public void execute(HgChangesetHandler handler) throws HgException {
+	public void execute(HgChangesetHandler handler) throws HgDataStreamException, HgCallbackTargetException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
 		if (csetTransform != null) {
 			throw new ConcurrentModificationException();
 		}
+		final ProgressSupport progressHelper = getProgressSupport(handler);
 		try {
 			count = 0;
 			HgChangelog.ParentWalker pw = parentHelper; // leave it uninitialized unless we iterate whole repo
@@ -191,19 +201,27 @@ public class HgLogCommand implements HgChangelog.Inspector {
 			}
 			// ChangesetTransfrom creates a blank PathPool, and #file(String, boolean) above 
 			// may utilize it as well. CommandContext? How about StatusCollector there as well?
-			csetTransform = new ChangesetTransformer(repo, handler, pw);
+			csetTransform = new ChangesetTransformer(repo, handler, pw, progressHelper, getCancelSupport(handler));
 			if (file == null) {
+				progressHelper.start(endRev - startRev + 1);
 				repo.getChangelog().range(startRev, endRev, this);
+				csetTransform.checkFailure();
 			} else {
+				progressHelper.start(-1/*XXX enum const, or a dedicated method startUnspecified(). How about startAtLeast(int)?*/);
 				HgDataFile fileNode = repo.getFileNode(file);
 				fileNode.history(startRev, endRev, this);
+				csetTransform.checkFailure();
 				if (fileNode.isCopy()) {
 					// even if we do not follow history, report file rename
 					do {
 						if (handler instanceof FileHistoryHandler) {
 							FileRevision src = new FileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
 							FileRevision dst = new FileRevision(repo, fileNode.getRevision(0), fileNode.getPath());
-							((FileHistoryHandler) handler).copy(src, dst);
+							try {
+								((FileHistoryHandler) handler).copy(src, dst);
+							} catch (RuntimeException ex) {
+								throw new HgCallbackTargetException(ex).setRevision(fileNode.getCopySourceRevision()).setFileName(fileNode.getCopySourceName());
+							}
 						}
 						if (limit > 0 && count >= limit) {
 							// if limit reach, follow is useless.
@@ -212,12 +230,14 @@ public class HgLogCommand implements HgChangelog.Inspector {
 						if (followHistory) {
 							fileNode = repo.getFileNode(fileNode.getCopySourceName());
 							fileNode.history(this);
+							csetTransform.checkFailure();
 						}
 					} while (followHistory && fileNode.isCopy());
 				}
 			}
 		} finally {
 			csetTransform = null;
+			progressHelper.done();
 		}
 	}
 

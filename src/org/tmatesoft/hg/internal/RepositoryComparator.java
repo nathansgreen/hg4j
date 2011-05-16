@@ -31,6 +31,7 @@ import java.util.Set;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
@@ -57,9 +58,7 @@ public class RepositoryComparator {
 		remoteRepo = hgRemote;
 	}
 	
-	public RepositoryComparator compare(Object context) throws HgException, CancelledException {
-		ProgressSupport progressSupport = ProgressSupport.Factory.get(context);
-		CancelSupport cancelSupport = CancelSupport.Factory.get(context);
+	public RepositoryComparator compare(ProgressSupport progressSupport, CancelSupport cancelSupport) throws HgRemoteConnectionException, CancelledException {
 		cancelSupport.checkCancelled();
 		progressSupport.start(10);
 		common = Collections.unmodifiableList(findCommonWithRemote());
@@ -126,7 +125,7 @@ public class RepositoryComparator {
 		changelog.range(earliestRevision+1, changelog.getLastRevision(), inspector);
 	}
 
-	private List<Nodeid> findCommonWithRemote() throws HgException {
+	private List<Nodeid> findCommonWithRemote() throws HgRemoteConnectionException {
 		List<Nodeid> remoteHeads = remoteRepo.heads();
 		LinkedList<Nodeid> resultCommon = new LinkedList<Nodeid>(); // these remotes are known in local
 		LinkedList<Nodeid> toQuery = new LinkedList<Nodeid>(); // these need further queries to find common
@@ -208,7 +207,7 @@ public class RepositoryComparator {
 	}
 
 	// somewhat similar to Outgoing.findCommonWithRemote() 
-	public List<BranchChain> calculateMissingBranches() throws HgException {
+	public List<BranchChain> calculateMissingBranches() throws HgRemoteConnectionException {
 		List<Nodeid> remoteHeads = remoteRepo.heads();
 		LinkedList<Nodeid> common = new LinkedList<Nodeid>(); // these remotes are known in local
 		LinkedList<Nodeid> toQuery = new LinkedList<Nodeid>(); // these need further queries to find common

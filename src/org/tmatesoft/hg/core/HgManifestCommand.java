@@ -39,7 +39,7 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgManifestCommand {
+public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	
 	private final HgRepository repo;
 	private Path.Matcher matcher;

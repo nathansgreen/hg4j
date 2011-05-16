@@ -52,7 +52,7 @@ public class Outgoing {
 		cmd.against(hgRemote);
 		
 		// find all local children of commonKnown
-		List<Nodeid> result = cmd.executeLite(null);
+		List<Nodeid> result = cmd.executeLite();
 		dump("Lite", result);
 		//
 		//

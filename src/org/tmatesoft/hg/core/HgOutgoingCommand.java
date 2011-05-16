@@ -24,7 +24,9 @@ import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Command to find out changes made in a local repository and missing at remote repository. 
@@ -32,7 +34,7 @@ import org.tmatesoft.hg.util.CancelledException;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgOutgoingCommand {
+public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 
 	private final HgRepository localRepo;
 	private HgRemoteRepository remoteRepo;
@@ -90,11 +92,16 @@ public class HgOutgoingCommand {
 	 * Lightweight check for outgoing changes. 
 	 * Reported changes are from any branch (limits set by {@link #branch(String)} are not taken into account.
 	 * 
-	 * @param context
 	 * @return list on local nodes known to be missing at remote server 
 	 */
-	public List<Nodeid> executeLite(Object context) throws HgException, CancelledException {
-		return getComparator(context).getLocalOnlyRevisions();
+	public List<Nodeid> executeLite() throws HgRemoteConnectionException, CancelledException {
+		final ProgressSupport ps = getProgressSupport(null);
+		try {
+			ps.start(10);
+			return getComparator(new ProgressSupport.Sub(ps, 5), getCancelSupport(null)).getLocalOnlyRevisions();
+		} finally {
+			ps.done();
+		}
 	}
 
 	/**
@@ -102,22 +109,30 @@ public class HgOutgoingCommand {
 	 * 
 	 * @param handler delegate to process changes
 	 */
-	public void executeFull(final HgChangesetHandler handler) throws HgException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgCallbackTargetException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
-		ChangesetTransformer inspector = new ChangesetTransformer(localRepo, handler, getParentHelper());
-		inspector.limitBranches(branches);
-		getComparator(handler).visitLocalOnlyRevisions(inspector);
+		final ProgressSupport ps = getProgressSupport(handler);
+		final CancelSupport cs = getCancelSupport(handler);
+		try {
+			ps.start(-1);
+			ChangesetTransformer inspector = new ChangesetTransformer(localRepo, handler, getParentHelper(), ps, cs);
+			inspector.limitBranches(branches);
+			getComparator(new ProgressSupport.Sub(ps, 1), cs).visitLocalOnlyRevisions(inspector);
+			inspector.checkFailure();
+		} finally {
+			ps.done();
+		}
 	}
 
-	private RepositoryComparator getComparator(Object context) throws HgException, CancelledException {
+	private RepositoryComparator getComparator(ProgressSupport ps, CancelSupport cs) throws HgRemoteConnectionException, CancelledException {
 		if (remoteRepo == null) {
 			throw new IllegalArgumentException("Shall specify remote repository to compare against");
 		}
 		if (comparator == null) {
 			comparator = new RepositoryComparator(getParentHelper(), remoteRepo);
-			comparator.compare(context);
+			comparator.compare(ps, cs);
 		}
 		return comparator;
 	}

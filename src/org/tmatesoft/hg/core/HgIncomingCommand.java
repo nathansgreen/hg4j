@@ -34,6 +34,7 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Command to find out changes available in a remote repository, missing locally.
@@ -41,7 +42,7 @@ import org.tmatesoft.hg.util.CancelledException;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgIncomingCommand {
+public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 
 	private final HgRepository localRepo;
 	private HgRemoteRepository remoteRepo;
@@ -98,15 +99,14 @@ public class HgIncomingCommand {
 	 * Lightweight check for incoming changes, gives only list of revisions to pull.
 	 * Reported changes are from any branch (limits set by {@link #branch(String)} are not taken into account. 
 	 *   
-	 * @param context anything hg4j can use to get progress and/or cancel support
 	 * @return list of nodes present at remote and missing locally
 	 * @throws HgException
 	 * @throws CancelledException
 	 */
-	public List<Nodeid> executeLite(Object context) throws HgException, CancelledException {
+	public List<Nodeid> executeLite() throws HgException, CancelledException {
 		LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
-		RepositoryComparator repoCompare = getComparator(context);
-		for (BranchChain bc : getMissingBranches(context)) {
+		RepositoryComparator repoCompare = getComparator();
+		for (BranchChain bc : getMissingBranches()) {
 			List<Nodeid> missing = repoCompare.visitBranches(bc);
 			HashSet<Nodeid> common = new HashSet<Nodeid>(); // ordering is irrelevant  
 			repoCompare.collectKnownRoots(bc, common);
@@ -124,21 +124,21 @@ public class HgIncomingCommand {
 	 * @throws HgException
 	 * @throws CancelledException
 	 */
-	public void executeFull(final HgChangesetHandler handler) throws HgException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgException/*FIXME specific type*/, HgCallbackTargetException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
-		final List<Nodeid> common = getCommon(handler);
+		final List<Nodeid> common = getCommon();
 		HgBundle changegroup = remoteRepo.getChanges(common);
+		final ProgressSupport ps = getProgressSupport(handler);
 		try {
+			final ChangesetTransformer transformer = new ChangesetTransformer(localRepo, handler, getParentHelper(), ps, getCancelSupport(handler));
+			transformer.limitBranches(branches);
 			changegroup.changes(localRepo, new HgChangelog.Inspector() {
 				private int localIndex;
 				private final HgChangelog.ParentWalker parentHelper;
-				private final ChangesetTransformer transformer;
 			
 				{
-					transformer = new ChangesetTransformer(localRepo, handler, getParentHelper());
-					transformer.limitBranches(branches);
 					parentHelper = getParentHelper();
 					// new revisions, if any, would be added after all existing, and would get numbered started with last+1
 					localIndex = localRepo.getChangelog().getRevisionCount();
@@ -154,14 +154,17 @@ public class HgIncomingCommand {
 					transformer.next(localIndex++, nodeid, cset);
 				}
 			});
+			transformer.checkFailure();
 		} catch (IOException ex) {
 			throw new HgException(ex);
+		} finally {
+			ps.done();
 		}
 	}
 
-	private RepositoryComparator getComparator(Object context) throws HgException, CancelledException {
+	private RepositoryComparator getComparator() throws CancelledException {
 		if (remoteRepo == null) {
-			throw new HgBadArgumentException("Shall specify remote repository to compare against", null);
+			throw new IllegalArgumentException("Shall specify remote repository to compare against", null);
 		}
 		if (comparator == null) {
 			comparator = new RepositoryComparator(getParentHelper(), remoteRepo);
@@ -178,20 +181,20 @@ public class HgIncomingCommand {
 		return parentHelper;
 	}
 	
-	private List<BranchChain> getMissingBranches(Object context) throws HgException, CancelledException {
+	private List<BranchChain> getMissingBranches() throws HgRemoteConnectionException, CancelledException {
 		if (missingBranches == null) {
-			missingBranches = getComparator(context).calculateMissingBranches();
+			missingBranches = getComparator().calculateMissingBranches();
 		}
 		return missingBranches;
 	}
 
-	private List<Nodeid> getCommon(Object context) throws HgException, CancelledException {
+	private List<Nodeid> getCommon() throws HgRemoteConnectionException, CancelledException {
 //		return getComparator(context).getCommon();
 		final LinkedHashSet<Nodeid> common = new LinkedHashSet<Nodeid>();
 		// XXX common can be obtained from repoCompare, but at the moment it would almost duplicate work of calculateMissingBranches
 		// once I refactor latter, common shall be taken from repoCompare.
-		RepositoryComparator repoCompare = getComparator(context);
-		for (BranchChain bc : getMissingBranches(context)) {
+		RepositoryComparator repoCompare = getComparator();
+		for (BranchChain bc : getMissingBranches()) {
 			repoCompare.collectKnownRoots(bc, common);
 		}
 		return new LinkedList<Nodeid>(common);

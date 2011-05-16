@@ -92,7 +92,7 @@ public class TestIncoming {
 		ExecHelper eh = new ExecHelper(outParser, new File(localRepo.getLocation()));
 		cmd.executeFull(collector);
 		eh.run("hg", "incoming", "--debug", hgRemote.getLocation());
-		List<Nodeid> liteResult = cmd.executeLite(null);
+		List<Nodeid> liteResult = cmd.executeLite();
 		report(collector, outParser, liteResult, errorCollector);
 		return liteResult;
 	}

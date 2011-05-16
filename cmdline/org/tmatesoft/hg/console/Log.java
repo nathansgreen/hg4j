@@ -22,6 +22,8 @@ import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 
 /**
@@ -39,6 +41,11 @@ public class Log {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
 			return;
 		}
+		//
+		// in fact, neither cancel nor progress of any use, need them just to check comamnd API
+		final CancelSupport noCancel = CancelSupport.Factory.get(null);
+		final ProgressSupport noProgress = ProgressSupport.Factory.get(null);
+		//
 		final Dump dump = new Dump(hgRepo);
 		dump.complete(cmdLineOpts.getBoolean("--debug"));
 		dump.verbose(cmdLineOpts.getBoolean("-v", "--verbose"));
@@ -55,6 +62,7 @@ public class Log {
 		if (limit != -1) {
 			cmd.limit(limit);
 		}
+		cmd.set(noCancel).set(noProgress);
 		List<String> files = cmdLineOpts.getList("");
 		final long start = System.currentTimeMillis();
 		if (files.isEmpty()) {

@@ -21,6 +21,7 @@ import static org.tmatesoft.hg.repo.HgInternals.wrongLocalRevision;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.util.ConcurrentModificationException;
+import java.util.concurrent.CancellationException;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -36,7 +37,7 @@ import org.tmatesoft.hg.util.Path.Matcher;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgStatusCommand {
+public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	private final HgRepository repo;
 
 	private int startRevision = TIP;
@@ -161,7 +162,7 @@ public class HgStatusCommand {
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
 	 */
-	public void execute(Handler statusHandler) {
+	public void execute(Handler statusHandler) throws CancellationException, HgCallbackTargetException {
 		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}

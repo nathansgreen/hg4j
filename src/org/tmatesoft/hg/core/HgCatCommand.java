@@ -35,7 +35,7 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgCatCommand {
+public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 
 	private final HgRepository repo;
 	private Path file;
@@ -110,7 +110,7 @@ public class HgCatCommand {
 		}
 		HgDataFile dataFile = repo.getFileNode(file);
 		if (!dataFile.exists()) {
-			throw new HgDataStreamException(file.toString(), new FileNotFoundException(file.toString()));
+			throw new HgDataStreamException(file, new FileNotFoundException(file.toString()));
 		}
 		int revToExtract;
 		if (revision != null) {

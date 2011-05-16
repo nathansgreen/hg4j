@@ -22,11 +22,15 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Bridges {@link HgChangelog.RawChangeset} with high-level {@link HgChangeset} API
+ * FIXME move to .internal
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -34,11 +38,19 @@ import org.tmatesoft.hg.util.PathRewrite;
 /*package-local*/ class ChangesetTransformer implements HgChangelog.Inspector {
 	private final HgChangesetHandler handler;
 	private final HgChangeset changeset;
+	private final ProgressSupport progressHelper;
+	private final CancelSupport cancelHelper;
 	private Set<String> branches;
+	private HgCallbackTargetException failure;
+	private CancelledException cancellation;
 
 	// repo and delegate can't be null, parent walker can
-	public ChangesetTransformer(HgRepository hgRepo, HgChangesetHandler delegate, HgChangelog.ParentWalker pw) {
+	// ps and cs can't be null
+	public ChangesetTransformer(HgRepository hgRepo, HgChangesetHandler delegate, HgChangelog.ParentWalker pw, ProgressSupport ps, CancelSupport cs) {
 		if (hgRepo == null || delegate == null) {
+			throw new IllegalArgumentException();
+		}
+		if (ps == null || cs == null) {
 			throw new IllegalArgumentException();
 		}
 		HgStatusCollector statusCollector = new HgStatusCollector(hgRepo);
@@ -48,15 +60,41 @@ import org.tmatesoft.hg.util.PathRewrite;
 		changeset = new HgChangeset(statusCollector, pp);
 		changeset.setParentHelper(pw);
 		handler = delegate;
+		cancelHelper = cs;
+		progressHelper = ps;
 	}
 	
 	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+		if (failure != null || cancellation != null) {
+			return; // FIXME need a better way to stop iterating revlog 
+		}
 		if (branches != null && !branches.contains(cset.branch())) {
 			return;
 		}
 
 		changeset.init(revisionNumber, nodeid, cset);
-		handler.next(changeset);
+		try {
+			handler.next(changeset);
+			progressHelper.worked(1);
+			cancelHelper.checkCancelled();
+		} catch (RuntimeException ex) {
+			failure = new HgCallbackTargetException(ex).setRevision(nodeid).setRevisionNumber(revisionNumber);
+		} catch (CancelledException ex) {
+			cancellation = ex;
+		}
+	}
+	
+	public void checkFailure() throws HgCallbackTargetException, CancelledException {
+		if (failure != null) {
+			HgCallbackTargetException toThrow = failure;
+			failure = null; // just in (otherwise unexpected) case this instance would get reused
+			throw toThrow;
+		}
+		if (cancellation != null) {
+			CancelledException toThrow = cancellation;
+			cancellation = null;
+			throw toThrow;
+		}
 	}
 	
 	public void limitBranches(Set<String> branches) {

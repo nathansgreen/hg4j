@@ -48,7 +48,7 @@ import javax.net.ssl.X509TrustManager;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 
 /**
@@ -115,7 +115,7 @@ public class HgRemoteRepository {
 		}
 	}
 	
-	public boolean isInvalid() throws HgException {
+	public boolean isInvalid() throws HgRemoteConnectionException {
 		// say hello to server, check response
 		if (Boolean.FALSE.booleanValue()) {
 			throw HgRepository.notImplemented();
@@ -137,7 +137,7 @@ public class HgRemoteRepository {
 		}
 	}
 
-	public List<Nodeid> heads() throws HgException {
+	public List<Nodeid> heads() throws HgRemoteConnectionException {
 		try {
 			URL u = new URL(url, url.getPath() + "?cmd=heads");
 			HttpURLConnection c = setupConnection(u.openConnection());
@@ -156,13 +156,13 @@ public class HgRemoteRepository {
 			}
 			return parseResult;
 		} catch (MalformedURLException ex) {
-			throw new HgException(ex);
+			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("heads").setServerInfo(getLocation());
 		} catch (IOException ex) {
-			throw new HgException(ex);
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("heads").setServerInfo(getLocation());
 		}
 	}
 	
-	public List<Nodeid> between(Nodeid tip, Nodeid base) throws HgException {
+	public List<Nodeid> between(Nodeid tip, Nodeid base) throws HgRemoteConnectionException {
 		Range r = new Range(base, tip);
 		// XXX shall handle errors like no range key in the returned map, not sure how.
 		return between(Collections.singletonList(r)).get(r);
@@ -171,9 +171,9 @@ public class HgRemoteRepository {
 	/**
 	 * @param ranges
 	 * @return map, where keys are input instances, values are corresponding server reply
-	 * @throws HgException 
+	 * @throws HgRemoteConnectionException 
 	 */
-	public Map<Range, List<Nodeid>> between(Collection<Range> ranges) throws HgException {
+	public Map<Range, List<Nodeid>> between(Collection<Range> ranges) throws HgRemoteConnectionException {
 		if (ranges.isEmpty()) {
 			return Collections.emptyMap();
 		}
@@ -257,13 +257,13 @@ public class HgRemoteRepository {
 			is.close();
 			return rv;
 		} catch (MalformedURLException ex) {
-			throw new HgException(ex);
+			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("between").setServerInfo(getLocation());
 		} catch (IOException ex) {
-			throw new HgException(ex);
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("between").setServerInfo(getLocation());
 		}
 	}
 
-	public List<RemoteBranch> branches(List<Nodeid> nodes) throws HgException {
+	public List<RemoteBranch> branches(List<Nodeid> nodes) throws HgRemoteConnectionException {
 		StringBuilder sb = new StringBuilder(20 + nodes.size() * 41);
 		sb.append("nodes=");
 		for (Nodeid n : nodes) {
@@ -291,7 +291,7 @@ public class HgRemoteRepository {
 				parseResult.add(Nodeid.fromAscii(st.sval));
 			}
 			if (parseResult.size() != nodes.size() * 4) {
-				throw new HgException(String.format("Bad number of nodeids in result (shall be factor 4), expected %d, got %d", nodes.size()*4, parseResult.size()));
+				throw new HgRemoteConnectionException(String.format("Bad number of nodeids in result (shall be factor 4), expected %d, got %d", nodes.size()*4, parseResult.size()));
 			}
 			ArrayList<RemoteBranch> rv = new ArrayList<RemoteBranch>(nodes.size());
 			for (int i = 0; i < nodes.size(); i++) {
@@ -300,9 +300,9 @@ public class HgRemoteRepository {
 			}
 			return rv;
 		} catch (MalformedURLException ex) {
-			throw new HgException(ex);
+			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("branches").setServerInfo(getLocation());
 		} catch (IOException ex) {
-			throw new HgException(ex);
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("branches").setServerInfo(getLocation());
 		}
 	}
 
@@ -322,7 +322,7 @@ public class HgRemoteRepository {
 	 * (there's no header like HG10?? with the server output, though, 
 	 * as one may expect according to http://mercurial.selenic.com/wiki/BundleFormat)
 	 */
-	public HgBundle getChanges(List<Nodeid> roots) throws HgException {
+	public HgBundle getChanges(List<Nodeid> roots) throws HgRemoteConnectionException {
 		List<Nodeid> _roots = roots.isEmpty() ? Collections.singletonList(Nodeid.NULL) : roots;
 		StringBuilder sb = new StringBuilder(20 + _roots.size() * 41);
 		sb.append("roots=");
@@ -346,10 +346,11 @@ public class HgRemoteRepository {
 				System.out.printf("Wrote bundle %s for roots %s\n", tf, sb);
 			}
 			return getLookupHelper().loadBundle(tf);
-		} catch (MalformedURLException ex) {
-			throw new HgException(ex);
+		} catch (MalformedURLException ex) { // XXX in fact, this exception might be better to be re-thrown as RuntimeEx,
+			// as there's little user can do about this issue (URLs are constructed by our code)
+			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("changegroup").setServerInfo(getLocation());
 		} catch (IOException ex) {
-			throw new HgException(ex);
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("changegroup").setServerInfo(getLocation());
 		}
 	}
 

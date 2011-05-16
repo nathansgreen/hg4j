@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * Any erroneous state with @link {@link HgDataFile} input/output, read/write operations 
@@ -26,8 +27,19 @@ import org.tmatesoft.hg.repo.HgDataFile;
  */
 @SuppressWarnings("serial")
 public class HgDataStreamException extends HgException {
+	private final Path fname;
 
-	public HgDataStreamException(String message, Throwable cause) {
+	public HgDataStreamException(Path file, String message, Throwable cause) {
 		super(message, cause);
+		fname = file;
+	}
+	
+	public HgDataStreamException(Path file, Throwable cause) {
+		super(cause);
+		fname = file;
+	}
+
+	public Path getFileName() {
+		return fname;
 	}
 }

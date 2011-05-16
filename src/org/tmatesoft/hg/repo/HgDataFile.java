@@ -136,7 +136,7 @@ public class HgDataFile extends Revlog {
 			insp = new ContentPipe(sink, metadata.dataOffset(revision));
 		} else {
 			// do not know if there's metadata
-			insp = new MetadataContentPipe(sink, metadata);
+			insp = new MetadataContentPipe(sink, metadata, getPath());
 		}
 		insp.checkCancelled();
 		super.content.iterate(revision, revision, true, insp);
@@ -146,7 +146,7 @@ public class HgDataFile extends Revlog {
 			throw ex;
 		} catch (HgException ex) {
 			// shall not happen, unless we changed ContentPipe or its subclass
-			throw new HgDataStreamException(ex.getClass().getName(), ex);
+			throw new HgDataStreamException(getPath(), ex.getClass().getName(), ex);
 		}
 	}
 	
@@ -210,7 +210,7 @@ public class HgDataFile extends Revlog {
 			} catch (CancelledException ex) {
 				// it's ok, we did that
 			} catch (Exception ex) {
-				throw new HgDataStreamException("Can't initialize metadata", ex);
+				throw new HgDataStreamException(getPath(), "Can't initialize metadata", ex);
 			}
 		}
 		if (!metadata.known(0)) {
@@ -319,10 +319,12 @@ public class HgDataFile extends Revlog {
 	private static class MetadataContentPipe extends ContentPipe {
 
 		private final Metadata metadata;
+		private final Path fname; // need this only for error reporting
 
-		public MetadataContentPipe(ByteChannel sink, Metadata _metadata) {
+		public MetadataContentPipe(ByteChannel sink, Metadata _metadata, Path file) {
 			super(sink, 0);
 			metadata = _metadata;
+			fname = file;
 		}
 
 		@Override
@@ -382,7 +384,7 @@ public class HgDataFile extends Revlog {
 			_metadata.trimToSize();
 			metadata.add(revisionNumber, lastEntryStart, _metadata);
 			if (da.isEmpty() || !byteOne) {
-				throw new HgDataStreamException(String.format("Metadata for revision %d is not closed properly", revisionNumber), null);
+				throw new HgDataStreamException(fname, String.format("Metadata for revision %d is not closed properly", revisionNumber), null);
 			}
 			// da is in prepared state (i.e. we consumed all bytes up to metadata end).
 		}

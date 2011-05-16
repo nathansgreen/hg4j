@@ -17,16 +17,38 @@
 package org.tmatesoft.hg.core;
 
 /**
- * Callback to process {@link HgChangeset changesets}.
- * 
+ *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public interface HgChangesetHandler/*XXX perhaps, shall parameterize with exception clients can throw, like: <E extends Exception>*/ {
-	/**
-	 * @param changeset not necessarily a distinct instance each time, {@link HgChangeset#clone() clone()} if need a copy.
-	 * @throws RuntimeException or any subclass thereof to indicate error. General contract is that RuntimeExceptions 
-	 * will be re-thrown wrapped into {@link HgCallbackTargetException}.  
-	 */
-	void next(HgChangeset changeset)/* throws E*/;
+@SuppressWarnings("serial")
+public class HgRemoteConnectionException extends HgException {
+
+	private String serverInfo;
+	private String cmdName;
+
+	public HgRemoteConnectionException(String reason) {
+		super(reason);
+	}
+
+	public HgRemoteConnectionException(String reason, Throwable cause) {
+		super(reason, cause);
+	}
+
+	public HgRemoteConnectionException setServerInfo(String si) {
+		serverInfo = si;
+		return this;
+	}
+	public String getServerInfo() {
+		return serverInfo;
+	}
+	
+	public HgRemoteConnectionException setRemoteCommand(String commandName) {
+		cmdName = commandName;
+		return this;
+	}
+
+	public String getRemoteCommand() {
+		return cmdName;
+	}
 }

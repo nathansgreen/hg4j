@@ -60,7 +60,7 @@ public class Incoming {
 		HgIncomingCommand cmd = hgRepo.createIncomingCommand();
 		cmd.against(hgRemote);
 		//
-		List<Nodeid> missing = cmd.executeLite(null);
+		List<Nodeid> missing = cmd.executeLite();
 		Collections.reverse(missing); // useful to test output, from newer to older
 		Outgoing.dump("Nodes to fetch:", missing);
 		System.out.printf("Total: %d\n\n", missing.size());

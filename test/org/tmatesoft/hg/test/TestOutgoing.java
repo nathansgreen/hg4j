@@ -66,7 +66,7 @@ public class TestOutgoing {
 			HgLogCommand.CollectHandler collector = new HgLogCommand.CollectHandler();
 			//
 			cmd.executeFull(collector);
-			List<Nodeid> liteResult = cmd.executeLite(null);
+			List<Nodeid> liteResult = cmd.executeLite();
 			eh.run("hg", "outgoing", "--debug", hgRemote.getLocation());
 			TestIncoming.report(collector, outParser, liteResult, errorCollector);
 			//
@@ -79,7 +79,7 @@ public class TestOutgoing {
 			//
 			cmd = new HgOutgoingCommand(lookup.detect(dest)).against(hgRemote);
 			cmd.executeFull(collector = new HgLogCommand.CollectHandler());
-			liteResult = cmd.executeLite(null);
+			liteResult = cmd.executeLite();
 			outParser.reset();
 			eh.run("hg", "outgoing", "--debug", hgRemote.getLocation());
 			TestIncoming.report(collector, outParser, liteResult, errorCollector);
