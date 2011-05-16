@@ -42,9 +42,16 @@ public final class HgDate implements Comparable<HgDate>, Cloneable {
 		// @see http://pydoc.org/2.5.1/time.html  time.timezone -- difference in seconds between UTC and local standard time
 		// UTC - local = timezone. local = UTC - timezone
 		// In Java, timezone is positive right of Greenwich, UTC+timezone = local
+		//
+		//
+		/*
+		 * The approach with available-short didn't work out as final timezone still relied
+		 * on daylight saving settings (and added/substracted hour shift according to date supplied)
+		 * E.g. 1218917104000 in zone GMT+2 (hello sample, changeset #2), results in EET timezone and 23 hours instead of 22
+		 * 
 		String[] available = TimeZone.getAvailableIDs(-timezone * 1000);
 		assert available != null && available.length > 0 : String.valueOf(timezone);
-		// this is sort of hach, I don't know another way how to get 
+		// this is sort of hack, I don't know another way how to get 
 		// abbreviated name from zone offset (other than to have own mapping)
 		// And I can't use any id, because e.g. zone with id  "US/Mountain" 
 		// gives incorrect (according to hg cmdline) result, unlike MST or US/Arizona (all ids for zone -0700)
@@ -53,6 +60,11 @@ public final class HgDate implements Comparable<HgDate>, Cloneable {
 		// XXX in fact, might need to handle daylight saving time, but not sure how, 
 		// getTimeZone(GMT-timezone*1000).inDaylightTime()?
 		TimeZone tz = TimeZone.getTimeZone(shortID);
+		*/
+		int tz_hours = -timezone/3600;
+		int tz_mins = timezone % 3600;
+		String customId = String.format("GMT%+02d:%02d", tz_hours, tz_mins);
+		TimeZone tz = TimeZone.getTimeZone(customId);
 		tzone = tz;
 	}
 	

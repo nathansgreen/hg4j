@@ -20,6 +20,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -69,11 +70,12 @@ public class TestHistory {
 	
 	public TestHistory() throws Exception {
 		this(new HgLookup().detectFromWorkingDir());
+//		this(new HgLookup().detect("\\temp\\hg\\hello"));
 	}
 
 	private TestHistory(HgRepository hgRepo) {
 		repo = hgRepo;
-		eh = new ExecHelper(changelogParser = new LogOutputParser(true), null);
+		eh = new ExecHelper(changelogParser = new LogOutputParser(true), new File(repo.getLocation()));
 		
 	}
 
@@ -88,39 +90,34 @@ public class TestHistory {
 	@Test
 	public void testFollowHistory() throws Exception {
 		final Path f = Path.create("cmdline/org/tmatesoft/hg/console/Remote.java");
-		try {
-			if (repo.getFileNode(f).exists()) { // FIXME getFileNode shall not fail with IAE
-				changelogParser.reset();
-				eh.run("hg", "log", "--debug", "--follow", f.toString());
-				
-				class H extends CollectHandler implements FileHistoryHandler {
-					boolean copyReported = false;
-					boolean fromMatched = false;
-					public void copy(FileRevision from, FileRevision to) {
-						copyReported = true;
-						fromMatched = "src/com/tmate/hgkit/console/Remote.java".equals(from.getPath().toString());
-					}
-				};
-				H h = new H();
-				new HgLogCommand(repo).file(f, true).execute(h);
-				String what = "hg log - FOLLOW FILE HISTORY";
-				errorCollector.checkThat(what + "#copyReported ", h.copyReported, is(true));
-				errorCollector.checkThat(what + "#copyFromMatched", h.fromMatched, is(true));
-				//
-				// cmdline always gives in changesets in order from newest (bigger rev number) to oldest.
-				// LogCommand does other way round, from oldest to newest, follewed by revisions of copy source, if any
-				// (apparently older than oldest of the copy target). Hence need to sort Java results according to rev numbers
-				final LinkedList<HgChangeset> sorted = new LinkedList<HgChangeset>(h.getChanges());
-				Collections.sort(sorted, new Comparator<HgChangeset>() {
-					public int compare(HgChangeset cs1, HgChangeset cs2) {
-						return cs1.getRevision() < cs2.getRevision() ? 1 : -1;
-					}
-				});
-				report(what, sorted, false);
+		assertTrue(repo.getFileNode(f).exists());
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "--follow", f.toString());
+		
+		class H extends CollectHandler implements FileHistoryHandler {
+			boolean copyReported = false;
+			boolean fromMatched = false;
+			public void copy(FileRevision from, FileRevision to) {
+				copyReported = true;
+				fromMatched = "src/com/tmate/hgkit/console/Remote.java".equals(from.getPath().toString());
 			}
-		} catch (IllegalArgumentException ex) {
-			System.out.println("Can't test file history with follow because need to query specific file with history");
-		}
+		};
+		H h = new H();
+		new HgLogCommand(repo).file(f, true).execute(h);
+		String what = "hg log - FOLLOW FILE HISTORY";
+		errorCollector.checkThat(what + "#copyReported ", h.copyReported, is(true));
+		errorCollector.checkThat(what + "#copyFromMatched", h.fromMatched, is(true));
+		//
+		// cmdline always gives in changesets in order from newest (bigger rev number) to oldest.
+		// LogCommand does other way round, from oldest to newest, follewed by revisions of copy source, if any
+		// (apparently older than oldest of the copy target). Hence need to sort Java results according to rev numbers
+		final LinkedList<HgChangeset> sorted = new LinkedList<HgChangeset>(h.getChanges());
+		Collections.sort(sorted, new Comparator<HgChangeset>() {
+			public int compare(HgChangeset cs1, HgChangeset cs2) {
+				return cs1.getRevision() < cs2.getRevision() ? 1 : -1;
+			}
+		});
+		report(what, sorted, false);
 	}
 
 	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResult) {
@@ -142,7 +139,7 @@ public class TestHistory {
 			}
 			Record cr = consoleResultItr.next();
 			int x = cs.getRevision() == cr.changesetIndex ? 0x1 : 0;
-			x |= cs.getDate().equals(cr.date) ? 0x2 : 0;
+			x |= cs.getDate().toString().equals(cr.date) ? 0x2 : 0;
 			x |= cs.getNodeid().toString().equals(cr.changesetNodeid) ? 0x4 : 0;
 			x |= cs.getUser().equals(cr.user) ? 0x8 : 0;
 			// need to do trim() on comment because command-line template does, and there are
