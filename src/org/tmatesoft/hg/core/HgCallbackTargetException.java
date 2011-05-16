@@ -37,7 +37,7 @@ public class HgCallbackTargetException extends HgException {
 	 * @param cause can't be <code>null</code>
 	 */
 	public HgCallbackTargetException(Throwable cause) {
-		super((Throwable) null);
+		super((String) null);
 		if (cause == null) {
 			throw new IllegalArgumentException();
 		}
