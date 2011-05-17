@@ -289,14 +289,15 @@ public class HgWorkingCopyStatusCollector {
 			try {
 				fis = new FileInputStream(f);
 				FileChannel fc = fis.getChannel();
-				ByteBuffer fb = ByteBuffer.allocate(min(data.length, 8192));
-				final boolean[] checkValue = new boolean[] { true };
-				ByteChannel check = new ByteChannel() {
-					int x = 0;
+				ByteBuffer fb = ByteBuffer.allocate(min(data.length * 2 /*to fit couple of lines appended*/, 8192));
+				class Check implements ByteChannel {
 					final boolean debug = false; // XXX may want to add global variable to allow clients to turn 
+					boolean sameSoFar = true;
+					int x = 0;
+
 					public int write(ByteBuffer buffer) {
 						for (int i = buffer.remaining(); i > 0; i--, x++) {
-							if (data[x] != buffer.get()) {
+							if (x >= data.length /*file has been appended*/ || data[x] != buffer.get()) {
 								if (debug) {
 									byte[] xx = new byte[15];
 									if (buffer.position() > 5) {
@@ -306,21 +307,29 @@ public class HgWorkingCopyStatusCollector {
 									System.out.print("expected >>" + new String(data, max(0, x - 4), 20) + "<< but got >>");
 									System.out.println(new String(xx) + "<<");
 								}
-								checkValue[0] = false;
+								sameSoFar = false;
 								break;
 							}
 						}
 						buffer.position(buffer.limit()); // mark as read
 						return buffer.limit();
 					}
+					
+					public boolean sameSoFar() {
+						return sameSoFar;
+					}
+					public boolean ultimatelyTheSame() {
+						return sameSoFar && x == data.length;
+					}
 				};
+				Check check = new Check(); 
 				FilterByteChannel filters = new FilterByteChannel(check, repo.getFiltersFromWorkingDirToRepo(p));
-				while (fc.read(fb) != -1 && checkValue[0]) {
+				while (fc.read(fb) != -1 && check.sameSoFar()) {
 					fb.flip();
 					filters.write(fb);
 					fb.compact();
 				}
-				return checkValue[0];
+				return check.ultimatelyTheSame();
 			} catch (IOException ex) {
 				if (fis != null) {
 					fis.close();
