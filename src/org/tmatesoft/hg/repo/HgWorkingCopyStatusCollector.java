@@ -18,6 +18,7 @@ package org.tmatesoft.hg.repo;
 
 import static java.lang.Math.max;
 import static java.lang.Math.min;
+import static org.tmatesoft.hg.repo.HgRepository.*;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
@@ -61,8 +62,8 @@ public class HgWorkingCopyStatusCollector {
 	}
 
 	HgWorkingCopyStatusCollector(HgRepository hgRepo, FileIterator hgRepoWalker) {
-		this.repo = hgRepo;
-		this.repoWalker = hgRepoWalker;
+		repo = hgRepo;
+		repoWalker = hgRepoWalker;
 	}
 	
 	/**
@@ -98,14 +99,17 @@ public class HgWorkingCopyStatusCollector {
 
 	// may be invoked few times
 	public void walk(int baseRevision, HgStatusInspector inspector) {
+		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION || baseRevision == WORKING_COPY) {
+			throw new IllegalArgumentException(String.valueOf(baseRevision));
+		}
 		final HgIgnore hgIgnore = repo.getIgnore();
 		TreeSet<String> knownEntries = getDirstate().all();
 		final boolean isTipBase;
 		if (baseRevision == TIP) {
-			baseRevision = repo.getManifest().getRevisionCount() - 1;
+			baseRevision = repo.getChangelog().getLastRevision();
 			isTipBase = true;
 		} else {
-			isTipBase = baseRevision == repo.getManifest().getRevisionCount() - 1;
+			isTipBase = baseRevision == repo.getChangelog().getLastRevision();
 		}
 		HgStatusCollector.ManifestRevisionInspector collect = null;
 		Set<String> baseRevFiles = Collections.emptySet();

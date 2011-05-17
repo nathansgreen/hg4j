@@ -98,7 +98,7 @@ abstract class Revlog {
 	// Till now, i follow approach that NULL nodeid is never part of revlog
 	public final boolean isKnown(Nodeid nodeid) {
 		final int rn = content.findLocalRevisionNumber(nodeid);
-		if (Integer.MIN_VALUE == rn) {
+		if (BAD_REVISION == rn) {
 			return false;
 		}
 		if (rn < 0 || rn >= content.revisionCount()) {

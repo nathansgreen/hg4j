@@ -175,7 +175,7 @@ public class HgStatusCollector {
 		if (inspector instanceof Record) {
 			((Record) inspector).init(rev1, rev2, this);
 		}
-		final int lastManifestRevision = repo.getManifest().getLastRevision();
+		final int lastManifestRevision = repo.getChangelog().getLastRevision();
 		if (rev1 == TIP) {
 			rev1 = lastManifestRevision;
 		}
