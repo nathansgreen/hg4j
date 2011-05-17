@@ -200,6 +200,7 @@ public class RevlogStream {
 		}
 		// XXX may cache [start .. end] from index with a single read (pre-read)
 		
+		Lifecycle.BasicCallback cb = null;
 		DataAccess daIndex = null, daData = null;
 		daIndex = getIndexStream();
 		if (needData && !inline) {
@@ -218,6 +219,12 @@ public class RevlogStream {
 			}
 			
 			daIndex.seek(getIndexOffsetInt(i));
+			
+			if (inspector instanceof Lifecycle) {
+				cb = new Lifecycle.BasicCallback();
+				((Lifecycle) inspector).start(end - start + 1, cb, cb);
+			}
+			
 			for (; i <= end; i++ ) {
 				if (inline && needData) {
 					// inspector reading data (though FilterDataAccess) may have affected index position
@@ -282,6 +289,11 @@ public class RevlogStream {
 				if (!extraReadsToBaseRev || i >= start) {
 					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, userDataAccess);
 				}
+				if (cb != null) {
+					if (cb.isStopped()) {
+						break;
+					}
+				}
 				if (userDataAccess != null) {
 					userDataAccess.reset();
 					if (lastUserData != null) {
@@ -293,6 +305,9 @@ public class RevlogStream {
 		} catch (IOException ex) {
 			throw new HgBadStateException(ex); // FIXME need better handling
 		} finally {
+			if (inspector instanceof Lifecycle) {
+				((Lifecycle) inspector).finish(cb);
+			}
 			daIndex.done();
 			if (daData != null) {
 				daData.done();
