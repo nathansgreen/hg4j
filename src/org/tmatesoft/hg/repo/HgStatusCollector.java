@@ -224,7 +224,7 @@ public class HgStatusCollector {
 				Nodeid nidR2 = r2.nodeid(fname);
 				String flagsR1 = r1.flags(fname);
 				String flagsR2 = r2.flags(fname);
-				if (nidR1.equals(nidR2) && ((flagsR2 == null && flagsR1 == null) || flagsR2.equals(flagsR1))) {
+				if (nidR1.equals(nidR2) && ((flagsR2 == null && flagsR1 == null) || (flagsR2 != null && flagsR2.equals(flagsR1)))) {
 					inspector.clean(pp.path(fname));
 				} else {
 					inspector.modified(pp.path(fname));
