@@ -34,6 +34,7 @@ import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 
 
@@ -65,13 +66,15 @@ public final class HgRepository {
 	private HgChangelog changelog;
 	private HgManifest manifest;
 	private HgTags tags;
+	private HgBranches branches;
+
 	// XXX perhaps, shall enable caching explicitly
 	private final HashMap<Path, SoftReference<RevlogStream>> streamsCache = new HashMap<Path, SoftReference<RevlogStream>>();
 	
 	private final org.tmatesoft.hg.internal.Internals impl = new org.tmatesoft.hg.internal.Internals();
 	private HgIgnore ignore;
 	private ConfigFile configFile;
-
+	
 	HgRepository(String repositoryPath) {
 		repoDir = null;
 		repoLocation = repositoryPath;
@@ -149,6 +152,14 @@ public final class HgRepository {
 			}
 		}
 		return tags;
+	}
+	
+	public final HgBranches getBranches() {
+		if (branches == null) {
+			branches = new HgBranches(this);
+			branches.collect(ProgressSupport.Factory.get(null));
+		}
+		return branches;
 	}
 	
 	public HgDataFile getFileNode(String path) {

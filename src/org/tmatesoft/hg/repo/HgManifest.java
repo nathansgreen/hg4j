@@ -149,6 +149,10 @@ public class HgManifest extends Revlog {
 
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 			if (changelog2manifest != null) {
+				// next assertion is not an error, rather assumption check, which is too development-related to be explicit exception - 
+				// I just wonder if there are manifests that have two entries pointing to single changeset. It seems unrealistic, though -
+				// changeset records one and only one manifest nodeid
+				assert changelog2manifest[linkRevision] == -1 : String.format("revision:%d, link:%d, already linked to revision:%d", revisionNumber, linkRevision, changelog2manifest[linkRevision]);
 				changelog2manifest[linkRevision] = revisionNumber;
 			} else {
 				if (revisionNumber != linkRevision) {
@@ -186,7 +190,7 @@ public class HgManifest extends Revlog {
 			}
 			for (int u : undefinedChangelogRevision) {
 				Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
-				// FIXME calculate those missing effectively (e.g. cache and sort nodeids to spead lookup
+				// FIXME calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
 				// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
 				changelog2manifest[u] = repo.getManifest().getLocalRevision(manifest);
 			}

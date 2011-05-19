@@ -28,6 +28,7 @@ import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
@@ -60,7 +61,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.inflaterLengthException();
+		m.dumpBranches();
+//		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
 //		m.testStatusInternals();
@@ -68,6 +70,20 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void dumpBranches() {
+		HgBranches b = hgRepo.getBranches();
+		for (HgBranches.BranchInfo bi : b.getAllBranches()) {
+			System.out.print(bi.getName());
+			if (bi.isClosed()) {
+				System.out.print("!");
+			}
+			System.out.print(" ");
+			System.out.print(bi.getStart());
+			System.out.print(" ");
+			System.out.println(bi.getHeads());
+		}
 	}
 	
 	private void inflaterLengthException() throws Exception {
