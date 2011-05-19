@@ -143,8 +143,8 @@ public class Main {
 	}
 
 	public static final class ManifestDump implements HgManifest.Inspector {
-		public boolean begin(int revision, Nodeid nid) {
-			System.out.printf("%d : %s\n", revision, nid);
+		public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
+			System.out.printf("%d : %s\n", manifestRevision, nid);
 			return true;
 		}
 

@@ -65,7 +65,7 @@ public class HgStatusCollector {
 		cacheFilenames = new Pool<String>();
 
 		emptyFakeState = new ManifestRevisionInspector(null, null);
-		emptyFakeState.begin(-1, null);
+		emptyFakeState.begin(-1, null, -1);
 		emptyFakeState.end(-1);
 	}
 	
@@ -103,15 +103,15 @@ public class HgStatusCollector {
 			private ManifestRevisionInspector delegate;
 			private boolean cacheHit; // range may include revisions we already know about, do not re-create them
 
-			public boolean begin(int revision, Nodeid nid) {
+			public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
 				assert delegate == null;
-				if (cache.containsKey(revision)) { // don't need to check emptyFakeState hit as revision never -1 here
+				if (cache.containsKey(changelogRevision)) { // don't need to check emptyFakeState hit as revision never -1 here
 					cacheHit = true;
 				} else {
-					cache.put(revision, delegate = new ManifestRevisionInspector(cacheNodes, cacheFilenames));
+					cache.put(changelogRevision, delegate = new ManifestRevisionInspector(cacheNodes, cacheFilenames));
 					// cache may grow bigger than max size here, but it's ok as present simplistic cache clearing mechanism may
 					// otherwise remove entries we just added
-					delegate.begin(revision, nid);
+					delegate.begin(manifestRevision, nid, changelogRevision);
 					cacheHit = false;
 				}
 				return true;
@@ -458,7 +458,7 @@ public class HgStatusCollector {
 			return false; 
 		}
 
-		public boolean begin(int revision, Nodeid nid) {
+		public boolean begin(int revision, Nodeid nid, int changelogRevision) {
 			return true;
 		}
 	}

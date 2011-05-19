@@ -147,7 +147,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 			pathPool = null;
 		}
 	
-		public boolean begin(int revision, Nodeid nid) {
+		public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
 			if (needDirs && manifestContent == null) {
 				manifestContent = new LinkedList<FileRevision>();
 			}

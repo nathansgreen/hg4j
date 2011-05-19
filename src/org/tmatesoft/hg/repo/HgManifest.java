@@ -69,9 +69,9 @@ public class HgManifest extends Revlog {
 	}
 	
 	public interface Inspector {
-		boolean begin(int revision, Nodeid nid);
+		boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision);
 		boolean next(Nodeid nid, String fname, String flags);
-		boolean end(int revision);
+		boolean end(int manifestRevision);
 	}
 
 	private static class ManifestParser implements RevlogStream.Inspector {
@@ -94,7 +94,7 @@ public class HgManifest extends Revlog {
 				return;
 			}
 			try {
-				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true));
+				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision);
 				int i;
 				String fname = null;
 				String flags = null;
