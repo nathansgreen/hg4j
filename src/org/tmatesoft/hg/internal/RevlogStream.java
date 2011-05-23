@@ -245,7 +245,6 @@ public class RevlogStream {
 				daIndex.skip(12);
 				DataAccess userDataAccess = null;
 				if (needData) {
-					final byte firstByte;
 					int streamOffset;
 					DataAccess streamDataAccess;
 					if (inline) {
@@ -257,15 +256,19 @@ public class RevlogStream {
 						daData.seek(streamOffset);
 					}
 					final boolean patchToPrevious = baseRevision != i; // the only way I found to tell if it's a patch
-					firstByte = streamDataAccess.readByte();
-					if (firstByte == 0x78 /* 'x' */) {
-						userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen);
-					} else if (firstByte == 0x75 /* 'u' */) {
-						userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
+					if (streamDataAccess.isEmpty()) {
+						userDataAccess = new DataAccess(); // empty
 					} else {
-						// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0'
-						// but I don't see reason not to return data as is 
-						userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
+						final byte firstByte = streamDataAccess.readByte();
+						if (firstByte == 0x78 /* 'x' */) {
+							userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen);
+						} else if (firstByte == 0x75 /* 'u' */) {
+							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
+						} else {
+							// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0'
+							// but I don't see reason not to return data as is 
+							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
+						}
 					}
 					// XXX 
 					if (patchToPrevious) {
