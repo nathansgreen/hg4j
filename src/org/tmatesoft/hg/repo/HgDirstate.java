@@ -75,7 +75,8 @@ class HgDirstate {
 			byte[] parents = new byte[40];
 			da.readBytes(parents, 0, 40);
 			parents = null;
-			do {
+			// hg init; hg up produces an empty repository where dirstate has parents (40 bytes) only
+			while (!da.isEmpty()) {
 				final byte state = da.readByte();
 				final int fmode = da.readInt();
 				final int size = da.readInt();
@@ -106,7 +107,7 @@ class HgDirstate {
 				} else {
 					// FIXME log error?
 				}
-			} while (!da.isEmpty());
+			}
 		} catch (IOException ex) {
 			ex.printStackTrace(); // FIXME log error, clean dirstate?
 		} finally {
