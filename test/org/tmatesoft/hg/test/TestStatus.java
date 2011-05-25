@@ -16,8 +16,8 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.junit.Assert.assertTrue;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.tmatesoft.hg.core.HgStatus.*;
 import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
@@ -33,6 +33,7 @@ import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgStatus;
+import org.tmatesoft.hg.core.HgStatus.Kind;
 import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -51,7 +52,7 @@ public class TestStatus {
 	@Rule
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 
-	private final HgRepository repo;
+	private HgRepository repo;
 	private StatusOutputParser statusParser;
 	private ExecHelper eh;
 
@@ -126,32 +127,145 @@ public class TestStatus {
 	}
 	
 	private static class StatusCollector implements HgStatusCommand.Handler {
-		private final Map<HgStatus.Kind, List<Path>> map = new TreeMap<HgStatus.Kind, List<Path>>();
+		private final Map<Kind, List<Path>> kind2names = new TreeMap<Kind, List<Path>>();
+		private final Map<Path, List<Kind>> name2kinds = new TreeMap<Path, List<Kind>>();
 
 		public void handleStatus(HgStatus s) {
-			List<Path> l = map.get(s.getKind());
+			List<Path> l = kind2names.get(s.getKind());
 			if (l == null) {
-				l = new LinkedList<Path>();
-				map.put(s.getKind(), l);
+				kind2names.put(s.getKind(), l = new LinkedList<Path>());
 			}
 			l.add(s.getPath());
+			//
+			List<Kind> k = name2kinds.get(s.getPath());
+			if (k == null) {
+				name2kinds.put(s.getPath(), k = new LinkedList<Kind>());
+			}
+			k.add(s.getKind());
 		}
 		
 		public List<Path> get(Kind k) {
-			List<Path> rv = map.get(k);
-			if (rv == null) {
-				return Collections.emptyList();
-			}
-			return rv;
+			List<Path> rv = kind2names.get(k);
+			return rv == null ? Collections.<Path>emptyList() : rv;
+		}
+		
+		public List<Kind> get(Path p) {
+			List<Kind> rv = name2kinds.get(p);
+			return rv == null ? Collections.<Kind>emptyList() : rv;
 		}
 	}
-	
-	public void testRemovedAgainstNonTip() {
-		/*
-		 status --rev N when a file added past revision N was removed ((both physically and in dirstate), but not yet committed
 
-		 Reports extra REMOVED file (the one added and removed in between). Shall not
-		 */
+	/*
+	 * status-1/dir/file5 was added in rev 8, scheduled (hg remove file5) for removal, but not yet committed
+	 * Erroneously reported extra REMOVED file (the one added and removed in between). Shall not
+	 */
+	@Test
+	public void testRemovedAgainstBaseWithoutIt() throws Exception {
+		// check very end of WCStatusCollector, foreach left knownEntry, collect == null || baseRevFiles.contains()
+		repo = Configuration.get().find("status-1");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		StatusCollector sc = new StatusCollector();
+		cmd.all().base(7).execute(sc);
+		Path file5 = Path.create("dir/file5");
+		// shall not be listed at all
+		assertTrue(sc.get(file5).isEmpty());
+	}
+	
+	/*
+	 * status-1/file2 is tracked, but later .hgignore got entry to ignore it, file2 got modified
+	 * HG doesn't respect .hgignore for tracked files.
+	 * Now reported as ignored and missing(?!).
+	 * Shall be reported as modified.
+	 */
+	@Test
+	public void testTrackedModifiedIgnored() throws Exception {
+		repo = Configuration.get().find("status-1");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		StatusCollector sc = new StatusCollector();
+		cmd.all().execute(sc);
+		final Path file2 = Path.create("file2");
+		assertTrue(sc.get(file2).contains(Modified));
+		assertTrue(sc.get(file2).size() == 1);
+	}
+
+	/*
+	 * status/dir/file4, added in rev 3, has been scheduled for removal (hg remove -Af file4), but still there in the WC.
+	 * Shall be reported as Removed, when comparing against rev 3 
+	 * (despite both rev 3 and WC's parent has file4,  there are different paths in the code for wc against parent and wc against rev)
+	 */
+	@Test
+	public void testMarkedRemovedButStillInWC() throws Exception {
+		repo = Configuration.get().find("status-1");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		StatusCollector sc = new StatusCollector();
+		cmd.all().execute(sc);
+		Path file4 = Path.create("dir/file4");
+		assertTrue(sc.get(file4).contains(Removed));
+		assertTrue(sc.get(file4).size() == 1);
+		//
+		// different code path (collect != null)
+		cmd.base(3).execute(sc = new StatusCollector());
+		assertTrue(sc.get(file4).contains(Removed));
+		assertTrue(sc.get(file4).size() == 1);
+		//
+		// wasn't there in rev 2, shall not be reported at all
+		cmd.base(2).execute(sc = new StatusCollector());
+		assertTrue(sc.get(file4).isEmpty());
+	}
+
+	/*
+	 * status-1/dir/file3 tracked, listed in .hgignore since rev 4, removed (hg remove file3)  from repo and WC 
+	 * (but entry in .hgignore left) in revision 5, and new file3 got created in WC.
+	 * Shall be reported as ignored when comparing against WC's parent,
+	 * and both ignored and removed when comparing against revision 3 
+	 */
+	@Test
+	public void testRemovedIgnoredInWC() throws Exception {
+		// check branch !known, ignored
+		repo = Configuration.get().find("status-1");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		StatusCollector sc = new StatusCollector();
+		cmd.all().execute(sc);
+		final Path file3 = Path.create("dir/file3");
+		assertTrue(sc.get(file3).contains(Ignored));
+		assertTrue(sc.get(file3).size() == 1);
+		//
+		cmd.base(3).execute(sc = new StatusCollector());
+		assertTrue(sc.get(file3).contains(Ignored));
+		assertTrue(sc.get(file3).contains(Removed));
+		assertTrue(sc.get(file3).size() == 2);
+		//
+		cmd.base(5).execute(sc = new StatusCollector());
+		assertTrue(sc.get(file3).contains(Ignored));
+		assertTrue(sc.get(file3).size() == 1);
+		//
+		cmd.base(0).execute(sc = new StatusCollector());
+		assertTrue(sc.get(file3).contains(Ignored));
+		assertTrue(sc.get(file3).size() == 1);
+
+	}
+
+	/*
+	 * status/file1 was removed in cset 2. New file with the same name in the WC.
+	 * Shall report 2 statuses (as cmdline hg does): unknown and removed when comparing against that revision. 
+	 */
+	@Test
+	public void testNewFileWithSameNameAsDeletedOld() throws Exception {
+		// check branch !known, !ignored (=> unknown)
+		repo = Configuration.get().find("status-1");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		StatusCollector sc = new StatusCollector();
+		cmd.base(1);
+		cmd.all().execute(sc);
+		final Path file1 = Path.create("file1");
+		assertTrue(sc.get(file1).contains(Unknown));
+		assertTrue(sc.get(file1).contains(Removed));
+		assertTrue(sc.get(file1).size() == 2);
+		// 
+		// no file1 in rev 2, shall be reported as unknown only
+		cmd.base(2).execute(sc = new StatusCollector());
+		assertTrue(sc.get(file1).contains(Unknown));
+		assertTrue(sc.get(file1).size() == 1);
 	}
 	
 	/*
