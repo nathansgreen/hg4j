@@ -76,6 +76,7 @@ public class HgIgnore {
 				result.add(Pattern.compile(line)); // case-sensitive
 			}
 		}
+		fr.close();
 		result.trimToSize();
 		entries = result;
 	}
