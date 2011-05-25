@@ -61,7 +61,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.dumpBranches();
+		m.testFileStatus();
+//		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
@@ -70,6 +71,13 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void testFileStatus() {
+//		final Path path = Path.create("src/org/tmatesoft/hg/util/");
+		final Path path = Path.create("src/org/tmatesoft/hg/internal/Experimental.java");
+		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, path);
+		wcsc.walk(TIP, new StatusDump());
 	}
 	
 	private void dumpBranches() {

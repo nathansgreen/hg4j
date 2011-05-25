@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Collections;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -35,11 +36,14 @@ import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
+import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.FileIterator;
+import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -112,7 +116,7 @@ public class HgWorkingCopyStatusCollector {
 			isTipBase = baseRevision == repo.getChangelog().getLastRevision();
 		}
 		HgStatusCollector.ManifestRevisionInspector collect = null;
-		Set<String> baseRevFiles = Collections.emptySet();
+		Set<String> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
 		if (!isTipBase) {
 			if (baseRevisionCollector != null) {
 				collect = baseRevisionCollector.raw(baseRevision);
@@ -130,28 +134,71 @@ public class HgWorkingCopyStatusCollector {
 		final PathPool pp = getPathPool();
 		while (repoWalker.hasNext()) {
 			repoWalker.next();
-			Path fname = repoWalker.name();
+			Path fname = pp.path(repoWalker.name());
 			File f = repoWalker.file();
-			if (hgIgnore.isIgnored(fname)) {
-				inspector.ignored(pp.path(fname));
-			} else if (knownEntries.remove(fname.toString())) {
+			assert f.isFile();
+			if (!f.exists()) {
+				// file coming from iterator doesn't exist.
+				if (knownEntries.remove(fname.toString())) {
+					if (getDirstate().checkRemoved(fname) == null) {
+						inspector.missing(fname);
+					} else {
+						inspector.removed(fname);
+					}
+					// do not report it as removed later
+					if (collect != null) {
+						baseRevFiles.remove(fname.toString());
+					}
+				} else {
+					// chances are it was known in baseRevision. We may rely
+					// that later iteration over baseRevFiles leftovers would yield correct Removed,
+					// but it doesn't hurt to be explicit (provided we know fname *is* inScope of the FileIterator
+					if (collect != null && baseRevFiles.remove(fname.toString())) {
+						inspector.removed(fname);
+					} else {
+						// not sure I shall report such files (i.e. arbitrary name coming from FileIterator)
+						// as unknown. Command-line HG aborts "system can't find the file specified"
+						// in similar case (against wc), or just gives nothing if --change <rev> is specified.
+						// however, as it's unlikely to get unexisting files from FileIterator, and
+						// its better to see erroneous file status rather than not to see any (which is too easy
+						// to overlook), I think unknown() is reasonable approach here
+						inspector.unknown(fname);
+					}
+				}
+				continue;
+			}
+			if (knownEntries.remove(fname.toString())) {
+				// tracked file.
 				// modified, added, removed, clean
 				if (collect != null) { // need to check against base revision, not FS file
 					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, baseRevision, fname, f, inspector);
-					baseRevFiles.remove(fname.toString());
 				} else {
 					checkLocalStatusAgainstFile(fname, f, inspector);
 				}
 			} else {
-				inspector.unknown(pp.path(fname));
+				if (hgIgnore.isIgnored(fname)) { // hgignore shall be consulted only for non-tracked files
+					inspector.ignored(fname);
+				} else {
+					inspector.unknown(fname);
+				}
+				// the file is not tracked. Even if it's known at baseRevision, we don't need to remove it
+				// from baseRevFiles, it might need to be reported as removed as well (cmdline client does
+				// yield two statuses for the same file)
 			}
 		}
 		if (collect != null) {
 			for (String r : baseRevFiles) {
-				inspector.removed(pp.path(r));
+				final Path fromBase = pp.path(r);
+				if (repoWalker.inScope(fromBase)) {
+					inspector.removed(fromBase);
+				}
 			}
 		}
 		for (String m : knownEntries) {
+			if (!repoWalker.inScope(pp.path(m))) {
+				// do not report as missing/removed those FileIterator doesn't care about.
+				continue;
+			}
 			// missing known file from a working dir  
 			if (getDirstate().checkRemoved(m) == null) {
 				// not removed from the repository = 'deleted'  
@@ -217,7 +264,7 @@ public class HgWorkingCopyStatusCollector {
 				try {
 					Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
 					if (origin != null) {
-						inspector.copied(getPathPool().path(origin), getPathPool().path(fname));
+						inspector.copied(getPathPool().path(origin), fname);
 						return;
 					}
 				} catch (HgDataStreamException ex) {
@@ -227,7 +274,7 @@ public class HgWorkingCopyStatusCollector {
 			} else if ((r = getDirstate().checkAdded(fname)) != null) {
 				if (r.name2 != null && baseRevNames.contains(r.name2)) {
 					baseRevNames.remove(r.name2); // XXX surely I shall not report rename source as Removed?
-					inspector.copied(getPathPool().path(r.name2), getPathPool().path(fname));
+					inspector.copied(getPathPool().path(r.name2), fname);
 					return;
 				}
 				// fall-through, report as added
@@ -235,7 +282,7 @@ public class HgWorkingCopyStatusCollector {
 				// removed: removed file was not known at the time of baseRevision, and we should not report it as removed
 				return;
 			}
-			inspector.added(getPathPool().path(fname));
+			inspector.added(fname);
 		} else {
 			// was known; check whether clean or modified
 			// when added - seems to be the case of a file added once again, hence need to check if content is different
@@ -244,17 +291,22 @@ public class HgWorkingCopyStatusCollector {
 				HgDataFile fileNode = repo.getFileNode(fname);
 				final int lengthAtRevision = fileNode.length(nid1);
 				if (r.size /* XXX File.length() ?! */ != lengthAtRevision || flags != todoGenerateFlags(fname /*java.io.File*/)) {
-					inspector.modified(getPathPool().path(fname));
+					inspector.modified(fname);
 				} else {
 					// check actual content to see actual changes
 					if (areTheSame(f, fileNode, fileNode.getLocalRevision(nid1))) {
-						inspector.clean(getPathPool().path(fname));
+						inspector.clean(fname);
 					} else {
-						inspector.modified(getPathPool().path(fname));
+						inspector.modified(fname);
 					}
 				}
+				baseRevNames.remove(fname.toString()); // consumed, processed, handled.
+			} else if (getDirstate().checkRemoved(fname) != null) {
+				// was known, and now marked as removed, report it right away, do not rely on baseRevNames processing later
+				inspector.removed(fname);
+				baseRevNames.remove(fname.toString()); // consumed, processed, handled.
 			}
-			// only those left in idsMap after processing are reported as removed 
+			// only those left in baseRevNames after processing are reported as removed 
 		}
 
 		// TODO think over if content comparison may be done more effectively by e.g. calculating nodeid for a local file and comparing it with nodeid from manifest
@@ -289,7 +341,7 @@ public class HgWorkingCopyStatusCollector {
 			try {
 				fis = new FileInputStream(f);
 				FileChannel fc = fis.getChannel();
-				ByteBuffer fb = ByteBuffer.allocate(min(data.length * 2 /*to fit couple of lines appended*/, 8192));
+				ByteBuffer fb = ByteBuffer.allocate(min(1 + data.length * 2 /*to fit couple of lines appended; never zero*/, 8192));
 				class Check implements ByteChannel {
 					final boolean debug = false; // XXX may want to add global variable to allow clients to turn 
 					boolean sameSoFar = true;
@@ -347,4 +399,92 @@ public class HgWorkingCopyStatusCollector {
 		return null;
 	}
 
+	@Experimental(reason="There's intention to support status query with multiple files/dirs, API might get changed")
+	public static HgWorkingCopyStatusCollector create(HgRepository hgRepo, Path file) {
+		FileIterator fi = file.isDirectory() ? new DirFileIterator(hgRepo, file) : new FileListIterator(hgRepo.getRepositoryRoot().getParentFile(), file);
+		return new HgWorkingCopyStatusCollector(hgRepo, fi);
+	}
+
+	private static class FileListIterator implements FileIterator {
+		private final File dir;
+		private final Path[] paths;
+		private int index;
+		private File nextFile; // cache file() in case it's called more than once
+
+		public FileListIterator(File startDir, Path... files) {
+			dir = startDir;
+			paths = files;
+			reset();
+		}
+
+		public void reset() {
+			index = -1;
+			nextFile = null;
+		}
+
+		public boolean hasNext() {
+			return paths.length > 0 && index < paths.length-1;
+		}
+
+		public void next() {
+			index++;
+			if (index == paths.length) {
+				throw new NoSuchElementException();
+			}
+			nextFile = new File(dir, paths[index].toString());
+		}
+
+		public Path name() {
+			return paths[index];
+		}
+
+		public File file() {
+			return nextFile;
+		}
+
+		public boolean inScope(Path file) {
+			for (int i = 0; i < paths.length; i++) {
+				if (paths[i].equals(file)) {
+					return true;
+				}
+			}
+			return false;
+		}
+	}
+	
+	private static class DirFileIterator implements FileIterator {
+		private final Path dirOfInterest;
+		private final FileWalker walker;
+
+		public DirFileIterator(HgRepository hgRepo, Path directory) {
+			dirOfInterest = directory;
+			File dir = hgRepo.getRepositoryRoot().getParentFile();
+			Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(dir), hgRepo.getToRepoPathHelper()));
+			walker = new FileWalker(new File(dir, directory.toString()), pathSrc);
+		}
+
+		public void reset() {
+			walker.reset();
+		}
+
+		public boolean hasNext() {
+			return walker.hasNext();
+		}
+
+		public void next() {
+			walker.next();
+		}
+
+		public Path name() {
+			return walker.name();
+		}
+
+		public File file() {
+			return walker.file();
+		}
+
+		public boolean inScope(Path file) {
+			return file.toString().startsWith(dirOfInterest.toString());
+		}
+	}
 }

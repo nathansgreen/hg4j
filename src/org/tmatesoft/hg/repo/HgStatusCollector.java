@@ -56,6 +56,7 @@ public class HgStatusCollector {
 	private final Pool<Nodeid> cacheNodes;
 	private final Pool<String> cacheFilenames; // XXX in fact, need to think if use of PathPool directly instead is better solution
 	private final ManifestRevisionInspector emptyFakeState;
+	private Path.Matcher scope;
 	
 
 	public HgStatusCollector(HgRepository hgRepo) {
@@ -218,20 +219,32 @@ public class HgStatusCollector {
 		PathPool pp = getPathPool();
 
 		TreeSet<String> r1Files = new TreeSet<String>(r1.files());
+		class MatchAny implements Path.Matcher {
+			public boolean accept(Path path) {
+				return true;
+			}
+		};
+		if (scope == null) {
+			scope = new MatchAny(); // FIXME configure from outside
+		}
 		for (String fname : r2.files()) {
+			final Path r2filePath = pp.path(fname);
+			if (!scope.accept(r2filePath)) {
+				continue;
+			}
 			if (r1Files.remove(fname)) {
 				Nodeid nidR1 = r1.nodeid(fname);
 				Nodeid nidR2 = r2.nodeid(fname);
 				String flagsR1 = r1.flags(fname);
 				String flagsR2 = r2.flags(fname);
 				if (nidR1.equals(nidR2) && ((flagsR2 == null && flagsR1 == null) || (flagsR2 != null && flagsR2.equals(flagsR1)))) {
-					inspector.clean(pp.path(fname));
+					inspector.clean(r2filePath);
 				} else {
-					inspector.modified(pp.path(fname));
+					inspector.modified(r2filePath);
 				}
 			} else {
 				try {
-					Path copyTarget = pp.path(fname);
+					Path copyTarget = r2filePath;
 					Path copyOrigin = getOriginIfCopy(repo, copyTarget, r1Files, rev1);
 					if (copyOrigin != null) {
 						inspector.copied(pp.path(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
@@ -246,7 +259,10 @@ public class HgStatusCollector {
 			}
 		}
 		for (String left : r1Files) {
-			inspector.removed(pp.path(left));
+			final Path r2filePath = pp.path(left);
+			if (scope.accept(r2filePath)) {
+				inspector.removed(r2filePath);
+			}
 		}
 	}
 	

@@ -18,6 +18,8 @@ package org.tmatesoft.hg.util;
 
 import java.io.File;
 
+import org.tmatesoft.hg.internal.Experimental;
+
 /**
  * Abstracts iteration over file system.
  * 
@@ -47,7 +49,19 @@ public interface FileIterator {
 	Path name();
 
 	/**
+	 * File object to retrieve actual state from. Not necessarily exist, if {@link FileIterator} is used to query status
+	 * of specific files.
 	 * @return filesystem element.
 	 */
 	File file();
+
+	/**
+	 * When {@link FileIterator} represents only fraction of a repository, library might need to figure out if
+	 * specific file (path) belongs to that fraction or not. Paths (and {@link File Files} returned by this {@link FileIterator}
+	 * are always considered as representing the fraction, nonetheless, {@link FileIterator} shall return true for such names if 
+	 * asked.
+	 * @return <code>true</code> if this {@link FileIterator} is responsible for (interested in) specified repository-local path 
+	 */
+	@Experimental(reason="Perhaps, shall not be part of FileIterator, but rather separate Path.Matcher. Approaches in regular StatusCollector (doesn't use FI, but supports scope) and WC collector to look similar, and for HgStatusCommand to use single approach to set the scope")
+	boolean inScope(Path file);
 }

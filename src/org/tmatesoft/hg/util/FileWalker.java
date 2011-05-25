@@ -70,6 +70,10 @@ public class FileWalker implements FileIterator {
 		return nextFile;
 	}
 	
+	public boolean inScope(Path file) {
+		return true; // no limits, all files are of interest
+	}
+	
 	private File[] listFiles(File f) {
 		// in case we need to solve os-related file issues (mac with some encodings?)
 		return f.listFiles();
