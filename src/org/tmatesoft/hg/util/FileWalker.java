@@ -74,9 +74,12 @@ public class FileWalker implements FileIterator {
 		return true; // no limits, all files are of interest
 	}
 	
+	// returns non-null
 	private File[] listFiles(File f) {
 		// in case we need to solve os-related file issues (mac with some encodings?)
-		return f.listFiles();
+		File[] rv = f.listFiles();
+		// there are chances directory we query files for is missing (deleted), just treat it as empty
+		return rv == null ? new File[0] : rv;
 	}
 
 	// return true when fill added any elements to fileQueue. 
