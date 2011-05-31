@@ -361,6 +361,32 @@ public class TestStatus {
 		assertTrue(r.getIgnored().contains(file3));
 	}
 	
+	@Test
+	public void testScopeInHistoricalStatus() throws Exception {
+		repo = Configuration.get().find("status-1");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		cmd.base(3).revision(8).all();
+		cmd.match(new PathGlobMatcher("dir/*"));
+		StatusCollector sc = new StatusCollector();
+		cmd.execute(sc);
+		final Path file3 = Path.create("dir/file3");
+		final Path file4 = Path.create("dir/file4");
+		final Path file5 = Path.create("dir/file5");
+		//
+		assertTrue(sc.get(file3).contains(Removed));
+		assertTrue(sc.get(file3).size() == 1);
+		assertTrue(sc.get(Removed).size() == 1);
+		//
+		assertTrue(sc.get(file4).contains(Clean));
+		assertTrue(sc.get(file4).size() == 1);
+		assertTrue(sc.get(Clean).size() == 1);
+		//
+		assertTrue(sc.get(file5).contains(Added));
+		assertTrue(sc.get(file5).size() == 1);
+		assertTrue(sc.get(Added).size() == 1);
+
+	}
+	
 	/*
 	 * With warm-up of previous tests, 10 runs, time in milliseconds
 	 * 'hg status -A': Native client total 953 (95 per run), Java client 94 (9)
