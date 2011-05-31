@@ -56,7 +56,7 @@ public class HgStatusCollector {
 	private final Pool<Nodeid> cacheNodes;
 	private final Pool<String> cacheFilenames; // XXX in fact, need to think if use of PathPool directly instead is better solution
 	private final ManifestRevisionInspector emptyFakeState;
-	private Path.Matcher scope;
+	private Path.Matcher scope = new Path.Matcher.Any();
 	
 
 	public HgStatusCollector(HgRepository hgRepo) {
@@ -152,7 +152,15 @@ public class HgStatusCollector {
 	public void setPathPool(PathPool pathPool) {
 		this.pathPool = pathPool;
 	}
-		
+
+	/**
+	 * Limit activity of the collector to certain sub-tree of the repository.
+	 * @param scopeMatcher tells whether collector shall report specific path, can be <code>null</code>
+	 */
+	public void setScope(Path.Matcher scopeMatcher) {
+		// do not assign null, ever
+		scope = scopeMatcher == null ? new Path.Matcher.Any() : scopeMatcher;
+	}
 	
 	// hg status --change <rev>
 	public void change(int rev, HgStatusInspector inspector) {
@@ -217,16 +225,7 @@ public class HgStatusCollector {
 		r2 = get(rev2);
 
 		PathPool pp = getPathPool();
-
 		TreeSet<String> r1Files = new TreeSet<String>(r1.files());
-		class MatchAny implements Path.Matcher {
-			public boolean accept(Path path) {
-				return true;
-			}
-		};
-		if (scope == null) {
-			scope = new MatchAny(); // FIXME configure from outside
-		}
 		for (String fname : r2.files()) {
 			final Path r2filePath = pp.path(fname);
 			if (!scope.accept(r2filePath)) {

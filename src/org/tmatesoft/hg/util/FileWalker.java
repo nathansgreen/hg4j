@@ -31,14 +31,28 @@ public class FileWalker implements FileIterator {
 	private final Path.Source pathHelper;
 	private final LinkedList<File> dirQueue;
 	private final LinkedList<File> fileQueue;
+	private final Path.Matcher scope;
 	private File nextFile;
 	private Path nextPath;
 
 	public FileWalker(File dir, Path.Source pathFactory) {
+		this(dir, pathFactory, null);
+	}
+
+	/**
+	 * 
+	 * @param dir
+	 * @param pathFactory
+	 * @param scopeMatcher - this matcher shall be capable to tell not only files of interest, but
+	 * also whether directories shall be traversed or not (Paths it gets in {@link Path.Matcher#accept(Path)} may 
+	 * point to directories)   
+	 */
+	public FileWalker(File dir, Path.Source pathFactory, Path.Matcher scopeMatcher) {
 		startDir = dir;
 		pathHelper = pathFactory;
 		dirQueue = new LinkedList<File>();
 		fileQueue = new LinkedList<File>();
+		scope = scopeMatcher;
 		reset();
 	}
 
@@ -71,7 +85,8 @@ public class FileWalker implements FileIterator {
 	}
 	
 	public boolean inScope(Path file) {
-		return true; // no limits, all files are of interest
+		/* by default, no limits, all files are of interest */
+		return scope == null ? true : scope.accept(file); 
 	}
 	
 	// returns non-null
@@ -91,8 +106,13 @@ public class FileWalker implements FileIterator {
 			while (!dirQueue.isEmpty()) {
 				File dir = dirQueue.removeFirst();
 				for (File f : listFiles(dir)) {
-					if (f.isDirectory()) {
-						if (!".hg".equals(f.getName())) {
+					final boolean isDir = f.isDirectory();
+					Path path = pathHelper.path(isDir ? ensureTrailingSlash(f.getPath()) : f.getPath());
+					if (!inScope(path)) {
+						continue;
+					}
+					if (isDir) {
+						if (!".hg/".equals(path.toString())) {
 							dirQueue.addLast(f);
 						}
 					} else {
@@ -103,5 +123,18 @@ public class FileWalker implements FileIterator {
 			}
 		}
 		return !fileQueue.isEmpty();
+	}
+	
+	private static String ensureTrailingSlash(String dirName) {
+		if (dirName.length() > 0) {
+			char last = dirName.charAt(dirName.length() - 1);
+			if (last == '/' || last == File.separatorChar) {
+				return dirName;
+			}
+			// if path already has platform-specific separator (which, BTW, it shall, according to File#getPath), 
+			// add similar, otherwise use our default.
+			return dirName.indexOf(File.separatorChar) != -1 ? dirName.concat(File.separator) : dirName.concat("/");
+		}
+		return dirName;
 	}
 }

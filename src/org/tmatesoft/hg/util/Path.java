@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.util;
 
+import java.util.Collection;
+
 /**
  * Identify repository files (not String nor io.File). Convenient for pattern matching. Memory-friendly.
  * 
@@ -75,6 +77,29 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 	public int hashCode() {
 		return path.hashCode();
 	}
+	
+	public enum CompareResult {
+		Same, Unrelated, Nested, Parent, /* perhaps, also ImmediateParent, DirectChild? */
+	}
+	
+	/*
+	 * a/file and a/dir ?
+	 */
+	public CompareResult compareWith(Path another) {
+		if (another == null) {
+			return CompareResult.Unrelated; // XXX perhaps, IAE?
+		}
+		if (another == this || (another.length() == length() && equals(another))) {
+			return CompareResult.Same;
+		}
+		if (path.startsWith(another.path)) {
+			return CompareResult.Nested;
+		}
+		if (another.path.startsWith(path)) {
+			return CompareResult.Parent;
+		}
+		return CompareResult.Unrelated;
+	}
 
 	public static Path create(String path) {
 		if (path == null) {
@@ -92,6 +117,26 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 	 */
 	public interface Matcher {
 		boolean accept(Path path);
+		
+		final class Any implements Matcher {
+			public boolean accept(Path path) { return true; }
+		}
+		class Composite implements Matcher {
+			private final Path.Matcher[] elements;
+			
+			public Composite(Collection<Path.Matcher> matchers) {
+				elements = matchers.toArray(new Path.Matcher[matchers.size()]);
+			}
+
+			public boolean accept(Path path) {
+				for (Path.Matcher m : elements) {
+					if (m.accept(path)) {
+						return true;
+					}
+				}
+				return false;
+			}
+		}
 	}
 
 	/**

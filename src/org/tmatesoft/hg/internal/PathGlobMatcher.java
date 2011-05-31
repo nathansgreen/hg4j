@@ -39,7 +39,7 @@ public class PathGlobMatcher implements Path.Matcher {
 		String[] regexp = new String[globPatterns.length]; //deliberately let fail with NPE
 		int i = 0;
 		for (String s : globPatterns) {
-			regexp[i] = glob2regexp(s);
+			regexp[i++] = glob2regexp(s);
 		}
 		try {
 			delegate = new PathRegexpMatcher(regexp);
@@ -53,21 +53,28 @@ public class PathGlobMatcher implements Path.Matcher {
 	// HgIgnore.glob2regex is similar, but IsIgnore solves slightly different task 
 	// (need to match partial paths, e.g. for glob 'bin' shall match not only 'bin' folder, but also any path below it,
 	// which is not generally the case
-	private static String glob2regexp(String glob) {
+	private static String glob2regexp(String glob) { // FIXME TESTS NEEDED!!!
 		int end = glob.length() - 1;
-		boolean needLineEndMatch = glob.charAt(end) != '*';
-		while (end > 0 && glob.charAt(end) == '*') end--; // remove trailing * that are useless for Pattern.find()
-		StringBuilder sb = new StringBuilder(end*2);
-		if (glob.charAt(0) != '*') {
-			sb.append('^');
+		if (glob.length() > 2 && glob.charAt(end) == '*' && glob.charAt(end - 1) == '.') {
+			end-=2;
 		}
+		boolean needLineEndMatch = true;//glob.charAt(end) != '*';
+//		while (end > 0 && glob.charAt(end) == '*') end--; // remove trailing * that are useless for Pattern.find()
+		StringBuilder sb = new StringBuilder(end*2);
+//		if (glob.charAt(0) != '*') {
+			sb.append('^');
+//		}
 		for (int i = 0; i <= end; i++) {
 			char ch = glob.charAt(i);
 			if (ch == '*') {
-				if (glob.charAt(i+1) == '*') { // i < end because we've stripped any trailing * earlier
+				if (i < end && glob.charAt(i+1) == '*') { 
 					// any char, including path segment separator
 					sb.append(".*?");
 					i++;
+					if (i < end && glob.charAt(i+1) == '/') {
+						sb.append("/?");
+						i++;
+					}
 				} else {
 					// just path segments
 					sb.append("[^/]*?");

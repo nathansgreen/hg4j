@@ -28,6 +28,7 @@ import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.PathGlobMatcher;
 import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -75,9 +76,26 @@ public class Main {
 	
 	private void testFileStatus() {
 //		final Path path = Path.create("src/org/tmatesoft/hg/util/");
-		final Path path = Path.create("src/org/tmatesoft/hg/internal/Experimental.java");
-		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, path);
+//		final Path path = Path.create("src/org/tmatesoft/hg/internal/Experimental.java");
+//		final Path path = Path.create("dir/file3");
+//		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, path);
+		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, new PathGlobMatcher("*"));
 		wcsc.walk(TIP, new StatusDump());
+		new HgManifestCommand(hgRepo).dirs(true).revision(TIP).execute(new HgManifestCommand.Handler() {
+			
+			public void file(FileRevision fileRevision) {
+			}
+			
+			public void end(Nodeid manifestRevision) {
+			}
+			
+			public void dir(Path p) {
+				System.out.println(p);
+			}
+			
+			public void begin(Nodeid manifestRevision) {
+			}
+		});
 	}
 	
 	private void dumpBranches() {

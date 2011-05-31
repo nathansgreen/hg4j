@@ -29,7 +29,6 @@ import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.Path.Matcher;
 
 /**
  * Command to obtain file status information, 'hg status' counterpart. 
@@ -41,7 +40,8 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	private final HgRepository repo;
 
 	private int startRevision = TIP;
-	private int endRevision = WORKING_COPY; 
+	private int endRevision = WORKING_COPY;
+	private Path.Matcher scope;
 	
 	private final Mediator mediator = new Mediator();
 
@@ -146,8 +146,8 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	 * @param pathMatcher - matcher to use,  pass <code>null/<code> to reset
 	 * @return <code>this</code> for convenience
 	 */
-	public HgStatusCommand match(Path.Matcher pathMatcher) {
-		mediator.matcher = pathMatcher;
+	public HgStatusCommand match(Path.Matcher scopeMatcher) {
+		scope = scopeMatcher;
 		return this;
 	}
 
@@ -176,10 +176,11 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 			// I may use number of files in either rev1 or rev2 manifest edition
 			mediator.start(statusHandler, new ChangelogHelper(repo, startRevision));
 			if (endRevision == WORKING_COPY) {
-				HgWorkingCopyStatusCollector wcsc = new HgWorkingCopyStatusCollector(repo);
+				HgWorkingCopyStatusCollector wcsc = scope != null ? HgWorkingCopyStatusCollector.create(repo, scope) : new HgWorkingCopyStatusCollector(repo);
 				wcsc.setBaseRevisionCollector(sc);
 				wcsc.walk(startRevision, mediator);
 			} else {
+				sc.setScope(scope); // explicitly set, even if null - would be handy once we reuse StatusCollector
 				if (startRevision == TIP) {
 					sc.change(endRevision, mediator);
 				} else {
@@ -204,7 +205,6 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		boolean needClean;
 		boolean needIgnored;
 		boolean needCopies;
-		Matcher matcher;
 		Handler handler;
 		private ChangelogHelper logHelper;
 
@@ -227,59 +227,43 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 
 		public void modified(Path fname) {
 			if (needModified) {
-				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Modified, fname, logHelper));
-				}
+				handler.handleStatus(new HgStatus(Modified, fname, logHelper));
 			}
 		}
 		public void added(Path fname) {
 			if (needAdded) {
-				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Added, fname, logHelper));
-				}
+				handler.handleStatus(new HgStatus(Added, fname, logHelper));
 			}
 		}
 		public void removed(Path fname) {
 			if (needRemoved) {
-				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Removed, fname, logHelper));
-				}
+				handler.handleStatus(new HgStatus(Removed, fname, logHelper));
 			}
 		}
 		public void copied(Path fnameOrigin, Path fnameAdded) {
 			if (needCopies) {
-				if (matcher == null || matcher.accept(fnameAdded)) {
-					// FIXME in fact, merged files may report 'copied from' as well, correct status kind thus may differ from Added
-					handler.handleStatus(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
-				}
+				// FIXME in fact, merged files may report 'copied from' as well, correct status kind thus may differ from Added
+				handler.handleStatus(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
 			}
 		}
 		public void missing(Path fname) {
 			if (needMissing) {
-				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Missing, fname, logHelper));
-				}
+				handler.handleStatus(new HgStatus(Missing, fname, logHelper));
 			}
 		}
 		public void unknown(Path fname) {
 			if (needUnknown) {
-				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Unknown, fname, logHelper));
-				}
+				handler.handleStatus(new HgStatus(Unknown, fname, logHelper));
 			}
 		}
 		public void clean(Path fname) {
 			if (needClean) {
-				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Clean, fname, logHelper));
-				}
+				handler.handleStatus(new HgStatus(Clean, fname, logHelper));
 			}
 		}
 		public void ignored(Path fname) {
 			if (needIgnored) {
-				if (matcher == null || matcher.accept(fname)) {
-					handler.handleStatus(new HgStatus(Ignored, fname, logHelper));
-				}
+				handler.handleStatus(new HgStatus(Ignored, fname, logHelper));
 			}
 		}
 	}

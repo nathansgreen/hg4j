@@ -27,11 +27,8 @@ import java.util.List;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Filter;
-import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
-import org.tmatesoft.hg.util.FileIterator;
-import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -215,16 +212,6 @@ public final class HgRepository {
 
 	/*package-local*/ DataAccessProvider getDataAccess() {
 		return dataAccess;
-	}
-
-	// FIXME not sure repository shall create walkers
-	/*package-local*/ FileIterator createWorkingDirWalker() {
-		File repoRoot = repoDir.getParentFile();
-		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), getToRepoPathHelper()));
-		// Impl note: simple source is enough as files in the working dir are all unique
-		// even if they might get reused (i.e. after FileIterator#reset() and walking once again),
-		// path caching is better to be done in the code which knows that path are being reused 
-		return new FileWalker(repoRoot, pathSrc);
 	}
 
 	/**

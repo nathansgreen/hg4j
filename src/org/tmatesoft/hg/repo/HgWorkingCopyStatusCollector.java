@@ -19,14 +19,13 @@ package org.tmatesoft.hg.repo;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.tmatesoft.hg.repo.HgRepository.*;
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -38,7 +37,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
-import org.tmatesoft.hg.internal.RelativePathRewrite;
+import org.tmatesoft.hg.internal.PathScope;
 import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
@@ -62,10 +61,11 @@ public class HgWorkingCopyStatusCollector {
 	private PathPool pathPool;
 
 	public HgWorkingCopyStatusCollector(HgRepository hgRepo) {
-		this(hgRepo, hgRepo.createWorkingDirWalker());
+		this(hgRepo, new HgInternals(hgRepo).createWorkingDirWalker(null));
 	}
 
-	HgWorkingCopyStatusCollector(HgRepository hgRepo, FileIterator hgRepoWalker) {
+	// FIXME document cons
+	public HgWorkingCopyStatusCollector(HgRepository hgRepo, FileIterator hgRepoWalker) {
 		repo = hgRepo;
 		repoWalker = hgRepoWalker;
 	}
@@ -136,7 +136,6 @@ public class HgWorkingCopyStatusCollector {
 			repoWalker.next();
 			Path fname = pp.path(repoWalker.name());
 			File f = repoWalker.file();
-			assert f.isFile();
 			if (!f.exists()) {
 				// file coming from iterator doesn't exist.
 				if (knownEntries.remove(fname.toString())) {
@@ -167,6 +166,7 @@ public class HgWorkingCopyStatusCollector {
 				}
 				continue;
 			}
+			assert f.isFile();
 			if (knownEntries.remove(fname.toString())) {
 				// tracked file.
 				// modified, added, removed, clean
@@ -399,10 +399,58 @@ public class HgWorkingCopyStatusCollector {
 		return null;
 	}
 
-	@Experimental(reason="There's intention to support status query with multiple files/dirs, API might get changed")
-	public static HgWorkingCopyStatusCollector create(HgRepository hgRepo, Path file) {
-		FileIterator fi = file.isDirectory() ? new DirFileIterator(hgRepo, file) : new FileListIterator(hgRepo.getRepositoryRoot().getParentFile(), file);
+	/**
+	 * Configure status collector to consider only subset of a working copy tree. Tries to be as effective as possible, and to 
+	 * traverse only relevant part of working copy on the filesystem.
+	 * 
+	 * @param hgRepo repository
+	 * @param paths repository-relative files and/or directories. Directories are processed recursively. 
+	 * 
+	 * @return new instance of {@link HgWorkingCopyStatusCollector}, ready to {@link #walk(int, HgStatusInspector) walk} associated working copy 
+	 */
+	@Experimental(reason="Provisional API")
+	public static HgWorkingCopyStatusCollector create(HgRepository hgRepo, Path... paths) {
+		ArrayList<Path> f = new ArrayList<Path>(5);
+		ArrayList<Path> d = new ArrayList<Path>(5);
+		for (Path p : paths) {
+			if (p.isDirectory()) {
+				d.add(p);
+			} else {
+				f.add(p);
+			}
+		}
+//		final Path[] dirs = f.toArray(new Path[d.size()]);
+		if (d.isEmpty()) {
+			final Path[] files = f.toArray(new Path[f.size()]);
+			FileIterator fi = new FileListIterator(hgRepo.getRepositoryRoot().getParentFile(), files);
+			return new HgWorkingCopyStatusCollector(hgRepo, fi);
+		}
+		//
+		
+		//FileIterator fi = file.isDirectory() ? new DirFileIterator(hgRepo, file) : new FileListIterator(, file);
+		FileIterator fi = new HgInternals(hgRepo).createWorkingDirWalker(new PathScope(true, paths));
 		return new HgWorkingCopyStatusCollector(hgRepo, fi);
+	}
+	
+	/**
+	 * Configure collector object to calculate status for matching files only. 
+	 * This method may be less effective than explicit list of files as it iterates over whole repository 
+	 * (thus supplied matcher doesn't need to care if directories to files in question are also in scope, 
+	 * see {@link FileWalker#FileWalker(File, Path.Source, Path.Matcher)})
+	 *  
+	 * @return new instance of {@link HgWorkingCopyStatusCollector}, ready to {@link #walk(int, HgStatusInspector) walk} associated working copy
+	 */
+	@Experimental(reason="Provisional API. May add boolean strict argument for those who write smart matchers that can be used in FileWalker")
+	public static HgWorkingCopyStatusCollector create(HgRepository hgRepo, Path.Matcher scope) {
+		FileIterator w = new HgInternals(hgRepo).createWorkingDirWalker(null);
+		FileIterator wf = (scope == null || scope instanceof Path.Matcher.Any) ? w : new FileIteratorFilter(w, scope);
+		// the reason I need to iterate over full repo and apply filter is that I have no idea whatsoever about
+		// patterns in the scope. I.e. if scope lists a file (PathGlobMatcher("a/b/c.txt")), FileWalker won't get deep
+		// to the file unless matcher would also explicitly include "a/", "a/b/" in scope. Since I can't rely
+		// users would write robust matchers, and I don't see a decent way to enforce that (i.e. factory to produce
+		// correct matcher from Path is much like what PathScope does, and can be accessed directly with #create(repo, Path...)
+		// method above/
+		return new HgWorkingCopyStatusCollector(hgRepo, wf);
 	}
 
 	private static class FileListIterator implements FileIterator {
@@ -452,15 +500,16 @@ public class HgWorkingCopyStatusCollector {
 		}
 	}
 	
-	private static class DirFileIterator implements FileIterator {
-		private final Path dirOfInterest;
-		private final FileWalker walker;
+	private static class FileIteratorFilter implements FileIterator {
+		private final Path.Matcher filter;
+		private final FileIterator walker;
+		private boolean didNext = false;
 
-		public DirFileIterator(HgRepository hgRepo, Path directory) {
-			dirOfInterest = directory;
-			File dir = hgRepo.getRepositoryRoot().getParentFile();
-			Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(dir), hgRepo.getToRepoPathHelper()));
-			walker = new FileWalker(new File(dir, directory.toString()), pathSrc);
+		public FileIteratorFilter(FileIterator fileWalker, Path.Matcher filterMatcher) {
+			assert fileWalker != null;
+			assert filterMatcher != null;
+			filter = filterMatcher;
+			walker = fileWalker;
 		}
 
 		public void reset() {
@@ -468,11 +517,24 @@ public class HgWorkingCopyStatusCollector {
 		}
 
 		public boolean hasNext() {
-			return walker.hasNext();
+			while (walker.hasNext()) {
+				walker.next();
+				if (filter.accept(walker.name())) {
+					didNext = true;
+					return true;
+				}
+			}
+			return false;
 		}
 
 		public void next() {
-			walker.next();
+			if (didNext) {
+				didNext = false;
+			} else {
+				if (!hasNext()) {
+					throw new NoSuchElementException();
+				}
+			}
 		}
 
 		public Path name() {
@@ -484,7 +546,7 @@ public class HgWorkingCopyStatusCollector {
 		}
 
 		public boolean inScope(Path file) {
-			return file.toString().startsWith(dirOfInterest.toString());
+			return filter.accept(file);
 		}
 	}
 }

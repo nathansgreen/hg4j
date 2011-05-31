@@ -16,8 +16,9 @@
  */
 package org.tmatesoft.hg.test;
 
-import static org.junit.Assert.assertTrue;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
@@ -35,6 +36,7 @@ import org.junit.Test;
 import org.tmatesoft.hg.core.HgStatus;
 import org.tmatesoft.hg.core.HgStatus.Kind;
 import org.tmatesoft.hg.core.HgStatusCommand;
+import org.tmatesoft.hg.internal.PathGlobMatcher;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -266,6 +268,97 @@ public class TestStatus {
 		cmd.base(2).execute(sc = new StatusCollector());
 		assertTrue(sc.get(file1).contains(Unknown));
 		assertTrue(sc.get(file1).size() == 1);
+	}
+	
+	@Test
+	public void testSubTreeStatus() throws Exception {
+		repo = Configuration.get().find("status-1");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		StatusCollector sc = new StatusCollector();
+		cmd.match(new PathGlobMatcher("*"));
+		cmd.all().execute(sc);
+		/*
+		 * C .hgignore
+		 * ? file1
+		 * M file2
+		 * C readme
+		 */
+		final Path file1 = Path.create("file1");
+		assertTrue(sc.get(file1).contains(Unknown));
+		assertTrue(sc.get(file1).size() == 1);
+		assertTrue(sc.get(Removed).isEmpty());
+		assertTrue(sc.get(Clean).size() == 2);
+		assertTrue(sc.get(Modified).size() == 1);
+		//
+		cmd.match(new PathGlobMatcher("dir/*")).execute(sc = new StatusCollector());
+		/*
+		 * I dir/file3
+		 * R dir/file4
+		 * R dir/file5
+		 */
+		assertTrue(sc.get(Modified).isEmpty());
+		assertTrue(sc.get(Added).isEmpty());
+		assertTrue(sc.get(Ignored).size() == 1);
+		assertTrue(sc.get(Removed).size() == 2);
+	}
+	
+	
+	@Test
+	public void testSpecificFileStatus() throws Exception {
+		repo = Configuration.get().find("status-1");
+		// files only
+		final Path file2 = Path.create("file2");
+		final Path file3 = Path.create("dir/file3");
+		HgWorkingCopyStatusCollector sc = HgWorkingCopyStatusCollector.create(repo, file2, file3);
+		HgStatusCollector.Record r = new HgStatusCollector.Record();
+		sc.walk(TIP, r);
+		assertTrue(r.getAdded().isEmpty());
+		assertTrue(r.getRemoved().isEmpty());
+		assertTrue(r.getUnknown().isEmpty());
+		assertTrue(r.getClean().isEmpty());
+		assertTrue(r.getMissing().isEmpty());
+		assertTrue(r.getCopied().isEmpty());
+		assertTrue(r.getIgnored().contains(file3));
+		assertTrue(r.getIgnored().size() == 1);
+		assertTrue(r.getModified().contains(file2));
+		assertTrue(r.getModified().size() == 1);
+		// mix files and directories
+		final Path readme = Path.create("readme");
+		final Path dir = Path.create("dir/");
+		sc = HgWorkingCopyStatusCollector.create(repo, readme, dir);
+		sc.walk(TIP, r = new HgStatusCollector.Record());
+		assertTrue(r.getAdded().isEmpty());
+		assertTrue(r.getRemoved().size() == 2);
+		for (Path p : r.getRemoved()) {
+			assertEquals(p.compareWith(dir), Path.CompareResult.Nested);
+		}
+		assertTrue(r.getUnknown().isEmpty());
+		assertTrue(r.getClean().size() == 1);
+		assertTrue(r.getClean().contains(readme));
+		assertTrue(r.getMissing().isEmpty());
+		assertTrue(r.getCopied().isEmpty());
+		assertTrue(r.getIgnored().contains(file3));
+		assertTrue(r.getIgnored().size() == 1);
+		assertTrue(r.getModified().isEmpty());
+	}
+	
+	@Test
+	public void testSameResultDirectPathVsMatcher() throws Exception {
+		repo = Configuration.get().find("status-1");
+		final Path file3 = Path.create("dir/file3");
+		final Path file5 = Path.create("dir/file5");
+		
+		HgWorkingCopyStatusCollector sc = HgWorkingCopyStatusCollector.create(repo, file3, file5);
+		HgStatusCollector.Record r;
+		sc.walk(TIP, r = new HgStatusCollector.Record());
+		assertTrue(r.getRemoved().contains(file5));
+		assertTrue(r.getIgnored().contains(file3));
+		//
+		// query for the same file, but with
+		sc = HgWorkingCopyStatusCollector.create(repo, new PathGlobMatcher(file3.toString(), file5.toString()));
+		sc.walk(TIP, r = new HgStatusCollector.Record());
+		assertTrue(r.getRemoved().contains(file5));
+		assertTrue(r.getIgnored().contains(file3));
 	}
 	
 	/*
