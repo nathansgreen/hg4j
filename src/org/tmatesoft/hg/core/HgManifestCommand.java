@@ -25,7 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
@@ -124,7 +123,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	public interface Handler {
 		void begin(Nodeid manifestRevision);
 		void dir(Path p); // optionally invoked (if walker was configured to spit out directories) prior to any files from this dir and subdirs
-		void file(FileRevision fileRevision); // XXX allow to check p is invalid (df.exists())
+		void file(HgLogCommand.FileRevision fileRevision); // XXX allow to check p is invalid (df.exists())
 		void end(Nodeid manifestRevision);
 	}
 
@@ -134,7 +133,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 		// However, once HgManifest.Inspector switches to Path objects, perhaps global Path pool
 		// might be more effective?
 		private PathPool pathPool;
-		private List<FileRevision> manifestContent;
+		private List<HgFileRevision> manifestContent;
 		private Nodeid manifestNodeid;
 		
 		public void start() {
@@ -149,27 +148,27 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	
 		public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
 			if (needDirs && manifestContent == null) {
-				manifestContent = new LinkedList<FileRevision>();
+				manifestContent = new LinkedList<HgFileRevision>();
 			}
 			visitor.begin(manifestNodeid = nid);
 			return true;
 		}
 		public boolean end(int revision) {
 			if (needDirs) {
-				LinkedHashMap<Path, LinkedList<FileRevision>> breakDown = new LinkedHashMap<Path, LinkedList<FileRevision>>();
-				for (FileRevision fr : manifestContent) {
+				LinkedHashMap<Path, LinkedList<HgFileRevision>> breakDown = new LinkedHashMap<Path, LinkedList<HgFileRevision>>();
+				for (HgFileRevision fr : manifestContent) {
 					Path filePath = fr.getPath();
 					Path dirPath = pathPool.parent(filePath);
-					LinkedList<FileRevision> revs = breakDown.get(dirPath);
+					LinkedList<HgFileRevision> revs = breakDown.get(dirPath);
 					if (revs == null) {
-						revs = new LinkedList<FileRevision>();
+						revs = new LinkedList<HgFileRevision>();
 						breakDown.put(dirPath, revs);
 					}
 					revs.addLast(fr);
 				}
 				for (Path dir : breakDown.keySet()) {
 					visitor.dir(dir);
-					for (FileRevision fr : breakDown.get(dir)) {
+					for (HgFileRevision fr : breakDown.get(dir)) {
 						visitor.file(fr);
 					}
 				}
@@ -184,7 +183,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 			if (matcher != null && !matcher.accept(p)) {
 				return true;
 			}
-			FileRevision fr = new FileRevision(repo, nid, p);
+			HgFileRevision fr = new HgFileRevision(repo, nid, p);
 			if (needDirs) {
 				manifestContent.add(fr);
 			} else {

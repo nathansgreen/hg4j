@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -49,7 +48,7 @@ public class HgChangeset implements Cloneable {
 	private Nodeid nodeid;
 
 	//
-	private List<FileRevision> modifiedFiles, addedFiles;
+	private List<HgFileRevision> modifiedFiles, addedFiles;
 	private List<Path> deletedFiles;
 	private int revNumber;
 	private byte[] parent1, parent2;
@@ -118,14 +117,14 @@ public class HgChangeset implements Cloneable {
 		return rv;
 	}
 
-	public List<FileRevision> getModifiedFiles() {
+	public List<HgFileRevision> getModifiedFiles() {
 		if (modifiedFiles == null) {
 			initFileChanges();
 		}
 		return modifiedFiles;
 	}
 
-	public List<FileRevision> getAddedFiles() {
+	public List<HgFileRevision> getAddedFiles() {
 		if (addedFiles == null) {
 			initFileChanges();
 		}
@@ -182,8 +181,8 @@ public class HgChangeset implements Cloneable {
 
 	private /*synchronized*/ void initFileChanges() {
 		ArrayList<Path> deleted = new ArrayList<Path>();
-		ArrayList<FileRevision> modified = new ArrayList<FileRevision>();
-		ArrayList<FileRevision> added = new ArrayList<FileRevision>();
+		ArrayList<HgFileRevision> modified = new ArrayList<HgFileRevision>();
+		ArrayList<HgFileRevision> added = new ArrayList<HgFileRevision>();
 		HgStatusCollector.Record r = new HgStatusCollector.Record();
 		statusHelper.change(revNumber, r);
 		final HgRepository repo = statusHelper.getRepo();
@@ -192,14 +191,14 @@ public class HgChangeset implements Cloneable {
 			if (nid == null) {
 				throw new HgBadStateException();
 			}
-			modified.add(new FileRevision(repo, nid, s));
+			modified.add(new HgFileRevision(repo, nid, s));
 		}
 		for (Path s : r.getAdded()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
 				throw new HgBadStateException();
 			}
-			added.add(new FileRevision(repo, nid, s));
+			added.add(new HgFileRevision(repo, nid, s));
 		}
 		for (Path s : r.getRemoved()) {
 			// with Path from getRemoved, may just copy

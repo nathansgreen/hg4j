@@ -26,6 +26,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
@@ -64,6 +65,7 @@ public final class HgRepository {
 	private HgManifest manifest;
 	private HgTags tags;
 	private HgBranches branches;
+	private HgMergeState mergeState;
 
 	// XXX perhaps, shall enable caching explicitly
 	private final HashMap<Path, SoftReference<RevlogStream>> streamsCache = new HashMap<Path, SoftReference<RevlogStream>>();
@@ -138,7 +140,7 @@ public final class HgRepository {
 		return this.manifest;
 	}
 	
-	public final HgTags getTags() {
+	public HgTags getTags() {
 		if (tags == null) {
 			tags = new HgTags();
 			try {
@@ -151,12 +153,20 @@ public final class HgRepository {
 		return tags;
 	}
 	
-	public final HgBranches getBranches() {
+	public HgBranches getBranches() {
 		if (branches == null) {
 			branches = new HgBranches(this);
 			branches.collect(ProgressSupport.Factory.get(null));
 		}
 		return branches;
+	}
+
+	@Experimental(reason="Perhaps, shall not cache instance, and provide loadMergeState as it may change often")
+	public HgMergeState getMergeState() {
+		if (mergeState == null) {
+			mergeState = new HgMergeState(this);
+		}
+		return mergeState;
 	}
 	
 	public HgDataFile getFileNode(String path) {

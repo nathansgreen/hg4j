@@ -41,6 +41,7 @@ public class PathPool implements Path.Source {
 	}
 
 	// pipes path object through cache to reuse instance, if possible
+	// TODO unify with Pool<Path>
 	public Path path(Path p) {
 		String s = pathRewrite.rewrite(p.toString());
 		Path cached = get(s, false);
@@ -62,6 +63,11 @@ public class PathPool implements Path.Source {
 			}
 		}
 		return get("", true);
+	}
+	
+	// invoke when path pool is no longer in use, to ease gc work
+	public void clear() {
+		cache.clear();
 	}
 
 	private Path get(String p, boolean create) {

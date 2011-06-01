@@ -22,8 +22,8 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetHandler;
+import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
@@ -122,7 +122,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 		if (complete) {
 			if (!cset.getModifiedFiles().isEmpty()) {
 				sb.append("files:      ");
-				for (FileRevision s : cset.getModifiedFiles()) {
+				for (HgFileRevision s : cset.getModifiedFiles()) {
 					sb.append(' ');
 					sb.append(s.getPath());
 				}
@@ -130,7 +130,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 			}
 			if (!cset.getAddedFiles().isEmpty()) {
 				sb.append("files+:     ");
-				for (FileRevision s : cset.getAddedFiles()) {
+				for (HgFileRevision s : cset.getAddedFiles()) {
 					sb.append(' ');
 					sb.append(s.getPath());
 				}

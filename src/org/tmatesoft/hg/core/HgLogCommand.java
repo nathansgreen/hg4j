@@ -215,8 +215,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					// even if we do not follow history, report file rename
 					do {
 						if (handler instanceof FileHistoryHandler) {
-							FileRevision src = new FileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
-							FileRevision dst = new FileRevision(repo, fileNode.getRevision(0), fileNode.getPath());
+							HgFileRevision src = new HgFileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
+							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), fileNode.getPath());
 							try {
 								((FileHistoryHandler) handler).copy(src, dst);
 							} catch (RuntimeException ex) {
@@ -315,31 +315,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		}
 	}
 
-	public static final class FileRevision {
-		private final HgRepository repo;
-		private final Nodeid revision;
-		private final Path path;
-		
-		/*package-local*/FileRevision(HgRepository hgRepo, Nodeid rev, Path p) {
-			if (hgRepo == null || rev == null || p == null) {
-				// since it's package local, it is our code to blame for non validated arguments
-				throw new HgBadStateException();
-			}
-			repo = hgRepo;
-			revision = rev;
-			path = p;
-		}
-		
-		public Path getPath() {
-			return path;
-		}
-		public Nodeid getRevision() {
-			return revision;
-		}
-		public void putContentTo(ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
-			HgDataFile fn = repo.getFileNode(path);
-			int localRevision = fn.getLocalRevision(revision);
-			fn.contentWithFilters(localRevision, sink);
-		}
+	/**
+	 * @deprecated pulled up, use {@link HgFileRevision} instead.
+	 */
+	@Deprecated
+	public interface FileRevision {
+		public abstract Path getPath();
+		public abstract Nodeid getRevision();
+		public abstract void putContentTo(ByteChannel sink) throws HgDataStreamException, IOException, CancelledException;
 	}
 }

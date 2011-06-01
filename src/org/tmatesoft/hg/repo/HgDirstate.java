@@ -23,6 +23,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.util.Path;
@@ -44,6 +46,7 @@ class HgDirstate {
 	private Map<String, Record> added;
 	private Map<String, Record> removed;
 	private Map<String, Record> merged;
+	private Nodeid p1, p2;
 
 	/*package-local*/ HgDirstate() {
 		// empty instance
@@ -71,9 +74,10 @@ class HgDirstate {
 		removed = new LinkedHashMap<String, Record>();
 		merged = new LinkedHashMap<String, Record>();
 		try {
-			// XXX skip(40) if we don't need these? 
 			byte[] parents = new byte[40];
 			da.readBytes(parents, 0, 40);
+			p1 = Nodeid.fromBinary(parents, 0);
+			p2 = Nodeid.fromBinary(parents, 20);
 			parents = null;
 			// hg init; hg up produces an empty repository where dirstate has parents (40 bytes) only
 			while (!da.isEmpty()) {
@@ -113,6 +117,41 @@ class HgDirstate {
 		} finally {
 			da.done();
 		}
+	}
+
+	// do not read whole dirstate if all we need is WC parent information
+	private void readParents() {
+		if (dirstateFile == null || !dirstateFile.exists()) {
+			return;
+		}
+		DataAccess da = accessProvider.create(dirstateFile);
+		if (da.isEmpty()) {
+			return;
+		}
+		try {
+			byte[] parents = new byte[40];
+			da.readBytes(parents, 0, 40);
+			p1 = Nodeid.fromBinary(parents, 0);
+			p2 = Nodeid.fromBinary(parents, 20);
+			parents = null;
+		} catch (IOException ex) {
+			throw new HgBadStateException(ex); // XXX in fact, our exception is not the best solution here.
+		} finally {
+			da.done();
+		}
+	}
+	
+	/**
+	 * @return array of length 2 with working copy parents, non null.
+	 */
+	public Nodeid[] parents() {
+		if (p1 == null) {
+			readParents();
+		}
+		Nodeid[] rv = new Nodeid[2];
+		rv[0] = p1;
+		rv[1] = p2;
+		return rv;
 	}
 
 	// new, modifiable collection

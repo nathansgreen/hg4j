@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -33,6 +34,7 @@ import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgMergeState;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
@@ -62,7 +64,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testFileStatus();
+		m.testMergeState();
+//		m.testFileStatus();
 //		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
@@ -74,28 +77,31 @@ public class Main {
 //		m.bunchOfTests();
 	}
 	
+	private void testMergeState() throws Exception {
+		final HgMergeState mergeState = hgRepo.getMergeState();
+		mergeState.refresh();
+		for (HgMergeState.Entry e : mergeState.getConflicts()) {
+			System.out.println(e.getState() + " " + e.getActualFile());
+			System.out.println("p1:       " + formatFileRevision(e.getFirstParent()));
+			System.out.println("p2:       " + formatFileRevision(e.getSecondParent()));
+			System.out.println("ancestor: " + formatFileRevision(e.getCommonAncestor()));
+			System.out.println();
+		}
+	}
+	
+	private static String formatFileRevision(HgFileRevision r) throws Exception {
+		final ByteArrayChannel sink = new ByteArrayChannel();
+		r.putContentTo(sink);
+		return String.format("%s %s (%d bytes)", r.getPath(), r.getRevision(), sink.toArray().length);
+	}
+	
 	private void testFileStatus() {
 //		final Path path = Path.create("src/org/tmatesoft/hg/util/");
 //		final Path path = Path.create("src/org/tmatesoft/hg/internal/Experimental.java");
-//		final Path path = Path.create("dir/file3");
+//		final Path path = Path.create("missing-dir/");
 //		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, path);
-		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, new PathGlobMatcher("*"));
+		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, new PathGlobMatcher("missing-dir/**/*"));
 		wcsc.walk(TIP, new StatusDump());
-		new HgManifestCommand(hgRepo).dirs(true).revision(TIP).execute(new HgManifestCommand.Handler() {
-			
-			public void file(FileRevision fileRevision) {
-			}
-			
-			public void end(Nodeid manifestRevision) {
-			}
-			
-			public void dir(Path p) {
-				System.out.println(p);
-			}
-			
-			public void begin(Nodeid manifestRevision) {
-			}
-		});
 	}
 	
 	private void dumpBranches() {
