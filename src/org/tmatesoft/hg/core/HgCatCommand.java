@@ -41,6 +41,7 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	private Path file;
 	private int localRevision = TIP;
 	private Nodeid revision;
+	private Nodeid cset;
 
 	public HgCatCommand(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -61,7 +62,11 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	}
 
 	/**
+	 * Select specific local revision of the file to cat. Note, revision numbering is of particular file, not that of
+	 * repository (i.e. revision 0 means initial content of the file, irrespective of changeset revision at the time of commit) 
+	 * 
 	 * Invocation of this method clears revision set with {@link #revision(Nodeid)} or {@link #revision(int)} earlier.
+	 * 
 	 * XXX rev can't be WORKING_COPY (if allowed, need to implement in #execute())
 	 * @param rev local revision number, non-negative, or one of predefined constants. Note, use of {@link HgRepository#BAD_REVISION}, 
 	 * although possible, makes little sense (command would fail if executed).  
@@ -73,13 +78,16 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 		}
 		localRevision = rev;
 		revision = null;
+		cset = null;
 		return this;
 	}
 	
 	/**
-	 * Select revision to read. Invocation of this method clears revision set with {@link #revision(int)} or {@link #revision(Nodeid)} earlier.
+	 * Select revision to read. Note, this revision is file revision (i.e. the one from manifest), not the changeset revision.
+	 *  
+	 * Invocation of this method clears revision set with {@link #revision(int)} or {@link #revision(Nodeid)} earlier.
 	 * 
-	 * @param nodeid - unique revision identifier, Note, use of <code>null</code> or {@link Nodeid#NULL} is senseless
+	 * @param nodeid - unique file revision identifier, Note, use of <code>null</code> or {@link Nodeid#NULL} is senseless
 	 * @return <code>this</code> for convenience
 	 */
 	public HgCatCommand revision(Nodeid nodeid) {
@@ -88,6 +96,23 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 		}
 		revision = nodeid;
 		localRevision = BAD_REVISION;
+		cset = null;
+		return this;
+	}
+	
+	/**
+	 * Select whatever revision of the file that was actual at the time of the specified changeset. Unlike {@link #revision(int)} or {@link #revision(Nodeid)}, this method 
+	 * operates in terms of repository global revisions (aka changesets). 
+	 * 
+	 * Invocation of this method clears local file revisions selection.
+	 * 
+	 * @param nodeid changeset revision
+	 * @return <code>this</code> for convenience
+	 */
+	public HgCatCommand changeset(Nodeid nodeid) {
+		localRevision = BAD_REVISION;
+		revision = null;
+		cset = nodeid;
 		return this;
 	}
 
@@ -99,8 +124,8 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	 * @throws IllegalArgumentException when command arguments are incomplete or wrong
 	 */
 	public void execute(ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
-		if (localRevision == BAD_REVISION && revision == null) {
-			throw new IllegalArgumentException("Either local file revision number or nodeid shall be specified");
+		if (localRevision == BAD_REVISION && revision == null && cset == null) {
+			throw new IllegalArgumentException("File revision, corresponing local number, or a changset nodeid shall be specified");
 		}
 		if (file == null) {
 			throw new IllegalArgumentException("Name of the file is missing");
@@ -113,7 +138,25 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 			throw new HgDataStreamException(file, new FileNotFoundException(file.toString()));
 		}
 		int revToExtract;
-		if (revision != null) {
+		if (cset != null) {
+			int csetRev = repo.getChangelog().getLocalRevision(cset);
+			Nodeid toExtract = null;
+			do {
+				toExtract = repo.getManifest().getFileRevision(csetRev, file);
+				if (toExtract == null) {
+					if (dataFile.isCopy()) {
+						file = dataFile.getCopySourceName();
+						dataFile = repo.getFileNode(file);
+					} else {
+						break;
+					}
+				}
+			} while (toExtract == null);
+			if (toExtract == null) {
+				throw new HgBadStateException(String.format("File %s not its origins were not known at repository %s revision", file, cset.shortNotation()));
+			}
+			revToExtract = dataFile.getLocalRevision(toExtract);
+		} else if (revision != null) {
 			revToExtract = dataFile.getLocalRevision(revision);
 		} else {
 			revToExtract = localRevision;

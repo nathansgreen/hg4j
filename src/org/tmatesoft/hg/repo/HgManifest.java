@@ -18,6 +18,7 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,9 +26,11 @@ import java.util.Arrays;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.util.Path;
 
 
 /**
@@ -57,6 +60,7 @@ public class HgManifest extends Revlog {
 		content.iterate(start0, end0, true, new ManifestParser(inspector));
 	}
 	
+	// manifest revision number that corresponds to the given changeset
 	/*package-local*/ int fromChangelog(int revisionNumber) {
 		if (HgInternals.wrongLocalRevision(revisionNumber)) {
 			throw new IllegalArgumentException(String.valueOf(revisionNumber));
@@ -68,6 +72,48 @@ public class HgManifest extends Revlog {
 		return revisionMap.at(revisionNumber);
 	}
 	
+	/**
+	 * Extracts file revision as it was known at the time of given changeset.
+	 * 
+	 * @param revisionNumber local changeset index 
+	 * @param file path to file in question
+	 * @return file revision or <code>null</code> if manifest at specified revision doesn't list such file
+	 */
+	@Experimental(reason="Perhaps, HgDataFile shall own this method")
+	public Nodeid getFileRevision(int revisionNumber, final Path file) {
+		int rev = fromChangelog(revisionNumber);
+		final Nodeid[] rv = new Nodeid[] { null };
+		content.iterate(rev, rev, true, new RevlogStream.Inspector() {
+			
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+				ByteArrayOutputStream bos = new ByteArrayOutputStream();
+				try {
+					byte b;
+					while (!data.isEmpty() && (b = data.readByte()) != '\n') {
+						if (b != 0) {
+							bos.write(b);
+						} else {
+							String fname = new String(bos.toByteArray());
+							bos.reset();
+							if (file.toString().equals(fname)) {
+								byte[] nid = new byte[40];  
+								data.readBytes(nid, 0, 40);
+								rv[0] = Nodeid.fromAscii(nid, 0, 40);
+								break;
+							}
+							// else skip to the end of line
+							while (!data.isEmpty() && (b = data.readByte()) != '\n')
+								;
+						}
+					}
+				} catch (IOException ex) {
+					throw new HgBadStateException(ex);
+				}
+			}
+		});
+		return rv[0];
+	}
+			
 	public interface Inspector {
 		boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision);
 		boolean next(Nodeid nid, String fname, String flags);

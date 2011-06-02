@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
@@ -64,7 +65,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testMergeState();
+		m.testCatAtCsetRevision();
+//		m.testMergeState();
 //		m.testFileStatus();
 //		m.dumpBranches();
 //		m.inflaterLengthException();
@@ -75,6 +77,16 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	// TODO as test in TestCat
+	private void testCatAtCsetRevision() throws Exception {
+		HgCatCommand cmd = new HgCatCommand(hgRepo);
+		cmd.file(Path.create("src/org/tmatesoft/hg/internal/RevlogStream.java"));
+		cmd.changeset(Nodeid.fromAscii("08db726a0fb7914ac9d27ba26dc8bbf6385a0554"));
+		final ByteArrayChannel sink = new ByteArrayChannel();
+		cmd.execute(sink);
+		System.out.println(sink.toArray().length);
 	}
 	
 	private void testMergeState() throws Exception {
