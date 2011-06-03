@@ -176,7 +176,37 @@ public class HgDataFile extends Revlog {
 			}
 		};
 		content.iterate(start, end, false, insp);
-		getRepo().getChangelog().range(inspector, commitRevisions);
+		final HgChangelog changelog = getRepo().getChangelog();
+//		changelog.range(inspector, commitRevisions); not effective when changes are sparse and far from each other
+		//
+		final int HistoricallyCloseCommits = 50; // XXX perhaps, shall increase/decrease based on changelog.revisionCount() 
+		// (huge changelog => memory mapped files, each file re-read is more expensive than iterating over records in one read?
+		//
+		// try short sequences on neighboring revisions.
+		for (int i = 0; i < commitRevisions.length; ) {
+			int x = i;
+			i++;
+			boolean sequential = true;
+			while (i < commitRevisions.length) {
+				if (commitRevisions[i] == commitRevisions[i-1] + 1) {
+					i++;
+				} else if (commitRevisions[i] - commitRevisions[i-1] < HistoricallyCloseCommits) {
+					// close enough, but not sequential
+					sequential = false;
+					i++;
+				} else {
+					break;
+				}
+			}
+			if (sequential) {
+				// commitRevisions[x..i-1] are sequential
+				changelog.range(commitRevisions[x], commitRevisions[i-1], inspector);
+			} else {
+				int[] revs = new int[i-x];
+				System.arraycopy(commitRevisions, x, revs, 0, i-x);
+				changelog.range(inspector, revs);
+			}
+		}
 	}
 	
 	// for a given local revision of the file, find out local revision in the changelog

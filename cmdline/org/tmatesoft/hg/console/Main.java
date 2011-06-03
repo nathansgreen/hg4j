@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgFileRevision;
@@ -32,6 +33,7 @@ import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
 import org.tmatesoft.hg.repo.HgBranches;
+import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
@@ -40,6 +42,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -65,7 +68,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testCatAtCsetRevision();
+		m.testEffectiveFileLog();
+//		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
 //		m.dumpBranches();
@@ -77,6 +81,20 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void testEffectiveFileLog() {
+		for (String fname : cmdLineOpts.getList("")) {
+			System.out.println(fname);
+			HgDataFile fn = hgRepo.getFileNode(fname);
+			if (fn.exists()) {
+				fn.history(new HgChangelog.Inspector() {
+					public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+						System.out.printf("%d:%s\n", revisionNumber, nodeid);
+					}
+				});
+			}
+		}
 	}
 	
 	// TODO as test in TestCat
@@ -112,7 +130,7 @@ public class Main {
 //		final Path path = Path.create("src/org/tmatesoft/hg/internal/Experimental.java");
 //		final Path path = Path.create("missing-dir/");
 //		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, path);
-		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, new PathGlobMatcher("missing-dir/**/*"));
+		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, new PathGlobMatcher("mi**"));
 		wcsc.walk(TIP, new StatusDump());
 	}
 	
