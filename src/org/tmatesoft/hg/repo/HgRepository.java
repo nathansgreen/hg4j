@@ -18,18 +18,23 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.lang.ref.SoftReference;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgDataStreamException;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -142,9 +147,29 @@ public final class HgRepository {
 	
 	public HgTags getTags() {
 		if (tags == null) {
-			tags = new HgTags();
+			tags = new HgTags(this);
 			try {
-				tags.readGlobal(new File(repoDir.getParentFile(), ".hgtags"));
+				HgDataFile hgTags = getFileNode(".hgtags");
+				if (hgTags.exists()) {
+					for (int i = 0; i <= hgTags.getLastRevision(); i++) { // FIXME in fact, would be handy to have walk(start,end) 
+						// method for data files as well, though it looks odd.
+						try {
+							ByteArrayChannel sink = new ByteArrayChannel();
+							hgTags.content(i, sink);
+							final String content = new String(sink.toArray(), "UTF8");
+							tags.readGlobal(new StringReader(content));
+						} catch (CancelledException ex) {
+							ex.printStackTrace(); // IGNORE, can't happen, we did not configure cancellation
+						} catch (HgDataStreamException ex) {
+							ex.printStackTrace(); // FIXME need to react
+						} catch (IOException ex) {
+							// UnsupportedEncodingException can't happen (UTF8)
+							// only from readGlobal. Need to reconsider exceptions thrown from there
+							ex.printStackTrace(); // XXX need to decide what to do this. failure to read single revision shall not break complete cycle
+						}
+					}
+				}
+				tags.readGlobal(new File(repoDir.getParentFile(), ".hgtags")); // XXX replace with HgDataFile.workingCopy
 				tags.readLocal(new File(repoDir, "localtags"));
 			} catch (IOException ex) {
 				ex.printStackTrace(); // FIXME log or othewise report
