@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.core.Nodeid.NULL;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -27,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
@@ -35,6 +38,7 @@ import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -218,6 +222,12 @@ public final class HgRepository {
 	/* clients need to rewrite path from their FS to a repository-friendly paths, and, perhaps, vice versa*/
 	public PathRewrite getToRepoPathHelper() {
 		return normalizePath;
+	}
+	
+	@Experimental(reason="return type and possible values (presently null, perhaps Nodeid.NULL) may get changed")
+	public Pair<Nodeid,Nodeid> getWorkingCopyParents() {
+		Nodeid[] p = loadDirstate().parents();
+		return new Pair<Nodeid,Nodeid>(NULL == p[0] ? null : p[0], NULL == p[1] ? null : p[1]);
 	}
 
 	// local to hide use of io.File. 

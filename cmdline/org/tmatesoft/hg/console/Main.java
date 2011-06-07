@@ -43,6 +43,7 @@ import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -68,7 +69,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testEffectiveFileLog();
+		m.testParents();
+//		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
@@ -83,6 +85,23 @@ public class Main {
 //		m.bunchOfTests();
 	}
 	
+	private void testParents() throws Exception {
+		// hg parents cmd
+		final Pair<Nodeid, Nodeid> wcParents = hgRepo.getWorkingCopyParents();
+		ChangesetDumpHandler dump = new ChangesetDumpHandler(hgRepo);
+		final HgChangelog clog = hgRepo.getChangelog();
+		HgLogCommand cmd = new HgLogCommand(hgRepo);
+		if (wcParents.hasFirst()) {
+			int x = clog.getLocalRevision(wcParents.first());
+			cmd.range(x, x).execute(dump); // FIXME HgLogCommand shall support Nodeid as revisions
+		}
+		if (wcParents.hasSecond()) {
+			int x = clog.getLocalRevision(wcParents.second());
+			cmd.range(x, x).execute(dump);
+		}
+	}
+	
+	// -R \temp\hg\hg4j-50 src/org/tmatesoft/hg/internal/RevlogStream.java
 	private void testEffectiveFileLog() {
 		for (String fname : cmdLineOpts.getList("")) {
 			System.out.println(fname);
