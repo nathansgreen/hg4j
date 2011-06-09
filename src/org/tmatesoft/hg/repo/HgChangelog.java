@@ -81,6 +81,11 @@ public class HgChangelog extends Revlog {
 		Arrays.sort(revisions);
 		content.iterate(revisions[0], revisions[revisions.length - 1], true, i);
 	}
+	
+	public RawChangeset changeset(Nodeid nid) {
+		int x = getLocalRevision(nid);
+		return range(x, x).get(0);
+	}
 
 	public interface Inspector {
 		// TODO describe whether cset is new instance each time

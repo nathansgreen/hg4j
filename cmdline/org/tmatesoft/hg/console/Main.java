@@ -45,6 +45,7 @@ import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Various debug dumps. 
@@ -69,12 +70,12 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testParents();
+//		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
-//		m.dumpBranches();
+		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
@@ -153,18 +154,30 @@ public class Main {
 		wcsc.walk(TIP, new StatusDump());
 	}
 	
+	/*
+	 * Straightforward approach to collect branches, no use of branchheads.cache
+	 * First, single run - 18 563
+	 * 10 runs (after 1 warm up) of HgBranches.collect took 167391 ms, ~17 seconds per run.
+	 */
 	private void dumpBranches() {
+		final long start0 = System.currentTimeMillis();
 		HgBranches b = hgRepo.getBranches();
+		System.out.println("1:" + (System.currentTimeMillis() - start0));
 		for (HgBranches.BranchInfo bi : b.getAllBranches()) {
 			System.out.print(bi.getName());
-			if (bi.isClosed()) {
-				System.out.print("!");
-			}
-			System.out.print(" ");
-			System.out.print(bi.getStart());
+//			if (bi.isClosed()) {
+//				System.out.print("!");
+//			}
+//			System.out.print(" ");
+//			System.out.print(bi.getStart());
 			System.out.print(" ");
 			System.out.println(bi.getHeads());
 		}
+//		final long start = System.currentTimeMillis();
+//		for (int i = 0; i < 10; i++) {
+//			b.collect(ProgressSupport.Factory.get(null));
+//		}
+//		System.out.println("10:" + (System.currentTimeMillis() - start));
 	}
 	
 	private void inflaterLengthException() throws Exception {
