@@ -20,8 +20,11 @@ import static org.tmatesoft.hg.repo.HgInternals.wrongLocalRevision;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.TreeMap;
@@ -33,8 +36,10 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 
 
@@ -77,8 +82,50 @@ public class HgDataFile extends Revlog {
 		return content.dataLength(getLocalRevision(nodeid));
 	}
 
-	public void workingCopy(ByteChannel sink) throws IOException, CancelledException {
-		throw HgRepository.notImplemented();
+	/**
+	 * Reads content of the file from working directory. If file present in the working directory, its actual content without
+	 * any filters is supplied through the sink. If file does not exist in the working dir, this method provides content of a file 
+	 * as if it would be refreshed in the working copy, i.e. its corresponding revision 
+	 * (XXX according to dirstate? file tip?) is read from the repository, and filters repo -> working copy get applied.
+	 *     
+	 * @param sink where to pipe content to
+	 * @throws HgDataStreamException to indicate troubles reading repository file
+	 * @throws CancelledException if operation was cancelled
+	 */
+	public void workingCopy(ByteChannel sink) throws HgDataStreamException, CancelledException {
+		File f = getRepo().getFile(this);
+		if (f.exists()) {
+			final CancelSupport cs = CancelSupport.Factory.get(sink);
+			final ProgressSupport progress = ProgressSupport.Factory.get(sink);
+			final long flength = f.length();
+			final int bsize = (int) Math.min(flength, 32*1024);
+			progress.start((int) (flength > Integer.MAX_VALUE ? flength >>> 15 /*32 kb buf size*/ : flength));
+			ByteBuffer buf = ByteBuffer.allocate(bsize);
+			FileChannel fc = null;
+			try {
+				fc = new FileInputStream(f).getChannel();
+				while (fc.read(buf) != -1) {
+					cs.checkCancelled();
+					buf.flip();
+					int consumed = sink.write(buf);
+					progress.worked(flength > Integer.MAX_VALUE ? 1 : consumed);
+					buf.compact();
+				}
+			} catch (IOException ex) {
+				throw new HgDataStreamException(getPath(), ex);
+			} finally {
+				progress.done();
+				if (fc != null) {
+					try {
+						fc.close();
+					} catch (IOException ex) {
+						ex.printStackTrace();
+					}
+				}
+			}
+		} else {
+			contentWithFilters(TIP, sink);
+		}
 	}
 	
 //	public void content(int revision, ByteChannel sink, boolean applyFilters) throws HgDataStreamException, IOException, CancelledException {
@@ -106,17 +153,23 @@ public class HgDataFile extends Revlog {
 //	}
 	
 	/*XXX not sure distinct method contentWithFilters() is the best way to do, perhaps, callers shall add filters themselves?*/
-	public void contentWithFilters(int revision, ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
-		content(revision, new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())));
+	public void contentWithFilters(int revision, ByteChannel sink) throws HgDataStreamException, CancelledException {
+		if (revision == WORKING_COPY) {
+			workingCopy(sink); // pass un-mangled sink
+		} else {
+			content(revision, new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())));
+		}
 	}
 
 	// for data files need to check heading of the file content for possible metadata
 	// @see http://mercurial.selenic.com/wiki/FileFormats#data.2BAC8-
-	public void content(int revision, ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
+	public void content(int revision, ByteChannel sink) throws HgDataStreamException, CancelledException {
 		if (revision == TIP) {
 			revision = getLastRevision();
 		}
 		if (revision == WORKING_COPY) {
+			// sink is supposed to come into workingCopy without filters
+			// thus we shall not get here (into #content) from #contentWithFilters(WC)
 			workingCopy(sink);
 			return;
 		}
@@ -141,9 +194,11 @@ public class HgDataFile extends Revlog {
 		insp.checkCancelled();
 		super.content.iterate(revision, revision, true, insp);
 		try {
-			insp.checkFailed();
+			insp.checkFailed(); // XXX is there real need to throw IOException from ContentPipe?
 		} catch (HgDataStreamException ex) {
 			throw ex;
+		} catch (IOException ex) {
+			throw new HgDataStreamException(getPath(), ex);
 		} catch (HgException ex) {
 			// shall not happen, unless we changed ContentPipe or its subclass
 			throw new HgDataStreamException(getPath(), ex.getClass().getName(), ex);

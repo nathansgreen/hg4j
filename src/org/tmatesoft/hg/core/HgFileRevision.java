@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.core;
 
-import java.io.IOException;
-
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.ByteChannel;
@@ -51,7 +49,7 @@ public final class HgFileRevision implements HgLogCommand.FileRevision {
 	public Nodeid getRevision() {
 		return revision;
 	}
-	public void putContentTo(ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
+	public void putContentTo(ByteChannel sink) throws HgDataStreamException, CancelledException {
 		HgDataFile fn = repo.getFileNode(path);
 		int localRevision = fn.getLocalRevision(revision);
 		fn.contentWithFilters(localRevision, sink);

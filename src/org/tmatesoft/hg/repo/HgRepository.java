@@ -22,7 +22,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.lang.ref.SoftReference;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,6 +63,7 @@ public final class HgRepository {
 	}
 	
 	private final File repoDir; // .hg folder
+	private final File workingDir; // .hg/../
 	private final String repoLocation;
 	private final DataAccessProvider dataAccess;
 	private final PathRewrite normalizePath;
@@ -85,6 +85,7 @@ public final class HgRepository {
 	
 	HgRepository(String repositoryPath) {
 		repoDir = null;
+		workingDir = null;
 		repoLocation = repositoryPath;
 		dataAccess = null;
 		dataPathHelper = repoPathHelper = null;
@@ -96,6 +97,10 @@ public final class HgRepository {
 		assert repositoryPath != null; 
 		assert repositoryRoot != null;
 		repoDir = repositoryRoot;
+		workingDir = repoDir.getParentFile();
+		if (workingDir == null) {
+			throw new IllegalArgumentException(repoDir.toString());
+		}
 		repoLocation = repositoryPath;
 		dataAccess = new DataAccessProvider();
 		final boolean runningOnWindows = System.getProperty("os.name").indexOf("Windows") != -1;
@@ -230,7 +235,14 @@ public final class HgRepository {
 		return new Pair<Nodeid,Nodeid>(NULL == p[0] ? null : p[0], NULL == p[1] ? null : p[1]);
 	}
 
-	// local to hide use of io.File. 
+	/**
+	 * @return location where user files (shall) reside
+	 */
+	public File getWorkingDir() {
+		return workingDir;
+	}
+
+	// shall be of use only for internal classes 
 	/*package-local*/ File getRepositoryRoot() {
 		return repoDir;
 	}
@@ -306,6 +318,10 @@ public final class HgRepository {
 
 	/*package-local*/ List<Filter> getFiltersFromWorkingDirToRepo(Path p) {
 		return instantiateFilters(p, new Filter.Options(Filter.Direction.ToRepo));
+	}
+	
+	/*package-local*/ File getFile(HgDataFile dataFile) {
+		return new File(getWorkingDir(), dataFile.getPath().toString());
 	}
 
 	private List<Filter> instantiateFilters(Path p, Filter.Options opts) {

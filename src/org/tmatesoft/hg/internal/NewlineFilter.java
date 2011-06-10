@@ -27,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
@@ -167,7 +166,7 @@ public class NewlineFilter implements Filter {
 
 		public void initialize(HgRepository hgRepo, ConfigFile cfg) {
 			failIfInconsistent = cfg.getBoolean("eol", "only-consistent", true);
-			File cfgFile = new File(new HgInternals(hgRepo).getRepositoryDir().getParentFile(), ".hgeol");
+			File cfgFile = new File(hgRepo.getWorkingDir(), ".hgeol");
 			if (!cfgFile.canRead()) {
 				return;
 			}

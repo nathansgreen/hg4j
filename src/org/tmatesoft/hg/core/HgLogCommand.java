@@ -322,6 +322,6 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	public interface FileRevision {
 		public abstract Path getPath();
 		public abstract Nodeid getRevision();
-		public abstract void putContentTo(ByteChannel sink) throws HgDataStreamException, IOException, CancelledException;
+		public abstract void putContentTo(ByteChannel sink) throws HgDataStreamException, CancelledException;
 	}
 }

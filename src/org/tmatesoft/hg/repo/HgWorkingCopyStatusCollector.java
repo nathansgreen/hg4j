@@ -422,7 +422,7 @@ public class HgWorkingCopyStatusCollector {
 //		final Path[] dirs = f.toArray(new Path[d.size()]);
 		if (d.isEmpty()) {
 			final Path[] files = f.toArray(new Path[f.size()]);
-			FileIterator fi = new FileListIterator(hgRepo.getRepositoryRoot().getParentFile(), files);
+			FileIterator fi = new FileListIterator(hgRepo.getWorkingDir(), files);
 			return new HgWorkingCopyStatusCollector(hgRepo, fi);
 		}
 		//

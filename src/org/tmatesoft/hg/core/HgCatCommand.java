@@ -21,7 +21,6 @@ import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
 
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -123,7 +122,7 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	 * @throws HgDataStreamException 
 	 * @throws IllegalArgumentException when command arguments are incomplete or wrong
 	 */
-	public void execute(ByteChannel sink) throws HgDataStreamException, IOException, CancelledException {
+	public void execute(ByteChannel sink) throws HgDataStreamException, CancelledException {
 		if (localRevision == BAD_REVISION && revision == null && cset == null) {
 			throw new IllegalArgumentException("File revision, corresponing local number, or a changset nodeid shall be specified");
 		}

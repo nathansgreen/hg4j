@@ -70,12 +70,13 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.testReadWorkingCopy();
 //		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
-		m.dumpBranches();
+//		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
@@ -84,6 +85,15 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void testReadWorkingCopy() throws Exception {
+		for (String fname : cmdLineOpts.getList("")) {
+			HgDataFile fn = hgRepo.getFileNode(fname);
+			ByteArrayChannel sink = new ByteArrayChannel();
+			fn.workingCopy(sink);
+			System.out.printf("%s: read %d bytes of working copy", fname, sink.toArray().length);
+		}
 	}
 	
 	private void testParents() throws Exception {
