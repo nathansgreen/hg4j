@@ -327,8 +327,6 @@ public class HgWorkingCopyStatusCollector {
 			dataFile.content(localRevision, bac);
 		} catch (CancelledException ex) {
 			// silently ignore - can't happen, ByteArrayChannel is not cancellable
-		} catch (IOException ex) {
-			ioFailed = true;
 		} catch (HgException ex) {
 			ioFailed = true;
 		}
