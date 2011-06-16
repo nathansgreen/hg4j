@@ -41,6 +41,8 @@ import org.tmatesoft.hg.repo.HgMergeState;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
+import org.tmatesoft.hg.repo.HgSubrepoLocation;
+import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Pair;
@@ -70,7 +72,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testReadWorkingCopy();
+		m.testSubrepos();
+//		m.testReadWorkingCopy();
 //		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
@@ -86,7 +89,24 @@ public class Main {
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
 	}
-	
+
+	private void testSubrepos() throws Exception {
+		for (HgSubrepoLocation l : hgRepo.getSubrepositories()) {
+			System.out.println(l.getLocation());
+			System.out.println(l.getSource());
+			System.out.println(l.getType());
+			System.out.println(l.isCommitted() ? l.getRevision() : "not yet committed");
+			if (l.getType() == Kind.Hg) {
+				HgRepository r = l.getRepo();
+				System.out.printf("%s has %d revisions\n", l.getLocation(), r.getChangelog().getLastRevision() + 1);
+				if (r.getChangelog().getLastRevision() >= 0) {
+					final RawChangeset c = r.getChangelog().range(TIP, TIP).get(0);
+					System.out.printf("TIP: %s %s %s\n", c.user(), c.dateString(), c.comment());
+				}
+			}
+		}
+	}
+
 	private void testReadWorkingCopy() throws Exception {
 		for (String fname : cmdLineOpts.getList("")) {
 			HgDataFile fn = hgRepo.getFileNode(fname);

@@ -36,6 +36,7 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
@@ -75,6 +76,7 @@ public final class HgRepository {
 	private HgTags tags;
 	private HgBranches branches;
 	private HgMergeState mergeState;
+	private SubrepoManager subRepos;
 
 	// XXX perhaps, shall enable caching explicitly
 	private final HashMap<Path, SoftReference<RevlogStream>> streamsCache = new HashMap<Path, SoftReference<RevlogStream>>();
@@ -240,6 +242,18 @@ public final class HgRepository {
 	 */
 	public File getWorkingDir() {
 		return workingDir;
+	}
+	
+	/**
+	 * Provides access to sub-repositories defined in this repository. Enumerated  sub-repositories are those directly
+	 * known, not recursive collection of all nested sub-repositories.
+	 * @return list of all known sub-repositories in this repository, or empty list if none found.
+	 */
+	public List<HgSubrepoLocation> getSubrepositories() {
+		if (subRepos == null) {
+			subRepos = new SubrepoManager(this);
+		}
+		return subRepos.all();
 	}
 
 	// shall be of use only for internal classes 
