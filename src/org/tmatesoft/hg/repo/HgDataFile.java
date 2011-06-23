@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.TreeMap;
 
@@ -232,12 +233,20 @@ public class HgDataFile extends Revlog {
 		};
 		content.iterate(start, end, false, insp);
 		final HgChangelog changelog = getRepo().getChangelog();
-//		changelog.range(inspector, commitRevisions); not effective when changes are sparse and far from each other
+		/*
+		 * changelog.range(inspector, commitRevisions);
+		 * Not effective when changes are sparse and far from each other.
+		 * However, it's only single file read, unlike code below (few reads of sequential blocks)
+		 * Need to weight tradeoffs of file read and iteration of sparse files.
+		 */
+		 
 		//
 		final int HistoricallyCloseCommits = 50; // XXX perhaps, shall increase/decrease based on changelog.revisionCount() 
 		// (huge changelog => memory mapped files, each file re-read is more expensive than iterating over records in one read?
 		//
 		// try short sequences on neighboring revisions.
+		Arrays.sort(commitRevisions); // automatic tools (svnmerge?) produce unnatural file history 
+		// (e.g. cpython/Lib/doctest.py, revision 164 points to 63509, 165 - to 38453) 
 		for (int i = 0; i < commitRevisions.length; ) {
 			int x = i;
 			i++;
