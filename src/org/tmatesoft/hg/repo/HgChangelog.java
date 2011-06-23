@@ -65,21 +65,28 @@ public class HgChangelog extends Revlog {
 		return c.result;
 	}
 
+	/**
+	 * Access individual revisions. Note, regardless of supplied revision order, inspector gets
+	 * changesets strictly in the order they are in the changelog.
+	 * @param inspector callback to get changesets
+	 * @param revisions revisions to read, unrestricted ordering.
+	 */
 	public void range(final HgChangelog.Inspector inspector, final int... revisions) {
-		if (revisions == null || revisions.length == 0) {
+		Arrays.sort(revisions);
+		rangeInternal(inspector, revisions);
+	}
+
+	/**
+	 * Friends-only version of {@link #range(Inspector, int...)}, when callers know array is sorted
+	 */
+	/*package-local*/ void rangeInternal(HgChangelog.Inspector inspector, int[] sortedRevisions) {
+		if (sortedRevisions == null || sortedRevisions.length == 0) {
 			return;
 		}
-		RevlogStream.Inspector i = new RevlogStream.Inspector() {
-			private final RawCsetParser delegate = new RawCsetParser(inspector);
-
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
-				if (Arrays.binarySearch(revisions, revisionNumber) >= 0) {
-					delegate.next(revisionNumber, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeid, da);
-				}
-			}
-		};
-		Arrays.sort(revisions);
-		content.iterate(revisions[0], revisions[revisions.length - 1], true, i);
+		if (inspector == null) {
+			throw new IllegalArgumentException();
+		}
+		content.iterate(sortedRevisions, true, new RawCsetParser(inspector));
 	}
 	
 	public RawChangeset changeset(Nodeid nid) {

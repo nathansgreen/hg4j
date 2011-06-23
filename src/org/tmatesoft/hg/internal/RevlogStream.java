@@ -200,121 +200,55 @@ public class RevlogStream {
 		}
 		// XXX may cache [start .. end] from index with a single read (pre-read)
 		
-		Lifecycle.BasicCallback cb = null;
-		DataAccess daIndex = null, daData = null;
-		daIndex = getIndexStream();
-		if (needData && !inline) {
-			daData = getDataStream();
-		}
+		ReaderN1 r = new ReaderN1(needData, inspector);
 		try {
-			byte[] nodeidBuf = new byte[20];
-			DataAccess lastUserData = null;
-			int i;
-			boolean extraReadsToBaseRev = false;
-			if (needData && getBaseRevision(start) < start) {
-				i = getBaseRevision(start);
-				extraReadsToBaseRev = true;
-			} else {
-				i = start;
-			}
-			
-			daIndex.seek(getIndexOffsetInt(i));
-			
-			if (inspector instanceof Lifecycle) {
-				cb = new Lifecycle.BasicCallback();
-				((Lifecycle) inspector).start(end - start + 1, cb, cb);
-			}
-			
-			for (; i <= end; i++ ) {
-				if (inline && needData) {
-					// inspector reading data (though FilterDataAccess) may have affected index position
-					daIndex.seek(getIndexOffsetInt(i));
-				}
-				long l = daIndex.readLong(); // 0
-				long offset = i == 0 ? 0 : (l >>> 16);
-				@SuppressWarnings("unused")
-				int flags = (int) (l & 0X0FFFF);
-				int compressedLen = daIndex.readInt(); // +8
-				int actualLen = daIndex.readInt(); // +12
-				int baseRevision = daIndex.readInt(); // +16
-				int linkRevision = daIndex.readInt(); // +20
-				int parent1Revision = daIndex.readInt();
-				int parent2Revision = daIndex.readInt();
-				// Hg has 32 bytes here, uses 20 for nodeid, and keeps 12 last bytes empty
-				daIndex.readBytes(nodeidBuf, 0, 20); // +32
-				daIndex.skip(12);
-				DataAccess userDataAccess = null;
-				if (needData) {
-					int streamOffset;
-					DataAccess streamDataAccess;
-					if (inline) {
-						streamDataAccess = daIndex;
-						streamOffset = getIndexOffsetInt(i) + REVLOGV1_RECORD_SIZE; // don't need to do seek as it's actual position in the index stream
+			r.start(end - start + 1);
+			r.range(start, end);
+		} catch (IOException ex) {
+			throw new HgBadStateException(ex); // FIXME need better handling
+		} finally {
+			r.finish();
+		}
+	}
+	
+	/**
+	 * Effective alternative to {@link #iterate(int, int, boolean, Inspector) batch read}, when only few selected 
+	 * revisions are of interest.
+	 * @param sortedRevisions revisions to walk, in ascending order.
+	 * @param needData whether inspector needs access to header only
+	 * @param inspector callback to process entries
+	 */
+	public void iterate(int[] sortedRevisions, boolean needData, Inspector inspector) {
+		final int indexSize = revisionCount();
+		if (indexSize == 0 || sortedRevisions.length == 0) {
+			return;
+		}
+		if (sortedRevisions[0] > indexSize || sortedRevisions[sortedRevisions.length - 1] > indexSize) {
+			throw new IllegalArgumentException(String.format("Can't iterate [%d, %d] in range [0..%d]", sortedRevisions[0], sortedRevisions[sortedRevisions.length - 1], indexSize));
+		}
+
+		ReaderN1 r = new ReaderN1(needData, inspector);
+		try {
+			r.start(sortedRevisions.length);
+			for (int i = 0; i < sortedRevisions.length; ) {
+				int x = i;
+				i++;
+				while (i < sortedRevisions.length) {
+					if (sortedRevisions[i] == sortedRevisions[i-1] + 1) {
+						i++;
 					} else {
-						streamOffset = (int) offset;
-						streamDataAccess = daData;
-						daData.seek(streamOffset);
-					}
-					final boolean patchToPrevious = baseRevision != i; // the only way I found to tell if it's a patch
-					if (streamDataAccess.isEmpty()) {
-						userDataAccess = new DataAccess(); // empty
-					} else {
-						final byte firstByte = streamDataAccess.readByte();
-						if (firstByte == 0x78 /* 'x' */) {
-							userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen);
-						} else if (firstByte == 0x75 /* 'u' */) {
-							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
-						} else {
-							// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0'
-							// but I don't see reason not to return data as is 
-							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
-						}
-					}
-					// XXX 
-					if (patchToPrevious) {
-						// this is a patch
-						LinkedList<PatchRecord> patches = new LinkedList<PatchRecord>();
-						while (!userDataAccess.isEmpty()) {
-							PatchRecord pr = PatchRecord.read(userDataAccess);
-//							System.out.printf("PatchRecord:%d %d %d\n", pr.start, pr.end, pr.len);
-							patches.add(pr);
-						}
-						userDataAccess.done();
-						//
-						byte[] userData = apply(lastUserData, actualLen, patches);
-						userDataAccess = new ByteArrayDataAccess(userData);
-					}
-				} else {
-					if (inline) {
-						daIndex.skip(compressedLen);
-					}
-				}
-				if (!extraReadsToBaseRev || i >= start) {
-					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, userDataAccess);
-				}
-				if (cb != null) {
-					if (cb.isStopped()) {
 						break;
 					}
 				}
-				if (userDataAccess != null) {
-					userDataAccess.reset();
-					if (lastUserData != null) {
-						lastUserData.done();
-					}
-					lastUserData = userDataAccess;
+				// commitRevisions[x..i-1] are sequential
+				if (!r.range(sortedRevisions[x], sortedRevisions[i-1])) {
+					return;
 				}
 			}
 		} catch (IOException ex) {
 			throw new HgBadStateException(ex); // FIXME need better handling
 		} finally {
-			if (inspector instanceof Lifecycle) {
-				((Lifecycle) inspector).finish(cb);
-			}
-			daIndex.done();
-			if (daData != null) {
-				daData.done();
-			}
+			r.finish();
 		}
 	}
 
@@ -392,6 +326,161 @@ public class RevlogStream {
 			da.done();
 		}
 	}
+	
+	/**
+	 * operation with single file open/close and multiple diverse reads.
+	 * XXX initOutline might need similar extraction to keen N1 format knowledge  
+	 */
+	class ReaderN1 {
+		private final Inspector inspector;
+		private final boolean needData;
+		private DataAccess daIndex = null, daData = null;
+		private Lifecycle.BasicCallback cb = null;
+		private int lastRevisionRead = BAD_REVISION;
+		private DataAccess lastUserData;
+
+		public ReaderN1(boolean needData, Inspector insp) {
+			assert insp != null;
+			this.needData = needData;
+			inspector = insp;
+		}
+		
+		public void start(int totalWork) {
+			daIndex = getIndexStream();
+			if (needData && !inline) {
+				daData = getDataStream();
+			}
+			if (inspector instanceof Lifecycle) {
+				cb = new Lifecycle.BasicCallback();
+				((Lifecycle) inspector).start(totalWork, cb, cb);
+			}
+		}
+
+		public void finish() {
+			if (lastUserData != null) {
+				lastUserData.done();
+				lastUserData = null;
+			}
+			if (inspector instanceof Lifecycle) {
+				((Lifecycle) inspector).finish(cb);
+			}
+			daIndex.done();
+			if (daData != null) {
+				daData.done();
+			}
+		}
+		
+		public boolean range(int start, int end) throws IOException {
+//			System.out.printf("RevlogStream.ReaderN1.range(): [%d, %d]\n", start, end);
+			byte[] nodeidBuf = new byte[20];
+			int i;
+			boolean extraReadsToBaseRev = false; // to indicate we read revision prior to start. XXX not sure can't do without
+			// it (i.e. replace with i >= start)
+			if (needData && (i = getBaseRevision(start)) < start) {
+				// if lastRevisionRead in [baseRevision(start), start)  can reuse lastUserData
+				// doesn't make sense to reuse if lastRevisionRead == start (too much to change in the cycle below). 
+				if (lastRevisionRead != BAD_REVISION && i <= lastRevisionRead && lastRevisionRead < start) {
+					i = lastRevisionRead + 1; // start with first not-yet-read revision
+					extraReadsToBaseRev = i < start;
+				} else {
+					if (lastUserData != null) {
+						lastUserData.done();
+						lastUserData = null;
+					}
+					extraReadsToBaseRev = true;
+				}
+			} else {
+				// don't need to clean lastUserData as it's always null when !needData
+				i = start;
+			}
+			
+			daIndex.seek(getIndexOffsetInt(i));
+			
+			for (; i <= end; i++ ) {
+				if (inline && needData) {
+					// inspector reading data (though FilterDataAccess) may have affected index position
+					daIndex.seek(getIndexOffsetInt(i));
+				}
+				long l = daIndex.readLong(); // 0
+				long offset = i == 0 ? 0 : (l >>> 16);
+				@SuppressWarnings("unused")
+				int flags = (int) (l & 0X0FFFF);
+				int compressedLen = daIndex.readInt(); // +8
+				int actualLen = daIndex.readInt(); // +12
+				int baseRevision = daIndex.readInt(); // +16
+				int linkRevision = daIndex.readInt(); // +20
+				int parent1Revision = daIndex.readInt();
+				int parent2Revision = daIndex.readInt();
+				// Hg has 32 bytes here, uses 20 for nodeid, and keeps 12 last bytes empty
+				daIndex.readBytes(nodeidBuf, 0, 20); // +32
+				daIndex.skip(12);
+				DataAccess userDataAccess = null;
+				if (needData) {
+					int streamOffset;
+					DataAccess streamDataAccess;
+					if (inline) {
+						streamDataAccess = daIndex;
+						streamOffset = getIndexOffsetInt(i) + REVLOGV1_RECORD_SIZE; // don't need to do seek as it's actual position in the index stream
+					} else {
+						streamOffset = (int) offset;
+						streamDataAccess = daData;
+						daData.seek(streamOffset);
+					}
+					final boolean patchToPrevious = baseRevision != i; // the only way I found to tell if it's a patch
+					if (streamDataAccess.isEmpty()) {
+						userDataAccess = new DataAccess(); // empty
+					} else {
+						final byte firstByte = streamDataAccess.readByte();
+						if (firstByte == 0x78 /* 'x' */) {
+							userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen);
+						} else if (firstByte == 0x75 /* 'u' */) {
+							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
+						} else {
+							// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0'
+							// but I don't see reason not to return data as is 
+							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
+						}
+					}
+					// XXX 
+					if (patchToPrevious) {
+						// this is a patch
+						LinkedList<PatchRecord> patches = new LinkedList<PatchRecord>();
+						while (!userDataAccess.isEmpty()) {
+							PatchRecord pr = PatchRecord.read(userDataAccess);
+//							System.out.printf("PatchRecord:%d %d %d\n", pr.start, pr.end, pr.len);
+							patches.add(pr);
+						}
+						userDataAccess.done();
+						//
+						byte[] userData = apply(lastUserData, actualLen, patches);
+						userDataAccess = new ByteArrayDataAccess(userData);
+					}
+				} else {
+					if (inline) {
+						daIndex.skip(compressedLen);
+					}
+				}
+				if (!extraReadsToBaseRev || i >= start) {
+					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, userDataAccess);
+				}
+				if (cb != null) {
+					if (cb.isStopped()) {
+						return false;
+					}
+				}
+				if (userDataAccess != null) {
+					userDataAccess.reset();
+					if (lastUserData != null) {
+						lastUserData.done();
+					}
+					lastUserData = userDataAccess;
+				}
+			}
+			lastRevisionRead = end;
+			return true;
+		}
+	}
+
 	
 	private static int[] toArray(List<Integer> l) {
 		int[] rv = new int[l.size()];

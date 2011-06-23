@@ -72,10 +72,10 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testSubrepos();
+//		m.testSubrepos();
 //		m.testReadWorkingCopy();
 //		m.testParents();
-//		m.testEffectiveFileLog();
+		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
@@ -132,10 +132,22 @@ public class Main {
 		}
 	}
 	
-	// -R \temp\hg\hg4j-50 src/org/tmatesoft/hg/internal/RevlogStream.java
+	/*
+	 *  -R \temp\hg\hg4j-50 src/org/tmatesoft/hg/internal/RevlogStream.java
+	 *  
+	 *  -R \temp\hg\cpython Lib/doctest.py, range 15907..68588, total 251 revision
+	 *  no improvement (collect linkRev, hgchangelog.range([]))							10890 ms
+	 *  improved history logic in HgDataFile (minimize reads of close revisions): 
+	 *  		with no sort (defect for tool-created repos)					took	10500 ms
+	 *  		with sort (to order revisions from linkRev before use)					  610 ms
+	 *  			HgChangelog.range() - 92 calls
+	 *  RevlogStream with separate iterate(int[] sortedRevisions,...)
+	 *  		RevlogStream.ReaderN1.range(): 185										  380 ms 
+	 */
 	private void testEffectiveFileLog() {
 		for (String fname : cmdLineOpts.getList("")) {
 			System.out.println(fname);
+			final long start = System.currentTimeMillis();
 			HgDataFile fn = hgRepo.getFileNode(fname);
 			if (fn.exists()) {
 				fn.history(new HgChangelog.Inspector() {
@@ -144,6 +156,7 @@ public class Main {
 					}
 				});
 			}
+			System.out.printf("Done: %d\n", System.currentTimeMillis() - start);
 		}
 	}
 	

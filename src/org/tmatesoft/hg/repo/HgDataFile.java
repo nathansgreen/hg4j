@@ -224,53 +224,26 @@ public class HgDataFile extends Revlog {
 			throw new IllegalArgumentException();
 		}
 		final int[] commitRevisions = new int[end - start + 1];
+		final boolean[] needsSorting = { false };
 		RevlogStream.Inspector insp = new RevlogStream.Inspector() {
 			int count = 0;
-			
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+				if (count > 0) {
+					if (commitRevisions[count -1] > linkRevision) {
+						needsSorting[0] = true;
+					}
+				}
 				commitRevisions[count++] = linkRevision;
 			}
 		};
 		content.iterate(start, end, false, insp);
 		final HgChangelog changelog = getRepo().getChangelog();
-		/*
-		 * changelog.range(inspector, commitRevisions);
-		 * Not effective when changes are sparse and far from each other.
-		 * However, it's only single file read, unlike code below (few reads of sequential blocks)
-		 * Need to weight tradeoffs of file read and iteration of sparse files.
-		 */
-		 
-		//
-		final int HistoricallyCloseCommits = 50; // XXX perhaps, shall increase/decrease based on changelog.revisionCount() 
-		// (huge changelog => memory mapped files, each file re-read is more expensive than iterating over records in one read?
-		//
-		// try short sequences on neighboring revisions.
-		Arrays.sort(commitRevisions); // automatic tools (svnmerge?) produce unnatural file history 
-		// (e.g. cpython/Lib/doctest.py, revision 164 points to 63509, 165 - to 38453) 
-		for (int i = 0; i < commitRevisions.length; ) {
-			int x = i;
-			i++;
-			boolean sequential = true;
-			while (i < commitRevisions.length) {
-				if (commitRevisions[i] == commitRevisions[i-1] + 1) {
-					i++;
-				} else if (commitRevisions[i] - commitRevisions[i-1] < HistoricallyCloseCommits) {
-					// close enough, but not sequential
-					sequential = false;
-					i++;
-				} else {
-					break;
-				}
-			}
-			if (sequential) {
-				// commitRevisions[x..i-1] are sequential
-				changelog.range(commitRevisions[x], commitRevisions[i-1], inspector);
-			} else {
-				int[] revs = new int[i-x];
-				System.arraycopy(commitRevisions, x, revs, 0, i-x);
-				changelog.range(inspector, revs);
-			}
+		if (needsSorting[0]) {
+			// automatic tools (svnmerge?) produce unnatural file history
+			// (e.g. cpython/Lib/doctest.py, revision 164 points to cset 63509, 165 - to 38453) 
+			Arrays.sort(commitRevisions);
 		}
+		changelog.range(inspector, commitRevisions);
 	}
 	
 	// for a given local revision of the file, find out local revision in the changelog
