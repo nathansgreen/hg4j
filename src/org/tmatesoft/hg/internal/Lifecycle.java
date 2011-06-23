@@ -23,11 +23,24 @@ package org.tmatesoft.hg.internal;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
+@Experimental(reason="Experimenting whether such approach pays off")
 public interface Lifecycle {
 
+	/**
+	 * @param count approximate number of iterations.
+	 * @param callback callback to communicate with RevlogStream (now to stop iteration only)
+	 * @param token identifier of the process
+	 */
 	public void start(int count, Callback callback, Object token);
+
+	/**
+	 * @param token identifier of the process, identical to the one passed in {@link #start(int, Callback, Object)} of this iteration
+	 */
 	public void finish(Object token);
 
+	/**
+	 * Access to RevlogStream facilities.
+	 */
 	interface Callback {
 		void stop();
 	}
