@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.core.Nodeid.NULL;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
@@ -87,6 +88,15 @@ abstract class Revlog {
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
 	}
 
+	/**
+	 * Get local revision number (index) of the specified revision.
+	 * 
+	 * For occasional queries, this method works with decent performance, despite its O(n/2) approach.
+	 * Alternatively, if you need to perform multiple queries (e.g. at least 15-20), {@link RevisionMap} may come handy.
+	 *   
+	 * @param nid revision to look up 
+	 * @return revision index, or {@link HgRepository#BAD_REVISION} if specified revision not found. 
+	 */
 	public final int getLocalRevision(Nodeid nid) {
 		int revision = content.findLocalRevisionNumber(nid);
 		if (revision == BAD_REVISION) {
@@ -229,6 +239,7 @@ abstract class Revlog {
 				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 					if (ix != revisionNumber) {
 						// XXX temp code, just to make sure I understand what's going on here
+						// FIXME check against cpython or another tool-mangled repository
 						throw new IllegalStateException();
 					}
 					if (parent1Revision >= revisionNumber || parent2Revision >= revisionNumber) {
@@ -369,6 +380,76 @@ abstract class Revlog {
 			return false;
 		}
 	}
+
+	/**
+	 * Effective int to Nodeid and vice versa translation. It's advised to use this class instead of 
+	 * multiple {@link Revlog#getLocalRevision(Nodeid)} calls.
+	 * 
+	 * getLocalRevision(Nodeid) with straightforward lookup approach performs O(n/2)
+	 * #localRevision() is log(n), plus initialization is O(n) 
+	 */
+	public final class RevisionMap {
+		/*
+		 * in fact, initialization is much slower as it instantiates Nodeids, while #getLocalRevision
+		 * compares directly against byte buffer. Measuring cpython with 70k+ gives 3 times difference (47 vs 171)
+		 * for complete changelog iteration. 
+		 */
+		
+		/*
+		 * XXX 3 * (x * 4) bytes. Can I do better? 
+		 */
+		private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
+		private Nodeid[] sorted; // for binary search
+		private int[] sorted2natural;
+
+		public RevisionMap() {
+		}
+		
+		public HgRepository getRepo() {
+			return Revlog.this.getRepo();
+		}
+
+		/**
+		 * @return <code>this</code> for convenience.
+		 */
+		public RevisionMap init(/*XXX Pool<Nodeid> to reuse nodeids, if possible. */) {
+			// XXX HgRepository.register((RepoChangeListener) this); // listen to changes in repo, re-init if needed?
+			final int revisionCount = Revlog.this.content.revisionCount();
+			sequential = new Nodeid[revisionCount];
+			sorted = new Nodeid[revisionCount];
+			sorted2natural = new int[revisionCount];
+			RevlogStream.Inspector insp = new RevlogStream.Inspector() {
+				
+				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+					final Nodeid nid = new Nodeid(nodeid, true);
+					sequential[revisionNumber] = sorted[revisionNumber] = nid;
+				}
+			};
+			Revlog.this.content.iterate(0, TIP, false, insp);
+			Arrays.sort(sorted);
+			for (int i = 0; i < revisionCount; i++) {
+				Nodeid n = sequential[i];
+				int x = Arrays.binarySearch(sorted, n);
+				sorted2natural[x] = i;
+			}
+			return this;
+		}
+		
+		public Nodeid revision(int localRevision) {
+			return sequential[localRevision];
+		}
+		public int localRevision(Nodeid revision) {
+			if (revision == null || NULL.equals(revision)) {
+				return BAD_REVISION;
+			}
+			int x = Arrays.binarySearch(sorted, revision);
+			if (x < 0) {
+				return BAD_REVISION;
+			}
+			return sorted2natural[x];
+		}
+	}
+
 
 	protected static class ContentPipe implements RevlogStream.Inspector, CancelSupport {
 		private final ByteChannel sink;

@@ -167,7 +167,7 @@ public class RevlogStream {
 				daIndex.skip(inline ? 12 + compressedLen : 12);
 			}
 		} catch (IOException ex) {
-			ex.printStackTrace(); // log error. FIXME better handling
+			ex.printStackTrace(); // log error. FIXME better handling. Perhaps, shall return BAD_REVISION here as well?
 			throw new IllegalStateException(ex);
 		} finally {
 			daIndex.done();
@@ -371,7 +371,6 @@ public class RevlogStream {
 		}
 		
 		public boolean range(int start, int end) throws IOException {
-//			System.out.printf("RevlogStream.ReaderN1.range(): [%d, %d]\n", start, end);
 			byte[] nodeidBuf = new byte[20];
 			int i;
 			boolean extraReadsToBaseRev = false; // to indicate we read revision prior to start. XXX not sure can't do without

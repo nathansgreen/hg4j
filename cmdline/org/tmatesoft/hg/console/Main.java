@@ -72,10 +72,11 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.testRevisionMap();
 //		m.testSubrepos();
 //		m.testReadWorkingCopy();
 //		m.testParents();
-		m.testEffectiveFileLog();
+//		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
@@ -88,6 +89,48 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	/*
+	 * cpython repo with 70715 revisions.
+	 	3 revisions - 80 ms vs 250 ms (250ms init)
+		4 revisions - 110 ms vs 265 ms (265 ms init)
+		5 revisions - 94 vs 266.
+		complete iteration in changelog.getLocalRevision(tipNodeid) takes 47 ms
+		compared to complete iteration inside RevisionMap.init() of 171 ms.
+		The only difference is latter instantiates Nodeids, while former compares binary content as is.
+		Hence, with 20-30 ms per regular getLocalRevision, it pays off to use RevisionMap with at least 15-20
+		queries 
+	 */
+	private void testRevisionMap() throws Exception {
+		HgChangelog changelog = hgRepo.getChangelog();
+		HgChangelog.RevisionMap rmap = changelog.new RevisionMap().init(); // warm-up, ensure complete file read
+		int tip = changelog.getLastRevision();
+		// take 5 arbitrary revisions at 0, 1/4, 2/4, 3/4 and 4/4 
+		final Nodeid[] revs = new Nodeid[5];
+		revs[4] = changelog.getRevision(0);
+		revs[3] = changelog.getRevision(tip / 4);
+		revs[2] = changelog.getRevision(tip / 2);
+		revs[1] = changelog.getRevision(tip / 4 + tip / 2);
+		revs[0] = changelog.getRevision(tip);
+		long start = System.currentTimeMillis();
+		for (int i = 0; i < revs.length; i++) {
+			final int localRev = changelog.getLocalRevision(revs[i]);
+			System.out.printf("%d:%s\n", localRev, revs[i]);
+		}
+		System.out.println(System.currentTimeMillis() - start);
+		System.out.println();
+		//
+		start = System.currentTimeMillis();
+		rmap = changelog.new RevisionMap().init();
+		long s2 = System.currentTimeMillis();
+		for (int i = 0; i < revs.length; i++) {
+			final int localRev = rmap.localRevision(revs[i]);
+			System.out.printf("%d:%s\n", localRev, revs[i]);
+		}
+		System.out.println(System.currentTimeMillis() - start);
+		System.out.printf("\t from that, init took %d ms\n", s2 - start);
+		
 	}
 
 	private void testSubrepos() throws Exception {
