@@ -72,7 +72,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testRevisionMap();
+//		m.testRevisionMap();
 //		m.testSubrepos();
 //		m.testReadWorkingCopy();
 //		m.testParents();
@@ -80,7 +80,7 @@ public class Main {
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
-//		m.dumpBranches();
+		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
@@ -259,6 +259,7 @@ public class Main {
 			System.out.print(" ");
 			System.out.println(bi.getHeads());
 		}
+		b.writeCache();
 //		final long start = System.currentTimeMillis();
 //		for (int i = 0; i < 10; i++) {
 //			b.collect(ProgressSupport.Factory.get(null));

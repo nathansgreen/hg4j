@@ -95,7 +95,10 @@ public final class Nodeid implements Comparable<Nodeid> {
 		}
 		return 0;
 	}
-	
+
+	/**
+	 * Complete string representation of this Nodeid.
+	 */
 	@Override
 	public String toString() {
 		// XXX may want to output just single 0 for the NULL id?

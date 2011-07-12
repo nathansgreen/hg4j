@@ -17,8 +17,10 @@
 package org.tmatesoft.hg.repo;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,6 +35,7 @@ import java.util.TreeMap;
 import java.util.regex.Pattern;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -45,13 +48,14 @@ public class HgBranches {
 	
 	private final Map<String, BranchInfo> branches = new TreeMap<String, BranchInfo>();
 	private final HgRepository repo;
-	
+	private boolean isCacheActual = false;
+
 	HgBranches(HgRepository hgRepo) {
 		repo = hgRepo;
 	}
 
 	private int readCache() {
-		File branchheadsCache = new File(repo.getRepositoryRoot(), "branchheads.cache");
+		File branchheadsCache = getCacheFile();
 		int lastInCache = -1;
 		if (!branchheadsCache.canRead()) {
 			return lastInCache;
@@ -69,7 +73,7 @@ public class HgBranches {
 			// XXX may want to check if nodeid of cset from repo.getChangelog() of lastInCache index match cacheIdentity[0]
 			//
 			while ((line = br.readLine()) != null) {
-				String[] elements = line.trim().split(" ");
+				String[] elements = spacePattern.split(line.trim());
 				if (elements.length < 2) {
 					// bad entry
 					continue;
@@ -162,7 +166,8 @@ public class HgBranches {
 			}
 		}
 		*/
-		if (lastCached != repo.getChangelog().getLastRevision()) {
+		isCacheActual = lastCached == repo.getChangelog().getLastRevision();
+		if (!isCacheActual) {
 			final HgChangelog.ParentWalker pw = repo.getChangelog().new ParentWalker();
 			pw.init();
 			ps.worked(repo.getChangelog().getRevisionCount());
@@ -243,7 +248,52 @@ public class HgBranches {
 	public BranchInfo getBranch(String name) {
 		return branches.get(name);
 	}
-	
+
+	/**
+	 * Writes down information about repository branches in a format Mercurial native client can understand.
+	 * Cache file gets overwritten only if it is out of date (i.e. misses some branch information)
+	 */
+	@Experimental(reason="Usage of cache isn't supposed to be public knowledge")
+	public void writeCache() {
+		if (isCacheActual) {
+			return;
+		}
+		try {
+			File branchheadsCache = getCacheFile();
+			if (!branchheadsCache.exists()) {
+				branchheadsCache.getParentFile().mkdirs(); // just in case cache/ doesn't exist jet
+				branchheadsCache.createNewFile();
+			}
+			if (!branchheadsCache.canWrite()) {
+				return;
+			}
+			final int lastRev = repo.getChangelog().getLastRevision();
+			final Nodeid lastNid = repo.getChangelog().getRevision(lastRev);
+			BufferedWriter bw = new BufferedWriter(new FileWriter(branchheadsCache));
+			bw.write(lastNid.toString());
+			bw.write((int) ' ');
+			bw.write(Integer.toString(lastRev));
+			bw.write("\n");
+			for (BranchInfo bi : branches.values()) {
+				for (Nodeid nid : bi.getHeads()) {
+					bw.write(nid.toString());
+					bw.write((int) ' ');
+					bw.write(bi.getName());
+					bw.write("\n");
+				}
+			}
+			bw.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	private File getCacheFile() {
+		// prior to 1.8 used to be .hg/branchheads.cache
+		return new File(repo.getRepositoryRoot(), "cache/branchheads");
+	}
+
 	public static class BranchInfo {
 		private final String name;
 		private final List<Nodeid> heads;
