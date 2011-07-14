@@ -243,7 +243,7 @@ public class HgDataFile extends Revlog {
 			// (e.g. cpython/Lib/doctest.py, revision 164 points to cset 63509, 165 - to 38453) 
 			Arrays.sort(commitRevisions);
 		}
-		changelog.range(inspector, commitRevisions);
+		changelog.rangeInternal(inspector, commitRevisions);
 	}
 	
 	// for a given local revision of the file, find out local revision in the changelog
