@@ -57,6 +57,7 @@ public class RequiresFile {
 			flags += fncache ? FNCACHE : 0;
 			flags += dotencode ? DOTENCODE : 0;
 			repoImpl.setStorageConfig(revlogv1 ? 1 : 0, flags);
+			br.close();
 		} catch (IOException ex) {
 			ex.printStackTrace(); // FIXME log
 		}

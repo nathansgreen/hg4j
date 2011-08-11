@@ -379,6 +379,7 @@ public class HgWorkingCopyStatusCollector {
 					filters.write(fb);
 					fb.compact();
 				}
+				fis.close();
 				return check.ultimatelyTheSame();
 			} catch (IOException ex) {
 				if (fis != null) {
