@@ -23,9 +23,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Assert;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.HgCatCommand;
+import org.tmatesoft.hg.core.HgFileInformer;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
@@ -77,10 +79,10 @@ public class Main {
 //		m.testReadWorkingCopy();
 //		m.testParents();
 //		m.testEffectiveFileLog();
-//		m.testCatAtCsetRevision();
+		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
-		m.dumpBranches();
+//		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
@@ -206,11 +208,25 @@ public class Main {
 	// TODO as test in TestCat
 	private void testCatAtCsetRevision() throws Exception {
 		HgCatCommand cmd = new HgCatCommand(hgRepo);
-		cmd.file(Path.create("src/org/tmatesoft/hg/internal/RevlogStream.java"));
-		cmd.changeset(Nodeid.fromAscii("08db726a0fb7914ac9d27ba26dc8bbf6385a0554"));
+		final Path file = Path.create("src/org/tmatesoft/hg/internal/RevlogStream.java");
+		cmd.file(file);
+		final Nodeid cset = Nodeid.fromAscii("08db726a0fb7914ac9d27ba26dc8bbf6385a0554");
+		cmd.changeset(cset);
 		final ByteArrayChannel sink = new ByteArrayChannel();
 		cmd.execute(sink);
 		System.out.println(sink.toArray().length);
+		HgFileInformer i = new HgFileInformer(hgRepo);
+		boolean result = i.changeset(cset).check(file);
+		Assert.assertFalse(result);
+		Assert.assertFalse(i.exists());
+		result = i.followRenames(true).check(file);
+		Assert.assertTrue(result);
+		Assert.assertTrue(i.exists());
+		HgCatCommand cmd2 = new HgCatCommand(hgRepo).revision(i.getFileRevision());
+		final ByteArrayChannel sink2 = new ByteArrayChannel();
+		cmd2.execute(sink2);
+		System.out.println(sink2.toArray().length);
+		Assert.assertEquals(sink.toArray().length, sink2.toArray().length);
 	}
 	
 	private void testMergeState() throws Exception {

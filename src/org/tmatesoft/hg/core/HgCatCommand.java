@@ -98,6 +98,16 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 		cset = null;
 		return this;
 	}
+
+	/**
+	 * Parameterize the command from file revision object.
+	 * 
+	 * @param fileRev file revision to cat 
+	 * @return <code>this</code> for convenience
+	 */
+	public HgCatCommand revision(HgFileRevision fileRev) {
+		return file(fileRev.getPath()).revision(fileRev.getRevision());
+	}
 	
 	/**
 	 * Select whatever revision of the file that was actual at the time of the specified changeset. Unlike {@link #revision(int)} or {@link #revision(Nodeid)}, this method 
@@ -152,7 +162,7 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 				}
 			} while (toExtract == null);
 			if (toExtract == null) {
-				throw new HgBadStateException(String.format("File %s not its origins were not known at repository %s revision", file, cset.shortNotation()));
+				throw new HgBadStateException(String.format("File %s nor its origins were not known at repository %s revision", file, cset.shortNotation()));
 			}
 			revToExtract = dataFile.getLocalRevision(toExtract);
 		} else if (revision != null) {

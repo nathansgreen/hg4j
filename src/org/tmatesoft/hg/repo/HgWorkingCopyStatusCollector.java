@@ -37,8 +37,8 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
+import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.PathScope;
-import org.tmatesoft.hg.repo.HgStatusCollector.ManifestRevisionInspector;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.FileIterator;
@@ -115,13 +115,13 @@ public class HgWorkingCopyStatusCollector {
 		} else {
 			isTipBase = baseRevision == repo.getChangelog().getLastRevision();
 		}
-		HgStatusCollector.ManifestRevisionInspector collect = null;
+		ManifestRevision collect = null;
 		Set<String> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
 		if (!isTipBase) {
 			if (baseRevisionCollector != null) {
 				collect = baseRevisionCollector.raw(baseRevision);
 			} else {
-				collect = new HgStatusCollector.ManifestRevisionInspector(null, null);
+				collect = new ManifestRevision(null, null);
 				repo.getManifest().walk(baseRevision, baseRevision, collect);
 			}
 			baseRevFiles = new TreeSet<String>(collect.files());
@@ -251,7 +251,7 @@ public class HgWorkingCopyStatusCollector {
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevisionInspector collect, int baseRevision, Path fname, File f, HgStatusInspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevision collect, int baseRevision, Path fname, File f, HgStatusInspector inspector) {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
 		Nodeid nid1 = collect.nodeid(fname.toString());
 		String flags = collect.flags(fname.toString());

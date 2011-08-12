@@ -31,6 +31,7 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
@@ -46,7 +47,7 @@ import org.tmatesoft.hg.util.PathRewrite;
 public class HgStatusCollector {
 
 	private final HgRepository repo;
-	private final SortedMap<Integer, ManifestRevisionInspector> cache; // sparse array, in fact
+	private final SortedMap<Integer, ManifestRevision> cache; // sparse array, in fact
 	// with cpython repository, ~70 000 changes, complete Log (direct out, no reverse) output 
 	// no cache limit, no nodeids and fname caching - OOME on changeset 1035
 	// no cache limit, but with cached nodeids and filenames - 1730+
@@ -55,17 +56,17 @@ public class HgStatusCollector {
 	private PathPool pathPool;
 	private final Pool<Nodeid> cacheNodes;
 	private final Pool<String> cacheFilenames; // XXX in fact, need to think if use of PathPool directly instead is better solution
-	private final ManifestRevisionInspector emptyFakeState;
+	private final ManifestRevision emptyFakeState;
 	private Path.Matcher scope = new Path.Matcher.Any();
 	
 
 	public HgStatusCollector(HgRepository hgRepo) {
 		this.repo = hgRepo;
-		cache = new TreeMap<Integer, ManifestRevisionInspector>();
+		cache = new TreeMap<Integer, ManifestRevision>();
 		cacheNodes = new Pool<Nodeid>();
 		cacheFilenames = new Pool<String>();
 
-		emptyFakeState = new ManifestRevisionInspector(null, null);
+		emptyFakeState = new ManifestRevision(null, null);
 		emptyFakeState.begin(-1, null, -1);
 		emptyFakeState.end(-1);
 	}
@@ -74,8 +75,8 @@ public class HgStatusCollector {
 		return repo;
 	}
 	
-	private ManifestRevisionInspector get(int rev) {
-		ManifestRevisionInspector i = cache.get(rev);
+	private ManifestRevision get(int rev) {
+		ManifestRevision i = cache.get(rev);
 		if (i == null) {
 			if (rev == -1) {
 				return emptyFakeState;
@@ -84,7 +85,7 @@ public class HgStatusCollector {
 				// assume usually we go from oldest to newest, hence remove oldest as most likely to be no longer necessary
 				cache.remove(cache.firstKey());
 			}
-			i = new ManifestRevisionInspector(cacheNodes, cacheFilenames);
+			i = new ManifestRevision(cacheNodes, cacheFilenames);
 			cache.put(rev, i);
 			repo.getManifest().walk(rev, rev, i);
 		}
@@ -101,7 +102,7 @@ public class HgStatusCollector {
 			cache.remove(cache.firstKey());
 		}
 		repo.getManifest().walk(minRev, maxRev, new HgManifest.Inspector() {
-			private ManifestRevisionInspector delegate;
+			private ManifestRevision delegate;
 			private boolean cacheHit; // range may include revisions we already know about, do not re-create them
 
 			public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
@@ -109,7 +110,7 @@ public class HgStatusCollector {
 				if (cache.containsKey(changelogRevision)) { // don't need to check emptyFakeState hit as revision never -1 here
 					cacheHit = true;
 				} else {
-					cache.put(changelogRevision, delegate = new ManifestRevisionInspector(cacheNodes, cacheFilenames));
+					cache.put(changelogRevision, delegate = new ManifestRevision(cacheNodes, cacheFilenames));
 					// cache may grow bigger than max size here, but it's ok as present simplistic cache clearing mechanism may
 					// otherwise remove entries we just added
 					delegate.begin(manifestRevision, nid, changelogRevision);
@@ -136,7 +137,7 @@ public class HgStatusCollector {
 		});
 	}
 	
-	/*package-local*/ ManifestRevisionInspector raw(int rev) {
+	/*package-local*/ ManifestRevision raw(int rev) {
 		return get(rev);
 	}
 	/*package-local*/ PathPool getPathPool() {
@@ -193,7 +194,7 @@ public class HgStatusCollector {
 		}
 		// in fact, rev1 and rev2 are often next (or close) to each other,
 		// thus, we can optimize Manifest reads here (manifest.walk(rev1, rev2))
-		ManifestRevisionInspector r1, r2 ;
+		ManifestRevision r1, r2 ;
 		boolean need1 = !cached(rev1), need2 = !cached(rev2);
 		if (need1 || need2) {
 			int minRev, maxRev;
@@ -420,61 +421,6 @@ public class HgStatusCollector {
 			}
 			l.add(p);
 			return l;
-		}
-	}
-	
-	/*package-local*/ static final class ManifestRevisionInspector implements HgManifest.Inspector {
-		private final TreeMap<String, Nodeid> idsMap;
-		private final TreeMap<String, String> flagsMap;
-		private final Pool<Nodeid> idsPool;
-		private final Pool<String> namesPool; 
-
-		// optional pools for effective management of nodeids and filenames (they are likely
-		// to be duplicated among different manifest revisions
-		public ManifestRevisionInspector(Pool<Nodeid> nodeidPool, Pool<String> filenamePool) {
-			idsPool = nodeidPool;
-			namesPool = filenamePool;
-			idsMap = new TreeMap<String, Nodeid>();
-			flagsMap = new TreeMap<String, String>();
-		}
-		
-		public Collection<String> files() {
-			return idsMap.keySet();
-		}
-
-		public Nodeid nodeid(String fname) {
-			return idsMap.get(fname);
-		}
-
-		public String flags(String fname) {
-			return flagsMap.get(fname);
-		}
-
-		//
-
-		public boolean next(Nodeid nid, String fname, String flags) {
-			if (namesPool != null) {
-				fname = namesPool.unify(fname);
-			}
-			if (idsPool != null) {
-				nid = idsPool.unify(nid);
-			}
-			idsMap.put(fname, nid);
-			if (flags != null) {
-				// TreeMap$Entry takes 32 bytes. No reason to keep null for such price
-				// Perhaps, Map<String, Pair<Nodeid, String>> might be better solution
-				flagsMap.put(fname, flags);
-			}
-			return true;
-		}
-
-		public boolean end(int revision) {
-			// in fact, this class cares about single revision
-			return false; 
-		}
-
-		public boolean begin(int revision, Nodeid nid, int changelogRevision) {
-			return true;
 		}
 	}
 
