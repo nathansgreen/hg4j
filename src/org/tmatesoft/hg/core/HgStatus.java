@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.core;
 
+import java.io.File;
 import java.util.Date;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
@@ -86,6 +87,10 @@ public class HgStatus {
 	public Date getModificationDate() {
 		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
+			File localFile = new File(logHelper.getRepo().getWorkingDir(), path.toString());
+			if (localFile.canRead()) {
+				return new Date(localFile.lastModified());
+			}
 			// FIXME check dirstate and/or local file for tstamp
 			return new Date(); // what's correct 
 		} else {

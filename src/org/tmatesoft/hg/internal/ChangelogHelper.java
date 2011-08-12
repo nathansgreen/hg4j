@@ -60,6 +60,9 @@ public class ChangelogHelper {
 	 */
 	public RawChangeset findLatestChangeWith(Path file) {
 		HgDataFile df = repo.getFileNode(file);
+		if (!df.exists()) {
+			return null;
+		}
 		int changelogRev = df.getChangesetLocalRevision(HgRepository.TIP);
 		if (changelogRev >= leftBoundary) {
 			// the method is likely to be invoked for different files, 
