@@ -278,13 +278,6 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 
 	/**
-	 * @deprecated Use {@link HgChangesetHandler} instead. This interface is left temporarily for compatibility.
-	 */
-	@Deprecated()
-	public interface Handler extends HgChangesetHandler {
-	}
-	
-	/**
 	 * When {@link HgLogCommand} is executed against file, handler passed to {@link HgLogCommand#execute(HgChangesetHandler)} may optionally
 	 * implement this interface to get information about file renames. Method {@link #copy(HgFileRevision, HgFileRevision)} would
 	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #next(HgChangeset)}.
