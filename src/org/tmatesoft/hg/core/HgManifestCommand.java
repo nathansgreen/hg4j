@@ -123,7 +123,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	public interface Handler {
 		void begin(Nodeid manifestRevision);
 		void dir(Path p); // optionally invoked (if walker was configured to spit out directories) prior to any files from this dir and subdirs
-		void file(HgLogCommand.FileRevision fileRevision); // XXX allow to check p is invalid (df.exists())
+		void file(HgFileRevision fileRevision); // XXX allow to check p is invalid (df.exists())
 		void end(Nodeid manifestRevision);
 	}
 

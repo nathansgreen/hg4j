@@ -28,7 +28,7 @@ import java.util.Map;
 
 import org.junit.Rule;
 import org.junit.Test;
-import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgLookup;
@@ -49,10 +49,10 @@ public class TestManifest {
 	private final HgRepository repo;
 	private ManifestOutputParser manifestParser;
 	private ExecHelper eh;
-	final LinkedList<FileRevision> revisions = new LinkedList<FileRevision>();
+	final LinkedList<HgFileRevision> revisions = new LinkedList<HgFileRevision>();
 	private HgManifestCommand.Handler handler  = new HgManifestCommand.Handler() {
 		
-		public void file(FileRevision fileRevision) {
+		public void file(HgFileRevision fileRevision) {
 			revisions.add(fileRevision);
 		}
 		
@@ -108,7 +108,7 @@ public class TestManifest {
 
 	private void report(String what) throws Exception {
 		final Map<Path, Nodeid> cmdLineResult = new LinkedHashMap<Path, Nodeid>(manifestParser.getResult());
-		for (FileRevision fr : revisions) {
+		for (HgFileRevision fr : revisions) {
 			Nodeid nid = cmdLineResult.remove(fr.getPath());
 			errorCollector.checkThat("Extra " + fr.getPath() + " in Java result", nid, notNullValue());
 			if (nid != null) {

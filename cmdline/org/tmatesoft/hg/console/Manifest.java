@@ -18,7 +18,7 @@ package org.tmatesoft.hg.console;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
-import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
+import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -47,7 +47,7 @@ public class Manifest {
 			}
 			public void dir(Path p) {
 			}
-			public void file(FileRevision fileRevision) {
+			public void file(HgFileRevision fileRevision) {
 				if (debug) {
 					System.out.print(fileRevision.getRevision());;
 				}

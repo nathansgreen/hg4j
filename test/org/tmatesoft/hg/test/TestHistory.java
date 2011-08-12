@@ -31,10 +31,10 @@ import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgChangeset;
+import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
 import org.tmatesoft.hg.core.HgLogCommand.FileHistoryHandler;
-import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
@@ -97,7 +97,7 @@ public class TestHistory {
 		class H extends CollectHandler implements FileHistoryHandler {
 			boolean copyReported = false;
 			boolean fromMatched = false;
-			public void copy(FileRevision from, FileRevision to) {
+			public void copy(HgFileRevision from, HgFileRevision to) {
 				copyReported = true;
 				fromMatched = "src/com/tmate/hgkit/console/Remote.java".equals(from.getPath().toString());
 			}

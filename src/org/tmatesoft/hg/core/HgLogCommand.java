@@ -18,7 +18,6 @@ package org.tmatesoft.hg.core;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
-import java.io.IOException;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -31,7 +30,6 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -288,11 +286,11 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	
 	/**
 	 * When {@link HgLogCommand} is executed against file, handler passed to {@link HgLogCommand#execute(HgChangesetHandler)} may optionally
-	 * implement this interface to get information about file renames. Method {@link #copy(FileRevision, FileRevision)} would
+	 * implement this interface to get information about file renames. Method {@link #copy(HgFileRevision, HgFileRevision)} would
 	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #next(HgChangeset)}.
 	 * 
 	 * For {@link HgLogCommand#file(Path, boolean)} with renamed file path and follow argument set to false, 
-	 * {@link #copy(FileRevision, FileRevision)} would be invoked for the first copy/rename in the history of the file, but not 
+	 * {@link #copy(HgFileRevision, HgFileRevision)} would be invoked for the first copy/rename in the history of the file, but not 
 	 * followed by any changesets. 
 	 *
 	 * @author Artem Tikhomirov
@@ -300,7 +298,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 */
 	public interface FileHistoryHandler extends HgChangesetHandler {
 		// XXX perhaps, should distinguish copy from rename? And what about merged revisions and following them?
-		void copy(FileRevision from, FileRevision to);
+		void copy(HgFileRevision from, HgFileRevision to);
 	}
 	
 	public static class CollectHandler implements HgChangesetHandler {
@@ -313,15 +311,5 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		public void next(HgChangeset changeset) {
 			result.add(changeset.clone());
 		}
-	}
-
-	/**
-	 * @deprecated pulled up, use {@link HgFileRevision} instead.
-	 */
-	@Deprecated
-	public interface FileRevision {
-		public abstract Path getPath();
-		public abstract Nodeid getRevision();
-		public abstract void putContentTo(ByteChannel sink) throws HgDataStreamException, CancelledException;
 	}
 }

@@ -18,8 +18,8 @@ package org.tmatesoft.hg.console;
 
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
-import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -123,7 +123,7 @@ public class Log {
 			super(hgRepo);
 		}
 		
-		public void copy(FileRevision from, FileRevision to) {
+		public void copy(HgFileRevision from, HgFileRevision to) {
 			System.out.printf("Got notified that %s(%s) was originally known as %s(%s)\n", to.getPath(), to.getRevision(), from.getPath(), from.getRevision());
 		}
 	}

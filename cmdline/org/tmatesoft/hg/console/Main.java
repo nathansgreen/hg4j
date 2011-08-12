@@ -25,7 +25,6 @@ import java.util.Map;
 
 import org.junit.Assert;
 import org.tmatesoft.hg.core.HgLogCommand;
-import org.tmatesoft.hg.core.HgLogCommand.FileRevision;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgFileInformer;
 import org.tmatesoft.hg.core.HgFileRevision;
@@ -49,7 +48,6 @@ import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Various debug dumps. 
@@ -365,7 +363,7 @@ public class Main {
 			public void dir(Path p) {
 				System.out.println(p);
 			}
-			public void file(FileRevision fileRevision) {
+			public void file(HgFileRevision fileRevision) {
 				System.out.print(fileRevision.getRevision());;
 				System.out.print("   ");
 				System.out.println(fileRevision.getPath());

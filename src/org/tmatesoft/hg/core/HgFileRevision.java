@@ -28,7 +28,7 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class HgFileRevision implements HgLogCommand.FileRevision {
+public final class HgFileRevision {
 	private final HgRepository repo;
 	private final Nodeid revision;
 	private final Path path;
