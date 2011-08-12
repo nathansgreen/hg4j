@@ -24,6 +24,16 @@ import org.tmatesoft.hg.util.Path;
 /**
  * Primary purpose is to provide information about file revisions at specific changeset. Multiple {@link #check(Path)} calls 
  * are possible once {@link #changeset(Nodeid)} (and optionally, {@link #followRenames(boolean)}) were set.
+ * 
+ * <p>Sample:
+ * <pre><code>
+ *   HgFileInformer i = new HgFileInformer(hgRepo).changeset(Nodeid.fromString("<40 digits>")).followRenames(true);
+ *   if (i.check(file)) {
+ *   	HgCatCommand catCmd = new HgCatCommand(hgRepo).revision(i.getFileRevision());
+ *   	catCmd.execute(...);
+ *   	...
+ *   }
+ * </pre></code>
  *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -41,6 +51,12 @@ public class HgFileInformer {
 		repo = hgRepo;
 	}
 
+	/**
+	 * Select specific changelog revision
+	 * 
+	 * @param nid changeset identifier
+	 * @return <code>this</code> for convenience
+	 */
 	public HgFileInformer changeset(Nodeid nid) {
 		if (nid == null || Nodeid.NULL.equals(nid)) {
 			throw new IllegalArgumentException(); 
@@ -50,13 +66,26 @@ public class HgFileInformer {
 		fileRevision = null;
 		return this;
 	}
-	
+
+	/**
+	 * Whether to check file origins, default is false (look up only the name supplied)
+	 *
+	 * @param follow <code>true</code> to check copy/rename origin of the file if it is a copy.
+	 * @return <code>this</code> for convenience
+	 */
 	public HgFileInformer followRenames(boolean follow) {
 		followRenames = follow;
 		fileRevision = null;
 		return this;
 	}
 
+	/**
+	 * Find file (or its origin, if {@link #followRenames(boolean)} was set to <code>true</code>) among files known at specified {@link #changeset(Nodeid)}.
+	 * 
+	 * @param file name of the file in question
+	 * @return <code>true</code> if file is known at the selected changeset.
+	 * @throws IllegalArgumentException if {@link #changeset(Nodeid)} not specified or file argument is bad.
+	 */
 	public boolean check(Path file) { // XXX IStatus instead of boolean?
 		fileRevision = null;
 		checked = false;
