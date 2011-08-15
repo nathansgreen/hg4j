@@ -75,9 +75,9 @@ public class Main {
 //		m.testRevisionMap();
 //		m.testSubrepos();
 //		m.testReadWorkingCopy();
-//		m.testParents();
+		m.testParents();
 //		m.testEffectiveFileLog();
-		m.testCatAtCsetRevision();
+//		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
 //		m.dumpBranches();
@@ -173,6 +173,7 @@ public class Main {
 			int x = clog.getLocalRevision(wcParents.second());
 			cmd.range(x, x).execute(dump);
 		}
+		System.out.println("Branch:" + hgRepo.getWorkingCopyBranchName());
 	}
 	
 	/*

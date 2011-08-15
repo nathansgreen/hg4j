@@ -57,6 +57,8 @@ public final class HgRepository {
 	public static final int TIP = -3;
 	public static final int BAD_REVISION = Integer.MIN_VALUE;
 	public static final int WORKING_COPY = -2;
+	
+	public static final String DEFAULT_BRANCH_NAME = "default";
 
 	// temp aux marker method
 	public static IllegalStateException notImplemented() {
@@ -180,7 +182,7 @@ public final class HgRepository {
 						}
 					}
 				}
-				tags.readGlobal(new File(repoDir.getParentFile(), ".hgtags")); // XXX replace with HgDataFile.workingCopy
+				tags.readGlobal(new File(getWorkingDir(), ".hgtags")); // XXX replace with HgDataFile.workingCopy
 				tags.readLocal(new File(repoDir, "localtags"));
 			} catch (IOException ex) {
 				ex.printStackTrace(); // FIXME log or othewise report
@@ -236,6 +238,13 @@ public final class HgRepository {
 		Nodeid[] p = loadDirstate().parents();
 		return new Pair<Nodeid,Nodeid>(NULL == p[0] ? null : p[0], NULL == p[1] ? null : p[1]);
 	}
+	
+	/**
+	 * @return name of the branch associated with working directory, never <code>null</code>.
+	 */
+	public String getWorkingCopyBranchName() {
+		return loadDirstate().branch();
+	}
 
 	/**
 	 * @return location where user files (shall) reside
@@ -263,7 +272,7 @@ public final class HgRepository {
 
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
 	/*package-local*/ final HgDirstate loadDirstate() {
-		return new HgDirstate(getDataAccess(), new File(repoDir, "dirstate"));
+		return new HgDirstate(this, new File(repoDir, "dirstate"));
 	}
 
 	// package-local, see comment for loadDirstate
@@ -272,7 +281,7 @@ public final class HgRepository {
 		if (ignore == null) {
 			ignore = new HgIgnore();
 			try {
-				File ignoreFile = new File(repoDir.getParentFile(), ".hgignore");
+				File ignoreFile = new File(getWorkingDir(), ".hgignore");
 				ignore.read(ignoreFile);
 			} catch (IOException ex) {
 				ex.printStackTrace(); // log warn

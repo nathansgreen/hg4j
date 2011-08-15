@@ -259,8 +259,9 @@ public class HgChangelog extends Revlog {
 			Date _time = new Date(unixTime * 1000);
 			String _extras = space2 < _timeString.length() ? _timeString.substring(space2 + 1) : null;
 			Map<String, String> _extrasMap;
+			final String extras_branch_key = "branch";
 			if (_extras == null) {
-				_extrasMap = Collections.singletonMap("branch", "default");
+				_extrasMap = Collections.singletonMap(extras_branch_key, HgRepository.DEFAULT_BRANCH_NAME);
 			} else {
 				_extrasMap = new HashMap<String, String>();
 				for (String pair : _extras.split("\00")) {
@@ -268,8 +269,8 @@ public class HgChangelog extends Revlog {
 					// FIXME need to decode key/value, @see changelog.py:decodeextra
 					_extrasMap.put(pair.substring(0, eq), pair.substring(eq + 1));
 				}
-				if (!_extrasMap.containsKey("branch")) {
-					_extrasMap.put("branch", "default");
+				if (!_extrasMap.containsKey(extras_branch_key)) {
+					_extrasMap.put(extras_branch_key, HgRepository.DEFAULT_BRANCH_NAME);
 				}
 				_extrasMap = Collections.unmodifiableMap(_extrasMap);
 			}

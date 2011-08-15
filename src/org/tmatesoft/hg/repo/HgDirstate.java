@@ -16,7 +16,9 @@
  */
 package org.tmatesoft.hg.repo;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -26,7 +28,6 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
-import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.util.Path;
 
 
@@ -37,9 +38,9 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-class HgDirstate {
+class HgDirstate /* XXX RepoChangeListener */{
 
-	private final DataAccessProvider accessProvider;
+	private final HgRepository repo;
 	private final File dirstateFile;
 	// deliberate String, not Path as it seems useless to keep Path here
 	private Map<String, Record> normal;
@@ -47,16 +48,11 @@ class HgDirstate {
 	private Map<String, Record> removed;
 	private Map<String, Record> merged;
 	private Nodeid p1, p2;
-
-	/*package-local*/ HgDirstate() {
-		// empty instance
-		accessProvider = null;
-		dirstateFile = null;
-	}
-
-	public HgDirstate(DataAccessProvider dap, File dirstate) {
-		accessProvider = dap;
-		dirstateFile = dirstate;
+	private String currentBranch;
+	
+	public HgDirstate(HgRepository hgRepo, File dirstate) {
+		repo = hgRepo;
+		dirstateFile = dirstate; // XXX decide whether file names shall be kept local to reader (see #branches()) or passed from outside 
 	}
 
 	private void read() {
@@ -64,7 +60,7 @@ class HgDirstate {
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return;
 		}
-		DataAccess da = accessProvider.create(dirstateFile);
+		DataAccess da = repo.getDataAccess().create(dirstateFile);
 		if (da.isEmpty()) {
 			return;
 		}
@@ -124,7 +120,7 @@ class HgDirstate {
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return;
 		}
-		DataAccess da = accessProvider.create(dirstateFile);
+		DataAccess da = repo.getDataAccess().create(dirstateFile);
 		if (da.isEmpty()) {
 			return;
 		}
@@ -152,6 +148,31 @@ class HgDirstate {
 		rv[0] = p1;
 		rv[1] = p2;
 		return rv;
+	}
+	
+	/**
+	 * @return branch associated with the working directory
+	 */
+	public String branch() {
+		if (currentBranch == null) {
+			currentBranch = HgRepository.DEFAULT_BRANCH_NAME;
+			File branchFile = new File(repo.getRepositoryRoot(), "branch");
+			if (branchFile.exists()) {
+				try {
+					BufferedReader r = new BufferedReader(new FileReader(branchFile));
+					String b = r.readLine();
+					if (b != null) {
+						b = b.trim().intern();
+					}
+					currentBranch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
+					r.close();
+				} catch (IOException ex) {
+					ex.printStackTrace(); // XXX log verbose debug, exception might be legal here (i.e. FileNotFound)
+					// IGNORE
+				}
+			}
+		}
+		return currentBranch;
 	}
 
 	// new, modifiable collection
