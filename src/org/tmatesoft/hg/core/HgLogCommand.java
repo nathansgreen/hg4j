@@ -142,6 +142,18 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	}
 	
 	/**
+	 * Select specific changeset
+	 * 
+	 * @param nid changeset revision
+	 * @return <code>this</code> for convenience
+	 */
+	public HgLogCommand changeset(Nodeid nid) {
+		// XXX perhaps, shall support multiple (...) arguments and extend #execute to handle not only range, but also set of revisions.
+		final int csetLocal = repo.getChangelog().getLocalRevision(nid);
+		return range(csetLocal, csetLocal);
+	}
+	
+	/**
 	 * Visit history of a given file only.
 	 * @param file path relative to repository root. Pass <code>null</code> to reset.
 	 * @param followCopyRename true to report changesets of the original file(-s), if copy/rename ever occured to the file. 

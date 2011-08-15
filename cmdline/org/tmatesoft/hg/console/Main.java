@@ -163,15 +163,12 @@ public class Main {
 		// hg parents cmd
 		final Pair<Nodeid, Nodeid> wcParents = hgRepo.getWorkingCopyParents();
 		ChangesetDumpHandler dump = new ChangesetDumpHandler(hgRepo);
-		final HgChangelog clog = hgRepo.getChangelog();
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		if (wcParents.hasFirst()) {
-			int x = clog.getLocalRevision(wcParents.first());
-			cmd.range(x, x).execute(dump); // FIXME HgLogCommand shall support Nodeid as revisions
+			cmd.changeset(wcParents.first()).execute(dump);
 		}
 		if (wcParents.hasSecond()) {
-			int x = clog.getLocalRevision(wcParents.second());
-			cmd.range(x, x).execute(dump);
+			cmd.changeset(wcParents.second()).execute(dump);
 		}
 		System.out.println("Branch:" + hgRepo.getWorkingCopyBranchName());
 	}
