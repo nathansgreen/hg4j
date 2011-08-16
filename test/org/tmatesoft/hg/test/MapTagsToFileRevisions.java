@@ -13,7 +13,6 @@ import org.tmatesoft.hg.core.HgChangesetHandler;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
@@ -56,16 +55,24 @@ public class MapTagsToFileRevisions {
 		// effective translation of changeset revisions to their local indexes
 		final HgChangelog.RevisionMap clogrmap = repository.getChangelog().new RevisionMap().init();
 		int[] tagLocalRevs = new int[allTags.length];
+		int x = 0;
 		for (int i = 0; i < allTags.length; i++) {
 			final Nodeid tagRevision = allTags[i].revision();
-			tagLocalRevs[i] = clogrmap.localRevision(tagRevision);
+			final int tagLocalRev = clogrmap.localRevision(tagRevision);
+			if (tagLocalRev != HgRepository.BAD_REVISION) {
+				tagLocalRevs[x++] = tagLocalRev;
+			}
+		}
+		if (x != allTags.length) {
+			// some tags were removed (recorded Nodeid.NULL tagname)
+			int[] copy = new int[x];
+			System.arraycopy(tagLocalRevs, 0, copy, 0, x);
+			tagLocalRevs = copy;
 		}
 		System.out.printf("Prepared tag revisions to analyze: %d ms\n", System.currentTimeMillis() - start);
 		//
 		repository.getManifest().walk(new HgManifest.Inspector() {
 			private int[] tagIndexAtRev = new int[4]; // it's unlikely there would be a lot of tags associated with a given cset
-			private final Pool<String> filenamePool = new Pool<String>();
-			private final Pool<Nodeid> nodeidPool = new Pool<Nodeid>();
 
 			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
 				Nodeid cset = clogrmap.revision(changelogRevision);
@@ -89,8 +96,6 @@ public class MapTagsToFileRevisions {
 			}
 			
 			public boolean next(Nodeid nid, String fname, String flags) {
-				fname = filenamePool.unify(fname);
-				nid = nodeidPool.unify(nid);
 				Nodeid[] m = file2rev2tag.get(fname);
 				if (m == null) {
 					file2rev2tag.put(fname, m = new Nodeid[allTags.length]);
