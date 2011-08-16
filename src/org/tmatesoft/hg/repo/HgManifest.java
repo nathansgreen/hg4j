@@ -90,6 +90,10 @@ public class HgManifest extends Revlog {
 		if (HgInternals.wrongLocalRevision(revisionNumber)) {
 			throw new IllegalArgumentException(String.valueOf(revisionNumber));
 		}
+		if (revisionNumber == HgRepository.WORKING_COPY || revisionNumber == HgRepository.BAD_REVISION) {
+			throw new IllegalArgumentException("Can't use constants like WORKING_COPY or BAD_REVISION");
+		}
+		// revisionNumber == TIP is processed by RevisionMapper 
 		if (revisionMap == null) {
 			revisionMap = new RevisionMapper(getRepo());
 			content.iterate(0, TIP, false, revisionMap);
@@ -211,7 +215,11 @@ public class HgManifest extends Revlog {
 			changelogRevisions = repo.getChangelog().getRevisionCount();
 		}
 
+		// respects TIP
 		public int at(int revisionNumber) {
+			if (revisionNumber == TIP) {
+				revisionNumber = changelogRevisions - 1;
+			}
 			if (changelog2manifest != null) {
 				return changelog2manifest[revisionNumber];
 			}
