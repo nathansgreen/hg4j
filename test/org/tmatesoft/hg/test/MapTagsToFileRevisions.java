@@ -2,6 +2,7 @@ package org.tmatesoft.hg.test;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -62,19 +63,26 @@ public class MapTagsToFileRevisions {
 		System.out.printf("Prepared tag revisions to analyze: %d ms\n", System.currentTimeMillis() - start);
 		//
 		repository.getManifest().walk(new HgManifest.Inspector() {
-			private final ArrayList<Integer> tagIndexAtRev = new ArrayList<Integer>();
+			private int[] tagIndexAtRev = new int[4]; // it's unlikely there would be a lot of tags associated with a given cset
 			private final Pool<String> filenamePool = new Pool<String>();
 			private final Pool<Nodeid> nodeidPool = new Pool<Nodeid>();
 
 			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
 				Nodeid cset = clogrmap.revision(changelogRevision);
-				tagIndexAtRev.clear();
-				for (int i = 0; i < allTags.length; i++) {
+				Arrays.fill(tagIndexAtRev, -1);
+				for (int i = 0, x = 0; i < allTags.length; i++) {
 					if (cset.equals(allTags[i].revision())) {
-						tagIndexAtRev.add(i);
+						tagIndexAtRev[x++] = i;
+						if (x == tagIndexAtRev.length) {
+							// expand twice as much
+							int[] expanded = new int[x << 1];
+							System.arraycopy(tagIndexAtRev, 0, expanded, 0, x);
+							expanded[x] = -1; // just in case there'd be no more tags associated with this cset
+							tagIndexAtRev = expanded;
+						}
 					}
 				}
-				if (tagIndexAtRev.isEmpty()) {
+				if (tagIndexAtRev[0] == -1) {
 					System.out.println("Can't happen, provided we iterate over revisions with tags only");
 				}
 				return true;
@@ -88,6 +96,9 @@ public class MapTagsToFileRevisions {
 					file2rev2tag.put(fname, m = new Nodeid[allTags.length]);
 				}
 				for (int tagIndex : tagIndexAtRev) {
+					if (tagIndex == -1) {
+						break;
+					}
 					if (m[tagIndex] != null) {
 						System.out.printf("There's another revision (%s) associated with tag %s already while we try to associate %s\n", m[tagIndex].shortNotation(), allTags[tagIndex].name(), nid.shortNotation());
 					}
