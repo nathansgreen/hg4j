@@ -22,7 +22,6 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgBadStateException;
@@ -394,6 +393,8 @@ public class RevlogStream {
 			}
 			
 			daIndex.seek(getIndexOffsetInt(i));
+			//
+			final ArrayList<PatchRecord> patches = new ArrayList<PatchRecord>();
 			
 			for (; i <= end; i++ ) {
 				if (inline && needData) {
@@ -443,7 +444,6 @@ public class RevlogStream {
 					// XXX 
 					if (patchToPrevious) {
 						// this is a patch
-						LinkedList<PatchRecord> patches = new LinkedList<PatchRecord>();
 						while (!userDataAccess.isEmpty()) {
 							PatchRecord pr = PatchRecord.read(userDataAccess);
 //							System.out.printf("PatchRecord:%d %d %d\n", pr.start, pr.end, pr.len);
@@ -452,6 +452,7 @@ public class RevlogStream {
 						userDataAccess.done();
 						//
 						byte[] userData = apply(lastUserData, actualLen, patches);
+						patches.clear();
 						userDataAccess = new ByteArrayDataAccess(userData);
 					}
 				} else {
