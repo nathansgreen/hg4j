@@ -18,6 +18,7 @@ package org.tmatesoft.hg.console;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -33,6 +34,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
+import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -46,8 +48,11 @@ import org.tmatesoft.hg.repo.HgSubrepoLocation;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.util.FileIterator;
+import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.PathRewrite;
 
 /**
  * Various debug dumps. 
@@ -72,10 +77,11 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.testTreeTraversal();
 //		m.testRevisionMap();
 //		m.testSubrepos();
 //		m.testReadWorkingCopy();
-		m.testParents();
+//		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
@@ -89,6 +95,19 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void testTreeTraversal() throws Exception {
+		File repoRoot = hgRepo.getWorkingDir();
+		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), hgRepo.getToRepoPathHelper()));
+		FileWalker w =  new FileWalker(repoRoot, pathSrc);
+		int count = 0;
+		final long start = System.currentTimeMillis();
+		while (w.hasNext()) {
+			count++;
+			w.next();
+		}
+		System.out.printf("Traversal of %d files took %d ms", count, System.currentTimeMillis() - start);
 	}
 	
 	/*

@@ -60,6 +60,31 @@ public class HgManifest extends Revlog {
 		content.iterate(start0, end0, true, new ManifestParser(inspector));
 	}
 	
+	/**
+	 * "Sparse" iteration of the manifest
+	 * 
+	 * @param inspector
+	 * @param localRevisions local changeset revisions to visit
+	 */
+	public void walk(final Inspector inspector, int... localRevisions) {
+		if (inspector == null || localRevisions == null) {
+			throw new IllegalArgumentException();
+		}
+		int[] manifestLocalRevs = new int[localRevisions.length];
+		boolean needsSort = false;
+		for (int i = 0; i < localRevisions.length; i++) {
+			final int manifestLocalRev = fromChangelog(localRevisions[i]);
+			manifestLocalRevs[i] = manifestLocalRev;
+			if (i > 0 && manifestLocalRevs[i-1] > manifestLocalRev) {
+				needsSort = true;
+			}
+		}
+		if (needsSort) {
+			Arrays.sort(manifestLocalRevs);
+		}
+		content.iterate(manifestLocalRevs, true, new ManifestParser(inspector));
+	}
+	
 	// manifest revision number that corresponds to the given changeset
 	/*package-local*/ int fromChangelog(int revisionNumber) {
 		if (HgInternals.wrongLocalRevision(revisionNumber)) {
