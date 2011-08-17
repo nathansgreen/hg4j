@@ -165,7 +165,7 @@ public final class Nodeid implements Comparable<Nodeid> {
 		// XXX is better impl for String possible?
 		return fromAscii(asciiRepresentation.getBytes(), 0, 40);
 	}
-
+	
 	/**
 	 * Parse encoded representation. Similar to {@link #fromAscii(String)}.
 	 */
@@ -176,10 +176,14 @@ public final class Nodeid implements Comparable<Nodeid> {
 		byte[] data = new byte[20];
 		boolean zeroBytes = true;
 		for (int i = 0, j = offset; i < data.length; i++) {
-			int hiNibble = Character.digit(asciiRepresentation[j++], 16);
-			int lowNibble = Character.digit(asciiRepresentation[j++], 16);
-			byte b = (byte) (((hiNibble << 4) | lowNibble) & 0xFF);
-			data[i] = b;
+			int b = asciiRepresentation[j++] & 0xCF; // -0x30 to get decimal digit out from their char, and to uppercase if a letter 
+			int hiNibble = b > 64 ? b - 55 : b;
+			b = asciiRepresentation[j++] & 0xCF;
+			int lowNibble = b > 64 ? b - 55 : b;
+			if (hiNibble >= 16 || lowNibble >= 16) {
+				throw new IllegalArgumentException(String.format("Characters '%c%c' (%1$d and %2$d) at index %d are not valid hex digits", asciiRepresentation[j-2], asciiRepresentation[j-1], j-2));
+			}
+			data[i] = (byte) (((hiNibble << 4) | lowNibble) & 0xFF);
 			zeroBytes = zeroBytes && b == 0;
 		}
 		if (zeroBytes) {
