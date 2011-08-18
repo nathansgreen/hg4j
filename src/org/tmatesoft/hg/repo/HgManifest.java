@@ -152,10 +152,10 @@ public class HgManifest extends Revlog {
 	private static class ManifestParser implements RevlogStream.Inspector {
 		private boolean gtg = true; // good to go
 		private final Inspector inspector;
-		private final Pool<Nodeid> nodeidPool;
+		private Pool<Nodeid> nodeidPool;
 		private final Pool<String> fnamePool;
 		private final Pool<String> flagsPool;
-
+		
 		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
@@ -163,41 +163,60 @@ public class HgManifest extends Revlog {
 			fnamePool = new Pool<String>();
 			flagsPool = new Pool<String>();
 		}
-
+		
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 			if (!gtg) {
 				return;
 			}
 			try {
 				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision);
-				int i;
+				Pool<Nodeid> thisRevPool = new Pool<Nodeid>(nodeidPool.size()); // supply hint to minimize map resize/rehash
 				String fname = null;
 				String flags = null;
 				Nodeid nid = null;
-				byte[] data = da.byteArray();
-				for (i = 0; gtg && i < actualLen; i++) {
-					int x = i;
-					for( ; data[i] != '\n' && i < actualLen; i++) {
-						if (fname == null && data[i] == 0) {
-							fname = fnamePool.unify(new String(data, x, i - x));
-							x = i+1;
+				final char[] nodeidConvertCache = new char[40];
+				String data = new String(da.byteArray());
+				final int dataLen = data.length(); // due to byte->char conversion, may be different
+				for (int x = 0; gtg && x < dataLen; x++) {
+					int start = x;
+					x = data.indexOf('\n', x+1);
+					assert x != -1;
+					int z = data.indexOf('\0', start+1);
+					assert z!= -1;
+					assert z < x;
+					fname = data.substring(start, z);
+					if (fnamePool.contains(fname)) {
+						fname = fnamePool.unify(fname);
+					} else {
+						fnamePool.record(fname = new String(fname));
+					}
+					z++; // cursor at first char of nodeid
+					int nodeidLen = x-z < 40 ? x-z : 40; // if x-z > 40, there are flags
+					data.getChars(z, z+nodeidLen, nodeidConvertCache, 0);
+					nid = nodeidPool.unify(Nodeid.fromAscii(nodeidConvertCache, 0, nodeidLen));
+					thisRevPool.record(nid); // memorize revision for the next iteration. 
+					if (x-z > 40) {
+						// 'x' and 'l' for executable bits and symlinks?
+						// hg --debug manifest shows 644 for each regular file in my repo
+						// for cpython repo, there are 755 in hg --debug output when 'x' flag is present
+						flags = data.substring(z + nodeidLen, x);
+						if (flagsPool.contains(flags)) {
+							flags = flagsPool.unify(flags);
+						} else {
+							flagsPool.record(flags = new String(flags));
 						}
 					}
-					if (i < actualLen) {
-						assert data[i] == '\n'; 
-						int nodeidLen = i - x < 40 ? i-x : 40;
-						nid = nodeidPool.unify(Nodeid.fromAscii(data, x, nodeidLen));
-						if (nodeidLen + x < i) {
-							// 'x' and 'l' for executable bits and symlinks?
-							// hg --debug manifest shows 644 for each regular file in my repo
-							flags = flagsPool.unify(new String(data, x + nodeidLen, i-x-nodeidLen));
-						}
-						gtg = gtg && inspector.next(nid, fname, flags);
-					}
+					gtg = gtg && inspector.next(nid, fname, flags);
 					nid = null;
 					fname = flags = null;
 				}
 				gtg = gtg && inspector.end(revisionNumber);
+				//
+				// keep only actual file revisions, found at this version 
+				// (next manifest is likely to refer to most of them, although in specific cases 
+				// like commit in another branch a lot may be useless)
+				nodeidPool.clear();
+				nodeidPool = thisRevPool;
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);
 			}

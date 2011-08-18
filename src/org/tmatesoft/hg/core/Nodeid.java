@@ -163,7 +163,7 @@ public final class Nodeid implements Comparable<Nodeid> {
 			throw new IllegalArgumentException();
 		}
 		// XXX is better impl for String possible?
-		return fromAscii(asciiRepresentation.getBytes(), 0, 40);
+		return fromAscii(asciiRepresentation.toCharArray(), 0, 40);
 	}
 	
 	/**
@@ -183,12 +183,21 @@ public final class Nodeid implements Comparable<Nodeid> {
 			if (hiNibble >= 16 || lowNibble >= 16) {
 				throw new IllegalArgumentException(String.format("Characters '%c%c' (%1$d and %2$d) at index %d are not valid hex digits", asciiRepresentation[j-2], asciiRepresentation[j-1], j-2));
 			}
-			data[i] = (byte) (((hiNibble << 4) | lowNibble) & 0xFF);
+			b = (((hiNibble << 4) | lowNibble) & 0xFF);
+			data[i] = (byte) b;
 			zeroBytes = zeroBytes && b == 0;
 		}
 		if (zeroBytes) {
 			return NULL;
 		}
 		return new Nodeid(data, false);
+	}
+	
+	public static Nodeid fromAscii(char[] asciiRepresentation, int offset, int length) {
+		byte[] b = new byte[length];
+		for (int i = 0; i < b.length; i++) {
+			b[i] = (byte) asciiRepresentation[offset+i];
+		}
+		return fromAscii(b, 0, b.length);
 	}
 }
