@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -337,6 +338,9 @@ public class RevlogStream {
 		private Lifecycle.BasicCallback cb = null;
 		private int lastRevisionRead = BAD_REVISION;
 		private DataAccess lastUserData;
+		// next are to track two major bottlenecks - patch application and actual time spent in inspector 
+//		private long applyTime, inspectorTime;
+
 
 		public ReaderN1(boolean needData, Inspector insp) {
 			assert insp != null;
@@ -353,6 +357,7 @@ public class RevlogStream {
 				cb = new Lifecycle.BasicCallback();
 				((Lifecycle) inspector).start(totalWork, cb, cb);
 			}
+//			applyTime = inspectorTime = 0;
 		}
 
 		public void finish() {
@@ -367,8 +372,9 @@ public class RevlogStream {
 			if (daData != null) {
 				daData.done();
 			}
+//			System.out.printf("applyTime:%d ms, inspectorTime: %d ms\n", applyTime, inspectorTime);
 		}
-		
+
 		public boolean range(int start, int end) throws IOException {
 			byte[] nodeidBuf = new byte[20];
 			int i;
@@ -394,7 +400,12 @@ public class RevlogStream {
 			
 			daIndex.seek(getIndexOffsetInt(i));
 			//
+			// reuse some instances
 			final ArrayList<PatchRecord> patches = new ArrayList<PatchRecord>();
+			final Inflater inflater = new Inflater();
+			// can share buffer between instances of InflaterDataAccess as I never read any two of them in parallel
+			final byte[] inflaterBuffer = new byte[1024];
+			//
 			
 			for (; i <= end; i++ ) {
 				if (inline && needData) {
@@ -432,7 +443,8 @@ public class RevlogStream {
 					} else {
 						final byte firstByte = streamDataAccess.readByte();
 						if (firstByte == 0x78 /* 'x' */) {
-							userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen);
+							inflater.reset();
+							userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen, inflater, inflaterBuffer);
 						} else if (firstByte == 0x75 /* 'u' */) {
 							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
 						} else {
@@ -444,6 +456,7 @@ public class RevlogStream {
 					// XXX 
 					if (patchToPrevious) {
 						// this is a patch
+						patches.clear(); // won't hurt to ensure there are no leftovers, even if we already cleaned
 						while (!userDataAccess.isEmpty()) {
 							PatchRecord pr = PatchRecord.read(userDataAccess);
 //							System.out.printf("PatchRecord:%d %d %d\n", pr.start, pr.end, pr.len);
@@ -451,8 +464,14 @@ public class RevlogStream {
 						}
 						userDataAccess.done();
 						//
+						// it shall be reset at the end of prev iteration, when it got assigned from userDataAccess
+						// however, actual userDataAccess and lastUserData may share Inflater object, which needs to be reset
+						// Alternatively, userDataAccess.done() above may be responsible to reset Inflater (if it's InflaterDataAccess)
+						lastUserData.reset();
+//						final long startMeasuring = System.currentTimeMillis();
 						byte[] userData = apply(lastUserData, actualLen, patches);
-						patches.clear();
+//						applyTime += (System.currentTimeMillis() - startMeasuring);
+						patches.clear(); // do not keep any reference, allow PatchRecord to be gc'd
 						userDataAccess = new ByteArrayDataAccess(userData);
 					}
 				} else {
@@ -461,7 +480,9 @@ public class RevlogStream {
 					}
 				}
 				if (!extraReadsToBaseRev || i >= start) {
+//					final long startMeasuring = System.currentTimeMillis();
 					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, userDataAccess);
+//					inspectorTime += (System.currentTimeMillis() - startMeasuring);
 				}
 				if (cb != null) {
 					if (cb.isStopped()) {
@@ -469,12 +490,12 @@ public class RevlogStream {
 					}
 				}
 				if (userDataAccess != null) {
-					userDataAccess.reset();
-					if (lastUserData != null) {
-						lastUserData.done();
-					}
-					lastUserData = userDataAccess;
+					userDataAccess.reset(); // not sure this is necessary here, as lastUserData would get reset anyway before next use.
 				}
+				if (lastUserData != null) {
+					lastUserData.done();
+				}
+				lastUserData = userDataAccess;
 			}
 			lastRevisionRead = end;
 			return true;
@@ -497,7 +518,8 @@ public class RevlogStream {
 		int last = 0, destIndex = 0;
 		if (outcomeLen == -1) {
 			outcomeLen = baseRevisionContent.length();
-			for (PatchRecord pr : patch) {
+			for (int i = 0, x = patch.size(); i < x; i++) {
+				PatchRecord pr = patch.get(i);
 				outcomeLen += pr.start - last + pr.len;
 				last = pr.end;
 			}
@@ -505,7 +527,8 @@ public class RevlogStream {
 			last = 0;
 		}
 		byte[] rv = new byte[outcomeLen];
-		for (PatchRecord pr : patch) {
+		for (int i = 0, x = patch.size(); i < x; i++) {
+			PatchRecord pr = patch.get(i);
 			baseRevisionContent.seek(last);
 			baseRevisionContent.readBytes(rv, destIndex, pr.start-last);
 			destIndex += pr.start - last;

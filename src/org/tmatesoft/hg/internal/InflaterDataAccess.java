@@ -41,18 +41,21 @@ public class InflaterDataAccess extends FilterDataAccess {
 	private int decompressedLength;
 
 	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength) {
-		this(dataAccess, offset, compressedLength, -1, new Inflater(), 512);
+		this(dataAccess, offset, compressedLength, -1, new Inflater(), new byte[512]);
 	}
 
 	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength, int actualLength) {
-		this(dataAccess, offset, compressedLength, actualLength, new Inflater(), 512);
+		this(dataAccess, offset, compressedLength, actualLength, new Inflater(), new byte[512]);
 	}
 
-	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength, int actualLength, Inflater inflater, int bufSize) {
+	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength, int actualLength, Inflater inflater, byte[] buf) {
 		super(dataAccess, offset, compressedLength);
+		if (inflater == null || buf == null) {
+			throw new IllegalArgumentException();
+		}
 		this.inflater = inflater;
 		this.decompressedLength = actualLength;
-		buffer = new byte[bufSize];
+		buffer = buf;
 	}
 	
 	@Override
