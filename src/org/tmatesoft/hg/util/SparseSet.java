@@ -53,7 +53,7 @@ public class SparseSet<T> {
 	private static final int MASK_8BIT = 0xFF, MASK_7BIT = 0x7F, MASK_6BIT = 0x3F, MASK_5BIT = 0x1F, MASK_4BIT = 0x0F;
 	private static final int I1_SHIFT = 15, I2_SHIFT = 6, I3_SHIFT = 0;
 	// 6, 5, 5
-	private static final int I1_MASK = MASK_5BIT, I2_MASK = MASK_4BIT, I3_MASK = MASK_4BIT;
+	private static final int I1_MASK = MASK_7BIT, I2_MASK = MASK_4BIT, I3_MASK = MASK_4BIT;
 
 	private final int[] fixups = new int[] {0x1, 0x10, 0xA, 0xD, 0x1F }; // rehash attempts
 	private final IndexBranch[] level2 = new IndexBranch[I1_MASK + 1];
