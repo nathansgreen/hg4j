@@ -339,7 +339,7 @@ public class RevlogStream {
 		private int lastRevisionRead = BAD_REVISION;
 		private DataAccess lastUserData;
 		// next are to track two major bottlenecks - patch application and actual time spent in inspector 
-//		private long applyTime, inspectorTime;
+//		private long applyTime, inspectorTime; // TIMING
 
 
 		public ReaderN1(boolean needData, Inspector insp) {
@@ -357,7 +357,7 @@ public class RevlogStream {
 				cb = new Lifecycle.BasicCallback();
 				((Lifecycle) inspector).start(totalWork, cb, cb);
 			}
-//			applyTime = inspectorTime = 0;
+//			applyTime = inspectorTime = 0; // TIMING
 		}
 
 		public void finish() {
@@ -372,7 +372,7 @@ public class RevlogStream {
 			if (daData != null) {
 				daData.done();
 			}
-//			System.out.printf("applyTime:%d ms, inspectorTime: %d ms\n", applyTime, inspectorTime);
+//			System.out.printf("applyTime:%d ms, inspectorTime: %d ms\n", applyTime, inspectorTime); // TIMING
 		}
 
 		public boolean range(int start, int end) throws IOException {
@@ -468,9 +468,9 @@ public class RevlogStream {
 						// however, actual userDataAccess and lastUserData may share Inflater object, which needs to be reset
 						// Alternatively, userDataAccess.done() above may be responsible to reset Inflater (if it's InflaterDataAccess)
 						lastUserData.reset();
-//						final long startMeasuring = System.currentTimeMillis();
+//						final long startMeasuring = System.currentTimeMillis(); // TIMING
 						byte[] userData = apply(lastUserData, actualLen, patches);
-//						applyTime += (System.currentTimeMillis() - startMeasuring);
+//						applyTime += (System.currentTimeMillis() - startMeasuring); // TIMING
 						patches.clear(); // do not keep any reference, allow PatchRecord to be gc'd
 						userDataAccess = new ByteArrayDataAccess(userData);
 					}
@@ -480,9 +480,9 @@ public class RevlogStream {
 					}
 				}
 				if (!extraReadsToBaseRev || i >= start) {
-//					final long startMeasuring = System.currentTimeMillis();
+//					final long startMeasuring = System.currentTimeMillis(); // TIMING
 					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, userDataAccess);
-//					inspectorTime += (System.currentTimeMillis() - startMeasuring);
+//					inspectorTime += (System.currentTimeMillis() - startMeasuring); // TIMING
 				}
 				if (cb != null) {
 					if (cb.isStopped()) {

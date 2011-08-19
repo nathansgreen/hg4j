@@ -16,45 +16,38 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.util.HashMap;
+import org.tmatesoft.hg.util.SparseSet;
 
 /**
- * Instance pooling.
- * 
+ *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Pool<T> {
-	private final HashMap<T,T> unify;
+public class Pool2<T> {
+	private final SparseSet<T> unify = new SparseSet<T>();
 	
-	public Pool() {
-		unify = new HashMap<T, T>();
+	public Pool2() {
 	}
 	
-	public Pool(int sizeHint) {
-		if (sizeHint <= 0) {
-			unify = new HashMap<T, T>();
-		} else {
-			unify = new HashMap<T, T>(sizeHint * 4 / 3, 0.75f);
-		}
+	public Pool2(int sizeHint) {
 	}
 	
 	public T unify(T t) {
 		T rv = unify.get(t);
 		if (rv == null) {
 			// first time we see a new value
-			unify.put(t, t);
+			unify.put(t);
 			rv = t;
 		}
 		return rv;
 	}
 	
 	public boolean contains(T t) {
-		return unify.containsKey(t);
+		return unify.get(t) != null;
 	}
 	
 	public void record(T t) {
-		unify.put(t, t);
+		unify.put(t);
 	}
 	
 	public void clear() {
@@ -64,18 +57,19 @@ public class Pool<T> {
 	public int size() {
 		return unify.size();
 	}
+	
+	public void x() {
+		unify.dump();
+	}
 
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append(Pool.class.getSimpleName());
-		sb.append('<');
-		if (!unify.isEmpty()) {
-			sb.append(unify.keySet().iterator().next().getClass().getName());
-		}
-		sb.append('>');
-		sb.append(':');
-		sb.append(unify.size());
+		sb.append(Pool2.class.getSimpleName());
+		sb.append('@');
+		sb.append(Integer.toString(System.identityHashCode(this)));
+		sb.append(' ');
+		sb.append(unify.toString());
 		return sb.toString();
 	}
 }

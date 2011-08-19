@@ -29,6 +29,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Pool;
+import org.tmatesoft.hg.internal.Pool2;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.Path;
 
@@ -149,19 +150,20 @@ public class HgManifest extends Revlog {
 		boolean end(int manifestRevision);
 	}
 
-	private static class ManifestParser implements RevlogStream.Inspector {
+	private static class ManifestParser implements RevlogStream.Inspector/*, Lifecycle*/ {
 		private boolean gtg = true; // good to go
 		private final Inspector inspector;
-		private Pool<Nodeid> nodeidPool;
-		private final Pool<String> fnamePool;
+		private Pool2<Nodeid> nodeidPool, thisRevPool;
+		private final Pool2<String> fnamePool;
 		private final Pool<String> flagsPool;
 		
 		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
-			nodeidPool = new Pool<Nodeid>();
-			fnamePool = new Pool<String>();
+			nodeidPool = new Pool2<Nodeid>();
+			fnamePool = new Pool2<String>();
 			flagsPool = new Pool<String>();
+			thisRevPool = new Pool2<Nodeid>();
 		}
 		
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
@@ -170,7 +172,6 @@ public class HgManifest extends Revlog {
 			}
 			try {
 				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision);
-				Pool<Nodeid> thisRevPool = new Pool<Nodeid>(nodeidPool.size()); // supply hint to minimize map resize/rehash
 				String fname = null;
 				String flags = null;
 				Nodeid nid = null;
@@ -216,11 +217,22 @@ public class HgManifest extends Revlog {
 				// (next manifest is likely to refer to most of them, although in specific cases 
 				// like commit in another branch a lot may be useless)
 				nodeidPool.clear();
+				Pool2<Nodeid> t = nodeidPool;
 				nodeidPool = thisRevPool;
+				thisRevPool = t;
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);
 			}
 		}
+//
+//		public void start(int count, Callback callback, Object token) {
+//		}
+//
+//		public void finish(Object token) {
+//			System.out.println(fnamePool);
+//			System.out.println(nodeidPool);
+//			System.out.printf("Free mem once parse done: %,d\n", Runtime.getRuntime().freeMemory());
+//		}
 	}
 	
 	private static class RevisionMapper implements RevlogStream.Inspector, Lifecycle {

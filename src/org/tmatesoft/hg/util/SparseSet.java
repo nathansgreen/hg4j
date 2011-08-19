@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.util;
 
+import java.util.Arrays;
+
 import org.tmatesoft.hg.internal.Experimental;
 
 /**
@@ -47,78 +49,47 @@ public class SparseSet<T> {
 		ss.dump();
 	}
 
-	private static class IndexBranch {
-		private final LeafBranch[] leafs = new LeafBranch[64];
-	}
-	private static class LeafBranch {
-		private final Object[] data = new Object[64];
-	}
+	@SuppressWarnings("unused")
+	private static final int MASK_8BIT = 0xFF, MASK_7BIT = 0x7F, MASK_6BIT = 0x3F, MASK_5BIT = 0x1F, MASK_4BIT = 0x0F;
+	private static final int I1_SHIFT = 15, I2_SHIFT = 6, I3_SHIFT = 0;
+	// 6, 5, 5
+	private static final int I1_MASK = MASK_5BIT, I2_MASK = MASK_4BIT, I3_MASK = MASK_4BIT;
 
 	private final int[] fixups = new int[] {0x1, 0x10, 0xA, 0xD, 0x1F }; // rehash attempts
-	private final IndexBranch[] level2 = new IndexBranch[64];
+	private final IndexBranch[] level2 = new IndexBranch[I1_MASK + 1];
 	private int size = 0;
+	
+
+	//
+	int directPut, neighborPut;
+	int[] fixupPut1 = new int[fixups.length], fixupPut2 = new int[fixups.length];;
 
 	public void put(T o) {
-		int hash = o.hashCode();
-		//
-		// 8 bits per level
-//		int i1 = (hash >>> 24) & 0xFF, i2 = (hash >>> 16) & 0xFF , i3 = (hash >>> 8) & 0xFF, i4 = hash & 0xFF;
-		//
-		// 10, 8, 8 and 6 bits
-//		final int i1 = (hash >>> 22) & 0x3FF, i2 = (hash >>> 14) & 0xFF , i3 = (hash >>> 6) & 0xFF, i4 = hash & 0x3F;
-		//
-		// 8, 6, 6, 6, 6
-		// 10, 6, 6, 6, 4
-		//
-		// 6, 5, 5, 5 = 21 bit
-//		hash = hash ^ (hash >>> 24); // incorporate upper byte we don't use into lower to value it
-//		final int i1 = (hash >>> 18) & 0x3F, i2 = (hash >>> 12) & 0x1F , i3 = (hash >>> 7) & 0x1F, i4 = (hash >>> 2) & 0x1F;
-		// 6, 5, 5
-//		hash = hash ^ (hash >>> 16);
-//		final int i1 = (hash >>> 10) & 0x3F, i2 = (hash >>> 5) & 0x1F , i3 = hash & 0x1F;
-		//
-		// 6, 6, 6
-		final int i1 = (hash >>> 15) & 0x3F, i2 = (hash >>> 6) & 0x3F , i3 = hash & 0x3F;
+		final int hash = hash(o);
+		final int i1 = (hash >>> I1_SHIFT) & I1_MASK, i2 = (hash >>> I2_SHIFT) & I2_MASK, i3 = (hash >>> I3_SHIFT) & I3_MASK;
 		LeafBranch l3 = leafBranchPut(i1, i2);
-		if (l3.data[i3] == null) {
-			l3.data[i3] = o;
+		int res;
+		if ((res = l3.put(i3, o)) != 0) {
 			size++;
-			return;
-		}
-		int neighbour = (i3+1) & 0x3F; 
-		if (l3.data[neighbour] == null) {
-			l3.data[neighbour] = o;
-			size++;
-			return;
-		}
-		int conflictCount = 0;
-		for (int fixup : fixups) {
-//			if (showConflicts) {
-//				System.out.printf("(fixup: 0x%x) ", fixup);
-//			}
-			l3 = leafBranchPut(i1 ^ fixup, i2);
-			conflictCount++;
-			if (l3.data[i3] != null) {
-//				if (showConflicts) {
-//					System.out.printf("i1 failed ");
-//				}
-				l3 = leafBranchPut(i1, i2 ^ fixup);
-				conflictCount++;
-//				if (showConflicts) {
-//					System.out.printf("i2 %s ",  (l3.data[i3] == null) ? "ok" : "failed");
-//				}
-//			} else {
-//				if (showConflicts) {
-//					System.out.printf("i1 ok");
-//				}
+			if (res == 1) {
+				directPut++;
+			} else if (res == 2) {
+				neighborPut++;
 			}
-//			if (showConflicts) {
-//				System.out.println();
-//			}
-			if (l3.data[i3] == null) {
-				l3.data[i3] = o;
-//				System.out.printf("Resolved conflict in %d steps (fixup 0x%X)\n", conflictCount, fixup);
+			return;
+		}
+		for (int i = 0; i < fixups.length; i++) {
+			int fixup = fixups[i];
+			l3 = leafBranchPut(i1 ^ fixup, i2);
+			if (l3.putIfEmptyOrSame(i3, o)) {
 				size++;
+				fixupPut1[i]++;
+				return;
+			}
+			l3 = leafBranchPut(i1, i2 ^ fixup);
+			if (l3.putIfEmptyOrSame(i3, o)) {
+				size++;
+				fixupPut2[i]++;
 				return;
 			}
 		}
@@ -127,25 +98,26 @@ public class SparseSet<T> {
 	
 	@SuppressWarnings("unchecked")
 	public T get(T o) {
-		int hash = o.hashCode();
-		//hash = hash ^ (hash >>> 16);
-		final int i1 = (hash >>> 15) & 0x3F, i2 = (hash >>> 6) & 0x3F , i3 = hash & 0x3F;
+		final int hash = hash(o);
+		final int i1 = (hash >>> I1_SHIFT) & I1_MASK, i2 = (hash >>> I2_SHIFT) & I2_MASK, i3 = (hash >>> I3_SHIFT) & I3_MASK;
 		//
 		LeafBranch l3 = leafBranchGet(i1, i2);
-		if (l3 == null || l3.data[i3] == null) {
+		if (l3 == null) {
 			return null;
 		}
-		if (o.equals(l3.data[i3])) {
-			return (T) l3.data[i3];
+		Object c;
+		if ((c = l3.get(i3, o)) != null) {
+			return c == l3 ? null : (T) c;
 		}
-		//
-		int neighbour = (i3+1) & 0x3F; 
-		if (o.equals(l3.data[neighbour])) {
-			return (T) l3.data[neighbour];
+		if ((c = l3.get(i3 ^ 0x1, o)) != null) {
+			return c == l3 ? null : (T) c;
 		}
-
-		//
-		// resolve conflict
+		if ((c = l3.get(i3 ^ 0x2, o)) != null) {
+			return c == l3 ? null : (T) c;
+		}
+		if ((c = l3.get(i3 ^ 0x3, o)) != null) {
+			return c == l3 ? null : (T) c;
+		}
 		for (int fixup : fixups) {
 			Object data = leafValueGet(i1 ^ fixup, i2, i3);
 			if (data == null) {
@@ -181,6 +153,39 @@ public class SparseSet<T> {
 		return l3;
 	}
 
+	// unlike regular collection clear, keeps all allocated arrays to minimize gc/reallocate costs
+	// do force clean, use #drop
+	public void clear() {
+		for (int i1 = 0; i1 < level2.length; i1++) {
+			IndexBranch l2 = level2[i1];
+			if (l2 == null) {
+				continue;
+			}
+			for (int i2 = 0; i2 < l2.leafs.length; i2++) {
+				LeafBranch l3 = l2.leafs[i2];
+				if (l3 == null) {
+					continue;
+				}
+				for (int i3 = 0; i3 < l3.data.length; i3++) {
+					l3.data[i3] = null;
+				}
+			}
+		}
+		reset();
+	}
+	
+	public void drop() {
+		reset();
+		for (int i1 = 0; i1 < level2.length; level2[i1++] = null);
+	}
+	
+	private void reset() {
+		size = 0;
+		directPut = neighborPut = 0;
+		Arrays.fill(fixupPut1, 0);
+		Arrays.fill(fixupPut2, 0);
+	}
+
 	private LeafBranch leafBranchGet(int i1, int i2) {
 		IndexBranch l2 = level2[i1];
 		if (l2 == null) {
@@ -200,9 +205,22 @@ public class SparseSet<T> {
 		}
 		return l3.data[i3];
 	}
+	
+	private int hash(Object o) {
+		int h = o.hashCode();
+		// HashMap.newHash()
+		h ^= (h >>> 20) ^ (h >>> 12);
+        return h ^ (h >>> 7) ^ (h >>> 4);
+	}
+
+	@Override
+	public String toString() {
+		return String.format("SparseSet (0x%02X-0x%02X-0x%02X), %d elements. Direct: %d. Resolutions: neighbour: %d, i1: %s. i2: %s", I1_MASK, I2_MASK, I3_MASK, size, directPut, neighborPut, Arrays.toString(fixupPut1), Arrays.toString(fixupPut2));
+	}
 
 	public void dump() {
 		int count = 0;
+		System.out.println(toString());
 		for (int i = 0; i < level2.length; i++) {
 			IndexBranch l2 = level2[i];
 			if (l2 == null) {
@@ -222,6 +240,70 @@ public class SparseSet<T> {
 				}
 			}
 		}
-		System.out.printf("Total: %d elements", count);
+		System.out.printf("Total: %d elements\n", count);
 	}
+
+	private static class IndexBranch {
+		private final LeafBranch[] leafs = new LeafBranch[64];
+	}
+	
+	private static final class LeafBranch {
+		public final Object[] data = new Object[64];
+
+		public int put(int ix, Object d) {
+			if (putIfEmptyOrSame(ix, d)) {
+				return 1;
+			}
+			// try neighbour elements
+			if (putIfEmptyOrSame(ix ^ 0x1, d) || putIfEmptyOrSame(ix ^ 0x2, d) || putIfEmptyOrSame(ix ^ 0x3, d)) {
+				return 2;
+			}
+			return 0;
+		}
+
+		public boolean putIfEmptyOrSame(int ix, Object d) {
+			if (data[ix] == null || data[ix].equals(d)) {
+				data[ix] = d;
+				return true;
+			}
+			return false;
+		}
+
+		/**
+		 * <code>null</code> result indicates further checks make sense
+		 * @return <code>this</code> if there's no entry at all, <code>null</code> if entry doesn't match, or entry value itself otherwise
+		 */
+		public Object get(int ix, Object o) {
+			if (data[ix] == null) {
+				return this;
+			}
+			if (data[ix].equals(o)) {
+				return data[ix];
+			}
+			return null;
+		}
+	}
+
+	//
+	// 8 bits per level
+//	int i1 = (hash >>> 24) & 0xFF, i2 = (hash >>> 16) & 0xFF , i3 = (hash >>> 8) & 0xFF, i4 = hash & 0xFF;
+	//
+	// 10, 8, 8 and 6 bits
+//	final int i1 = (hash >>> 22) & 0x3FF, i2 = (hash >>> 14) & 0xFF , i3 = (hash >>> 6) & 0xFF, i4 = hash & 0x3F;
+	//
+	// 8, 6, 6, 6, 6
+	// 10, 6, 6, 6, 4
+	//
+	// 6, 5, 5, 5 = 21 bit
+//	hash = hash ^ (hash >>> 24); // incorporate upper byte we don't use into lower to value it
+//final int i1 = (hash >>> 18) & 0x3F, i2 = (hash >>> 12) & 0x1F , i3 = (hash >>> 7) & 0x1F, i4 = (hash >>> 2) & 0x1F;
+// 6, 5, 5
+//hash = hash ^ (hash >>> 16);
+//final int i1 = (hash >>> 10) & 0x3F, i2 = (hash >>> 5) & 0x1F , i3 = hash & 0x1F;
+//
+// 6, 6, 6
+//final int i1 = (hash >>> 15) & 0x3F, i2 = (hash >>> 6) & 0x3F , i3 = hash & 0x3F;
+//
+// 8, 5, 5
+
 }
