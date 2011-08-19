@@ -20,6 +20,8 @@ import static org.tmatesoft.hg.internal.DigestHelper.toHexString;
 
 import java.util.Arrays;
 
+import org.tmatesoft.hg.internal.DigestHelper;
+
 
 
 /**
@@ -174,19 +176,7 @@ public final class Nodeid implements Comparable<Nodeid> {
 			throw new IllegalArgumentException();
 		}
 		byte[] data = new byte[20];
-		boolean zeroBytes = true;
-		for (int i = 0, j = offset; i < data.length; i++) {
-			int b = asciiRepresentation[j++] & 0xCF; // -0x30 to get decimal digit out from their char, and to uppercase if a letter 
-			int hiNibble = b > 64 ? b - 55 : b;
-			b = asciiRepresentation[j++] & 0xCF;
-			int lowNibble = b > 64 ? b - 55 : b;
-			if (hiNibble >= 16 || lowNibble >= 16) {
-				throw new IllegalArgumentException(String.format("Characters '%c%c' (%1$d and %2$d) at index %d are not valid hex digits", asciiRepresentation[j-2], asciiRepresentation[j-1], j-2));
-			}
-			b = (((hiNibble << 4) | lowNibble) & 0xFF);
-			data[i] = (byte) b;
-			zeroBytes = zeroBytes && b == 0;
-		}
+		boolean zeroBytes = DigestHelper.ascii2bin(asciiRepresentation, offset, length, data);
 		if (zeroBytes) {
 			return NULL;
 		}

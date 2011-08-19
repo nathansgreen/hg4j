@@ -26,6 +26,7 @@ import java.util.Arrays;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Pool;
@@ -150,12 +151,14 @@ public class HgManifest extends Revlog {
 		boolean end(int manifestRevision);
 	}
 
-	private static class ManifestParser implements RevlogStream.Inspector/*, Lifecycle*/ {
+	private static class ManifestParser implements RevlogStream.Inspector/*, Lifecycle */{
 		private boolean gtg = true; // good to go
 		private final Inspector inspector;
 		private Pool2<Nodeid> nodeidPool, thisRevPool;
 		private final Pool2<String> fnamePool;
 		private final Pool<String> flagsPool;
+		private final byte[] nodeidAsciiConvertBuffer = new byte[40];
+		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
 		
 		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
@@ -175,7 +178,6 @@ public class HgManifest extends Revlog {
 				String fname = null;
 				String flags = null;
 				Nodeid nid = null;
-				final char[] nodeidConvertCache = new char[40];
 				String data = new String(da.byteArray());
 				final int dataLen = data.length(); // due to byte->char conversion, may be different
 				for (int x = 0; gtg && x < dataLen; x++) {
@@ -193,8 +195,19 @@ public class HgManifest extends Revlog {
 					}
 					z++; // cursor at first char of nodeid
 					int nodeidLen = x-z < 40 ? x-z : 40; // if x-z > 40, there are flags
-					data.getChars(z, z+nodeidLen, nodeidConvertCache, 0);
-					nid = nodeidPool.unify(Nodeid.fromAscii(nodeidConvertCache, 0, nodeidLen));
+					for (int k = 0; k < nodeidLen; k++) {
+						// intentionally didn't clear array as it shall be of length 40 (Nodeid.fromAscii won't stand anything but 40)
+						nodeidAsciiConvertBuffer[k] = (byte) data.charAt(z+k);
+					}
+					DigestHelper.ascii2bin(nodeidAsciiConvertBuffer, 0, nodeidLen, nodeidLookupBuffer);
+					nid = new Nodeid(nodeidLookupBuffer, false); // this Nodeid is for pool lookup only, mock object
+					Nodeid cached = nodeidPool.unify(nid);
+					if (cached == nid) {
+						// buffer now belongs to the cached nodeid
+						nodeidLookupBuffer = new byte[20];
+					} else {
+						nid = cached; // use existing version, discard the lookup object
+					}
 					thisRevPool.record(nid); // memorize revision for the next iteration. 
 					if (x-z > 40) {
 						// 'x' and 'l' for executable bits and symlinks?

@@ -122,4 +122,24 @@ public class DigestHelper {
 		}
 		return new String(result);
 	}
+
+	public static boolean ascii2bin(byte[] ascii, int offset, int len, byte[] binary) {
+		assert len % 2 == 0;
+		assert binary.length >= len >>> 1;
+
+		boolean zeroBytes = true;
+		for (int i = 0, j = offset; i < len >>> 1; i++) {
+			int b = ascii[j++] & 0xCF; // -0x30 to get decimal digit out from their char, and to uppercase if a letter 
+			int hiNibble = b > 64 ? b - 55 : b;
+			b = ascii[j++] & 0xCF;
+			int lowNibble = b > 64 ? b - 55 : b;
+			if (hiNibble >= 16 || lowNibble >= 16) {
+				throw new IllegalArgumentException(String.format("Characters '%c%c' (%1$d and %2$d) at index %d are not valid hex digits", ascii[j-2], ascii[j-1], j-2));
+			}
+			b = (((hiNibble << 4) | lowNibble) & 0xFF);
+			binary[i] = (byte) b;
+			zeroBytes = zeroBytes && b == 0;
+		}
+		return zeroBytes;
+	}
 }
