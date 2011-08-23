@@ -154,18 +154,29 @@ public class HgManifest extends Revlog {
 		T get();
 	}
 	
-	private static class PoolStringProxy {
+	/**
+	 * When Pool uses Strings directly,
+	 * ManifestParser creates new String instance with new char[] value, and does byte->char conversion.
+	 * For cpython repo, walk(0..10k), there are over 16 million filenames, of them only 3020 unique.
+	 * This means there are 15.9 million useless char[] instances and byte->char conversions  
+	 * 
+	 * When String is wrapped into {@link StringProxy}, there's extra overhead of byte[] representation
+	 * of the String, but these are only for unique Strings (3020 in the example above). Besides, I save
+	 * useless char[] and byte->char conversions. 
+	 */
+	private static class StringProxy {
 		private byte[] data;
-		private int start, length;
-		private int hash;
+		private int start; 
+		private final int hash, length;
 		private String result;
 
-		public void init(byte[] data, int start, int length) {
+		public StringProxy(byte[] data, int start, int length) {
 			this.data = data;
 			this.start = start;
 			this.length = length;
 
-			// copy from String.hashCode()
+			// copy from String.hashCode(). In fact, not necessarily match result of String(data).hashCode
+			// just need some nice algorithm here
 			int h = 0;
 			byte[] d = data;
 			for (int i = 0, off = start, len = length; i < len; i++) {
@@ -176,26 +187,14 @@ public class HgManifest extends Revlog {
 
 		@Override
 		public boolean equals(Object obj) {
-			if (false == obj instanceof PoolStringProxy) {
+			if (false == obj instanceof StringProxy) {
 				return false;
 			}
-			PoolStringProxy o = (PoolStringProxy) obj;
+			StringProxy o = (StringProxy) obj;
 			if (o.result != null && result != null) {
 				return result.equals(o.result);
 			}
-			if (o.result == null && result != null || o.result != null && result == null) {
-				String s; PoolStringProxy noString; 
-				if (o.result == null) {
-					s = result;
-					noString = o;
-				} else {
-					s = o.result;
-					noString = this;
-				}
-				
-			}
-			// both are null
-			if (o.length != length) {
+			if (o.length != length || o.hash != hash) {
 				return false;
 			}
 			for (int i = 0, x = o.start, y = start; i < length; i++) {
@@ -213,30 +212,33 @@ public class HgManifest extends Revlog {
 		public String freeze() {
 			if (result == null) {
 				result = new String(data, start, length);
-				data = null;
-				start = length = -1;
+				// release reference to bigger data array, make a copy of relevant part only
+				byte[] d = new byte[length];
+				System.arraycopy(data, start, d, 0, length);
+				data = d;
+				start = 0;
 			}
 			return result;
 		}
 	}
 
-	private static class ManifestParser implements RevlogStream.Inspector/*, Lifecycle */{
+	private static class ManifestParser implements RevlogStream.Inspector {
 		private boolean gtg = true; // good to go
 		private final Inspector inspector;
 		private Pool<Nodeid> nodeidPool, thisRevPool;
-		private final Pool<String> fnamePool;
-		private final Pool<String> flagsPool;
+		private final Pool<StringProxy> fnamePool;
+		private final Pool<StringProxy> flagsPool;
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
 		
 		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
 			nodeidPool = new Pool<Nodeid>();
-			fnamePool = new Pool<String>();
-			flagsPool = new Pool<String>();
+			fnamePool = new Pool<StringProxy>();
+			flagsPool = new Pool<StringProxy>();
 			thisRevPool = new Pool<Nodeid>();
 		}
-
+		
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 			if (!gtg) {
 				return;
@@ -252,7 +254,10 @@ public class HgManifest extends Revlog {
 					int x = i;
 					for( ; data[i] != '\n' && i < actualLen; i++) {
 						if (fname == null && data[i] == 0) {
-							fname = fnamePool.unify(new String(data, x, i - x));
+							StringProxy px = fnamePool.unify(new StringProxy(data, x, i - x));
+							// if (cached = fnamePool.unify(px))== px then cacheMiss, else cacheHit
+							// cpython 0..10k: hits: 15 989 152, misses: 3020
+							fname = px.freeze();
 							x = i+1;
 						}
 					}
@@ -272,7 +277,8 @@ public class HgManifest extends Revlog {
 						if (nodeidLen + x < i) {
 							// 'x' and 'l' for executable bits and symlinks?
 							// hg --debug manifest shows 644 for each regular file in my repo
-							flags = flagsPool.unify(new String(data, x + nodeidLen, i-x-nodeidLen));
+							// for cpython 0..10k, there are 4361062 flagPool checks, and there's only 1 unique flag
+							flags = flagsPool.unify(new StringProxy(data, x + nodeidLen, i-x-nodeidLen)).freeze();
 						}
 						gtg = gtg && inspector.next(nid, fname, flags);
 					}
@@ -292,15 +298,6 @@ public class HgManifest extends Revlog {
 				throw new HgBadStateException(ex);
 			}
 		}
-//
-//		public void start(int count, Callback callback, Object token) {
-//		}
-//
-//		public void finish(Object token) {
-//			System.out.println(fnamePool);
-//			System.out.println(nodeidPool);
-//			System.out.printf("Free mem once parse done: %,d\n", Runtime.getRuntime().freeMemory());
-//		}
 	}
 	
 	private static class RevisionMapper implements RevlogStream.Inspector, Lifecycle {

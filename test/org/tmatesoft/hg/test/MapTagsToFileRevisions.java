@@ -66,6 +66,7 @@ public class MapTagsToFileRevisions {
 	}
 
 	private void manifestWalk() throws Exception {
+		System.out.println(System.getProperty("java.version"));
 		final long start = System.currentTimeMillis();
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
 		repository.getManifest().walk(0, 10000, new HgManifest.Inspector() {
@@ -87,6 +88,9 @@ public class MapTagsToFileRevisions {
 		// cpython -r 1000: 484 files, -r 2000: 1015 files. Iteration 1000..2000; fnamePool.size:1019 nodeidPool.size:2989
 		// nodeidPool for two subsequent revisions only: 840. 37 sec for 0..10000. 99 sec for 0..20k
 		// 0..10000 fnamePool: hits:15989152, misses:3020
+		//
+		// With Pool<StringProxy> for fname and flags, Nodeid's ascii2bin through local array, overall byte[] iteration, 
+		// 0..10k is 34 seconds now
 		System.out.printf("Total time: %d ms\n", System.currentTimeMillis() - start);
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
