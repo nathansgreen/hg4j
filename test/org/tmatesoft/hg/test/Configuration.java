@@ -39,6 +39,7 @@ public class Configuration {
 	private final HgLookup lookup;
 	private File tempDir;
 	private List<String> remoteServers;
+	private File testDataDir;
 	
 	private Configuration() {
 		lookup = new HgLookup();
@@ -97,5 +98,12 @@ public class Configuration {
 			tempDir = new File(td);
 		}
 		return tempDir;
+	}
+	
+	public File getTestDataDir() {
+		if (testDataDir == null) {
+			testDataDir = new File(System.getProperty("user.dir"), "test-data");
+		}
+		return testDataDir;
 	}
 }

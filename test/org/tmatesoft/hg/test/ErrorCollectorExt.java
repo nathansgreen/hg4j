@@ -21,6 +21,7 @@ import static org.junit.Assert.assertThat;
 import java.util.concurrent.Callable;
 
 import org.hamcrest.Matcher;
+import org.junit.internal.runners.model.MultipleFailureException;
 import org.junit.rules.ErrorCollector;
 
 /**
@@ -31,7 +32,14 @@ import org.junit.rules.ErrorCollector;
  */
 final class ErrorCollectorExt extends ErrorCollector {
 	public void verify() throws Throwable {
-		super.verify();
+		try {
+			super.verify();
+		} catch (MultipleFailureException ex) {
+			for (Throwable t : ex.getFailures()) {
+				t.printStackTrace();
+			}
+			throw ex;
+		}
 	}
 
 	public <T> void checkThat(final String reason, final T value, final Matcher<T> matcher) {
@@ -39,6 +47,15 @@ final class ErrorCollectorExt extends ErrorCollector {
 			public Object call() throws Exception {
 				assertThat(reason, value, matcher);
 				return value;
+			}
+		});
+	}
+	
+	public void assertTrue(final String reason, final boolean value) {
+		checkSucceeds(new Callable<Object>() {
+			public Object call() throws Exception {
+				org.junit.Assert.assertTrue(reason, value);
+				return null;
 			}
 		});
 	}

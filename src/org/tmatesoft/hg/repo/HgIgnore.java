@@ -45,26 +45,40 @@ public class HgIgnore {
 		if (!hgignoreFile.exists()) {
 			return;
 		}
-		ArrayList<Pattern> result = new ArrayList<Pattern>(entries); // start with existing
-		String syntax = "regex"; // or "glob"
 		BufferedReader fr = new BufferedReader(new FileReader(hgignoreFile));
+		try {
+			read(fr);
+		} finally {
+			fr.close();
+		}
+	}
+
+	/* package-local */void read(BufferedReader content) throws IOException {
+		ArrayList<Pattern> result = new ArrayList<Pattern>(entries); // start with existing
+		String syntax = "regexp"; // or "glob"
 		String line;
-		while ((line = fr.readLine()) != null) {
+		while ((line = content.readLine()) != null) {
 			line = line.trim();
 			if (line.startsWith("syntax:")) {
 				syntax = line.substring("syntax:".length()).trim();
-				if (!"regex".equals(syntax) && !"glob".equals(syntax)) {
+				if (!"regexp".equals(syntax) && !"glob".equals(syntax)) {
 					throw new IllegalStateException(line);
 				}
 			} else if (line.length() > 0) {
 				// shall I account for local paths in the file (i.e.
 				// back-slashed on windows)?
-				int x;
-				if ((x = line.indexOf('#')) >= 0) {
-					line = line.substring(0, x).trim();
-					if (line.length() == 0) {
-						continue;
+				int x, s = 0;
+				while ((x = line.indexOf('#', s)) >= 0) {
+					if (x > 0 && line.charAt(x-1) == '\\') {
+						// remove escape char
+						line = line.substring(0, x-1).concat(line.substring(x));
+						s = x; // with exclusion of char at [x], s now points to what used to be at [x+1]
+					} else {
+						line = line.substring(0, x).trim();
 					}
+				}
+				if (line.length() == 0) {
+					continue;
 				}
 				if ("glob".equals(syntax)) {
 					// hgignore(5)
@@ -76,7 +90,6 @@ public class HgIgnore {
 				result.add(Pattern.compile(line)); // case-sensitive
 			}
 		}
-		fr.close();
 		result.trimToSize();
 		entries = result;
 	}
@@ -94,13 +107,19 @@ public class HgIgnore {
 	private String glob2regex(String line) {
 		assert line.length() > 0;
 		StringBuilder sb = new StringBuilder(line.length() + 10);
-		sb.append('^'); // help avoid matcher.find() to match 'bin' pattern in the middle of the filename
+		if (line.charAt(0) != '*') {
+			sb.append('^'); // help avoid matcher.find() to match 'bin' pattern in the middle of the filename
+		}
 		int start = 0, end = line.length() - 1;
 		// '*' at the beginning and end of a line are useless for Pattern
 		// XXX although how about **.txt - such globs can be seen in a config, are they valid for HgIgnore?
 		while (start <= end && line.charAt(start) == '*') start++;
 		while (end > start && line.charAt(end) == '*') end--;
 
+		if (line.endsWith(".so")) {
+			System.out.println();
+		}
+		int inCurly = 0;
 		for (int i = start; i <= end; i++) {
 			char ch = line.charAt(i);
 			if (ch == '.' || ch == '\\') {
@@ -116,6 +135,21 @@ public class HgIgnore {
 				continue;
 			} else if (ch == '*') {
 				sb.append("[^/]*?");
+				continue;
+			} else if (ch == '{') {
+				// XXX in fact, need to respect if last char was escaping ('\\'), then don't need to treat this as special
+				// see link at javadoc above for reasonable example
+				inCurly++;
+				sb.append('(');
+				continue;
+			} else if (ch == '}') {
+				if (inCurly > 0) {
+					inCurly--;
+					sb.append(')');
+					continue;
+				}
+			} else if (ch == ',' && inCurly > 0) {
+				sb.append('|');
 				continue;
 			}
 			sb.append(ch);

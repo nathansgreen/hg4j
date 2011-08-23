@@ -18,7 +18,10 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -68,6 +71,14 @@ public class HgInternals {
 	
 	public ConfigFile getRepoConfig() {
 		return repo.getConfigFile();
+	}
+	
+	public static HgIgnore newHgIgnore(Reader source) throws IOException {
+		HgIgnore hgIgnore = new HgIgnore();
+		BufferedReader br = source instanceof BufferedReader ? (BufferedReader) source : new BufferedReader(source);
+		hgIgnore.read(br);
+		br.close();
+		return hgIgnore;
 	}
 
 	// in fact, need a setter for this anyway, shall move to internal.Internals perhaps?
