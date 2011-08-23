@@ -30,7 +30,6 @@ import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Pool;
-import org.tmatesoft.hg.internal.Pool2;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.Path;
 
@@ -150,25 +149,94 @@ public class HgManifest extends Revlog {
 		boolean next(Nodeid nid, String fname, String flags);
 		boolean end(int manifestRevision);
 	}
+	
+	public interface ElementProxy<T> {
+		T get();
+	}
+	
+	private static class PoolStringProxy {
+		private byte[] data;
+		private int start, length;
+		private int hash;
+		private String result;
+
+		public void init(byte[] data, int start, int length) {
+			this.data = data;
+			this.start = start;
+			this.length = length;
+
+			// copy from String.hashCode()
+			int h = 0;
+			byte[] d = data;
+			for (int i = 0, off = start, len = length; i < len; i++) {
+				h = 31 * h + d[off++];
+			}
+			hash = h;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (false == obj instanceof PoolStringProxy) {
+				return false;
+			}
+			PoolStringProxy o = (PoolStringProxy) obj;
+			if (o.result != null && result != null) {
+				return result.equals(o.result);
+			}
+			if (o.result == null && result != null || o.result != null && result == null) {
+				String s; PoolStringProxy noString; 
+				if (o.result == null) {
+					s = result;
+					noString = o;
+				} else {
+					s = o.result;
+					noString = this;
+				}
+				
+			}
+			// both are null
+			if (o.length != length) {
+				return false;
+			}
+			for (int i = 0, x = o.start, y = start; i < length; i++) {
+				if (o.data[x++] != data[y++]) {
+					return false;
+				}
+			}
+			return true;
+		}
+		@Override
+		public int hashCode() {
+			return hash;
+		}
+		
+		public String freeze() {
+			if (result == null) {
+				result = new String(data, start, length);
+				data = null;
+				start = length = -1;
+			}
+			return result;
+		}
+	}
 
 	private static class ManifestParser implements RevlogStream.Inspector/*, Lifecycle */{
 		private boolean gtg = true; // good to go
 		private final Inspector inspector;
-		private Pool2<Nodeid> nodeidPool, thisRevPool;
-		private final Pool2<String> fnamePool;
+		private Pool<Nodeid> nodeidPool, thisRevPool;
+		private final Pool<String> fnamePool;
 		private final Pool<String> flagsPool;
-		private final byte[] nodeidAsciiConvertBuffer = new byte[40];
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
 		
 		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
-			nodeidPool = new Pool2<Nodeid>();
-			fnamePool = new Pool2<String>();
+			nodeidPool = new Pool<Nodeid>();
+			fnamePool = new Pool<String>();
 			flagsPool = new Pool<String>();
-			thisRevPool = new Pool2<Nodeid>();
+			thisRevPool = new Pool<Nodeid>();
 		}
-		
+
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 			if (!gtg) {
 				return;
@@ -178,49 +246,36 @@ public class HgManifest extends Revlog {
 				String fname = null;
 				String flags = null;
 				Nodeid nid = null;
-				String data = new String(da.byteArray());
-				final int dataLen = data.length(); // due to byte->char conversion, may be different
-				for (int x = 0; gtg && x < dataLen; x++) {
-					int start = x;
-					x = data.indexOf('\n', x+1);
-					assert x != -1;
-					int z = data.indexOf('\0', start+1);
-					assert z!= -1;
-					assert z < x;
-					fname = data.substring(start, z);
-					if (fnamePool.contains(fname)) {
-						fname = fnamePool.unify(fname);
-					} else {
-						fnamePool.record(fname = new String(fname));
-					}
-					z++; // cursor at first char of nodeid
-					int nodeidLen = x-z < 40 ? x-z : 40; // if x-z > 40, there are flags
-					for (int k = 0; k < nodeidLen; k++) {
-						// intentionally didn't clear array as it shall be of length 40 (Nodeid.fromAscii won't stand anything but 40)
-						nodeidAsciiConvertBuffer[k] = (byte) data.charAt(z+k);
-					}
-					DigestHelper.ascii2bin(nodeidAsciiConvertBuffer, 0, nodeidLen, nodeidLookupBuffer);
-					nid = new Nodeid(nodeidLookupBuffer, false); // this Nodeid is for pool lookup only, mock object
-					Nodeid cached = nodeidPool.unify(nid);
-					if (cached == nid) {
-						// buffer now belongs to the cached nodeid
-						nodeidLookupBuffer = new byte[20];
-					} else {
-						nid = cached; // use existing version, discard the lookup object
-					}
-					thisRevPool.record(nid); // memorize revision for the next iteration. 
-					if (x-z > 40) {
-						// 'x' and 'l' for executable bits and symlinks?
-						// hg --debug manifest shows 644 for each regular file in my repo
-						// for cpython repo, there are 755 in hg --debug output when 'x' flag is present
-						flags = data.substring(z + nodeidLen, x);
-						if (flagsPool.contains(flags)) {
-							flags = flagsPool.unify(flags);
-						} else {
-							flagsPool.record(flags = new String(flags));
+				int i;
+				byte[] data = da.byteArray();
+				for (i = 0; gtg && i < actualLen; i++) {
+					int x = i;
+					for( ; data[i] != '\n' && i < actualLen; i++) {
+						if (fname == null && data[i] == 0) {
+							fname = fnamePool.unify(new String(data, x, i - x));
+							x = i+1;
 						}
 					}
-					gtg = gtg && inspector.next(nid, fname, flags);
+					if (i < actualLen) {
+						assert data[i] == '\n'; 
+						int nodeidLen = i - x < 40 ? i-x : 40; // if > 40, there are flags
+						DigestHelper.ascii2bin(data, x, nodeidLen, nodeidLookupBuffer); // ignore return value as it's unlikely to have NULL in manifest
+						nid = new Nodeid(nodeidLookupBuffer, false); // this Nodeid is for pool lookup only, mock object
+						Nodeid cached = nodeidPool.unify(nid);
+						if (cached == nid) {
+							// buffer now belongs to the cached nodeid
+							nodeidLookupBuffer = new byte[20];
+						} else {
+							nid = cached; // use existing version, discard the lookup object
+						} // for cpython 0..10k, cache hits are 15 973 301, vs 18871 misses.
+						thisRevPool.record(nid); // memorize revision for the next iteration. 
+						if (nodeidLen + x < i) {
+							// 'x' and 'l' for executable bits and symlinks?
+							// hg --debug manifest shows 644 for each regular file in my repo
+							flags = flagsPool.unify(new String(data, x + nodeidLen, i-x-nodeidLen));
+						}
+						gtg = gtg && inspector.next(nid, fname, flags);
+					}
 					nid = null;
 					fname = flags = null;
 				}
@@ -230,7 +285,7 @@ public class HgManifest extends Revlog {
 				// (next manifest is likely to refer to most of them, although in specific cases 
 				// like commit in another branch a lot may be useless)
 				nodeidPool.clear();
-				Pool2<Nodeid> t = nodeidPool;
+				Pool<Nodeid> t = nodeidPool;
 				nodeidPool = thisRevPool;
 				thisRevPool = t;
 			} catch (IOException ex) {
