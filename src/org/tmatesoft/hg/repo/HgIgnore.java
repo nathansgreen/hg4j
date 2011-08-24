@@ -116,9 +116,6 @@ public class HgIgnore {
 		while (start <= end && line.charAt(start) == '*') start++;
 		while (end > start && line.charAt(end) == '*') end--;
 
-		if (line.endsWith(".so")) {
-			System.out.println();
-		}
 		int inCurly = 0;
 		for (int i = start; i <= end; i++) {
 			char ch = line.charAt(i);
