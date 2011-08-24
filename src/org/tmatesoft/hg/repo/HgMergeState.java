@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.core.Nodeid.NULL;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -40,7 +42,7 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author TMate Software Ltd.
  */
 public class HgMergeState {
-	private Nodeid wcp1, wcp2;
+	private Nodeid wcp1, wcp2, stateParent;
 	
 	public enum Kind {
 		Resolved, Unresolved;
@@ -95,29 +97,46 @@ public class HgMergeState {
 			// empty state
 			return;
 		}
-		Nodeid[] wcParents = repo.loadDirstate().parents();
-		wcp1 = wcParents[0]; wcp2 = wcParents[1];
-		ArrayList<Entry> result = new ArrayList<Entry>();
-		PathPool pathPool = new PathPool(new PathRewrite.Empty());
 		Pool<Nodeid> nodeidPool = new Pool<Nodeid>();
 		Pool<String> fnamePool = new Pool<String>();
+		Nodeid[] wcParents = repo.loadDirstate().parents();
+		wcp1 = nodeidPool.unify(wcParents[0]); wcp2 = nodeidPool.unify(wcParents[1]);
+		ArrayList<Entry> result = new ArrayList<Entry>();
+		PathPool pathPool = new PathPool(new PathRewrite.Empty());
 		final ManifestRevision m1 = new ManifestRevision(nodeidPool, fnamePool);
 		final ManifestRevision m2 = new ManifestRevision(nodeidPool, fnamePool);
-		final int rp1 = repo.getChangelog().getLocalRevision(wcp1);
-		final int rp2 = repo.getChangelog().getLocalRevision(wcp2);
-		repo.getManifest().walk(rp1, rp1, m1);
-		repo.getManifest().walk(rp2, rp2, m2);
+		if (!wcp2.isNull()) {
+			final int rp2 = repo.getChangelog().getLocalRevision(wcp2);
+			repo.getManifest().walk(rp2, rp2, m2);
+		}
 		BufferedReader br = new BufferedReader(new FileReader(f));
 		String s = br.readLine();
-		Nodeid n = Nodeid.fromAscii(s);
-		if (!wcp1.equals(n)) {
-			throw new AssertionError("I assume merge/state records revision of the wc we merge into");
-		}
+		stateParent = nodeidPool.unify(Nodeid.fromAscii(s));
+		final int rp1 = repo.getChangelog().getLocalRevision(stateParent);
+		repo.getManifest().walk(rp1, rp1, m1);
 		while ((s = br.readLine()) != null) {
 			String[] r = s.split("\\00");
-			HgFileRevision p1 = new HgFileRevision(repo, m1.nodeid(r[3]), pathPool.path(r[3]));
-			HgFileRevision ca = new HgFileRevision(repo, Nodeid.fromAscii(r[5]), pathPool.path(r[4]));
-			HgFileRevision p2 = new HgFileRevision(repo, m2.nodeid(r[6]), pathPool.path(r[6]));
+			Nodeid nidP1 = m1.nodeid(r[3]);
+			Nodeid nidCA = nodeidPool.unify(Nodeid.fromAscii(r[5]));
+			HgFileRevision p1 = new HgFileRevision(repo, nidP1, pathPool.path(r[3]));
+			HgFileRevision ca;
+			if (nidCA == nidP1 && r[3].equals(r[4])) {
+				ca = p1;
+			} else {
+				ca = new HgFileRevision(repo, nidCA, pathPool.path(r[4]));
+			}
+			HgFileRevision p2;
+			if (!wcp2.isNull() || !r[6].equals(r[4])) {
+				Nodeid nidP2 = m2.nodeid(r[6]);
+				if (nidP2 == null) {
+					assert false : "There's not enough information (or I don't know where to look) in merge/state to find out what's the second parent";
+					nidP2 = NULL;
+				}
+				p2 = new HgFileRevision(repo, nidP2, pathPool.path(r[6]));
+			} else {
+				// no second parent known. no idea what to do here, assume linear merge, use common ancestor as parent
+				p2 = ca;
+			}
 			final Kind k;
 			if ("u".equals(r[1])) {
 				k = Kind.Unresolved;
@@ -132,6 +151,21 @@ public class HgMergeState {
 		entries = result.toArray(new Entry[result.size()]);
 		br.close();
 		pathPool.clear();
+	}
+
+	
+	public boolean isMerging() {
+		return !getFirstParent().isNull() && !getSecondParent().isNull() && !isStale();
+	}
+	
+	/**
+	 * @return <code>true</code> when recorded merge state doesn't seem to correspond to present working copy
+	 */
+	public boolean isStale() {
+		if (wcp1 == null) {
+			throw new HgBadStateException("Call #refresh() first");
+		}
+		return !wcp1.equals(stateParent); 
 	}
 	
 	public Nodeid getFirstParent() {
@@ -148,6 +182,13 @@ public class HgMergeState {
 		return wcp2;
 	}
 	
+	public Nodeid getStateParent() {
+		if (stateParent == null) {
+			throw new HgBadStateException("Call #refresh() first");
+		}
+		return stateParent;
+	}
+
 	public List<Entry> getConflicts() {
 		return entries == null ? Collections.<Entry>emptyList() : Arrays.asList(entries);
 	}

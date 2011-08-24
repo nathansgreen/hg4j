@@ -77,14 +77,14 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testTreeTraversal();
+//		m.testTreeTraversal();
 //		m.testRevisionMap();
 //		m.testSubrepos();
 //		m.testReadWorkingCopy();
 //		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
-//		m.testMergeState();
+		m.testMergeState();
 //		m.testFileStatus();
 //		m.dumpBranches();
 //		m.inflaterLengthException();
@@ -247,6 +247,8 @@ public class Main {
 	private void testMergeState() throws Exception {
 		final HgMergeState mergeState = hgRepo.getMergeState();
 		mergeState.refresh();
+		System.out.printf("isMerging: %s, isStale: %s.\n", mergeState.isMerging(), mergeState.isStale());
+		System.out.printf("P1:%s\nP2:%s\nState parent:%s\n",mergeState.getFirstParent().shortNotation(), mergeState.getSecondParent().shortNotation(), mergeState.getStateParent().shortNotation());
 		for (HgMergeState.Entry e : mergeState.getConflicts()) {
 			System.out.println(e.getState() + " " + e.getActualFile());
 			System.out.println("p1:       " + formatFileRevision(e.getFirstParent()));
