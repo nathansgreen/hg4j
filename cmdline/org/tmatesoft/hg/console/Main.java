@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
+import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgFileInformer;
@@ -445,7 +446,7 @@ public class Main {
 	}
 
 
-	private void testStatusInternals() {
+	private void testStatusInternals() throws HgDataStreamException {
 		HgDataFile n = hgRepo.getFileNode(Path.create("design.txt"));
 		for (String s : new String[] {"011dfd44417c72bd9e54cf89b82828f661b700ed", "e5529faa06d53e06a816e56d218115b42782f1ba", "c18e7111f1fc89a80a00f6a39d51288289a382fc"}) {
 			// expected: 359, 2123, 3079

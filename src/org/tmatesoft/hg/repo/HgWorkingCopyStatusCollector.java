@@ -59,6 +59,7 @@ public class HgWorkingCopyStatusCollector {
 	private HgDirstate dirstate;
 	private HgStatusCollector baseRevisionCollector;
 	private PathPool pathPool;
+	private ManifestRevision dirstateParentManifest;
 
 	public HgWorkingCopyStatusCollector(HgRepository hgRepo) {
 		this(hgRepo, new HgInternals(hgRepo).createWorkingDirWalker(null));
@@ -100,21 +101,31 @@ public class HgWorkingCopyStatusCollector {
 		}
 		return dirstate;
 	}
-
+	
 	// may be invoked few times
+	// NOTE, use of TIP constant requires certain care. TIP here doesn't mean latest cset, but actual working copy parent.
+	// XXX this shall be changed, though, and use of TIP throughout code shall be revised - 
+	// consider case when repository is updated to one of its previous revisions. TIP points to last change, but a lot of
+	// commands need to work with revision that is in dirstate now.
 	public void walk(int baseRevision, HgStatusInspector inspector) {
 		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION || baseRevision == WORKING_COPY) {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
 		}
 		final HgIgnore hgIgnore = repo.getIgnore();
 		TreeSet<String> knownEntries = getDirstate().all();
-		final boolean isTipBase;
 		if (baseRevision == TIP) {
-			baseRevision = repo.getChangelog().getLastRevision();
-			isTipBase = true;
-		} else {
-			isTipBase = baseRevision == repo.getChangelog().getLastRevision();
+			// WC not necessarily points to TIP, but may be result of update to any previous revision.
+			// In such case, we need to compare local files not to their TIP content, but to specific version at the time of selected revision
+			Nodeid dirstateParentRev = getDirstate().parents()[0];
+			Nodeid lastCsetRev = repo.getChangelog().getRevision(HgRepository.TIP);
+			if (lastCsetRev.equals(dirstateParentRev)) {
+				baseRevision = repo.getChangelog().getLastRevision();
+			} else {
+				// can do it right away, but explicit check above might save few cycles (unless getLocalRevision(Nodeid) is effective)
+				baseRevision = repo.getChangelog().getLocalRevision(dirstateParentRev);
+			}
 		}
+		final boolean isTipBase = baseRevision == repo.getChangelog().getLastRevision();
 		ManifestRevision collect = null;
 		Set<String> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
 		if (!isTipBase) {
@@ -289,8 +300,16 @@ public class HgWorkingCopyStatusCollector {
 			if ((r = getDirstate().checkNormal(fname)) != null || (r = getDirstate().checkMerged(fname)) != null || (r = getDirstate().checkAdded(fname)) != null) {
 				// either clean or modified
 				HgDataFile fileNode = repo.getFileNode(fname);
-				final int lengthAtRevision = fileNode.length(nid1);
-				if (r.size /* XXX File.length() ?! */ != lengthAtRevision || flags != todoGenerateFlags(fname /*java.io.File*/)) {
+				int lengthAtRevision;
+				try {
+					lengthAtRevision = fileNode.length(nid1);
+				} catch (HgDataStreamException ex) {
+					ex.printStackTrace(); // XXX log error
+					lengthAtRevision = -1; // compare file content then
+				}
+				// XXX is it safe with respect to filters (keyword, eol) to compare lengthAtRevision (unprocessed) with size 
+				// from dirstate, which I assume is size of processed data?
+				if (r.size != -1 && r.size /* XXX File.length() ?! */ != lengthAtRevision || flags != todoGenerateFlags(fname /*java.io.File*/)) {
 					inspector.modified(fname);
 				} else {
 					// check actual content to see actual changes

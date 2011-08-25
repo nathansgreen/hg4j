@@ -179,7 +179,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		CollectHandler collector = new CollectHandler();
 		try {
 			execute(collector);
-		} catch (HgCallbackTargetException ex) {
+		} catch (HgException ex) {
 			// can't happen as long as our CollectHandler doesn't throw any exception
 			throw new HgBadStateException(ex.getCause());
 		} catch (CancelledException ex) {

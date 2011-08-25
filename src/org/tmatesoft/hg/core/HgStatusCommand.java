@@ -162,7 +162,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
 	 */
-	public void execute(Handler statusHandler) throws CancellationException, HgCallbackTargetException {
+	public void execute(Handler statusHandler) throws CancellationException, HgException {
 		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}

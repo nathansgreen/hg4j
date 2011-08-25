@@ -79,8 +79,26 @@ public class HgDataFile extends Revlog {
 		return path; // hgRepo.backresolve(this) -> name? In this case, what about hashed long names?
 	}
 
-	public int length(Nodeid nodeid) {
-		return content.dataLength(getLocalRevision(nodeid));
+	/**
+	 * @return size of the file content at the given revision
+	 */
+	public int length(Nodeid nodeid) throws HgDataStreamException {
+		return length(getLocalRevision(nodeid));
+		
+	}
+	
+	/**
+	 * @return size of the file content at the revision identified by local revision number.
+	 */
+	public int length(int localRev) throws HgDataStreamException {
+		if (metadata == null || !metadata.checked(localRev)) {
+			checkAndRecordMetadata(localRev);
+		}
+		final int dataLen = content.dataLength(localRev);
+		if (metadata.known(localRev)) {
+			return dataLen - metadata.dataOffset(localRev);
+		}
+		return dataLen;
 	}
 
 	/**
@@ -258,27 +276,7 @@ public class HgDataFile extends Revlog {
 
 	public boolean isCopy() throws HgDataStreamException {
 		if (metadata == null || !metadata.checked(0)) {
-			// content() always initializes metadata.
-			// FIXME this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
-			// Alternatively, may parameterize MetadataContentPipe to do prepare only.
-			// For reference, when throwing CancelledException, hg status -A --rev 3:80 takes 70 ms
-			// however, if we just consume buffer instead (buffer.position(buffer.limit()), same command takes ~320ms
-			// (compared to command-line counterpart of 190ms)
-			try {
-				content(0, new ByteChannel() { // No-op channel
-					public int write(ByteBuffer buffer) throws IOException, CancelledException {
-						// pretend we consumed whole buffer
-//						int rv = buffer.remaining();
-//						buffer.position(buffer.limit());
-//						return rv;
-						throw new CancelledException();
-					}
-				});
-			} catch (CancelledException ex) {
-				// it's ok, we did that
-			} catch (Exception ex) {
-				throw new HgDataStreamException(getPath(), "Can't initialize metadata", ex);
-			}
+			checkAndRecordMetadata(0);
 		}
 		if (!metadata.known(0)) {
 			return false;
@@ -307,6 +305,26 @@ public class HgDataFile extends Revlog {
 		sb.append(getPath());
 		sb.append(')');
 		return sb.toString();
+	}
+	
+	private void checkAndRecordMetadata(int localRev) throws HgDataStreamException {
+		// content() always initializes metadata.
+		// FIXME this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
+		// Alternatively, may parameterize MetadataContentPipe to do prepare only.
+		// For reference, when throwing CancelledException, hg status -A --rev 3:80 takes 70 ms
+		// however, if we just consume buffer instead (buffer.position(buffer.limit()), same command takes ~320ms
+		// (compared to command-line counterpart of 190ms)
+		try {
+			content(localRev, new ByteChannel() { // No-op channel
+				public int write(ByteBuffer buffer) throws IOException, CancelledException {
+					throw new CancelledException();
+				}
+			});
+		} catch (CancelledException ex) {
+			// it's ok, we did that
+		} catch (Exception ex) {
+			throw new HgDataStreamException(getPath(), "Can't initialize metadata", ex).setRevisionNumber(localRev);
+		}
 	}
 
 	private static final class MetadataEntry {

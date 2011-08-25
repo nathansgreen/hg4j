@@ -16,6 +16,11 @@
  */
 package org.tmatesoft.hg.core;
 
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
+
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Path;
+
 /**
  * Root class for all hg4j exceptions.
  * 
@@ -24,6 +29,10 @@ package org.tmatesoft.hg.core;
  */
 @SuppressWarnings("serial")
 public class HgException extends Exception {
+
+	protected int revNumber = BAD_REVISION;
+	protected Nodeid revision;
+	protected Path filename;
 
 	public HgException(String reason) {
 		super(reason);
@@ -35,6 +44,59 @@ public class HgException extends Exception {
 
 	public HgException(Throwable cause) {
 		super(cause);
+	}
+
+	/**
+	 * @return not {@link HgRepository#BAD_REVISION} only when local revision number was supplied at the construction time
+	 */
+	public int getRevisionNumber() {
+		return revNumber;
+	}
+
+	public HgException setRevisionNumber(int rev) {
+		revNumber = rev;
+		return this;
+	}
+
+	/**
+	 * @return non-null only when revision was supplied at construction time
+	 */
+	public Nodeid getRevision() {
+		return revision;
+	}
+
+	public HgException setRevision(Nodeid r) {
+		revision = r;
+		return this;
+	}
+
+	/**
+	 * @return non-null only if file name was set at construction time
+	 */
+	public Path getFileName() {
+		return filename;
+	}
+
+	public HgException setFileName(Path name) {
+		filename = name;
+		return this;
+	}
+	
+	protected void appendDetails(StringBuilder sb) {
+		if (filename != null) {
+			sb.append(filename);
+			sb.append(':');
+			sb.append(' ');
+		}
+		if (revNumber != BAD_REVISION) {
+			sb.append(revNumber);
+			if (revision != null) {
+				sb.append(':');
+			}
+		}
+		if (revision != null) {
+			sb.append(revision.shortNotation());
+		}
 	}
 
 //	/* XXX CONSIDER capability to pass extra information about errors */

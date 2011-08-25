@@ -124,7 +124,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	 * @throws HgException
 	 * @throws CancelledException
 	 */
-	public void executeFull(final HgChangesetHandler handler) throws HgException/*FIXME specific type*/, HgCallbackTargetException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgException/*FIXME specific type*/, HgException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}

@@ -27,19 +27,28 @@ import org.tmatesoft.hg.util.Path;
  */
 @SuppressWarnings("serial")
 public class HgDataStreamException extends HgException {
-	private final Path fname;
 
 	public HgDataStreamException(Path file, String message, Throwable cause) {
 		super(message, cause);
-		fname = file;
+		setFileName(file);
 	}
 	
 	public HgDataStreamException(Path file, Throwable cause) {
 		super(cause);
-		fname = file;
+		setFileName(file);
 	}
 
-	public Path getFileName() {
-		return fname;
+	@Override
+	public HgDataStreamException setRevision(Nodeid r) {
+		return (HgDataStreamException) super.setRevision(r);
+	}
+	
+	@Override
+	public HgDataStreamException setRevisionNumber(int rev) {
+		return (HgDataStreamException) super.setRevisionNumber(rev);
+	}
+	@Override
+	public HgDataStreamException setFileName(Path name) {
+		return (HgDataStreamException) super.setFileName(name);
 	}
 }

@@ -16,10 +16,9 @@
  */
 package org.tmatesoft.hg.core;
 
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
-
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
+
+
 
 /**
  * Checked exception that indicates errors in client code and tries to supply extra information about the context it occured in.
@@ -29,10 +28,6 @@ import org.tmatesoft.hg.util.Path;
  */
 @SuppressWarnings("serial")
 public class HgCallbackTargetException extends HgException {
-	private int revNumber = BAD_REVISION;
-	private Nodeid revision;
-	private Path filename;
-
 	/**
 	 * @param cause can't be <code>null</code>
 	 */
@@ -49,42 +44,6 @@ public class HgCallbackTargetException extends HgException {
 		}
 	}
 
-	/**
-	 * @return not {@link HgRepository#BAD_REVISION} only when local revision number was supplied at the construction time
-	 */
-	public int getRevisionNumber() {
-		return revNumber;
-	}
-
-	public HgCallbackTargetException setRevisionNumber(int rev) {
-		revNumber = rev;
-		return this;
-	}
-
-	/**
-	 * @return non-null only when revision was supplied at construction time
-	 */
-	public Nodeid getRevision() {
-		return revision;
-	}
-
-	public HgCallbackTargetException setRevision(Nodeid r) {
-		revision = r;
-		return this;
-	}
-
-	/**
-	 * @return non-null only if file name was set at construction time
-	 */
-	public Path getFileName() {
-		return filename;
-	}
-
-	public HgCallbackTargetException setFileName(Path name) {
-		filename = name;
-		return this;
-	}
-
 	@SuppressWarnings("unchecked")
 	public <T extends Exception> T getTargetException() {
 		return (T) getCause();
@@ -97,21 +56,21 @@ public class HgCallbackTargetException extends HgException {
 	@Override
 	public String getMessage() {
 		StringBuilder sb = new StringBuilder();
-		if (filename != null) {
-			sb.append(filename);
-			sb.append(':');
-			sb.append(' ');
-		}
-		if (revNumber != BAD_REVISION) {
-			sb.append(revNumber);
-			if (revision != null) {
-				sb.append(':');
-			}
-		}
-		if (revision != null) {
-			sb.append(revision.shortNotation());
-		}
+		appendDetails(sb);
 		return sb.toString();
+	}
+
+	@Override
+	public HgCallbackTargetException setRevision(Nodeid r) {
+		return (HgCallbackTargetException) super.setRevision(r);
+	}
+	@Override
+	public HgCallbackTargetException setRevisionNumber(int rev) {
+		return (HgCallbackTargetException) super.setRevisionNumber(rev);
+	}
+	@Override
+	public HgCallbackTargetException setFileName(Path name) {
+		return (HgCallbackTargetException) super.setFileName(name);
 	}
 
 	/**
