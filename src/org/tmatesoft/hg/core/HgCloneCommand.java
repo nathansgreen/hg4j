@@ -232,7 +232,7 @@ public class HgCloneCommand {
 		}
 
 		private int knownRevision(Nodeid p) {
-			if (NULL.equals(p)) {
+			if (p.isNull()) {
 				return -1;
 			} else {
 				for (int i = revisionSequence.size() - 1; i >= 0; i--) {
@@ -250,7 +250,7 @@ public class HgCloneCommand {
 				boolean writeComplete = false;
 				Nodeid p1 = ge.firstParent();
 				Nodeid p2 = ge.secondParent();
-				if (NULL.equals(p1) && NULL.equals(p2) /* or forced flag, does REVIDX_PUNCHED_FLAG indicate that? */) {
+				if (p1.isNull() && p2.isNull() /* or forced flag, does REVIDX_PUNCHED_FLAG indicate that? */) {
 					prevRevContent = new ByteArrayDataAccess(new byte[0]);
 					writeComplete = true;
 				}

@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.core.Nodeid.NULL;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
@@ -141,7 +139,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 				HgChangelog changelog = hgRepo.getChangelog();
 				try {
 					if (prevRevContent == null) { 
-						if (NULL.equals(ge.firstParent()) && NULL.equals(ge.secondParent())) {
+						if (ge.firstParent().isNull() && ge.secondParent().isNull()) {
 							prevRevContent = new ByteArrayDataAccess(new byte[0]);
 						} else {
 							final Nodeid base = ge.firstParent();
@@ -389,18 +387,22 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			dataAccess = rawDataAccess;
 		}
 
+		// non-null
 		public Nodeid node() {
 			return Nodeid.fromBinary(header, 0);
 		}
 
+		// non-null
 		public Nodeid firstParent() {
 			return Nodeid.fromBinary(header, 20);
 		}
 
+		// non-null
 		public Nodeid secondParent() {
 			return Nodeid.fromBinary(header, 40);
 		}
 
+		// non-null
 		public Nodeid cset() { // cs seems to be changeset
 			return Nodeid.fromBinary(header, 60);
 		}

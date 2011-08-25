@@ -104,8 +104,8 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 		if (complete) {
 			Nodeid p1 = cset.getFirstParentRevision();
 			Nodeid p2 = cset.getSecondParentRevision();
-			int p1x = p1 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevision(p1);
-			int p2x = p2 == Nodeid.NULL ? -1 : repo.getChangelog().getLocalRevision(p2);
+			int p1x = p1.isNull() ? -1 : repo.getChangelog().getLocalRevision(p1);
+			int p2x = p2.isNull() ? -1 : repo.getChangelog().getLocalRevision(p2);
 			int mx = repo.getManifest().getLocalRevision(cset.getManifestRevision());
 			f.format("parent:      %d:%s\nparent:      %d:%s\nmanifest:    %d:%s\n", p1x, p1, p2x, p2, mx, cset.getManifestRevision());
 		}

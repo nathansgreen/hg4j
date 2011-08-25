@@ -155,10 +155,10 @@ public class RepositoryComparator {
 					checkUp2Head.add(rb);
 				} else {
 					// dig deeper in the history, if necessary
-					if (!NULL.equals(rb.p1) && !localRepo.knownNode(rb.p1)) {
+					if (!rb.p1.isNull() && !localRepo.knownNode(rb.p1)) {
 						toQuery.add(rb.p1);
 					}
-					if (!NULL.equals(rb.p2) && !localRepo.knownNode(rb.p2)) {
+					if (!rb.p2.isNull() && !localRepo.knownNode(rb.p2)) {
 						toQuery.add(rb.p2);
 					}
 				}
@@ -245,7 +245,7 @@ public class RepositoryComparator {
 				} else {
 					chainElement.branchRoot = rb.root;
 					// dig deeper in the history, if necessary
-					boolean hasP1 = !NULL.equals(rb.p1), hasP2 = !NULL.equals(rb.p2);  
+					boolean hasP1 = !rb.p1.isNull(), hasP2 = !rb.p2.isNull();  
 					if (hasP1 && !localRepo.knownNode(rb.p1)) {
 						toQuery.add(rb.p1);
 						// we might have seen parent node already, and recorded it as a branch chain
@@ -356,7 +356,7 @@ public class RepositoryComparator {
 		// true when this BranchChain is a branch that spans up to very start of the repository
 		// Thus, the only common revision is NULL, recorded in a fake BranchChain object shared between p1 and p2
 		/*package-local*/ boolean isRepoStart() {
-			return p1 == p2 && p1 != null && p1.branchHead == p1.branchRoot && NULL.equals(p1.branchHead);
+			return p1 == p2 && p1 != null && p1.branchHead == p1.branchRoot && p1.branchHead.isNull();
 		}
 
 		@Override

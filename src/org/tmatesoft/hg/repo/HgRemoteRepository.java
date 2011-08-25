@@ -442,6 +442,7 @@ public class HgRemoteRepository {
 				return false;
 			}
 			RemoteBranch o = (RemoteBranch) obj;
+			// in fact, p1 and p2 are not supposed to be null, ever (at least for RemoteBranch created from server output)
 			return head.equals(o.head) && root.equals(o.root) && (p1 == null && o.p1 == null || p1.equals(o.p1)) && (p2 == null && o.p2 == null || p2.equals(o.p2));
 		}
 	}

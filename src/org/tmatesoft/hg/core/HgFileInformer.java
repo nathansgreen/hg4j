@@ -58,7 +58,7 @@ public class HgFileInformer {
 	 * @return <code>this</code> for convenience
 	 */
 	public HgFileInformer changeset(Nodeid nid) {
-		if (nid == null || Nodeid.NULL.equals(nid)) {
+		if (nid == null || nid.isNull()) {
 			throw new IllegalArgumentException(); 
 		}
 		cset = nid;

@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.core.Nodeid.NULL;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
@@ -439,7 +438,7 @@ abstract class Revlog {
 			return sequential[localRevision];
 		}
 		public int localRevision(Nodeid revision) {
-			if (revision == null || NULL.equals(revision)) {
+			if (revision == null || revision.isNull()) {
 				return BAD_REVISION;
 			}
 			int x = Arrays.binarySearch(sorted, revision);

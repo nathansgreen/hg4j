@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.core;
 
-import static org.tmatesoft.hg.core.Nodeid.NULL;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -140,9 +138,12 @@ public class HgChangeset implements Cloneable {
 
 	public boolean isMerge() {
 		// p1 == -1 and p2 != -1 is legitimate case
-		return !NULL.equals(getFirstParentRevision()) && !NULL.equals(getSecondParentRevision()); 
+		return !(getFirstParentRevision().isNull() || getSecondParentRevision().isNull()); 
 	}
 	
+	/**
+	 * @return never <code>null</code>
+	 */
 	public Nodeid getFirstParentRevision() {
 		if (parentHelper != null) {
 			return parentHelper.safeFirstParent(nodeid);
@@ -156,6 +157,9 @@ public class HgChangeset implements Cloneable {
 		return Nodeid.fromBinary(parent1, 0);
 	}
 	
+	/**
+	 * @return never <code>null</code>
+	 */
 	public Nodeid getSecondParentRevision() {
 		if (parentHelper != null) {
 			return parentHelper.safeSecondParent(nodeid);
