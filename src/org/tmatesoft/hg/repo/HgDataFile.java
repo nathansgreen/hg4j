@@ -34,6 +34,7 @@ import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
+import org.tmatesoft.hg.internal.FilterDataAccess;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
@@ -201,14 +202,14 @@ public class HgDataFile extends Revlog {
 		if (metadata == null) {
 			metadata = new Metadata();
 		}
-		ContentPipe insp;
+		ErrorHandlingInspector insp;
 		if (metadata.none(revision)) {
 			insp = new ContentPipe(sink, 0);
 		} else if (metadata.known(revision)) {
 			insp = new ContentPipe(sink, metadata.dataOffset(revision));
 		} else {
 			// do not know if there's metadata
-			insp = new MetadataContentPipe(sink, metadata, getPath());
+			insp = new MetadataInspector(metadata, getPath(), new ContentPipe(sink, 0));
 		}
 		insp.checkCancelled();
 		super.content.iterate(revision, revision, true, insp);
@@ -409,28 +410,47 @@ public class HgDataFile extends Revlog {
 		}
 	}
 
-	private static class MetadataContentPipe extends ContentPipe {
-
+	private static class MetadataInspector extends ErrorHandlingInspector implements RevlogStream.Inspector {
 		private final Metadata metadata;
 		private final Path fname; // need this only for error reporting
+		private final RevlogStream.Inspector delegate;
 
-		public MetadataContentPipe(ByteChannel sink, Metadata _metadata, Path file) {
-			super(sink, 0);
+		public MetadataInspector(Metadata _metadata, Path file, RevlogStream.Inspector chain) {
 			metadata = _metadata;
 			fname = file;
+			delegate = chain;
+			setCancelSupport(CancelSupport.Factory.get(chain));
 		}
 
-		@Override
-		protected void prepare(int revisionNumber, DataAccess da) throws HgException, IOException {
-			final int daLength = da.length();
-			if (daLength < 4 || da.readByte() != 1 || da.readByte() != 10) {
-				metadata.recordNone(revisionNumber);
-				da.reset();
-				return;
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+			try {
+				final int daLength = data.length();
+				if (daLength < 4 || data.readByte() != 1 || data.readByte() != 10) {
+					metadata.recordNone(revisionNumber);
+					data.reset();
+				} else {
+					ArrayList<MetadataEntry> _metadata = new ArrayList<MetadataEntry>();
+					int offset = parseMetadata(data, daLength, _metadata);
+					metadata.add(revisionNumber, offset, _metadata);
+					// da is in prepared state (i.e. we consumed all bytes up to metadata end).
+					// However, it's not safe to assume delegate won't call da.reset() for some reason,
+					// and we need to ensure predictable result.
+					data.reset();
+					data = new FilterDataAccess(data, offset, daLength - offset);
+				}
+				if (delegate != null) {
+					delegate.next(revisionNumber, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeid, data);
+				}
+			} catch (IOException ex) {
+				recordFailure(ex);
+			} catch (HgDataStreamException ex) {
+				recordFailure(ex.setRevisionNumber(revisionNumber));
 			}
+		}
+
+		private int parseMetadata(DataAccess data, final int daLength, ArrayList<MetadataEntry> _metadata) throws IOException, HgDataStreamException {
 			int lastEntryStart = 2;
 			int lastColon = -1;
-			ArrayList<MetadataEntry> _metadata = new ArrayList<MetadataEntry>();
 			// XXX in fact, need smth like ByteArrayBuilder, similar to StringBuilder,
 			// which can't be used here because we can't convert bytes to chars as we read them
 			// (there might be multi-byte encoding), and we need to collect all bytes before converting to string 
@@ -438,7 +458,7 @@ public class HgDataFile extends Revlog {
 			String key = null, value = null;
 			boolean byteOne = false;
 			for (int i = 2; i < daLength; i++) {
-				byte b = da.readByte();
+				byte b = data.readByte();
 				if (b == '\n') {
 					if (byteOne) { // i.e. \n follows 1
 						lastEntryStart = i+1;
@@ -456,12 +476,12 @@ public class HgDataFile extends Revlog {
 					lastEntryStart = i+1;
 					continue;
 				} 
-				// byteOne has to be consumed up to this line, if not jet, consume it
+				// byteOne has to be consumed up to this line, if not yet, consume it
 				if (byteOne) {
 					// insert 1 we've read on previous step into the byte builder
 					bos.write(1);
-					// fall-through to consume current byte
 					byteOne = false;
+					// fall-through to consume current byte
 				}
 				if (b == (int) ':') {
 					assert value == null;
@@ -474,11 +494,10 @@ public class HgDataFile extends Revlog {
 					bos.write(b);
 				}
 			}
-			metadata.add(revisionNumber, lastEntryStart, _metadata);
-			if (da.isEmpty() || !byteOne) {
-				throw new HgDataStreamException(fname, String.format("Metadata for revision %d is not closed properly", revisionNumber), null);
+			if (data.isEmpty() || !byteOne) {
+				throw new HgDataStreamException(fname, "Metadata is not closed properly", null);
 			}
-			// da is in prepared state (i.e. we consumed all bytes up to metadata end).
+			return lastEntryStart;
 		}
 	}
 }

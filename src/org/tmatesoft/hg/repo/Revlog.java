@@ -449,58 +449,13 @@ abstract class Revlog {
 		}
 	}
 
-
-	protected static class ContentPipe implements RevlogStream.Inspector, CancelSupport {
-		private final ByteChannel sink;
-		private final CancelSupport cancelSupport;
+	protected abstract static class ErrorHandlingInspector implements RevlogStream.Inspector, CancelSupport {
 		private Exception failure;
-		private final int offset;
-
-		/**
-		 * @param _sink - cannot be <code>null</code>
-		 * @param seekOffset - when positive, orders to pipe bytes to the sink starting from specified offset, not from the first byte available in DataAccess
-		 */
-		public ContentPipe(ByteChannel _sink, int seekOffset) {
-			assert _sink != null;
-			sink = _sink;
-			cancelSupport = CancelSupport.Factory.get(_sink);
-			offset = seekOffset;
-		}
+		private CancelSupport cancelSupport;
 		
-		protected void prepare(int revisionNumber, DataAccess da) throws HgException, IOException {
-			if (offset > 0) { // save few useless reset/rewind operations
-				da.seek(offset);
-			}
-		}
-
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
-			try {
-				prepare(revisionNumber, da); // XXX perhaps, prepare shall return DA (sliced, if needed)
-				final ProgressSupport progressSupport = ProgressSupport.Factory.get(sink);
-				ByteBuffer buf = ByteBuffer.allocate(512);
-				progressSupport.start(da.length());
-				while (!da.isEmpty()) {
-					cancelSupport.checkCancelled();
-					da.readBytes(buf);
-					buf.flip();
-					// XXX I may not rely on returned number of bytes but track change in buf position instead.
-					int consumed = sink.write(buf); 
-					// FIXME in fact, bad sink implementation (that consumes no bytes) would result in endless loop. Need to account for this 
-					buf.compact();
-					progressSupport.worked(consumed);
-				}
-				progressSupport.done(); // XXX shall specify whether #done() is invoked always or only if completed successfully.
-			} catch (IOException ex) {
-				recordFailure(ex);
-			} catch (CancelledException ex) {
-				recordFailure(ex);
-			} catch (HgException ex) {
-				recordFailure(ex);
-			}
-		}
-		
-		public void checkCancelled() throws CancelledException {
-			cancelSupport.checkCancelled();
+		protected void setCancelSupport(CancelSupport cs) {
+			assert cancelSupport == null; // no reason to set it twice
+			cancelSupport = cs;
 		}
 
 		protected void recordFailure(Exception ex) {
@@ -522,6 +477,60 @@ abstract class Revlog {
 				throw (HgException) failure;
 			}
 			throw new HgBadStateException(failure);
+		}
+
+		public void checkCancelled() throws CancelledException {
+			if (cancelSupport != null) {
+				cancelSupport.checkCancelled();
+			}
+		}
+	}
+
+	protected static class ContentPipe extends ErrorHandlingInspector implements RevlogStream.Inspector, CancelSupport {
+		private final ByteChannel sink;
+		private final int offset;
+
+		/**
+		 * @param _sink - cannot be <code>null</code>
+		 * @param seekOffset - when positive, orders to pipe bytes to the sink starting from specified offset, not from the first byte available in DataAccess
+		 */
+		public ContentPipe(ByteChannel _sink, int seekOffset) {
+			assert _sink != null;
+			sink = _sink;
+			setCancelSupport(CancelSupport.Factory.get(_sink));
+			offset = seekOffset;
+		}
+		
+		protected void prepare(int revisionNumber, DataAccess da) throws HgException, IOException {
+			if (offset > 0) { // save few useless reset/rewind operations
+				da.seek(offset);
+			}
+		}
+
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
+			try {
+				prepare(revisionNumber, da); // XXX perhaps, prepare shall return DA (sliced, if needed)
+				final ProgressSupport progressSupport = ProgressSupport.Factory.get(sink);
+				ByteBuffer buf = ByteBuffer.allocate(512);
+				progressSupport.start(da.length());
+				while (!da.isEmpty()) {
+					checkCancelled();
+					da.readBytes(buf);
+					buf.flip();
+					// XXX I may not rely on returned number of bytes but track change in buf position instead.
+					int consumed = sink.write(buf); 
+					// FIXME in fact, bad sink implementation (that consumes no bytes) would result in endless loop. Need to account for this 
+					buf.compact();
+					progressSupport.worked(consumed);
+				}
+				progressSupport.done(); // XXX shall specify whether #done() is invoked always or only if completed successfully.
+			} catch (IOException ex) {
+				recordFailure(ex);
+			} catch (CancelledException ex) {
+				recordFailure(ex);
+			} catch (HgException ex) {
+				recordFailure(ex);
+			}
 		}
 	}
 }
