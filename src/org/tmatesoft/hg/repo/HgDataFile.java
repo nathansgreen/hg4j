@@ -28,13 +28,13 @@ import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
+import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -347,52 +347,60 @@ public class HgDataFile extends Revlog {
 	}
 
 	private static class Metadata {
+		private static class Record {
+			public final int offset;
+			public final MetadataEntry[] entries;
+			
+			public Record(int off, MetadataEntry[] entr) {
+				offset = off;
+				entries = entr;
+			}
+		}
 		// XXX sparse array needed
-		private final TreeMap<Integer, Integer> offsets = new TreeMap<Integer, Integer>();
-		private final TreeMap<Integer, MetadataEntry[]> entries = new TreeMap<Integer, MetadataEntry[]>();
+		private final IntMap<Record> entries = new IntMap<Record>(5);
 		
-		private final Integer NONE = new Integer(-1); // do not duplicate -1 integers at least within single file (don't want statics)
+		private final Record NONE = new Record(-1, null); // don't want statics
 
 		// true when there's metadata for given revision
 		boolean known(int revision) {
-			Integer i = offsets.get(revision);
+			Record i = entries.get(revision);
 			return i != null && NONE != i;
 		}
 
 		// true when revision has been checked for metadata presence.
 		public boolean checked(int revision) {
-			return offsets.containsKey(revision);
+			return entries.containsKey(revision);
 		}
 
 		// true when revision has been checked and found not having any metadata
 		boolean none(int revision) {
-			Integer i = offsets.get(revision);
+			Record i = entries.get(revision);
 			return i == NONE;
 		}
 
 		// mark revision as having no metadata.
 		void recordNone(int revision) {
-			Integer i = offsets.get(revision);
+			Record i = entries.get(revision);
 			if (i == NONE) {
 				return; // already there
 			} 
 			if (i != null) {
 				throw new IllegalStateException(String.format("Trying to override Metadata state for revision %d (known offset: %d)", revision, i));
 			}
-			offsets.put(revision, NONE);
+			entries.put(revision, NONE);
 		}
 
 		// since this is internal class, callers are supposed to ensure arg correctness (i.e. ask known() before)
 		int dataOffset(int revision) {
-			return offsets.get(revision);
+			return entries.get(revision).offset;
 		}
 		void add(int revision, int dataOffset, Collection<MetadataEntry> e) {
-			assert !offsets.containsKey(revision);
-			offsets.put(revision, dataOffset);
-			entries.put(revision, e.toArray(new MetadataEntry[e.size()]));
+			assert !entries.containsKey(revision);
+			entries.put(revision, new Record(dataOffset, e.toArray(new MetadataEntry[e.size()])));
 		}
+
 		String find(int revision, String key) {
-			for (MetadataEntry me : entries.get(revision)) {
+			for (MetadataEntry me : entries.get(revision).entries) {
 				if (me.matchKey(key)) {
 					return me.value();
 				}
@@ -466,7 +474,6 @@ public class HgDataFile extends Revlog {
 					bos.write(b);
 				}
 			}
-			_metadata.trimToSize();
 			metadata.add(revisionNumber, lastEntryStart, _metadata);
 			if (da.isEmpty() || !byteOne) {
 				throw new HgDataStreamException(fname, String.format("Metadata for revision %d is not closed properly", revisionNumber), null);
