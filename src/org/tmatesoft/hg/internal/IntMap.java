@@ -71,7 +71,8 @@ public class IntMap<V> {
 			final int insertPoint = -ix - 1;
 			assert insertPoint <= size; // can't be greater, provided binarySearch didn't malfunction.
 			if (size == keys.length) {
-				int newCapacity = size + (size >>> 2);
+				int capInc = size >>> 2; // +25%
+				int newCapacity = size + (capInc < 2 ? 2 : capInc) ;
 				int[] newKeys = new int[newCapacity];
 				Object[] newValues = new Object[newCapacity];
 				System.arraycopy(keys, 0, newKeys, 0, insertPoint);
@@ -126,26 +127,5 @@ public class IntMap<V> {
 				return mid; // key found
 		}
 		return -(low + 1); // key not found.
-	}
-
-	public static void main(String[] args) {
-		IntMap<String> m = new IntMap<String>(-1);
-		m.put(18, "18");
-		m.put(1, "1");
-		m.put(9, "9");
-		m.put(20, "20");
-		m.put(2, "2");
-		m.put(3, "3");
-		m.put(21, "21");
-		m.put(15, "15");
-		m.put(12, "12");
-		m.put(11, "11");
-		m.put(31, "31");
-		System.out.printf("%d  [%d..%d]\n", m.size(), m.firstKey(), m.lastKey());
-		for (int i = m.firstKey(); i <= m.lastKey(); i++) {
-			if (m.containsKey(i)) {
-				System.out.printf("@%02d:%s\n", i, m.get(i));
-			}
-		}
 	}
 }
