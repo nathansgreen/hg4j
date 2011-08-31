@@ -20,11 +20,11 @@ import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.core.HgStatus;
@@ -65,7 +65,7 @@ public class Status {
 		final boolean showCopies = cmdLineOpts.getBoolean("-C", "--copies");
 		class StatusHandler implements HgStatusCommand.Handler {
 			
-			final Map<HgStatus.Kind, List<Path>> data = new TreeMap<HgStatus.Kind, List<Path>>();
+			final EnumMap<HgStatus.Kind, List<Path>> data = new EnumMap<HgStatus.Kind, List<Path>>(HgStatus.Kind.class);
 			final Map<Path, Path> copies = showCopies ? new HashMap<Path,Path>() : null;
 			
 			public void handleStatus(HgStatus s) {
