@@ -228,7 +228,9 @@ class HgDirstate /* XXX RepoChangeListener */{
 	
 	/*package-local*/ static class Record {
 		final int mode;
-		final int size;
+		// it seems Dirstate keeps local file size (i.e. that with any filters already applied). 
+		// Thus, can't compare directly to HgDataFile.length()
+		final int size; 
 		final int time;
 		final String name1;
 		final String name2;

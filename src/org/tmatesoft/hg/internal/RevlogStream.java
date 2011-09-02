@@ -63,6 +63,8 @@ public class RevlogStream {
 	}
 
 	/*package*/ DataAccess getIndexStream() {
+		// XXX may supply a hint that I'll need really few bytes of data (perhaps, at some offset) 
+		// to avoid mmap files when only few bytes are to be read (i.e. #dataLength())
 		return dataAccess.create(indexFile);
 	}
 
@@ -81,7 +83,7 @@ public class RevlogStream {
 		// XXX in fact, use of iterate() instead of this implementation may be quite reasonable.
 		//
 		final int indexSize = revisionCount();
-		DataAccess daIndex = getIndexStream(); // XXX may supply a hint that I'll need really few bytes of data (although at some offset)
+		DataAccess daIndex = getIndexStream();
 		if (revision == TIP) {
 			revision = indexSize - 1;
 		}

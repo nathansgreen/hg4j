@@ -59,7 +59,6 @@ public class HgWorkingCopyStatusCollector {
 	private HgDirstate dirstate;
 	private HgStatusCollector baseRevisionCollector;
 	private PathPool pathPool;
-	private ManifestRevision dirstateParentManifest;
 
 	public HgWorkingCopyStatusCollector(HgRepository hgRepo) {
 		this(hgRepo, new HgInternals(hgRepo).createWorkingDirWalker(null));
@@ -145,7 +144,7 @@ public class HgWorkingCopyStatusCollector {
 		final PathPool pp = getPathPool();
 		while (repoWalker.hasNext()) {
 			repoWalker.next();
-			Path fname = pp.path(repoWalker.name());
+			final Path fname = pp.path(repoWalker.name());
 			File f = repoWalker.file();
 			if (!f.exists()) {
 				// file coming from iterator doesn't exist.
@@ -237,9 +236,13 @@ public class HgWorkingCopyStatusCollector {
 		HgDirstate.Record r;
 		if ((r = getDirstate().checkNormal(fname)) != null) {
 			// either clean or modified
-			if (f.lastModified() / 1000 == r.time && r.size == f.length()) {
-				inspector.clean(getPathPool().path(fname));
+			final boolean timestampEqual = getFileModificationTime(f) == r.time, sizeEqual = r.size == f.length();
+			if (timestampEqual && sizeEqual) {
+				inspector.clean(fname);
+			} else if (!sizeEqual && r.size >= 0) {
+				inspector.modified(fname);
 			} else {
+				// size is the same or unknown, and, perhaps, different timestamp
 				// check actual content to avoid false modified files
 				HgDataFile df = repo.getFileNode(fname);
 				if (!areTheSame(f, df, HgRepository.TIP)) {
@@ -250,15 +253,20 @@ public class HgWorkingCopyStatusCollector {
 			}
 		} else if ((r = getDirstate().checkAdded(fname)) != null) {
 			if (r.name2 == null) {
-				inspector.added(getPathPool().path(fname));
+				inspector.added(fname);
 			} else {
-				inspector.copied(getPathPool().path(r.name2), getPathPool().path(fname));
+				inspector.copied(getPathPool().path(r.name2), fname);
 			}
 		} else if ((r = getDirstate().checkRemoved(fname)) != null) {
-			inspector.removed(getPathPool().path(fname));
+			inspector.removed(fname);
 		} else if ((r = getDirstate().checkMerged(fname)) != null) {
-			inspector.modified(getPathPool().path(fname));
+			inspector.modified(fname);
 		}
+	}
+	
+	// return mtime analog, directly comparable to dirstate's mtime.
+	private static int getFileModificationTime(File f) {
+		return (int) (f.lastModified() / 1000);
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
@@ -296,23 +304,28 @@ public class HgWorkingCopyStatusCollector {
 			inspector.added(fname);
 		} else {
 			// was known; check whether clean or modified
-			// when added - seems to be the case of a file added once again, hence need to check if content is different
-			if ((r = getDirstate().checkNormal(fname)) != null || (r = getDirstate().checkMerged(fname)) != null || (r = getDirstate().checkAdded(fname)) != null) {
-				// either clean or modified
-				HgDataFile fileNode = repo.getFileNode(fname);
-				int lengthAtRevision;
-				try {
-					lengthAtRevision = fileNode.length(nid1);
-				} catch (HgDataStreamException ex) {
-					ex.printStackTrace(); // XXX log error
-					lengthAtRevision = -1; // compare file content then
+			if ((r = getDirstate().checkNormal(fname)) != null) {
+				final boolean timestampEqual = getFileModificationTime(f) == r.time, sizeEqual = r.size == f.length();
+				if (timestampEqual && sizeEqual) {
+					inspector.clean(fname);
+					baseRevNames.remove(fname.toString()); // consumed, processed, handled.
+					return;
+				} else if (!sizeEqual && r.size >= 0) {
+					inspector.modified(fname);
+					baseRevNames.remove(fname.toString()); // consumed, processed, handled.
+					return;
 				}
-				// XXX is it safe with respect to filters (keyword, eol) to compare lengthAtRevision (unprocessed) with size 
-				// from dirstate, which I assume is size of processed data?
-				if (r.size != -1 && r.size /* XXX File.length() ?! */ != lengthAtRevision || flags != todoGenerateFlags(fname /*java.io.File*/)) {
+				// otherwise, shall check actual content (size not the same, or unknown (-1 or -2), or timestamp is different) 
+				// FALL THROUGH
+			}
+			if (r != null /*Normal dirstate, but needs extra check*/ || (r = getDirstate().checkMerged(fname)) != null || (r = getDirstate().checkAdded(fname)) != null) {
+				// when added - seems to be the case of a file added once again, hence need to check if content is different
+				// either clean or modified
+				if (r.size != -1 /*XXX what about ==-2?*/&& r.size != f.length() || !todoCheckFlagsEqual(f, flags)) {
 					inspector.modified(fname);
 				} else {
 					// check actual content to see actual changes
+					HgDataFile fileNode = repo.getFileNode(fname);
 					if (areTheSame(f, fileNode, fileNode.getLocalRevision(nid1))) {
 						inspector.clean(fname);
 					} else {
@@ -412,9 +425,9 @@ public class HgWorkingCopyStatusCollector {
 		return false;
 	}
 
-	private static String todoGenerateFlags(Path fname) {
+	private static boolean todoCheckFlagsEqual(File f, String manifestFlags) {
 		// FIXME implement
-		return null;
+		return true;
 	}
 
 	/**

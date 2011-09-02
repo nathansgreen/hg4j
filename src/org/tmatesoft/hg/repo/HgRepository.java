@@ -271,6 +271,7 @@ public final class HgRepository {
 	}
 
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
+	// XXX consider passing Path pool or factory to produce (shared) Path instead of Strings
 	/*package-local*/ final HgDirstate loadDirstate() {
 		return new HgDirstate(this, new File(repoDir, "dirstate"));
 	}
