@@ -25,12 +25,11 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.util.Path;
@@ -47,7 +46,7 @@ import org.tmatesoft.hg.util.PathRewrite;
 public class HgStatusCollector {
 
 	private final HgRepository repo;
-	private final SortedMap<Integer, ManifestRevision> cache; // sparse array, in fact
+	private final IntMap<ManifestRevision> cache; // sparse array, in fact
 	// with cpython repository, ~70 000 changes, complete Log (direct out, no reverse) output 
 	// no cache limit, no nodeids and fname caching - OOME on changeset 1035
 	// no cache limit, but with cached nodeids and filenames - 1730+
@@ -62,7 +61,7 @@ public class HgStatusCollector {
 
 	public HgStatusCollector(HgRepository hgRepo) {
 		this.repo = hgRepo;
-		cache = new TreeMap<Integer, ManifestRevision>();
+		cache = new IntMap<ManifestRevision>(cacheMaxSize);
 		cacheNodes = new Pool<Nodeid>();
 		cacheFilenames = new Pool<String>();
 
@@ -81,10 +80,7 @@ public class HgStatusCollector {
 			if (rev == -1) {
 				return emptyFakeState;
 			}
-			while (cache.size() > cacheMaxSize) {
-				// assume usually we go from oldest to newest, hence remove oldest as most likely to be no longer necessary
-				cache.remove(cache.firstKey());
-			}
+			ensureCacheSize();
 			i = new ManifestRevision(cacheNodes, cacheFilenames);
 			cache.put(rev, i);
 			repo.getManifest().walk(rev, rev, i);
@@ -96,11 +92,15 @@ public class HgStatusCollector {
 		return cache.containsKey(revision) || revision == -1;
 	}
 	
-	private void initCacheRange(int minRev, int maxRev) {
-		while (cache.size() > cacheMaxSize) {
+	private void ensureCacheSize() {
+		if (cache.size() > cacheMaxSize) {
 			// assume usually we go from oldest to newest, hence remove oldest as most likely to be no longer necessary
-			cache.remove(cache.firstKey());
+			cache.removeFromStart(cache.size() - cacheMaxSize + 1 /* room for new element */);
 		}
+	}
+	
+	private void initCacheRange(int minRev, int maxRev) {
+		ensureCacheSize();
 		repo.getManifest().walk(minRev, maxRev, new HgManifest.Inspector() {
 			private ManifestRevision delegate;
 			private boolean cacheHit; // range may include revisions we already know about, do not re-create them

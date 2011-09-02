@@ -109,6 +109,39 @@ public class IntMap<V> {
 		}
 		return null;
 	}
+	
+	public void remove(int key) {
+		int ix = binarySearch(keys, size, key);
+		if (ix >= 0) {
+			if (ix <= size - 1) {
+				System.arraycopy(keys, ix+1, keys, ix, size - ix - 1);
+				System.arraycopy(values, ix+1, values, ix, size - ix - 1);
+			} // if ix points to last element, no reason to attempt a copy
+			size--;
+			keys[size] = 0;
+			values[size] = null;
+		}
+	}
+	
+	/**
+	 * Forget first N entries (in natural order) in the map.
+	 */
+	@Experimental
+	public void removeFromStart(int count) {
+		if (count > 0 && count <= size) {
+			if (count < size) {
+				System.arraycopy(keys, count, keys, 0, size - count);
+				System.arraycopy(values, count, values, 0, size - count);
+			}
+			for (int i = size - count; i < size; i++) {
+				keys[i] = 0;
+				values[i] = null;
+			}
+			size -= count;
+		} 
+	}
+	
+	
 
 	// copy of Arrays.binarySearch, with upper search limit as argument
 	private static int binarySearch(int[] a, int high, int key) {

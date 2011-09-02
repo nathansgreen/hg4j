@@ -49,7 +49,6 @@ import org.tmatesoft.hg.repo.HgSubrepoLocation;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
-import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
