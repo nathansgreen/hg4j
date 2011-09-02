@@ -59,6 +59,7 @@ public class HgWorkingCopyStatusCollector {
 	private HgDirstate dirstate;
 	private HgStatusCollector baseRevisionCollector;
 	private PathPool pathPool;
+	private ManifestRevision dirstateParentManifest;
 
 	public HgWorkingCopyStatusCollector(HgRepository hgRepo) {
 		this(hgRepo, new HgInternals(hgRepo).createWorkingDirWalker(null));
@@ -101,45 +102,57 @@ public class HgWorkingCopyStatusCollector {
 		return dirstate;
 	}
 	
-	// may be invoked few times
+	private ManifestRevision getManifest(int changelogLocalRev) {
+		ManifestRevision mr;
+		if (baseRevisionCollector != null) {
+			mr = baseRevisionCollector.raw(changelogLocalRev);
+		} else {
+			mr = new ManifestRevision(null, null);
+			repo.getManifest().walk(changelogLocalRev, changelogLocalRev, mr);
+		}
+		return mr;
+	}
+	
+	private ManifestRevision getDirstateParentManifest() {
+		// WC not necessarily points to TIP, but may be result of update to any previous revision.
+		// In such case, we need to compare local files not to their TIP content, but to specific version at the time of selected revision
+		if (dirstateParentManifest == null) {
+			Nodeid dirstateParent = getDirstate().parents()[0];
+			int changelogLocalRev = repo.getChangelog().getLocalRevision(dirstateParent);
+			dirstateParentManifest = getManifest(changelogLocalRev);
+		}
+		return dirstateParentManifest;
+	}
+	
+	// may be invoked few times, TIP or WORKING_COPY indicate comparison shall be run against working copy parent
 	// NOTE, use of TIP constant requires certain care. TIP here doesn't mean latest cset, but actual working copy parent.
-	// XXX this shall be changed, though, and use of TIP throughout code shall be revised - 
-	// consider case when repository is updated to one of its previous revisions. TIP points to last change, but a lot of
-	// commands need to work with revision that is in dirstate now.
 	public void walk(int baseRevision, HgStatusInspector inspector) {
-		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION || baseRevision == WORKING_COPY) {
+		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
 		}
-		final HgIgnore hgIgnore = repo.getIgnore();
-		TreeSet<String> knownEntries = getDirstate().all();
-		if (baseRevision == TIP) {
-			// WC not necessarily points to TIP, but may be result of update to any previous revision.
-			// In such case, we need to compare local files not to their TIP content, but to specific version at the time of selected revision
-			Nodeid dirstateParentRev = getDirstate().parents()[0];
-			Nodeid lastCsetRev = repo.getChangelog().getRevision(HgRepository.TIP);
-			if (lastCsetRev.equals(dirstateParentRev)) {
-				baseRevision = repo.getChangelog().getLastRevision();
-			} else {
-				// can do it right away, but explicit check above might save few cycles (unless getLocalRevision(Nodeid) is effective)
-				baseRevision = repo.getChangelog().getLocalRevision(dirstateParentRev);
-			}
-		}
-		final boolean isTipBase = baseRevision == repo.getChangelog().getLastRevision();
-		ManifestRevision collect = null;
+		ManifestRevision collect = null; // non null indicates we compare against base revision
 		Set<String> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
-		if (!isTipBase) {
-			if (baseRevisionCollector != null) {
-				collect = baseRevisionCollector.raw(baseRevision);
-			} else {
-				collect = new ManifestRevision(null, null);
-				repo.getManifest().walk(baseRevision, baseRevision, collect);
-			}
+		if (baseRevision != TIP && baseRevision != WORKING_COPY) {
+			collect = getManifest(baseRevision);
 			baseRevFiles = new TreeSet<String>(collect.files());
 		}
 		if (inspector instanceof HgStatusCollector.Record) {
 			HgStatusCollector sc = baseRevisionCollector == null ? new HgStatusCollector(repo) : baseRevisionCollector;
-			((HgStatusCollector.Record) inspector).init(baseRevision, BAD_REVISION, sc);
+			// nodeidAfterChange(dirstate's parent) doesn't make too much sense,
+			// because the change might be actually in working copy. Nevertheless, 
+			// as long as no nodeids can be provided for WC, seems reasonable to report
+			// latest known nodeid change (although at the moment this is not used and
+			// is done mostly not to leave stale initialization in the Record)
+			int rev1,rev2 = getDirstateParentManifest().changesetLocalRev();
+			if (baseRevision == TIP || baseRevision == WORKING_COPY) {
+				rev1 = rev2 - 1; // just use revision prior to dirstate's parent
+			} else {
+				rev1 = baseRevision;
+			}
+			((HgStatusCollector.Record) inspector).init(rev1, rev2, sc);
 		}
+		final HgIgnore hgIgnore = repo.getIgnore();
+		TreeSet<String> knownEntries = getDirstate().all();
 		repoWalker.reset();
 		final PathPool pp = getPathPool();
 		while (repoWalker.hasNext()) {
@@ -245,7 +258,8 @@ public class HgWorkingCopyStatusCollector {
 				// size is the same or unknown, and, perhaps, different timestamp
 				// check actual content to avoid false modified files
 				HgDataFile df = repo.getFileNode(fname);
-				if (!areTheSame(f, df, HgRepository.TIP)) {
+				Nodeid rev = getDirstateParentManifest().nodeid(fname.toString());
+				if (!areTheSame(f, df, rev)) {
 					inspector.modified(df.getPath());
 				} else {
 					inspector.clean(df.getPath());
@@ -304,33 +318,40 @@ public class HgWorkingCopyStatusCollector {
 			inspector.added(fname);
 		} else {
 			// was known; check whether clean or modified
-			if ((r = getDirstate().checkNormal(fname)) != null) {
+			Nodeid nidFromDirstate = getDirstateParentManifest().nodeid(fname.toString());
+			if ((r = getDirstate().checkNormal(fname)) != null && nid1.equals(nidFromDirstate)) {
+				// regular file, was the same up to WC initialization. Check if was modified since, and, if not, report right away
+				// same code as in #checkLocalStatusAgainstFile
 				final boolean timestampEqual = getFileModificationTime(f) == r.time, sizeEqual = r.size == f.length();
+				boolean handled = false;
 				if (timestampEqual && sizeEqual) {
 					inspector.clean(fname);
-					baseRevNames.remove(fname.toString()); // consumed, processed, handled.
-					return;
+					handled = true;
 				} else if (!sizeEqual && r.size >= 0) {
 					inspector.modified(fname);
+					handled = true;
+				} else if (!todoCheckFlagsEqual(f, flags)) {
+					// seems like flags have changed, no reason to check content further
+					inspector.modified(fname);
+					handled = true;
+				}
+				if (handled) {
 					baseRevNames.remove(fname.toString()); // consumed, processed, handled.
 					return;
 				}
-				// otherwise, shall check actual content (size not the same, or unknown (-1 or -2), or timestamp is different) 
+				// otherwise, shall check actual content (size not the same, or unknown (-1 or -2), or timestamp is different,
+				// or nodeid in dirstate is different, but local change might have brought it back to baseRevision state)
 				// FALL THROUGH
 			}
-			if (r != null /*Normal dirstate, but needs extra check*/ || (r = getDirstate().checkMerged(fname)) != null || (r = getDirstate().checkAdded(fname)) != null) {
+			if (r != null || (r = getDirstate().checkMerged(fname)) != null || (r = getDirstate().checkAdded(fname)) != null) {
+				// check actual content to see actual changes
 				// when added - seems to be the case of a file added once again, hence need to check if content is different
 				// either clean or modified
-				if (r.size != -1 /*XXX what about ==-2?*/&& r.size != f.length() || !todoCheckFlagsEqual(f, flags)) {
-					inspector.modified(fname);
+				HgDataFile fileNode = repo.getFileNode(fname);
+				if (areTheSame(f, fileNode, nid1)) {
+					inspector.clean(fname);
 				} else {
-					// check actual content to see actual changes
-					HgDataFile fileNode = repo.getFileNode(fname);
-					if (areTheSame(f, fileNode, fileNode.getLocalRevision(nid1))) {
-						inspector.clean(fname);
-					} else {
-						inspector.modified(fname);
-					}
+					inspector.modified(fname);
 				}
 				baseRevNames.remove(fname.toString()); // consumed, processed, handled.
 			} else if (getDirstate().checkRemoved(fname) != null) {
@@ -349,11 +370,12 @@ public class HgWorkingCopyStatusCollector {
 		// The question is whether original Hg treats this case (same content, different parents and hence nodeids) as 'modified' or 'clean'
 	}
 
-	private boolean areTheSame(File f, HgDataFile dataFile, int localRevision) {
+	private boolean areTheSame(File f, HgDataFile dataFile, Nodeid revision) {
 		// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
 		ByteArrayChannel bac = new ByteArrayChannel();
 		boolean ioFailed = false;
 		try {
+			int localRevision = dataFile.getLocalRevision(revision);
 			// need content with metadata striped off - although theoretically chances are metadata may be different,
 			// WC doesn't have it anyway 
 			dataFile.content(localRevision, bac);

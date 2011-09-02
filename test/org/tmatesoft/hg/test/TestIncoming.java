@@ -89,7 +89,7 @@ public class TestIncoming {
 		cmd.against(hgRemote);
 		HgLogCommand.CollectHandler collector = new HgLogCommand.CollectHandler();
 		LogOutputParser outParser = new LogOutputParser(true);
-		ExecHelper eh = new ExecHelper(outParser, new File(localRepo.getLocation()));
+		ExecHelper eh = new ExecHelper(outParser, localRepo.getWorkingDir());
 		cmd.executeFull(collector);
 		eh.run("hg", "incoming", "--debug", hgRemote.getLocation());
 		List<Nodeid> liteResult = cmd.executeLite();

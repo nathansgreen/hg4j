@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.junit.Assume;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgStatus;
@@ -64,6 +66,13 @@ public class TestStatus {
 		test.testStatusCommand();
 		test.testPerformance();
 		test.errorCollector.verify();
+		//
+		TestStatus t2 = new TestStatus(new HgLookup().detect("/temp/hg/hg4j-merging/hg4j"));
+		t2.testDirstateParentOtherThanTip(238);
+		t2.errorCollector.verify();
+		TestStatus t3 = new TestStatus(new HgLookup().detect("/temp/hg/cpython"));
+		t3.testDirstateParentOtherThanTip(-1);
+		t3.errorCollector.verify();
 	}
 	
 	public TestStatus() throws Exception {
@@ -74,7 +83,7 @@ public class TestStatus {
 		repo = hgRepo;
 		Assume.assumeTrue(!repo.isInvalid());
 		statusParser = new StatusOutputParser();
-		eh = new ExecHelper(statusParser, null);
+		eh = new ExecHelper(statusParser, hgRepo.getWorkingDir());
 	}
 	
 	@Test
@@ -104,6 +113,42 @@ public class TestStatus {
 		r = new HgStatusCollector(repo).status(revision, rev2);
 		report("Status -A -rev " + range, r, statusParser);
 	}
+
+	/**
+	 * hg up --rev <earlier rev>; hg status
+	 * 
+	 * To check if HgWorkingCopyStatusCollector respects actual working copy parent (takes from dirstate)
+	 * and if status is calculated correctly 
+	 */
+	@Test
+	@Ignore("modifies test repository, needs careful configuration")
+	public void testDirstateParentOtherThanTip(int revToUpdate) throws Exception {
+		final HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(repo);
+		statusParser.reset();
+		try {
+			if (revToUpdate != -1) {
+				// there are repositories (like cpython) where WC is not tip-based, and no need to
+				// accomplish that artificially 
+				eh.run("hg", "up", "--rev", String.valueOf(revToUpdate));
+			}
+			//
+			eh.run("hg", "status", "-A");
+			HgStatusCollector.Record r = wcc.status(HgRepository.TIP);
+			report("hg status -A", r, statusParser);
+			//
+			statusParser.reset();
+			int revision = 3;
+			eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
+			r = wcc.status(revision);
+			report("status -A --rev " + revision, r, statusParser);
+		} finally {
+			if (revToUpdate != -1) {
+				// bring the repository to the tip just in case anyone else is using it afterwards
+				eh.run("hg", "up");
+			}
+		}
+	}
+
 	
 	@Test
 	public void testStatusCommand() throws Exception {
@@ -456,9 +501,14 @@ public class TestStatus {
 		errorCollector.checkThat(what + "#COPIED", copyDiff, equalTo(Collections.<Path,String>emptyMap()));
 	}
 	
-	private <T> void reportNotEqual(String what, Collection<T> l1, Collection<T> l2) {
-		List<T> diff = difference(l1, l2);
-		errorCollector.checkThat(what, diff, equalTo(Collections.<T>emptyList()));
+	private <T extends Comparable<? super T>> void reportNotEqual(String what, Collection<T> l1, Collection<T> l2) {
+//		List<T> diff = difference(l1, l2);
+//		errorCollector.checkThat(what, diff, equalTo(Collections.<T>emptyList()));
+		ArrayList<T> sl1 = new ArrayList<T>(l1);
+		Collections.sort(sl1);
+		ArrayList<T> sl2 = new ArrayList<T>(l2);
+		Collections.sort(sl2);
+		errorCollector.checkThat(what, sl1, equalTo(sl2));
 	}
 
 	private static <T> List<T> difference(Collection<T> l1, Collection<T> l2) {

@@ -76,7 +76,7 @@ public class TestManifest {
 	private TestManifest(HgRepository hgRepo) {
 		repo = hgRepo;
 		assertTrue(!repo.isInvalid());
-		eh = new ExecHelper(manifestParser = new ManifestOutputParser(), null);
+		eh = new ExecHelper(manifestParser = new ManifestOutputParser(), repo.getWorkingDir());
 	}
 
 	@Test

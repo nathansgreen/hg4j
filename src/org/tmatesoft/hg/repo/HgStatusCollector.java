@@ -170,11 +170,10 @@ public class HgStatusCollector {
 		walk(parents[0], rev, inspector);
 	}
 	
-	// I assume revision numbers are the same for changelog and manifest - here 
-	// user would like to pass changelog revision numbers, and I use them directly to walk manifest.
-	// if this assumption is wrong, fix this (lookup manifest revisions from changeset).
-	// rev1 and rev2 may be -1 to indicate comparison to empty repository
-	// argument order matters 
+	// rev1 and rev2 are changelog revision numbers, argument order matters.
+	// Either rev1 or rev2 may be -1 to indicate comparison to empty repository (XXX this is due to use of 
+	// parents in #change(), I believe. Perhaps, need a constant for this? Otherwise this hidden knowledge gets
+	// exposed to e.g. Record
 	public void walk(int rev1, int rev2, HgStatusInspector inspector) {
 		if (rev1 == rev2) {
 			throw new IllegalArgumentException();
@@ -182,15 +181,15 @@ public class HgStatusCollector {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		if (inspector instanceof Record) {
-			((Record) inspector).init(rev1, rev2, this);
-		}
 		final int lastManifestRevision = repo.getChangelog().getLastRevision();
 		if (rev1 == TIP) {
 			rev1 = lastManifestRevision;
 		}
 		if (rev2 == TIP) {
 			rev2 = lastManifestRevision; 
+		}
+		if (inspector instanceof Record) {
+			((Record) inspector).init(rev1, rev2, this);
 		}
 		// in fact, rev1 and rev2 are often next (or close) to each other,
 		// thus, we can optimize Manifest reads here (manifest.walk(rev1, rev2))

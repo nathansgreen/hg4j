@@ -20,7 +20,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertTrue;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -75,7 +74,7 @@ public class TestHistory {
 
 	private TestHistory(HgRepository hgRepo) {
 		repo = hgRepo;
-		eh = new ExecHelper(changelogParser = new LogOutputParser(true), new File(repo.getLocation()));
+		eh = new ExecHelper(changelogParser = new LogOutputParser(true), repo.getWorkingDir());
 		
 	}
 
