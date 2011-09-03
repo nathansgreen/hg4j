@@ -86,6 +86,7 @@
 			<test name="org.tmatesoft.hg.test.TestStatus" />
 			<test name="org.tmatesoft.hg.test.TestStorePath" />
 			<test name="org.tmatesoft.hg.test.TestIgnore" />
+			<test name="org.tmatesoft.hg.test.TestDirstate" />
 			<test name="org.tmatesoft.hg.test.TestByteChannel" />
 			<test name="org.tmatesoft.hg.test.TestClone" />
 			<test name="org.tmatesoft.hg.test.TestIncoming" />
