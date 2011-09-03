@@ -31,6 +31,7 @@ import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 
 
@@ -53,7 +54,7 @@ public class HgInternals {
 	}
 
 	public void dumpDirstate() {
-		repo.loadDirstate().dump();
+		repo.loadDirstate(new PathPool(new PathRewrite.Empty())).dump();
 	}
 
 	public boolean[] checkIgnored(String... toCheck) {

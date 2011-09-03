@@ -32,6 +32,7 @@ import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -99,8 +100,8 @@ public class HgMergeState {
 		}
 		Pool<Nodeid> nodeidPool = new Pool<Nodeid>();
 		Pool<String> fnamePool = new Pool<String>();
-		Nodeid[] wcParents = repo.loadDirstate().parents();
-		wcp1 = nodeidPool.unify(wcParents[0]); wcp2 = nodeidPool.unify(wcParents[1]);
+		Pair<Nodeid, Nodeid> wcParents = repo.getWorkingCopyParents();
+		wcp1 = nodeidPool.unify(wcParents.first()); wcp2 = nodeidPool.unify(wcParents.second());
 		ArrayList<Entry> result = new ArrayList<Entry>();
 		PathPool pathPool = new PathPool(new PathRewrite.Empty());
 		final ManifestRevision m1 = new ManifestRevision(nodeidPool, fnamePool);

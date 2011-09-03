@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.core.Nodeid.NULL;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -28,7 +30,9 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.PathPool;
 
 
 /**
@@ -42,21 +46,22 @@ class HgDirstate /* XXX RepoChangeListener */{
 
 	private final HgRepository repo;
 	private final File dirstateFile;
-	// deliberate String, not Path as it seems useless to keep Path here
-	private Map<String, Record> normal;
-	private Map<String, Record> added;
-	private Map<String, Record> removed;
-	private Map<String, Record> merged;
-	private Nodeid p1, p2;
+	private final PathPool pathPool;
+	private Map<Path, Record> normal;
+	private Map<Path, Record> added;
+	private Map<Path, Record> removed;
+	private Map<Path, Record> merged;
+	private Pair<Nodeid, Nodeid> parents;
 	private String currentBranch;
 	
-	public HgDirstate(HgRepository hgRepo, File dirstate) {
+	public HgDirstate(HgRepository hgRepo, File dirstate, PathPool pathPool) {
 		repo = hgRepo;
-		dirstateFile = dirstate; // XXX decide whether file names shall be kept local to reader (see #branches()) or passed from outside 
+		dirstateFile = dirstate; // XXX decide whether file names shall be kept local to reader (see #branches()) or passed from outside
+		this.pathPool = pathPool;
 	}
 
 	private void read() {
-		normal = added = removed = merged = Collections.<String, Record>emptyMap();
+		normal = added = removed = merged = Collections.<Path, Record>emptyMap();
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return;
 		}
@@ -65,16 +70,12 @@ class HgDirstate /* XXX RepoChangeListener */{
 			return;
 		}
 		// not sure linked is really needed here, just for ease of debug
-		normal = new LinkedHashMap<String, Record>();
-		added = new LinkedHashMap<String, Record>();
-		removed = new LinkedHashMap<String, Record>();
-		merged = new LinkedHashMap<String, Record>();
+		normal = new LinkedHashMap<Path, Record>();
+		added = new LinkedHashMap<Path, Record>();
+		removed = new LinkedHashMap<Path, Record>();
+		merged = new LinkedHashMap<Path, Record>();
 		try {
-			byte[] parents = new byte[40];
-			da.readBytes(parents, 0, 40);
-			p1 = Nodeid.fromBinary(parents, 0);
-			p2 = Nodeid.fromBinary(parents, 20);
-			parents = null;
+			parents = internalReadParents(da);
 			// hg init; hg up produces an empty repository where dirstate has parents (40 bytes) only
 			while (!da.isEmpty()) {
 				final byte state = da.readByte();
@@ -95,7 +96,7 @@ class HgDirstate /* XXX RepoChangeListener */{
 				if (fn1 == null) {
 					fn1 = new String(name);
 				}
-				Record r = new Record(fmode, size, time, fn1, fn2);
+				Record r = new Record(fmode, size, time, pathPool.path(fn1), fn2 == null ? null : pathPool.path(fn2));
 				if (state == 'n') {
 					normal.put(r.name1, r);
 				} else if (state == 'a') {
@@ -115,21 +116,39 @@ class HgDirstate /* XXX RepoChangeListener */{
 		}
 	}
 
-	// do not read whole dirstate if all we need is WC parent information
-	private void readParents() {
+	private static Pair<Nodeid, Nodeid> internalReadParents(DataAccess da) throws IOException {
+		byte[] parents = new byte[40];
+		da.readBytes(parents, 0, 40);
+		Nodeid n1 = Nodeid.fromBinary(parents, 0);
+		Nodeid n2 = Nodeid.fromBinary(parents, 20);
+		parents = null;
+		return new Pair<Nodeid, Nodeid>(n1, n2);
+	}
+	
+	/**
+	 * @return array of length 2 with working copy parents, non null.
+	 */
+	public Pair<Nodeid,Nodeid> parents() {
+		if (parents == null) {
+			parents = readParents(repo, dirstateFile);
+		}
+		return parents;
+	}
+	
+	/**
+	 * @return pair of parents, both {@link Nodeid#NULL} if dirstate is not available
+	 */
+	public static Pair<Nodeid, Nodeid> readParents(HgRepository repo, File dirstateFile) {
+		// do not read whole dirstate if all we need is WC parent information
 		if (dirstateFile == null || !dirstateFile.exists()) {
-			return;
+			return new Pair<Nodeid,Nodeid>(NULL, NULL);
 		}
 		DataAccess da = repo.getDataAccess().create(dirstateFile);
 		if (da.isEmpty()) {
-			return;
+			return new Pair<Nodeid,Nodeid>(NULL, NULL);
 		}
 		try {
-			byte[] parents = new byte[40];
-			da.readBytes(parents, 0, 40);
-			p1 = Nodeid.fromBinary(parents, 0);
-			p2 = Nodeid.fromBinary(parents, 20);
-			parents = null;
+			return internalReadParents(da);
 		} catch (IOException ex) {
 			throw new HgBadStateException(ex); // XXX in fact, our exception is not the best solution here.
 		} finally {
@@ -138,49 +157,46 @@ class HgDirstate /* XXX RepoChangeListener */{
 	}
 	
 	/**
-	 * @return array of length 2 with working copy parents, non null.
-	 */
-	public Nodeid[] parents() {
-		if (p1 == null) {
-			readParents();
-		}
-		Nodeid[] rv = new Nodeid[2];
-		rv[0] = p1;
-		rv[1] = p2;
-		return rv;
-	}
-	
-	/**
+	 * XXX is it really proper place for the method?
 	 * @return branch associated with the working directory
 	 */
 	public String branch() {
 		if (currentBranch == null) {
-			currentBranch = HgRepository.DEFAULT_BRANCH_NAME;
-			File branchFile = new File(repo.getRepositoryRoot(), "branch");
-			if (branchFile.exists()) {
-				try {
-					BufferedReader r = new BufferedReader(new FileReader(branchFile));
-					String b = r.readLine();
-					if (b != null) {
-						b = b.trim().intern();
-					}
-					currentBranch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
-					r.close();
-				} catch (IOException ex) {
-					ex.printStackTrace(); // XXX log verbose debug, exception might be legal here (i.e. FileNotFound)
-					// IGNORE
-				}
-			}
+			currentBranch = readBranch(repo);
 		}
 		return currentBranch;
 	}
+	
+	/**
+	 * XXX is it really proper place for the method?
+	 * @return branch associated with the working directory
+	 */
+	public static String readBranch(HgRepository repo) {
+		String branch = HgRepository.DEFAULT_BRANCH_NAME;
+		File branchFile = new File(repo.getRepositoryRoot(), "branch");
+		if (branchFile.exists()) {
+			try {
+				BufferedReader r = new BufferedReader(new FileReader(branchFile));
+				String b = r.readLine();
+				if (b != null) {
+					b = b.trim().intern();
+				}
+				branch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
+				r.close();
+			} catch (IOException ex) {
+				ex.printStackTrace(); // XXX log verbose debug, exception might be legal here (i.e. FileNotFound)
+				// IGNORE
+			}
+		}
+		return branch;
+	}
 
 	// new, modifiable collection
-	/*package-local*/ TreeSet<String> all() {
+	/*package-local*/ TreeSet<Path> all() {
 		read();
-		TreeSet<String> rv = new TreeSet<String>();
+		TreeSet<Path> rv = new TreeSet<Path>();
 		@SuppressWarnings("unchecked")
-		Map<String, Record>[] all = new Map[] { normal, added, removed, merged };
+		Map<Path, Record>[] all = new Map[] { normal, added, removed, merged };
 		for (int i = 0; i < all.length; i++) {
 			for (Record r : all[i].values()) {
 				rv.add(r.name1);
@@ -190,20 +206,17 @@ class HgDirstate /* XXX RepoChangeListener */{
 	}
 	
 	/*package-local*/ Record checkNormal(Path fname) {
-		return normal.get(fname.toString());
+		return normal.get(fname);
 	}
 
 	/*package-local*/ Record checkAdded(Path fname) {
-		return added.get(fname.toString());
+		return added.get(fname);
 	}
 	/*package-local*/ Record checkRemoved(Path fname) {
-		return removed.get(fname.toString());
-	}
-	/*package-local*/ Record checkRemoved(String fname) {
 		return removed.get(fname);
 	}
 	/*package-local*/ Record checkMerged(Path fname) {
-		return merged.get(fname.toString());
+		return merged.get(fname);
 	}
 
 
@@ -212,7 +225,7 @@ class HgDirstate /* XXX RepoChangeListener */{
 	/*package-local*/ void dump() {
 		read();
 		@SuppressWarnings("unchecked")
-		Map<String, Record>[] all = new Map[] { normal, added, removed, merged };
+		Map<Path, Record>[] all = new Map[] { normal, added, removed, merged };
 		char[] x = new char[] {'n', 'a', 'r', 'm' };
 		for (int i = 0; i < all.length; i++) {
 			for (Record r : all[i].values()) {
@@ -232,10 +245,10 @@ class HgDirstate /* XXX RepoChangeListener */{
 		// Thus, can't compare directly to HgDataFile.length()
 		final int size; 
 		final int time;
-		final String name1;
-		final String name2;
+		final Path name1;
+		final Path name2;
 
-		public Record(int fmode, int fsize, int ftime, String name1, String name2) {
+		public Record(int fmode, int fsize, int ftime, Path name1, Path name2) {
 			mode = fmode;
 			size = fsize;
 			time = ftime;

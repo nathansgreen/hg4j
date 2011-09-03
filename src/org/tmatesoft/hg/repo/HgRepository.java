@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.core.Nodeid.NULL;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -40,6 +38,7 @@ import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -232,18 +231,19 @@ public final class HgRepository {
 	public PathRewrite getToRepoPathHelper() {
 		return normalizePath;
 	}
-	
-	@Experimental(reason="return type and possible values (presently null, perhaps Nodeid.NULL) may get changed")
+
+	/**
+	 * @return pair of values, {@link Pair#first()} and {@link Pair#second()} are respective parents, never <code>null</code>. 
+	 */
 	public Pair<Nodeid,Nodeid> getWorkingCopyParents() {
-		Nodeid[] p = loadDirstate().parents();
-		return new Pair<Nodeid,Nodeid>(NULL == p[0] ? null : p[0], NULL == p[1] ? null : p[1]);
+		return HgDirstate.readParents(this, new File(repoDir, "dirstate"));
 	}
 	
 	/**
 	 * @return name of the branch associated with working directory, never <code>null</code>.
 	 */
 	public String getWorkingCopyBranchName() {
-		return loadDirstate().branch();
+		return HgDirstate.readBranch(this);
 	}
 
 	/**
@@ -272,8 +272,8 @@ public final class HgRepository {
 
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
 	// XXX consider passing Path pool or factory to produce (shared) Path instead of Strings
-	/*package-local*/ final HgDirstate loadDirstate() {
-		return new HgDirstate(this, new File(repoDir, "dirstate"));
+	/*package-local*/ final HgDirstate loadDirstate(PathPool pathPool) {
+		return new HgDirstate(this, new File(repoDir, "dirstate"), pathPool);
 	}
 
 	// package-local, see comment for loadDirstate

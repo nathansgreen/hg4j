@@ -65,9 +65,7 @@ public class HgStatusCollector {
 		cacheNodes = new Pool<Nodeid>();
 		cacheFilenames = new Pool<String>();
 
-		emptyFakeState = new ManifestRevision(null, null);
-		emptyFakeState.begin(-1, null, -1);
-		emptyFakeState.end(-1);
+		emptyFakeState = createEmptyManifestRevision();
 	}
 	
 	public HgRepository getRepo() {
@@ -135,6 +133,13 @@ public class HgStatusCollector {
 				return true;
 			}
 		});
+	}
+	
+	/*package-local*/ static ManifestRevision createEmptyManifestRevision() {
+		ManifestRevision fakeEmptyRev = new ManifestRevision(null, null);
+		fakeEmptyRev.begin(-1, null, -1);
+		fakeEmptyRev.end(-1);
+		return fakeEmptyRev;
 	}
 	
 	/*package-local*/ ManifestRevision raw(int rev) {

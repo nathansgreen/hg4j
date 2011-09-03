@@ -97,12 +97,13 @@ public class HgWorkingCopyStatusCollector {
 	
 	private HgDirstate getDirstate() {
 		if (dirstate == null) {
-			dirstate = repo.loadDirstate();
+			dirstate = repo.loadDirstate(getPathPool());
 		}
 		return dirstate;
 	}
 	
 	private ManifestRevision getManifest(int changelogLocalRev) {
+		assert changelogLocalRev >= 0;
 		ManifestRevision mr;
 		if (baseRevisionCollector != null) {
 			mr = baseRevisionCollector.raw(changelogLocalRev);
@@ -117,9 +118,13 @@ public class HgWorkingCopyStatusCollector {
 		// WC not necessarily points to TIP, but may be result of update to any previous revision.
 		// In such case, we need to compare local files not to their TIP content, but to specific version at the time of selected revision
 		if (dirstateParentManifest == null) {
-			Nodeid dirstateParent = getDirstate().parents()[0];
-			int changelogLocalRev = repo.getChangelog().getLocalRevision(dirstateParent);
-			dirstateParentManifest = getManifest(changelogLocalRev);
+			Nodeid dirstateParent = getDirstate().parents().first();
+			if (dirstateParent.isNull()) {
+				dirstateParentManifest = baseRevisionCollector != null ? baseRevisionCollector.raw(-1) : HgStatusCollector.createEmptyManifestRevision();
+			} else {
+				int changelogLocalRev = repo.getChangelog().getLocalRevision(dirstateParent);
+				dirstateParentManifest = getManifest(changelogLocalRev);
+			}
 		}
 		return dirstateParentManifest;
 	}
@@ -152,16 +157,15 @@ public class HgWorkingCopyStatusCollector {
 			((HgStatusCollector.Record) inspector).init(rev1, rev2, sc);
 		}
 		final HgIgnore hgIgnore = repo.getIgnore();
-		TreeSet<String> knownEntries = getDirstate().all();
+		TreeSet<Path> knownEntries = getDirstate().all();
 		repoWalker.reset();
-		final PathPool pp = getPathPool();
 		while (repoWalker.hasNext()) {
 			repoWalker.next();
-			final Path fname = pp.path(repoWalker.name());
+			final Path fname = getPathPool().path(repoWalker.name());
 			File f = repoWalker.file();
 			if (!f.exists()) {
 				// file coming from iterator doesn't exist.
-				if (knownEntries.remove(fname.toString())) {
+				if (knownEntries.remove(fname)) {
 					if (getDirstate().checkRemoved(fname) == null) {
 						inspector.missing(fname);
 					} else {
@@ -190,7 +194,7 @@ public class HgWorkingCopyStatusCollector {
 				continue;
 			}
 			assert f.isFile();
-			if (knownEntries.remove(fname.toString())) {
+			if (knownEntries.remove(fname)) {
 				// tracked file.
 				// modified, added, removed, clean
 				if (collect != null) { // need to check against base revision, not FS file
@@ -211,26 +215,26 @@ public class HgWorkingCopyStatusCollector {
 		}
 		if (collect != null) {
 			for (String r : baseRevFiles) {
-				final Path fromBase = pp.path(r);
+				final Path fromBase = getPathPool().path(r);
 				if (repoWalker.inScope(fromBase)) {
 					inspector.removed(fromBase);
 				}
 			}
 		}
-		for (String m : knownEntries) {
-			if (!repoWalker.inScope(pp.path(m))) {
+		for (Path m : knownEntries) {
+			if (!repoWalker.inScope(m)) {
 				// do not report as missing/removed those FileIterator doesn't care about.
 				continue;
 			}
 			// missing known file from a working dir  
 			if (getDirstate().checkRemoved(m) == null) {
 				// not removed from the repository = 'deleted'  
-				inspector.missing(pp.path(m));
+				inspector.missing(m);
 			} else {
 				// removed from the repo
 				// if we check against non-tip revision, do not report files that were added past that revision and now removed.
-				if (collect == null || baseRevFiles.contains(m)) {
-					inspector.removed(pp.path(m));
+				if (collect == null || baseRevFiles.contains(m.toString())) {
+					inspector.removed(m);
 				}
 			}
 		}
