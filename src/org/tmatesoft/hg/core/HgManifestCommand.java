@@ -27,6 +27,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -128,7 +129,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	}
 
 	// I'd rather let HgManifestCommand implement HgManifest.Inspector directly, but this pollutes API alot
-	private class Mediator implements HgManifest.Inspector {
+	private class Mediator implements HgManifest.Inspector2 {
 		// file names are likely to repeat in each revision, hence caching of Paths.
 		// However, once HgManifest.Inspector switches to Path objects, perhaps global Path pool
 		// might be more effective?
@@ -179,11 +180,14 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 			return true;
 		}
 		public boolean next(Nodeid nid, String fname, String flags) {
-			Path p = pathPool.path(fname);
-			if (matcher != null && !matcher.accept(p)) {
+			throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+		}
+		
+		public boolean next(Nodeid nid, Path fname, Flags flags) {
+			if (matcher != null && !matcher.accept(fname)) {
 				return true;
 			}
-			HgFileRevision fr = new HgFileRevision(repo, nid, p);
+			HgFileRevision fr = new HgFileRevision(repo, nid, fname);
 			if (needDirs) {
 				manifestContent.add(fr);
 			} else {

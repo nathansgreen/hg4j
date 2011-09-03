@@ -136,10 +136,10 @@ public class HgWorkingCopyStatusCollector {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
 		}
 		ManifestRevision collect = null; // non null indicates we compare against base revision
-		Set<String> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
+		Set<Path> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
 		if (baseRevision != TIP && baseRevision != WORKING_COPY) {
 			collect = getManifest(baseRevision);
-			baseRevFiles = new TreeSet<String>(collect.files());
+			baseRevFiles = new TreeSet<Path>(collect.files());
 		}
 		if (inspector instanceof HgStatusCollector.Record) {
 			HgStatusCollector sc = baseRevisionCollector == null ? new HgStatusCollector(repo) : baseRevisionCollector;
@@ -173,13 +173,13 @@ public class HgWorkingCopyStatusCollector {
 					}
 					// do not report it as removed later
 					if (collect != null) {
-						baseRevFiles.remove(fname.toString());
+						baseRevFiles.remove(fname);
 					}
 				} else {
 					// chances are it was known in baseRevision. We may rely
 					// that later iteration over baseRevFiles leftovers would yield correct Removed,
 					// but it doesn't hurt to be explicit (provided we know fname *is* inScope of the FileIterator
-					if (collect != null && baseRevFiles.remove(fname.toString())) {
+					if (collect != null && baseRevFiles.remove(fname)) {
 						inspector.removed(fname);
 					} else {
 						// not sure I shall report such files (i.e. arbitrary name coming from FileIterator)
@@ -214,8 +214,7 @@ public class HgWorkingCopyStatusCollector {
 			}
 		}
 		if (collect != null) {
-			for (String r : baseRevFiles) {
-				final Path fromBase = getPathPool().path(r);
+			for (Path fromBase : baseRevFiles) {
 				if (repoWalker.inScope(fromBase)) {
 					inspector.removed(fromBase);
 				}
@@ -233,7 +232,7 @@ public class HgWorkingCopyStatusCollector {
 			} else {
 				// removed from the repo
 				// if we check against non-tip revision, do not report files that were added past that revision and now removed.
-				if (collect == null || baseRevFiles.contains(m.toString())) {
+				if (collect == null || baseRevFiles.contains(m)) {
 					inspector.removed(m);
 				}
 			}
@@ -262,7 +261,7 @@ public class HgWorkingCopyStatusCollector {
 				// size is the same or unknown, and, perhaps, different timestamp
 				// check actual content to avoid false modified files
 				HgDataFile df = repo.getFileNode(fname);
-				Nodeid rev = getDirstateParentManifest().nodeid(fname.toString());
+				Nodeid rev = getDirstateParentManifest().nodeid(fname);
 				if (!areTheSame(f, df, rev)) {
 					inspector.modified(df.getPath());
 				} else {
@@ -288,10 +287,10 @@ public class HgWorkingCopyStatusCollector {
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<String> baseRevNames, ManifestRevision collect, int baseRevision, Path fname, File f, HgStatusInspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<Path> baseRevNames, ManifestRevision collect, int baseRevision, Path fname, File f, HgStatusInspector inspector) {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
-		Nodeid nid1 = collect.nodeid(fname.toString());
-		String flags = collect.flags(fname.toString());
+		Nodeid nid1 = collect.nodeid(fname);
+		HgManifest.Flags flags = collect.flags(fname);
 		HgDirstate.Record r;
 		if (nid1 == null) {
 			// normal: added?
@@ -311,7 +310,7 @@ public class HgWorkingCopyStatusCollector {
 			} else if ((r = getDirstate().checkAdded(fname)) != null) {
 				if (r.name2 != null && baseRevNames.contains(r.name2)) {
 					baseRevNames.remove(r.name2); // XXX surely I shall not report rename source as Removed?
-					inspector.copied(getPathPool().path(r.name2), fname);
+					inspector.copied(r.name2, fname);
 					return;
 				}
 				// fall-through, report as added
@@ -322,7 +321,7 @@ public class HgWorkingCopyStatusCollector {
 			inspector.added(fname);
 		} else {
 			// was known; check whether clean or modified
-			Nodeid nidFromDirstate = getDirstateParentManifest().nodeid(fname.toString());
+			Nodeid nidFromDirstate = getDirstateParentManifest().nodeid(fname);
 			if ((r = getDirstate().checkNormal(fname)) != null && nid1.equals(nidFromDirstate)) {
 				// regular file, was the same up to WC initialization. Check if was modified since, and, if not, report right away
 				// same code as in #checkLocalStatusAgainstFile
@@ -340,7 +339,7 @@ public class HgWorkingCopyStatusCollector {
 					handled = true;
 				}
 				if (handled) {
-					baseRevNames.remove(fname.toString()); // consumed, processed, handled.
+					baseRevNames.remove(fname); // consumed, processed, handled.
 					return;
 				}
 				// otherwise, shall check actual content (size not the same, or unknown (-1 or -2), or timestamp is different,
@@ -357,11 +356,11 @@ public class HgWorkingCopyStatusCollector {
 				} else {
 					inspector.modified(fname);
 				}
-				baseRevNames.remove(fname.toString()); // consumed, processed, handled.
+				baseRevNames.remove(fname); // consumed, processed, handled.
 			} else if (getDirstate().checkRemoved(fname) != null) {
 				// was known, and now marked as removed, report it right away, do not rely on baseRevNames processing later
 				inspector.removed(fname);
-				baseRevNames.remove(fname.toString()); // consumed, processed, handled.
+				baseRevNames.remove(fname); // consumed, processed, handled.
 			}
 			// only those left in baseRevNames after processing are reported as removed 
 		}
@@ -451,7 +450,7 @@ public class HgWorkingCopyStatusCollector {
 		return false;
 	}
 
-	private static boolean todoCheckFlagsEqual(File f, String manifestFlags) {
+	private static boolean todoCheckFlagsEqual(File f, HgManifest.Flags originalManifestFlags) {
 		// FIXME implement
 		return true;
 	}

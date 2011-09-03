@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.IntMap;
@@ -54,7 +55,7 @@ public class HgStatusCollector {
 	private final int cacheMaxSize = 50; // do not keep too much manifest revisions
 	private PathPool pathPool;
 	private final Pool<Nodeid> cacheNodes;
-	private final Pool<String> cacheFilenames; // XXX in fact, need to think if use of PathPool directly instead is better solution
+	private final Pool<Path> cacheFilenames;
 	private final ManifestRevision emptyFakeState;
 	private Path.Matcher scope = new Path.Matcher.Any();
 	
@@ -63,7 +64,7 @@ public class HgStatusCollector {
 		this.repo = hgRepo;
 		cache = new IntMap<ManifestRevision>(cacheMaxSize);
 		cacheNodes = new Pool<Nodeid>();
-		cacheFilenames = new Pool<String>();
+		cacheFilenames = new Pool<Path>();
 
 		emptyFakeState = createEmptyManifestRevision();
 	}
@@ -99,7 +100,7 @@ public class HgStatusCollector {
 	
 	private void initCacheRange(int minRev, int maxRev) {
 		ensureCacheSize();
-		repo.getManifest().walk(minRev, maxRev, new HgManifest.Inspector() {
+		repo.getManifest().walk(minRev, maxRev, new HgManifest.Inspector2() {
 			private ManifestRevision delegate;
 			private boolean cacheHit; // range may include revisions we already know about, do not re-create them
 
@@ -118,6 +119,10 @@ public class HgStatusCollector {
 			}
 
 			public boolean next(Nodeid nid, String fname, String flags) {
+				throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+			}
+
+			public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {
 				if (!cacheHit) {
 					delegate.next(nid, fname, flags);
 				}
@@ -229,29 +234,27 @@ public class HgStatusCollector {
 		r1 = get(rev1);
 		r2 = get(rev2);
 
-		PathPool pp = getPathPool();
-		TreeSet<String> r1Files = new TreeSet<String>(r1.files());
-		for (String fname : r2.files()) {
-			final Path r2filePath = pp.path(fname);
-			if (!scope.accept(r2filePath)) {
+		TreeSet<Path> r1Files = new TreeSet<Path>(r1.files());
+		for (Path r2fname : r2.files()) {
+			if (!scope.accept(r2fname)) {
 				continue;
 			}
-			if (r1Files.remove(fname)) {
-				Nodeid nidR1 = r1.nodeid(fname);
-				Nodeid nidR2 = r2.nodeid(fname);
-				String flagsR1 = r1.flags(fname);
-				String flagsR2 = r2.flags(fname);
-				if (nidR1.equals(nidR2) && ((flagsR2 == null && flagsR1 == null) || (flagsR2 != null && flagsR2.equals(flagsR1)))) {
-					inspector.clean(r2filePath);
+			if (r1Files.remove(r2fname)) {
+				Nodeid nidR1 = r1.nodeid(r2fname);
+				Nodeid nidR2 = r2.nodeid(r2fname);
+				HgManifest.Flags flagsR1 = r1.flags(r2fname);
+				HgManifest.Flags flagsR2 = r2.flags(r2fname);
+				if (nidR1.equals(nidR2) && flagsR2 == flagsR1) {
+					inspector.clean(r2fname);
 				} else {
-					inspector.modified(r2filePath);
+					inspector.modified(r2fname);
 				}
 			} else {
 				try {
-					Path copyTarget = r2filePath;
+					Path copyTarget = r2fname;
 					Path copyOrigin = getOriginIfCopy(repo, copyTarget, r1Files, rev1);
 					if (copyOrigin != null) {
-						inspector.copied(pp.path(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
+						inspector.copied(getPathPool().path(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
 					} else {
 						inspector.added(copyTarget);
 					}
@@ -262,10 +265,9 @@ public class HgStatusCollector {
 				}
 			}
 		}
-		for (String left : r1Files) {
-			final Path r2filePath = pp.path(left);
-			if (scope.accept(r2filePath)) {
-				inspector.removed(r2filePath);
+		for (Path r1fname : r1Files) {
+			if (scope.accept(r1fname)) {
+				inspector.removed(r1fname);
 			}
 		}
 	}
@@ -276,11 +278,11 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
-	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<String> originals, int originalChangelogRevision) throws HgDataStreamException {
+	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgDataStreamException {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		while (df.isCopy()) {
 			Path original = df.getCopySourceName();
-			if (originals.contains(original.toString())) {
+			if (originals.contains(original)) {
 				df = hgRepo.getFileNode(original);
 				int changelogRevision = df.getChangesetLocalRevision(0);
 				if (changelogRevision <= originalChangelogRevision) {
@@ -326,7 +328,7 @@ public class HgStatusCollector {
 			if ((modified == null || !modified.contains(fname)) && (removed == null || !removed.contains(fname))) {
 				return null;
 			}
-			return statusHelper.raw(startRev).nodeid(fname.toString());
+			return statusHelper.raw(startRev).nodeid(fname);
 		}
 		public Nodeid nodeidAfterChange(Path fname) {
 			if (statusHelper == null || endRev == BAD_REVISION) {
@@ -335,7 +337,7 @@ public class HgStatusCollector {
 			if ((modified == null || !modified.contains(fname)) && (added == null || !added.contains(fname))) {
 				return null;
 			}
-			return statusHelper.raw(endRev).nodeid(fname.toString());
+			return statusHelper.raw(endRev).nodeid(fname);
 		}
 		
 		public List<Path> getModified() {

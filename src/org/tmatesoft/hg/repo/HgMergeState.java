@@ -99,11 +99,13 @@ public class HgMergeState {
 			return;
 		}
 		Pool<Nodeid> nodeidPool = new Pool<Nodeid>();
-		Pool<String> fnamePool = new Pool<String>();
+		Pool<Path> fnamePool = new Pool<Path>();
 		Pair<Nodeid, Nodeid> wcParents = repo.getWorkingCopyParents();
 		wcp1 = nodeidPool.unify(wcParents.first()); wcp2 = nodeidPool.unify(wcParents.second());
 		ArrayList<Entry> result = new ArrayList<Entry>();
-		PathPool pathPool = new PathPool(new PathRewrite.Empty());
+		// FIXME need to settle use of Pool<Path> and PathPool
+		// latter is pool that can create objects on demand, former is just cache
+		PathPool pathPool = new PathPool(new PathRewrite.Empty()); 
 		final ManifestRevision m1 = new ManifestRevision(nodeidPool, fnamePool);
 		final ManifestRevision m2 = new ManifestRevision(nodeidPool, fnamePool);
 		if (!wcp2.isNull()) {
@@ -117,9 +119,10 @@ public class HgMergeState {
 		repo.getManifest().walk(rp1, rp1, m1);
 		while ((s = br.readLine()) != null) {
 			String[] r = s.split("\\00");
-			Nodeid nidP1 = m1.nodeid(r[3]);
+			Path p1fname = pathPool.path(r[3]);
+			Nodeid nidP1 = m1.nodeid(p1fname);
 			Nodeid nidCA = nodeidPool.unify(Nodeid.fromAscii(r[5]));
-			HgFileRevision p1 = new HgFileRevision(repo, nidP1, pathPool.path(r[3]));
+			HgFileRevision p1 = new HgFileRevision(repo, nidP1, p1fname);
 			HgFileRevision ca;
 			if (nidCA == nidP1 && r[3].equals(r[4])) {
 				ca = p1;
@@ -128,12 +131,13 @@ public class HgMergeState {
 			}
 			HgFileRevision p2;
 			if (!wcp2.isNull() || !r[6].equals(r[4])) {
-				Nodeid nidP2 = m2.nodeid(r[6]);
+				final Path p2fname = pathPool.path(r[6]);
+				Nodeid nidP2 = m2.nodeid(p2fname);
 				if (nidP2 == null) {
 					assert false : "There's not enough information (or I don't know where to look) in merge/state to find out what's the second parent";
 					nidP2 = NULL;
 				}
-				p2 = new HgFileRevision(repo, nidP2, pathPool.path(r[6]));
+				p2 = new HgFileRevision(repo, nidP2, p2fname);
 			} else {
 				// no second parent known. no idea what to do here, assume linear merge, use common ancestor as parent
 				p2 = ca;

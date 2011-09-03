@@ -7,8 +7,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetHandler;
 import org.tmatesoft.hg.core.HgException;
@@ -21,6 +21,7 @@ import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgTags;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgTags.TagInfo;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
@@ -69,16 +70,16 @@ public class MapTagsToFileRevisions {
 		System.out.println(System.getProperty("java.version"));
 		final long start = System.currentTimeMillis();
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
-		repository.getManifest().walk(0, 10000, new HgManifest.Inspector() {
-
+		repository.getManifest().walk(0, 10000, new HgManifest.Inspector2() {
 			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
 				return true;
 			}
-
 			public boolean next(Nodeid nid, String fname, String flags) {
+				throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+			}
+			public boolean next(Nodeid nid, Path fname, Flags flags) {
 				return true;
 			}
-
 			public boolean end(int manifestRevision) {
 				return true;
 			}
@@ -106,7 +107,7 @@ public class MapTagsToFileRevisions {
 		tags.getTags().values().toArray(allTags);
 		// file2rev2tag value is array of revisions, always of allTags.length. Revision index in the array
 		// is index of corresponding TagInfo in allTags;
-		final Map<String, Nodeid[]> file2rev2tag = new HashMap<String, Nodeid[]>();
+		final Map<Path, Nodeid[]> file2rev2tag = new HashMap<Path, Nodeid[]>();
 		System.out.printf("Collecting manifests for %d tags\n", allTags.length);
 		// effective translation of changeset revisions to their local indexes
 		final HgChangelog.RevisionMap clogrmap = repository.getChangelog().new RevisionMap().init();
@@ -127,32 +128,7 @@ public class MapTagsToFileRevisions {
 		}
 		System.out.printf("Prepared tag revisions to analyze: %d ms\n", System.currentTimeMillis() - start);
 		//
-		final int[] counts = new int[2];
-		HgManifest.Inspector emptyInsp = new HgManifest.Inspector() {
-			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
-				counts[0]++;
-				return true;
-			}
-			public boolean next(Nodeid nid, String fname, String flags) {
-				counts[1]++;
-				return true;
-			}
-			public boolean end(int manifestRevision) {
-				return true;
-			}
-		};
-//		final long start0 = System.currentTimeMillis();
-//		repository.getManifest().walk(emptyInsp, tagLocalRevs[0]); // warm-up
-//		final long start1 = System.currentTimeMillis();
-//		repository.getManifest().walk(emptyInsp, tagLocalRevs[0]); // warm-up
-//		counts[0] = counts[1] = 0;
-//		final long start2 = System.currentTimeMillis();
-//		repository.getManifest().walk(emptyInsp, tagLocalRevs);
-//		// No-op iterate over selected revisions: 11719 ms (revs:189, files: 579652), warm-up: 218 ms.  Cache built: 25281 ms
-//		// No-op iterate over selected revisions: 11719 ms (revs:189, files: 579652), warm-up1: 234 ms, warm-up2: 16 ms.  Cache built: 25375 ms
-//		System.out.printf("No-op iterate over selected revisions: %d ms (revs:%d, files: %d), warm-up1: %d ms, warm-up2: %d ms \n", System.currentTimeMillis() - start2, counts[0], counts[1], start1-start0, start2-start1);
-		//
-		repository.getManifest().walk(new HgManifest.Inspector() {
+		repository.getManifest().walk(new HgManifest.Inspector2() {
 			private int[] tagIndexAtRev = new int[4]; // it's unlikely there would be a lot of tags associated with a given cset
 
 			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
@@ -177,6 +153,10 @@ public class MapTagsToFileRevisions {
 			}
 			
 			public boolean next(Nodeid nid, String fname, String flags) {
+				throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+			}
+
+			public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {
 				Nodeid[] m = file2rev2tag.get(fname);
 				if (m == null) {
 					file2rev2tag.put(fname, m = new Nodeid[allTags.length]);
@@ -203,7 +183,7 @@ public class MapTagsToFileRevisions {
 		// look up specific file. This part is fast.
 		final Path targetPath = Path.create("README");
 		HgDataFile fileNode = repository.getFileNode(targetPath);
-		final Nodeid[] allTagsOfTheFile = file2rev2tag.get(targetPath.toString());
+		final Nodeid[] allTagsOfTheFile = file2rev2tag.get(targetPath);
 		// TODO if fileNode.isCopy, repeat for each getCopySourceName()
 		for (int localFileRev = 0; localFileRev < fileNode.getRevisionCount(); localFileRev++) {
 			Nodeid fileRev = fileNode.getRevision(localFileRev);

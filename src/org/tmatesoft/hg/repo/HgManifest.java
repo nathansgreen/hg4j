@@ -41,6 +41,49 @@ import org.tmatesoft.hg.util.Path;
  */
 public class HgManifest extends Revlog {
 	private RevisionMapper revisionMap;
+	
+	public enum Flags {
+		Exec, Link;
+		
+		static Flags parse(String flags) {
+			if ("x".equalsIgnoreCase(flags)) {
+				return Exec;
+			}
+			if ("l".equalsIgnoreCase(flags)) {
+				return Link;
+			}
+			if (flags == null) {
+				return null;
+			}
+			throw new IllegalStateException(flags);
+		}
+
+		static Flags parse(byte[] data, int start, int length) {
+			if (length == 0) {
+				return null;
+			}
+			if (length == 1) {
+				if (data[start] == 'x') {
+					return Exec;
+				}
+				if (data[start] == 'l') {
+					return Link;
+				}
+				// FALL THROUGH
+			}
+			throw new IllegalStateException(new String(data, start, length));
+		}
+
+		String nativeString() {
+			if (this == Exec) {
+				return "x";
+			}
+			if (this == Link) {
+				return "l";
+			}
+			throw new IllegalStateException(toString());
+		}
+	}
 
 	/*package-local*/ HgManifest(HgRepository hgRepo, RevlogStream content) {
 		super(hgRepo, content);
@@ -146,12 +189,17 @@ public class HgManifest extends Revlog {
 			
 	public interface Inspector {
 		boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision);
+		/**
+		 * @deprecated switch to {@link Inspector2#next(Nodeid, Path, Flags)}
+		 */
+		@Deprecated
 		boolean next(Nodeid nid, String fname, String flags);
 		boolean end(int manifestRevision);
 	}
 	
-	public interface ElementProxy<T> {
-		T get();
+	@Experimental(reason="Explore Path alternative for filenames and enum for flags")
+	public interface Inspector2 extends Inspector {
+		boolean next(Nodeid nid, Path fname, Flags flags);
 	}
 	
 	/**
@@ -160,17 +208,17 @@ public class HgManifest extends Revlog {
 	 * For cpython repo, walk(0..10k), there are over 16 million filenames, of them only 3020 unique.
 	 * This means there are 15.9 million useless char[] instances and byte->char conversions  
 	 * 
-	 * When String is wrapped into {@link StringProxy}, there's extra overhead of byte[] representation
-	 * of the String, but these are only for unique Strings (3020 in the example above). Besides, I save
+	 * When String (Path) is wrapped into {@link PathProxy}, there's extra overhead of byte[] representation
+	 * of the String, but these are only for unique Strings (Paths) (3020 in the example above). Besides, I save
 	 * useless char[] and byte->char conversions. 
 	 */
-	private static class StringProxy {
+	private static class PathProxy {
 		private byte[] data;
 		private int start; 
 		private final int hash, length;
-		private String result;
+		private Path result;
 
-		public StringProxy(byte[] data, int start, int length) {
+		public PathProxy(byte[] data, int start, int length) {
 			this.data = data;
 			this.start = start;
 			this.length = length;
@@ -187,10 +235,10 @@ public class HgManifest extends Revlog {
 
 		@Override
 		public boolean equals(Object obj) {
-			if (false == obj instanceof StringProxy) {
+			if (false == obj instanceof PathProxy) {
 				return false;
 			}
-			StringProxy o = (StringProxy) obj;
+			PathProxy o = (PathProxy) obj;
 			if (o.result != null && result != null) {
 				return result.equals(o.result);
 			}
@@ -209,10 +257,11 @@ public class HgManifest extends Revlog {
 			return hash;
 		}
 		
-		public String freeze() {
+		public Path freeze() {
 			if (result == null) {
-				result = new String(data, start, length);
+				result = Path.create(new String(data, start, length));
 				// release reference to bigger data array, make a copy of relevant part only
+				// use original bytes, not those from String above to avoid cache misses due to different encodings 
 				byte[] d = new byte[length];
 				System.arraycopy(data, start, d, 0, length);
 				data = d;
@@ -225,17 +274,17 @@ public class HgManifest extends Revlog {
 	private static class ManifestParser implements RevlogStream.Inspector {
 		private boolean gtg = true; // good to go
 		private final Inspector inspector;
+		private final Inspector2 inspector2;
 		private Pool<Nodeid> nodeidPool, thisRevPool;
-		private final Pool<StringProxy> fnamePool;
-		private final Pool<StringProxy> flagsPool;
+		private final Pool<PathProxy> fnamePool;
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
 		
 		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
+			inspector2 = delegate instanceof Inspector2 ? (Inspector2) delegate : null;
 			nodeidPool = new Pool<Nodeid>();
-			fnamePool = new Pool<StringProxy>();
-			flagsPool = new Pool<StringProxy>();
+			fnamePool = new Pool<PathProxy>();
 			thisRevPool = new Pool<Nodeid>();
 		}
 		
@@ -245,8 +294,8 @@ public class HgManifest extends Revlog {
 			}
 			try {
 				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision);
-				String fname = null;
-				String flags = null;
+				Path fname = null;
+				Flags flags = null;
 				Nodeid nid = null;
 				int i;
 				byte[] data = da.byteArray();
@@ -254,7 +303,7 @@ public class HgManifest extends Revlog {
 					int x = i;
 					for( ; data[i] != '\n' && i < actualLen; i++) {
 						if (fname == null && data[i] == 0) {
-							StringProxy px = fnamePool.unify(new StringProxy(data, x, i - x));
+							PathProxy px = fnamePool.unify(new PathProxy(data, x, i - x));
 							// if (cached = fnamePool.unify(px))== px then cacheMiss, else cacheHit
 							// cpython 0..10k: hits: 15 989 152, misses: 3020
 							fname = px.freeze();
@@ -277,13 +326,21 @@ public class HgManifest extends Revlog {
 						if (nodeidLen + x < i) {
 							// 'x' and 'l' for executable bits and symlinks?
 							// hg --debug manifest shows 644 for each regular file in my repo
-							// for cpython 0..10k, there are 4361062 flagPool checks, and there's only 1 unique flag
-							flags = flagsPool.unify(new StringProxy(data, x + nodeidLen, i-x-nodeidLen)).freeze();
+							// for cpython 0..10k, there are 4361062 flag checks, and there's only 1 unique flag
+							flags = Flags.parse(data, x + nodeidLen, i-x-nodeidLen);
+						} else {
+							flags = null;
 						}
-						gtg = gtg && inspector.next(nid, fname, flags);
+						if (inspector2 == null) {
+							String flagString = flags == null ? null : flags.nativeString();
+							gtg = inspector.next(nid, fname.toString(), flagString);
+						} else {
+							gtg = inspector2.next(nid, fname, flags);
+						}
 					}
 					nid = null;
-					fname = flags = null;
+					fname = null;
+					flags = null;
 				}
 				gtg = gtg && inspector.end(revisionNumber);
 				//

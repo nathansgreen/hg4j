@@ -103,14 +103,14 @@ public class HgFileInformer {
 			repo.getManifest().walk(csetRev, csetRev, cachedManifest);
 			// cachedManifest shall be meaningful - changelog.getLocalRevision above ensures we've got version that exists.
 		}
-		Nodeid toExtract = cachedManifest.nodeid(file.toString());
+		Nodeid toExtract = cachedManifest.nodeid(file);
 		try {
 			if (toExtract == null && followRenames) {
 				while (toExtract == null && dataFile.isCopy()) {
 					renamed = true;
 					file = dataFile.getCopySourceName();
 					dataFile = repo.getFileNode(file);
-					toExtract = cachedManifest.nodeid(file.toString());
+					toExtract = cachedManifest.nodeid(file);
 				}
 			}
 		} catch (HgDataStreamException ex) {

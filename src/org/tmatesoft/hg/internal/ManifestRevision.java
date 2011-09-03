@@ -19,8 +19,10 @@ package org.tmatesoft.hg.internal;
 import java.util.Collection;
 import java.util.TreeMap;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * Specific revision of the manifest. 
@@ -29,32 +31,32 @@ import org.tmatesoft.hg.repo.HgManifest;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class ManifestRevision implements HgManifest.Inspector {
-	private final TreeMap<String, Nodeid> idsMap;
-	private final TreeMap<String, String> flagsMap;
+public final class ManifestRevision implements HgManifest.Inspector2 {
+	private final TreeMap<Path, Nodeid> idsMap;
+	private final TreeMap<Path, HgManifest.Flags> flagsMap;
 	private final Pool<Nodeid> idsPool;
-	private final Pool<String> namesPool;
+	private final Pool<Path> namesPool;
 	private Nodeid changeset;
 	private int changelogRev; 
 
 	// optional pools for effective management of nodeids and filenames (they are likely
 	// to be duplicated among different manifest revisions
-	public ManifestRevision(Pool<Nodeid> nodeidPool, Pool<String> filenamePool) {
+	public ManifestRevision(Pool<Nodeid> nodeidPool, Pool<Path> filenamePool) {
 		idsPool = nodeidPool;
 		namesPool = filenamePool;
-		idsMap = new TreeMap<String, Nodeid>();
-		flagsMap = new TreeMap<String, String>();
+		idsMap = new TreeMap<Path, Nodeid>();
+		flagsMap = new TreeMap<Path, HgManifest.Flags>();
 	}
 	
-	public Collection<String> files() {
+	public Collection<Path> files() {
 		return idsMap.keySet();
 	}
 
-	public Nodeid nodeid(String fname) {
+	public Nodeid nodeid(Path fname) {
 		return idsMap.get(fname);
 	}
 
-	public String flags(String fname) {
+	public HgManifest.Flags flags(Path fname) {
 		return flagsMap.get(fname);
 	}
 
@@ -72,6 +74,10 @@ public final class ManifestRevision implements HgManifest.Inspector {
 	//
 
 	public boolean next(Nodeid nid, String fname, String flags) {
+		throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+	}
+
+	public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {
 		if (namesPool != null) {
 			fname = namesPool.unify(fname);
 		}
@@ -81,7 +87,11 @@ public final class ManifestRevision implements HgManifest.Inspector {
 		idsMap.put(fname, nid);
 		if (flags != null) {
 			// TreeMap$Entry takes 32 bytes. No reason to keep null for such price
-			// Perhaps, Map<String, Pair<Nodeid, String>> might be better solution
+			// Alternatively, Map<Path, Pair<Nodeid, Flags>> might come as a solution
+			// however, with low rate of elements with flags this would consume more memory
+			// than two distinct maps (sizeof(Pair) == 16).  
+			// Map<Pair>: n*(32+16)
+			// 2 Maps:    n*32 + m*32  <-- consumes more with m>n/2 
 			flagsMap.put(fname, flags);
 		}
 		return true;

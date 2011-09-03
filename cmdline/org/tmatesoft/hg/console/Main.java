@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgCatCommand;
@@ -46,6 +47,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -356,13 +358,16 @@ public class Main {
 		hgRepo.getManifest().walk(0, TIP, new ManifestDump());
 	}
 
-	public static final class ManifestDump implements HgManifest.Inspector {
+	public static final class ManifestDump implements HgManifest.Inspector2 {
 		public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
 			System.out.printf("%d : %s\n", manifestRevision, nid);
 			return true;
 		}
 
 		public boolean next(Nodeid nid, String fname, String flags) {
+			throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+		}
+		public boolean next(Nodeid nid, Path fname, Flags flags) {
 			System.out.println(nid + "\t" + fname + "\t\t" + flags);
 			return true;
 		}
