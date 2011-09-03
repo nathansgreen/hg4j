@@ -68,10 +68,10 @@ public class TestStatus {
 		test.errorCollector.verify();
 		//
 		TestStatus t2 = new TestStatus(new HgLookup().detect("/temp/hg/hg4j-merging/hg4j"));
-		t2.testDirstateParentOtherThanTip(238);
+		t2.testDirstateParentOtherThanTipWithUpdate();
 		t2.errorCollector.verify();
 		TestStatus t3 = new TestStatus(new HgLookup().detect("/temp/hg/cpython"));
-		t3.testDirstateParentOtherThanTip(-1);
+		t3.testDirstateParentOtherThanTipNoUpdate();
 		t3.errorCollector.verify();
 	}
 	
@@ -122,31 +122,31 @@ public class TestStatus {
 	 */
 	@Test
 	@Ignore("modifies test repository, needs careful configuration")
-	public void testDirstateParentOtherThanTip(int revToUpdate) throws Exception {
+	public void testDirstateParentOtherThanTipWithUpdate() throws Exception {
+		int revToUpdate = 238;
+		try {
+			eh.run("hg", "up", "--rev", String.valueOf(revToUpdate));
+			testDirstateParentOtherThanTipNoUpdate();
+		} finally {
+			eh.run("hg", "up");
+		}
+	}
+
+	@Test
+	@Ignore("needs configuration as it requires special repository")
+	public void testDirstateParentOtherThanTipNoUpdate() throws Exception {
 		final HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(repo);
 		statusParser.reset();
-		try {
-			if (revToUpdate != -1) {
-				// there are repositories (like cpython) where WC is not tip-based, and no need to
-				// accomplish that artificially 
-				eh.run("hg", "up", "--rev", String.valueOf(revToUpdate));
-			}
-			//
-			eh.run("hg", "status", "-A");
-			HgStatusCollector.Record r = wcc.status(HgRepository.TIP);
-			report("hg status -A", r, statusParser);
-			//
-			statusParser.reset();
-			int revision = 3;
-			eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
-			r = wcc.status(revision);
-			report("status -A --rev " + revision, r, statusParser);
-		} finally {
-			if (revToUpdate != -1) {
-				// bring the repository to the tip just in case anyone else is using it afterwards
-				eh.run("hg", "up");
-			}
-		}
+		//
+		eh.run("hg", "status", "-A");
+		HgStatusCollector.Record r = wcc.status(HgRepository.TIP);
+		report("hg status -A", r, statusParser);
+		//
+		statusParser.reset();
+		int revision = 3;
+		eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
+		r = wcc.status(revision);
+		report("status -A --rev " + revision, r, statusParser);
 	}
 
 	
