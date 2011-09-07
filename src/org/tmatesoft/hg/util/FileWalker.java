@@ -32,7 +32,7 @@ public class FileWalker implements FileIterator {
 	private final LinkedList<File> dirQueue;
 	private final LinkedList<File> fileQueue;
 	private final Path.Matcher scope;
-	private File nextFile;
+	private RegularFileInfo nextFile;
 	private Path nextPath;
 
 	public FileWalker(File dir, Path.Source pathFactory) {
@@ -60,7 +60,7 @@ public class FileWalker implements FileIterator {
 		fileQueue.clear();
 		dirQueue.clear();
 		dirQueue.add(startDir);
-		nextFile = null;
+		nextFile = new RegularFileInfo();
 		nextPath = null;
 	}
 	
@@ -72,15 +72,16 @@ public class FileWalker implements FileIterator {
 		if (!fill()) {
 			throw new NoSuchElementException();
 		}
-		nextFile = fileQueue.removeFirst();
-		nextPath = pathHelper.path(nextFile.getPath());
+		File next = fileQueue.removeFirst();
+		nextFile.init(next);
+		nextPath = pathHelper.path(next.getPath());
 	}
 
 	public Path name() {
 		return nextPath;
 	}
 	
-	public File file() {
+	public FileInfo file() {
 		return nextFile;
 	}
 	

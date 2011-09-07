@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.util;
 
-import java.io.File;
-
 import org.tmatesoft.hg.internal.Experimental;
 
 /**
@@ -49,15 +47,15 @@ public interface FileIterator {
 	Path name();
 
 	/**
-	 * File object to retrieve actual state from. Not necessarily exist, if {@link FileIterator} is used to query status
-	 * of specific files.
-	 * @return filesystem element.
+	 * {@link FileInfo} object to retrieve actual file information. Caller shall not assume new instance for each {@link #next()} entry, 
+	 * implementors of this interface may reuse {@link FileInfo} instance if deemed suitable. 
+	 * @return file information holder.
 	 */
-	File file();
+	FileInfo file();
 
 	/**
 	 * When {@link FileIterator} represents only fraction of a repository, library might need to figure out if
-	 * specific file (path) belongs to that fraction or not. Paths (and {@link File Files} returned by this {@link FileIterator}
+	 * specific file (path) belongs to that fraction or not. Paths and files returned by this {@link FileIterator}
 	 * are always considered as representing the fraction, nonetheless, {@link FileIterator} shall return true for such names if 
 	 * asked.
 	 * @return <code>true</code> if this {@link FileIterator} is responsible for (interested in) specified repository-local path 

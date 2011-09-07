@@ -21,10 +21,9 @@ import static java.lang.Math.min;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.NoSuchElementException;
@@ -41,11 +40,13 @@ import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.PathScope;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.FileInfo;
 import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
+import org.tmatesoft.hg.util.RegularFileInfo;
 
 /**
  *
@@ -162,7 +163,7 @@ public class HgWorkingCopyStatusCollector {
 		while (repoWalker.hasNext()) {
 			repoWalker.next();
 			final Path fname = getPathPool().path(repoWalker.name());
-			File f = repoWalker.file();
+			FileInfo f = repoWalker.file();
 			if (!f.exists()) {
 				// file coming from iterator doesn't exist.
 				if (knownEntries.remove(fname)) {
@@ -193,7 +194,6 @@ public class HgWorkingCopyStatusCollector {
 				}
 				continue;
 			}
-			assert f.isFile();
 			if (knownEntries.remove(fname)) {
 				// tracked file.
 				// modified, added, removed, clean
@@ -248,11 +248,11 @@ public class HgWorkingCopyStatusCollector {
 	//********************************************
 
 	
-	private void checkLocalStatusAgainstFile(Path fname, File f, HgStatusInspector inspector) {
+	private void checkLocalStatusAgainstFile(Path fname, FileInfo f, HgStatusInspector inspector) {
 		HgDirstate.Record r;
 		if ((r = getDirstate().checkNormal(fname)) != null) {
 			// either clean or modified
-			final boolean timestampEqual = getFileModificationTime(f) == r.time, sizeEqual = r.size == f.length();
+			final boolean timestampEqual = f.lastModified() == r.time, sizeEqual = r.size == f.length();
 			if (timestampEqual && sizeEqual) {
 				inspector.clean(fname);
 			} else if (!sizeEqual && r.size >= 0) {
@@ -281,13 +281,8 @@ public class HgWorkingCopyStatusCollector {
 		}
 	}
 	
-	// return mtime analog, directly comparable to dirstate's mtime.
-	private static int getFileModificationTime(File f) {
-		return (int) (f.lastModified() / 1000);
-	}
-	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<Path> baseRevNames, ManifestRevision collect, int baseRevision, Path fname, File f, HgStatusInspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<Path> baseRevNames, ManifestRevision collect, int baseRevision, Path fname, FileInfo f, HgStatusInspector inspector) {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
 		Nodeid nid1 = collect.nodeid(fname);
 		HgManifest.Flags flags = collect.flags(fname);
@@ -325,7 +320,7 @@ public class HgWorkingCopyStatusCollector {
 			if ((r = getDirstate().checkNormal(fname)) != null && nid1.equals(nidFromDirstate)) {
 				// regular file, was the same up to WC initialization. Check if was modified since, and, if not, report right away
 				// same code as in #checkLocalStatusAgainstFile
-				final boolean timestampEqual = getFileModificationTime(f) == r.time, sizeEqual = r.size == f.length();
+				final boolean timestampEqual = f.lastModified() == r.time, sizeEqual = r.size == f.length();
 				boolean handled = false;
 				if (timestampEqual && sizeEqual) {
 					inspector.clean(fname);
@@ -373,7 +368,7 @@ public class HgWorkingCopyStatusCollector {
 		// The question is whether original Hg treats this case (same content, different parents and hence nodeids) as 'modified' or 'clean'
 	}
 
-	private boolean areTheSame(File f, HgDataFile dataFile, Nodeid revision) {
+	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) {
 		// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
 		ByteArrayChannel bac = new ByteArrayChannel();
 		boolean ioFailed = false;
@@ -390,12 +385,11 @@ public class HgWorkingCopyStatusCollector {
 		return !ioFailed && areTheSame(f, bac.toArray(), dataFile.getPath());
 	}
 	
-	private boolean areTheSame(File f, final byte[] data, Path p) {
-		FileInputStream fis = null;
+	private boolean areTheSame(FileInfo f, final byte[] data, Path p) {
+		ReadableByteChannel is = null;
 		try {
 			try {
-				fis = new FileInputStream(f);
-				FileChannel fc = fis.getChannel();
+				is = f.newInputChannel();
 				ByteBuffer fb = ByteBuffer.allocate(min(1 + data.length * 2 /*to fit couple of lines appended; never zero*/, 8192));
 				class Check implements ByteChannel {
 					final boolean debug = false; // XXX may want to add global variable to allow clients to turn 
@@ -431,18 +425,18 @@ public class HgWorkingCopyStatusCollector {
 				};
 				Check check = new Check(); 
 				FilterByteChannel filters = new FilterByteChannel(check, repo.getFiltersFromWorkingDirToRepo(p));
-				while (fc.read(fb) != -1 && check.sameSoFar()) {
+				while (is.read(fb) != -1 && check.sameSoFar()) {
 					fb.flip();
 					filters.write(fb);
 					fb.compact();
 				}
-				fis.close();
 				return check.ultimatelyTheSame();
 			} catch (IOException ex) {
-				if (fis != null) {
-					fis.close();
-				}
 				ex.printStackTrace(); // log warn
+			} finally {
+				if (is != null) {
+					is.close();
+				}
 			}
 		} catch (/*TODO typed*/Exception ex) {
 			ex.printStackTrace();
@@ -450,7 +444,7 @@ public class HgWorkingCopyStatusCollector {
 		return false;
 	}
 
-	private static boolean todoCheckFlagsEqual(File f, HgManifest.Flags originalManifestFlags) {
+	private static boolean todoCheckFlagsEqual(FileInfo f, HgManifest.Flags originalManifestFlags) {
 		// FIXME implement
 		return true;
 	}
@@ -513,7 +507,7 @@ public class HgWorkingCopyStatusCollector {
 		private final File dir;
 		private final Path[] paths;
 		private int index;
-		private File nextFile; // cache file() in case it's called more than once
+		private RegularFileInfo nextFile;
 
 		public FileListIterator(File startDir, Path... files) {
 			dir = startDir;
@@ -523,7 +517,7 @@ public class HgWorkingCopyStatusCollector {
 
 		public void reset() {
 			index = -1;
-			nextFile = null;
+			nextFile = new RegularFileInfo();
 		}
 
 		public boolean hasNext() {
@@ -535,14 +529,14 @@ public class HgWorkingCopyStatusCollector {
 			if (index == paths.length) {
 				throw new NoSuchElementException();
 			}
-			nextFile = new File(dir, paths[index].toString());
+			nextFile.init(new File(dir, paths[index].toString()));
 		}
 
 		public Path name() {
 			return paths[index];
 		}
 
-		public File file() {
+		public FileInfo file() {
 			return nextFile;
 		}
 
@@ -597,7 +591,7 @@ public class HgWorkingCopyStatusCollector {
 			return walker.name();
 		}
 
-		public File file() {
+		public FileInfo file() {
 			return walker.file();
 		}
 
