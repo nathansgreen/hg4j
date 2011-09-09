@@ -269,8 +269,6 @@ public class RevlogStream {
 		if (baseRevisions != null && baseRevisions.length > 0) {
 			return;
 		}
-		ArrayList<Integer> resBases = new ArrayList<Integer>();
-		ArrayList<Integer> resOffsets = new ArrayList<Integer>();
 		DataAccess da = getIndexStream();
 		try {
 			if (da.isEmpty()) {
@@ -282,6 +280,14 @@ public class RevlogStream {
 			da.readInt(); // just to skip next 4 bytes of offset + flags
 			final int INLINEDATA = 1 << 16;
 			inline = (versionField & INLINEDATA) != 0;
+			IntVector resBases, resOffsets = null;
+			int entryCountGuess = da.length() / REVLOGV1_RECORD_SIZE;
+			if (inline) {
+				entryCountGuess >>>= 2; // pure guess, assume useful data takes 3/4 of total space
+				resOffsets = new IntVector(entryCountGuess, 5000);
+			}
+			resBases = new IntVector(entryCountGuess, 5000);
+			
 			long offset = 0; // first offset is always 0, thus Hg uses it for other purposes
 			while(true) {
 				int compressedLen = da.readInt();
@@ -309,9 +315,9 @@ public class RevlogStream {
 				}
 				if (da.isEmpty()) {
 					// fine, done then
-					baseRevisions = toArray(resBases);
+					baseRevisions = resBases.toArray(true);
 					if (inline) {
-						indexRecordOffset = toArray(resOffsets);
+						indexRecordOffset = resOffsets.toArray(true);
 					}
 					break;
 				} else {
