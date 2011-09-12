@@ -33,7 +33,7 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgIgnore {
+public class HgIgnore implements Path.Matcher {
 
 	private List<Pattern> entries;
 
@@ -104,7 +104,9 @@ public class HgIgnore {
 	//
 	// might be interesting, although looks like of no direct use in my case 
 	// @see http://stackoverflow.com/questions/1247772/is-there-an-equivalent-of-java-util-regex-for-glob-type-patterns
-	private String glob2regex(String line) {
+	//
+	// TODO consider refactoring to reuse in PathGlobMatcher#glob2regexp
+	private static String glob2regex(String line) {
 		assert line.length() > 0;
 		StringBuilder sb = new StringBuilder(line.length() + 10);
 		if (line.charAt(0) != '*') {
@@ -154,7 +156,10 @@ public class HgIgnore {
 		return sb.toString();
 	}
 
-	// TODO use PathGlobMatcher
+	/**
+	 * @param path file or directory name in question
+	 * @return <code>true</code> if matches repository configuration of ignored files.
+	 */
 	public boolean isIgnored(Path path) {
 		for (Pattern p : entries) {
 			if (p.matcher(path).find()) {
@@ -162,5 +167,13 @@ public class HgIgnore {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * A handy wrap of {@link #isIgnored(Path)} into {@link Path.Matcher}. Yields same result as {@link #isIgnored(Path)}.
+	 * @return <code>true</code> if file is deemed ignored.
+	 */
+	public boolean accept(Path path) {
+		return isIgnored(path);
 	}
 }

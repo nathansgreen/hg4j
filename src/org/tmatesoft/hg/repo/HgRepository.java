@@ -276,8 +276,11 @@ public final class HgRepository {
 		return new HgDirstate(this, new File(repoDir, "dirstate"), pathPool);
 	}
 
-	// package-local, see comment for loadDirstate
-	/*package-local*/ final HgIgnore getIgnore() {
+	/**
+	 * Access to configured set of ignored files.
+	 * @see HgIgnore#isIgnored(Path)
+	 */
+	public HgIgnore getIgnore() {
 		// TODO read config for additional locations
 		if (ignore == null) {
 			ignore = new HgIgnore();
