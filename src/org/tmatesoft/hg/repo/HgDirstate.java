@@ -42,7 +42,11 @@ import org.tmatesoft.hg.util.PathPool;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-class HgDirstate /* XXX RepoChangeListener */{
+public final class HgDirstate /* XXX RepoChangeListener */{
+	
+	public enum EntryKind {
+		Normal, Added, Removed, Merged, // order is being used in code of this class, don't change unless any use is checked
+	}
 
 	private final HgRepository repo;
 	private final File dirstateFile;
@@ -54,7 +58,7 @@ class HgDirstate /* XXX RepoChangeListener */{
 	private Pair<Nodeid, Nodeid> parents;
 	private String currentBranch;
 	
-	public HgDirstate(HgRepository hgRepo, File dirstate, PathPool pathPool) {
+	/*package-local*/ HgDirstate(HgRepository hgRepo, File dirstate, PathPool pathPool) {
 		repo = hgRepo;
 		dirstateFile = dirstate; // XXX decide whether file names shall be kept local to reader (see #branches()) or passed from outside
 		this.pathPool = pathPool;
@@ -126,7 +130,7 @@ class HgDirstate /* XXX RepoChangeListener */{
 	}
 	
 	/**
-	 * @return array of length 2 with working copy parents, non null.
+	 * @return pair of working copy parents, with {@link Nodeid#NULL} for missing values.
 	 */
 	public Pair<Nodeid,Nodeid> parents() {
 		if (parents == null) {
@@ -138,7 +142,7 @@ class HgDirstate /* XXX RepoChangeListener */{
 	/**
 	 * @return pair of parents, both {@link Nodeid#NULL} if dirstate is not available
 	 */
-	public static Pair<Nodeid, Nodeid> readParents(HgRepository repo, File dirstateFile) {
+	/*package-local*/ static Pair<Nodeid, Nodeid> readParents(HgRepository repo, File dirstateFile) {
 		// do not read whole dirstate if all we need is WC parent information
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return new Pair<Nodeid,Nodeid>(NULL, NULL);
@@ -157,10 +161,10 @@ class HgDirstate /* XXX RepoChangeListener */{
 	}
 	
 	/**
-	 * XXX is it really proper place for the method?
 	 * @return branch associated with the working directory
 	 */
 	public String branch() {
+		// XXX is it really proper place for the method?
 		if (currentBranch == null) {
 			currentBranch = readBranch(repo);
 		}
@@ -171,7 +175,7 @@ class HgDirstate /* XXX RepoChangeListener */{
 	 * XXX is it really proper place for the method?
 	 * @return branch associated with the working directory
 	 */
-	public static String readBranch(HgRepository repo) {
+	/*package-local*/ static String readBranch(HgRepository repo) {
 		String branch = HgRepository.DEFAULT_BRANCH_NAME;
 		File branchFile = new File(repo.getRepositoryRoot(), "branch");
 		if (branchFile.exists()) {
@@ -193,7 +197,9 @@ class HgDirstate /* XXX RepoChangeListener */{
 
 	// new, modifiable collection
 	/*package-local*/ TreeSet<Path> all() {
-		read();
+		if (normal == null) {
+			read();
+		}
 		TreeSet<Path> rv = new TreeSet<Path>();
 		@SuppressWarnings("unchecked")
 		Map<Path, Record>[] all = new Map[] { normal, added, removed, merged };
@@ -239,22 +245,58 @@ class HgDirstate /* XXX RepoChangeListener */{
 		}
 	}
 	
-	/*package-local*/ static class Record {
-		final int mode;
-		// it seems Dirstate keeps local file size (i.e. that with any filters already applied). 
-		// Thus, can't compare directly to HgDataFile.length()
-		final int size; 
-		final int time;
-		final Path name1;
-		final Path name2;
+	public void walk(Inspector inspector) {
+		if (normal == null) {
+			read();
+		}
+		@SuppressWarnings("unchecked")
+		Map<Path, Record>[] all = new Map[] { normal, added, removed, merged };
+		for (int i = 0; i < all.length; i++) {
+			EntryKind k = EntryKind.values()[i];
+			for (Record r : all[i].values()) {
+				if (!inspector.next(k, r)) {
+					return;
+				}
+			}
+		}
+	}
 
-		public Record(int fmode, int fsize, int ftime, Path name1, Path name2) {
+	public interface Inspector {
+		boolean next(EntryKind kind, Record entry);
+	}
+
+	public static final class Record {
+		private final int mode, size, time;
+		// Dirstate keeps local file size (i.e. that with any filters already applied). 
+		// Thus, can't compare directly to HgDataFile.length()
+		private final Path name1, name2;
+
+		/*package-local*/ Record(int fmode, int fsize, int ftime, Path name1, Path name2) {
 			mode = fmode;
 			size = fsize;
 			time = ftime;
 			this.name1 = name1;
 			this.name2 = name2;
 			
+		}
+
+		public Path name() {
+			return name1;
+		}
+
+		/**
+		 * @return non-<code>null</code> for copy/move
+		 */
+		public Path copySource() {
+			return name2;
+		}
+
+		public int modificationTime() {
+			return time;
+		}
+
+		public int size() {
+			return size;
 		}
 	}
 }

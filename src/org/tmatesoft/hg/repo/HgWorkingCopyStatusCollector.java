@@ -95,8 +95,11 @@ public class HgWorkingCopyStatusCollector {
 		this.pathPool = pathPool;
 	}
 
-	
-	private HgDirstate getDirstate() {
+	/**
+	 * Access to directory state information this collector uses.
+	 * @return directory state holder, never <code>null</code> 
+	 */
+	public HgDirstate getDirstate() {
 		if (dirstate == null) {
 			dirstate = repo.loadDirstate(getPathPool());
 		}
@@ -252,10 +255,10 @@ public class HgWorkingCopyStatusCollector {
 		HgDirstate.Record r;
 		if ((r = getDirstate().checkNormal(fname)) != null) {
 			// either clean or modified
-			final boolean timestampEqual = f.lastModified() == r.time, sizeEqual = r.size == f.length();
+			final boolean timestampEqual = f.lastModified() == r.modificationTime(), sizeEqual = r.size() == f.length();
 			if (timestampEqual && sizeEqual) {
 				inspector.clean(fname);
-			} else if (!sizeEqual && r.size >= 0) {
+			} else if (!sizeEqual && r.size() >= 0) {
 				inspector.modified(fname);
 			} else {
 				// size is the same or unknown, and, perhaps, different timestamp
@@ -269,10 +272,10 @@ public class HgWorkingCopyStatusCollector {
 				}
 			}
 		} else if ((r = getDirstate().checkAdded(fname)) != null) {
-			if (r.name2 == null) {
+			if (r.copySource() == null) {
 				inspector.added(fname);
 			} else {
-				inspector.copied(getPathPool().path(r.name2), fname);
+				inspector.copied(r.copySource(), fname);
 			}
 		} else if ((r = getDirstate().checkRemoved(fname)) != null) {
 			inspector.removed(fname);
@@ -303,9 +306,9 @@ public class HgWorkingCopyStatusCollector {
 					// FIXME report to a mediator, continue status collection
 				}
 			} else if ((r = getDirstate().checkAdded(fname)) != null) {
-				if (r.name2 != null && baseRevNames.contains(r.name2)) {
-					baseRevNames.remove(r.name2); // XXX surely I shall not report rename source as Removed?
-					inspector.copied(r.name2, fname);
+				if (r.copySource() != null && baseRevNames.contains(r.copySource())) {
+					baseRevNames.remove(r.copySource()); // XXX surely I shall not report rename source as Removed?
+					inspector.copied(r.copySource(), fname);
 					return;
 				}
 				// fall-through, report as added
@@ -320,12 +323,12 @@ public class HgWorkingCopyStatusCollector {
 			if ((r = getDirstate().checkNormal(fname)) != null && nid1.equals(nidFromDirstate)) {
 				// regular file, was the same up to WC initialization. Check if was modified since, and, if not, report right away
 				// same code as in #checkLocalStatusAgainstFile
-				final boolean timestampEqual = f.lastModified() == r.time, sizeEqual = r.size == f.length();
+				final boolean timestampEqual = f.lastModified() == r.modificationTime(), sizeEqual = r.size() == f.length();
 				boolean handled = false;
 				if (timestampEqual && sizeEqual) {
 					inspector.clean(fname);
 					handled = true;
-				} else if (!sizeEqual && r.size >= 0) {
+				} else if (!sizeEqual && r.size() >= 0) {
 					inspector.modified(fname);
 					handled = true;
 				} else if (!todoCheckFlagsEqual(f, flags)) {

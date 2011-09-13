@@ -40,6 +40,7 @@ import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgDirstate;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgMergeState;
@@ -51,6 +52,8 @@ import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
+import org.tmatesoft.hg.repo.HgDirstate.Record;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
@@ -86,12 +89,12 @@ public class Main {
 //		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
-		m.testMergeState();
+//		m.testMergeState();
 //		m.testFileStatus();
 //		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
-//		m.dumpDirstate();
+		m.dumpDirstate();
 //		m.testStatusInternals();
 //		m.catCompleteHistory();
 //		m.dumpCompleteManifestLow();
@@ -325,6 +328,14 @@ public class Main {
 	
 	private void dumpDirstate() {
 		new HgInternals(hgRepo).dumpDirstate();
+		HgWorkingCopyStatusCollector wcc = HgWorkingCopyStatusCollector.create(hgRepo, new Path.Matcher.Any());
+		wcc.getDirstate().walk(new HgDirstate.Inspector() {
+			
+			public boolean next(EntryKind kind, Record entry) {
+				System.out.printf("%s %s\n", kind, entry.name());
+				return true;
+			}
+		});
 	}
 
 	
