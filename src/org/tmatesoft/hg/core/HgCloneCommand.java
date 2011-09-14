@@ -209,7 +209,7 @@ public class HgCloneCommand {
 				revisionSequence.clear();
 				fncacheFiles.add("data/" + name + ".i"); // FIXME this is pure guess, 
 				// need to investigate more how filenames are kept in fncache
-				File file = new File(hgDir, filename = storagePathHelper.rewrite(name));
+				File file = new File(hgDir, filename = storagePathHelper.rewrite(name).toString());
 				file.getParentFile().mkdirs();
 				indexFile = new FileOutputStream(file);
 			} catch (IOException ex) {

@@ -101,14 +101,19 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 		return CompareResult.Unrelated;
 	}
 
-	public static Path create(String path) {
+	public static Path create(CharSequence path) {
 		if (path == null) {
 			throw new IllegalArgumentException();
 		}
-		if (path.indexOf('\\') != -1) {
+		if (path instanceof Path) {
+			Path o = (Path) path;
+			return o;
+		}
+		String p = path.toString();
+		if (p.indexOf('\\') != -1) {
 			throw new IllegalArgumentException();
 		}
-		Path rv = new Path(path);
+		Path rv = new Path(p);
 		return rv;
 	}
 

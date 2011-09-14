@@ -16,9 +16,9 @@
  */
 package org.tmatesoft.hg.test;
 
-import static org.hamcrest.CoreMatchers.equalTo;
 import junit.framework.Assert;
 
+import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.internal.Internals;
@@ -66,8 +66,8 @@ public class TestStorePath {
 		String n3 = "AUX.THE-QUICK-BROWN-FOX-JU:MPS-OVER-THE-LAZY-DOG-THE-QUICK-BROWN-FOX-JUMPS-OVER-THE-LAZY-DOG.TXT";
 		String r3 = "store/dh/au~78.the-quick-brown-fox-ju~3amps-over-the-lazy-dog-the-quick-brown-fox-jud4dcadd033000ab2b26eb66bae1906bcb15d4a70.i";
 		// TODO segment[8] == [. ], segment[8] in the middle of windows reserved name or character (to see if ~xx is broken)
-		errorCollector.checkThat(storePathHelper.rewrite(n1), equalTo(r1));
-		errorCollector.checkThat(storePathHelper.rewrite(n2), equalTo(r2));
-		errorCollector.checkThat(storePathHelper.rewrite(n3), equalTo(r3));
+		errorCollector.checkThat(storePathHelper.rewrite(n1), CoreMatchers.<CharSequence>equalTo(r1));
+		errorCollector.checkThat(storePathHelper.rewrite(n2), CoreMatchers.<CharSequence>equalTo(r2));
+		errorCollector.checkThat(storePathHelper.rewrite(n3), CoreMatchers.<CharSequence>equalTo(r3));
 	}
 }

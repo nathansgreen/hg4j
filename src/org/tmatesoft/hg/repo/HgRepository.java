@@ -32,6 +32,7 @@ import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
@@ -71,6 +72,7 @@ public final class HgRepository {
 	private final PathRewrite normalizePath;
 	private final PathRewrite dataPathHelper;
 	private final PathRewrite repoPathHelper;
+	private final boolean isCaseSensitiveFileSystem;
 
 	private HgChangelog changelog;
 	private HgManifest manifest;
@@ -93,6 +95,7 @@ public final class HgRepository {
 		dataAccess = null;
 		dataPathHelper = repoPathHelper = null;
 		normalizePath = null;
+		isCaseSensitiveFileSystem = !Internals.runningOnWindows();
 	}
 	
 	HgRepository(String repositoryPath, File repositoryRoot) {
@@ -106,12 +109,14 @@ public final class HgRepository {
 		}
 		repoLocation = repositoryPath;
 		dataAccess = new DataAccessProvider();
-		final boolean runningOnWindows = System.getProperty("os.name").indexOf("Windows") != -1;
+		final boolean runningOnWindows = Internals.runningOnWindows();
+		isCaseSensitiveFileSystem = !runningOnWindows;
 		if (runningOnWindows) {
 			normalizePath = new PathRewrite() {
 					
-					public String rewrite(String path) {
+					public CharSequence rewrite(CharSequence p) {
 						// TODO handle . and .. (although unlikely to face them from GUI client)
+						String path = p.toString();
 						path = path.replace('\\', '/').replace("//", "/");
 						if (path.startsWith("/")) {
 							path = path.substring(1);
@@ -142,7 +147,7 @@ public final class HgRepository {
 	
 	public HgChangelog getChangelog() {
 		if (this.changelog == null) {
-			String storagePath = repoPathHelper.rewrite("00changelog.i");
+			CharSequence storagePath = repoPathHelper.rewrite("00changelog.i");
 			RevlogStream content = resolve(Path.create(storagePath), true);
 			this.changelog = new HgChangelog(this, content);
 		}
@@ -207,8 +212,8 @@ public final class HgRepository {
 	}
 	
 	public HgDataFile getFileNode(String path) {
-		String nPath = normalizePath.rewrite(path);
-		String storagePath = dataPathHelper.rewrite(nPath);
+		CharSequence nPath = normalizePath.rewrite(path);
+		CharSequence storagePath = dataPathHelper.rewrite(nPath);
 		RevlogStream content = resolve(Path.create(storagePath), false);
 		Path p = Path.create(nPath);
 		if (content == null) {
@@ -218,7 +223,7 @@ public final class HgRepository {
 	}
 
 	public HgDataFile getFileNode(Path path) {
-		String storagePath = dataPathHelper.rewrite(path.toString());
+		CharSequence storagePath = dataPathHelper.rewrite(path.toString());
 		RevlogStream content = resolve(Path.create(storagePath), false);
 		// XXX no content when no file? or HgDataFile.exists() to detect that?
 		if (content == null) {
@@ -273,7 +278,16 @@ public final class HgRepository {
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
 	// XXX consider passing Path pool or factory to produce (shared) Path instead of Strings
 	/*package-local*/ final HgDirstate loadDirstate(PathPool pathPool) {
-		return new HgDirstate(this, new File(repoDir, "dirstate"), pathPool);
+		PathRewrite canonicalPath = null;
+		if (!isCaseSensitiveFileSystem) {
+			canonicalPath = new PathRewrite() {
+
+				public CharSequence rewrite(CharSequence path) {
+					return path.toString().toLowerCase();
+				}
+			};
+		}
+		return new HgDirstate(this, new File(repoDir, "dirstate"), pathPool, canonicalPath);
 	}
 
 	/**

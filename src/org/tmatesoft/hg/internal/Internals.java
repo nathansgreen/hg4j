@@ -54,17 +54,12 @@ public class Internals {
 	public PathRewrite buildRepositoryFilesHelper() {
 		if ((requiresFlags & STORE) != 0) {
 			return new PathRewrite() {
-				public String rewrite(String path) {
+				public CharSequence rewrite(CharSequence path) {
 					return "store/" + path;
 				}
 			};
 		} else {
-			return new PathRewrite() {
-				public String rewrite(String path) {
-					//no-op
-					return path;
-				}
-			};
+			return new PathRewrite.Empty();
 		}
 	}
 
@@ -106,6 +101,10 @@ public class Internals {
 		requiresFile.write(sb.toString().getBytes());
 		requiresFile.close();
 		new File(hgDir, "store").mkdir(); // with that, hg verify says ok.
+	}
+
+	public static boolean runningOnWindows() {
+		return System.getProperty("os.name").indexOf("Windows") != -1;
 	}
 
 }

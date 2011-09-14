@@ -37,7 +37,8 @@ public class RelativePathRewrite implements PathRewrite {
 		this.rootPath = rootPath;
 	}
 
-	public String rewrite(String path) {
+	public CharSequence rewrite(CharSequence p) {
+		String path = p == null ? null : p.toString();
 		if (path != null && path.startsWith(rootPath)) {
 			if (path.length() == rootPath.length()) {
 				return "";

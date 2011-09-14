@@ -36,14 +36,14 @@ public class PathPool implements Path.Source {
 	}
 
 	public Path path(String p) {
-		p = pathRewrite.rewrite(p);
+		p = pathRewrite.rewrite(p).toString();
 		return get(p, true);
 	}
 
 	// pipes path object through cache to reuse instance, if possible
 	// TODO unify with Pool<Path>
 	public Path path(Path p) {
-		String s = pathRewrite.rewrite(p.toString());
+		String s = pathRewrite.rewrite(p).toString();
 		Path cached = get(s, false);
 		if (cached == null) {
 			cache.put(s, new SoftReference<Path>(cached = p));

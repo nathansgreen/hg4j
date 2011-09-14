@@ -27,11 +27,10 @@ import java.util.List;
  */
 public interface PathRewrite {
 
-	// XXX think over CharSequence use instead of String
-	public String rewrite(String path);
+	public CharSequence rewrite(CharSequence path);
 	
 	public static class Empty implements PathRewrite {
-		public String rewrite(String path) {
+		public CharSequence rewrite(CharSequence path) {
 			return path;
 		}
 	}
@@ -51,7 +50,7 @@ public interface PathRewrite {
 			return this;
 		}
 
-		public String rewrite(String path) {
+		public CharSequence rewrite(CharSequence path) {
 			for (PathRewrite pr : chain) {
 				path = pr.rewrite(path);
 			}

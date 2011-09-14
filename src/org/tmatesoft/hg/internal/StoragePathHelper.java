@@ -43,13 +43,14 @@ class StoragePathHelper implements PathRewrite {
 	// FIXME document what path argument is, whether it includes .i or .d, and whether it's 'normalized' (slashes) or not.
 	// since .hg/store keeps both .i files and files without extension (e.g. fncache), guees, for data == false 
 	// we shall assume path has extension
-	public String rewrite(String path) {
+	public CharSequence rewrite(CharSequence p) {
 		final String STR_STORE = "store/";
 		final String STR_DATA = "data/";
 		final String STR_DH = "dh/";
 		final String reservedChars = "\\:*?\"<>|";
 		char[] hexByte = new char[2];
 		
+		String path = p.toString();
 		path = path.replace(".hg/", ".hg.hg/").replace(".i/", ".i.hg/").replace(".d/", ".d.hg/");
 		StringBuilder sb = new StringBuilder(path.length() << 1);
 		if (store || fncache) {

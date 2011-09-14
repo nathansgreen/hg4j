@@ -48,10 +48,10 @@ public class StatusOutputParser implements OutputParser {
 			
 			private final boolean winPathSeparator = File.separatorChar == '\\';
 
-			public String rewrite(String s) {
+			public CharSequence rewrite(CharSequence s) {
 				if (winPathSeparator) {
 					// Java impl always give slashed path, while Hg uses local, os-specific convention
-					s = s.replace('\\', '/'); 
+					s = s.toString().replace('\\', '/'); 
 				}
 				return s;
 			}
