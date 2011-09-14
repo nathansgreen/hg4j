@@ -175,14 +175,14 @@ public class HgWorkingCopyStatusCollector {
 				if ((knownInDirstate = ds.known(fname)) != null) {
 					// found in dirstate
 					processed.add(knownInDirstate);
-					if (ds.checkRemoved(fname) == null) {
-						inspector.missing(fname);
+					if (ds.checkRemoved(knownInDirstate) == null) {
+						inspector.missing(knownInDirstate);
 					} else {
-						inspector.removed(fname);
+						inspector.removed(knownInDirstate);
 					}
 					// do not report it as removed later
 					if (collect != null) {
-						baseRevFiles.remove(fname);
+						baseRevFiles.remove(knownInDirstate);
 					}
 				} else {
 					// chances are it was known in baseRevision. We may rely
@@ -207,9 +207,9 @@ public class HgWorkingCopyStatusCollector {
 				// modified, added, removed, clean
 				processed.add(knownInDirstate);
 				if (collect != null) { // need to check against base revision, not FS file
-					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, baseRevision, fname, f, inspector);
+					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, baseRevision, knownInDirstate, f, inspector);
 				} else {
-					checkLocalStatusAgainstFile(fname, f, inspector);
+					checkLocalStatusAgainstFile(knownInDirstate, f, inspector);
 				}
 			} else {
 				if (hgIgnore.isIgnored(fname)) { // hgignore shall be consulted only for non-tracked files
