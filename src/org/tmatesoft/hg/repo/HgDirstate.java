@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeSet;
@@ -57,7 +58,10 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	private Map<Path, Record> added;
 	private Map<Path, Record> removed;
 	private Map<Path, Record> merged;
-	private Map<Path, Path> canonical2dirstate; // map of canonicalized file names to their originals from dirstate file
+	/* map of canonicalized file names to their originals from dirstate file.
+	 * Note, only those canonical names that differ from their dirstate counterpart are recorded here
+	 */
+	private Map<Path, Path> canonical2dirstateName; 
 	private Pair<Nodeid, Nodeid> parents;
 	private String currentBranch;
 	
@@ -83,6 +87,11 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		added = new LinkedHashMap<Path, Record>();
 		removed = new LinkedHashMap<Path, Record>();
 		merged = new LinkedHashMap<Path, Record>();
+		if (canonicalPathRewrite != null) {
+			canonical2dirstateName = new HashMap<Path,Path>();
+		} else {
+			canonical2dirstateName = Collections.emptyMap();
+		}
 		try {
 			parents = internalReadParents(da);
 			// hg init; hg up produces an empty repository where dirstate has parents (40 bytes) only
@@ -106,6 +115,22 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 					fn1 = new String(name);
 				}
 				Record r = new Record(fmode, size, time, pathPool.path(fn1), fn2 == null ? null : pathPool.path(fn2));
+				if (canonicalPathRewrite != null) {
+					Path canonicalPath = pathPool.path(canonicalPathRewrite.rewrite(fn1).toString());
+					if (canonicalPath != r.name()) { // == as they come from the same pool
+						assert !canonical2dirstateName.containsKey(canonicalPath); // otherwise there's already a file with same canonical name
+						// which can't happen for case-insensitive file system (or there's erroneous PathRewrite, perhaps doing smth else)
+						canonical2dirstateName.put(canonicalPath, r.name());
+					}
+					if (fn2 != null) {
+						// not sure I need copy origin in the map, I don't seem to use it anywhere,
+						// but I guess I'll have to use it some day.
+						canonicalPath = pathPool.path(canonicalPathRewrite.rewrite(fn2).toString());
+						if (canonicalPath != r.copySource()) {
+							canonical2dirstateName.put(canonicalPath, r.copySource());
+						}
+					}
+				}
 				if (state == 'n') {
 					normal.put(r.name1, r);
 				} else if (state == 'a') {
@@ -217,20 +242,61 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	}
 	
 	/*package-local*/ Record checkNormal(Path fname) {
-		return normal.get(fname);
+		return internalCheck(normal, fname);
 	}
 
 	/*package-local*/ Record checkAdded(Path fname) {
-		return added.get(fname);
+		return internalCheck(added, fname);
 	}
 	/*package-local*/ Record checkRemoved(Path fname) {
-		return removed.get(fname);
+		return internalCheck(removed, fname);
 	}
 	/*package-local*/ Record checkMerged(Path fname) {
-		return merged.get(fname);
+		return internalCheck(merged, fname);
 	}
 
+	
+	// return non-null if fname is known, either as is, or its canonical form. in latter case, this canonical form is return value
+	/*package-local*/ Path known(Path fname) {
+		Path fnameCanonical = null;
+		if (canonicalPathRewrite != null) {
+			fnameCanonical = pathPool.path(canonicalPathRewrite.rewrite(fname).toString());
+			if (fnameCanonical != fname && canonical2dirstateName.containsKey(fnameCanonical)) {
+				// we know right away there's name in dirstate with alternative canonical form
+				return canonical2dirstateName.get(fnameCanonical);
+			}
+		}
+		@SuppressWarnings("unchecked")
+		Map<Path, Record>[] all = new Map[] { normal, added, removed, merged };
+		for (int i = 0; i < all.length; i++) {
+			if (all[i].containsKey(fname)) {
+				return fname;
+			}
+			if (fnameCanonical != null && all[i].containsKey(fnameCanonical)) {
+				return fnameCanonical;
+			}
+		}
+		return null;
+	}
 
+	private Record internalCheck(Map<Path, Record> map, Path fname) {
+		Record rv = map.get(fname);
+		if (rv != null || canonicalPathRewrite == null) {
+			return rv;
+		}
+		Path fnameCanonical = pathPool.path(canonicalPathRewrite.rewrite(fname).toString());
+		if (fnameCanonical != fname) {
+			// case when fname = /a/B/c, and dirstate is /a/b/C 
+			if (canonical2dirstateName.containsKey(fnameCanonical)) {
+				return map.get(canonical2dirstateName.get(fnameCanonical));
+			}
+			// try canonical directly, fname = /a/B/C, dirstate has /a/b/c
+			if ((rv = map.get(fnameCanonical)) != null) {
+				return rv;
+			}
+		}
+		return null;
+	}
 
 
 	/*package-local*/ void dump() {
@@ -267,10 +333,16 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	}
 
 	public interface Inspector {
+		/**
+		 * Invoked for each entry in the directory state file
+		 * @param kind file record kind
+		 * @param entry file record. Note, do not cache instance as it may be reused between the calls
+		 * @return <code>true</code> to indicate further records are still of interest, <code>false</code> to stop iteration
+		 */
 		boolean next(EntryKind kind, Record entry);
 	}
 
-	public static final class Record {
+	public static final class Record implements Cloneable {
 		private final int mode, size, time;
 		// Dirstate keeps local file size (i.e. that with any filters already applied). 
 		// Thus, can't compare directly to HgDataFile.length()
@@ -302,6 +374,15 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 
 		public int size() {
 			return size;
+		}
+		
+		@Override
+		public Record clone()  {
+			try {
+				return (Record) super.clone();
+			} catch (CloneNotSupportedException ex) {
+				throw new InternalError(ex.toString());
+			}
 		}
 	}
 }

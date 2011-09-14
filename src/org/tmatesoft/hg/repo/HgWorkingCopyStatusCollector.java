@@ -161,16 +161,21 @@ public class HgWorkingCopyStatusCollector {
 			((HgStatusCollector.Record) inspector).init(rev1, rev2, sc);
 		}
 		final HgIgnore hgIgnore = repo.getIgnore();
-		TreeSet<Path> knownEntries = getDirstate().all();
 		repoWalker.reset();
+		TreeSet<Path> processed = new TreeSet<Path>(); // names of files we handled as they known to Dirstate (not FileIterator)
+		final HgDirstate ds = getDirstate();
+		TreeSet<Path> knownEntries = ds.all(); // here just to get dirstate initialized
 		while (repoWalker.hasNext()) {
 			repoWalker.next();
 			final Path fname = getPathPool().path(repoWalker.name());
 			FileInfo f = repoWalker.file();
+			Path knownInDirstate;
 			if (!f.exists()) {
 				// file coming from iterator doesn't exist.
-				if (knownEntries.remove(fname)) {
-					if (getDirstate().checkRemoved(fname) == null) {
+				if ((knownInDirstate = ds.known(fname)) != null) {
+					// found in dirstate
+					processed.add(knownInDirstate);
+					if (ds.checkRemoved(fname) == null) {
 						inspector.missing(fname);
 					} else {
 						inspector.removed(fname);
@@ -197,9 +202,10 @@ public class HgWorkingCopyStatusCollector {
 				}
 				continue;
 			}
-			if (knownEntries.remove(fname)) {
+			if ((knownInDirstate = ds.known(fname)) != null) {
 				// tracked file.
 				// modified, added, removed, clean
+				processed.add(knownInDirstate);
 				if (collect != null) { // need to check against base revision, not FS file
 					checkLocalStatusAgainstBaseRevision(baseRevFiles, collect, baseRevision, fname, f, inspector);
 				} else {
@@ -223,13 +229,14 @@ public class HgWorkingCopyStatusCollector {
 				}
 			}
 		}
+		knownEntries.removeAll(processed);
 		for (Path m : knownEntries) {
 			if (!repoWalker.inScope(m)) {
 				// do not report as missing/removed those FileIterator doesn't care about.
 				continue;
 			}
 			// missing known file from a working dir  
-			if (getDirstate().checkRemoved(m) == null) {
+			if (ds.checkRemoved(m) == null) {
 				// not removed from the repository = 'deleted'  
 				inspector.missing(m);
 			} else {

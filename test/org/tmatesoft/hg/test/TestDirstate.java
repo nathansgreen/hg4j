@@ -57,4 +57,10 @@ public class TestDirstate {
 		repo = Configuration.get().own();
 		Assert.assertEquals("default", repo.getWorkingCopyBranchName());
 	}
+
+	public void testMixedNameCaseHandling() {
+		// 1. dirstate: /a/b/c, FileIterator: /a/B/C
+		// 2. dirstate: /a/B/C, FileIterator: /a/b/c
+		// 2. dirstate: /a/B/C, FileIterator: /A/b/C
+	}
 }
