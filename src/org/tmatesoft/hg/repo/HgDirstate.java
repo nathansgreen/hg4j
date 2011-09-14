@@ -33,6 +33,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
+import org.tmatesoft.hg.util.PathRewrite;
 
 
 /**
@@ -51,17 +52,21 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	private final HgRepository repo;
 	private final File dirstateFile;
 	private final PathPool pathPool;
+	private final PathRewrite canonicalPathRewrite;
 	private Map<Path, Record> normal;
 	private Map<Path, Record> added;
 	private Map<Path, Record> removed;
 	private Map<Path, Record> merged;
+	private Map<Path, Path> canonical2dirstate; // map of canonicalized file names to their originals from dirstate file
 	private Pair<Nodeid, Nodeid> parents;
 	private String currentBranch;
 	
-	/*package-local*/ HgDirstate(HgRepository hgRepo, File dirstate, PathPool pathPool) {
+	// canonicalPath may be null if we don't need to check for names other than in dirstate
+	/*package-local*/ HgDirstate(HgRepository hgRepo, File dirstate, PathPool pathPool, PathRewrite canonicalPath) {
 		repo = hgRepo;
 		dirstateFile = dirstate; // XXX decide whether file names shall be kept local to reader (see #branches()) or passed from outside
 		this.pathPool = pathPool;
+		canonicalPathRewrite = canonicalPath;
 	}
 
 	private void read() {
