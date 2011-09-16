@@ -16,12 +16,23 @@
  */
 package org.tmatesoft.hg.test;
 
+import static java.lang.Character.*;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.TreeSet;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgDirstate;
+import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
+import org.tmatesoft.hg.repo.HgDirstate.Record;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Pair;
+import org.tmatesoft.hg.util.Path;
 
 /**
  *
@@ -58,9 +69,77 @@ public class TestDirstate {
 		Assert.assertEquals("default", repo.getWorkingCopyBranchName());
 	}
 
-	public void testMixedNameCaseHandling() {
+	@Test
+	public void testMixedNameCaseHandling() throws Exception {
+		// General idea: to check cases like
 		// 1. dirstate: /a/b/c, FileIterator: /a/B/C
 		// 2. dirstate: /a/B/C, FileIterator: /a/b/c
 		// 2. dirstate: /a/B/C, FileIterator: /A/b/C
+		repo = Configuration.get().find("mixed-case");
+		// Windows, case-insensitive file system
+		final HgInternals testAccess = new HgInternals(repo);
+		HgDirstate dirstate = testAccess.createDirstate(false);
+		final TreeSet<Path> entries = new TreeSet<Path>();
+		dirstate.walk(new HgDirstate.Inspector() {
+			
+			public boolean next(EntryKind kind, Record entry) {
+				entries.add(entry.name());
+				return true;
+			}
+		});
+		Path[] expected = new Path[] {
+			Path.create("a/low/low"),
+			Path.create("a/low/UP"),
+			Path.create("a/UP/low"),
+			Path.create("a/UP/UP"),
+		};
+		Path[] allLower = new Path[expected.length];
+		Path[] allUpper = new Path[expected.length];
+		Path[] mixedNonMatching = new Path[expected.length];
+		for (int i = 0; i < expected.length; i++) {
+			assertTrue("prereq", entries.contains(expected[i]));
+			final String s = expected[i].toString();
+			allLower[i] = Path.create(s.toLowerCase());
+			allUpper[i] = Path.create(s.toUpperCase());
+			char[] ss = s.toCharArray();
+			for (int j = 0; j < ss.length; j++) {
+				if (isLetter(ss[j])) {
+					ss[j] = isLowerCase(ss[j]) ? toUpperCase(ss[j]) : toLowerCase(ss[j]);
+				}
+			}
+			Path mixed = Path.create(new String(ss));
+			mixedNonMatching[i] = mixed;
+		}
+		// prereq
+		checkKnownInDirstate(testAccess, dirstate, expected, expected);
+		// all upper
+		checkKnownInDirstate(testAccess, dirstate, allUpper, expected);
+		// all lower
+		checkKnownInDirstate(testAccess, dirstate, allLower, expected);
+		// mixed
+		checkKnownInDirstate(testAccess, dirstate, mixedNonMatching, expected);
+		//
+		// check that in case-sensitive file system mangled names do not match 
+		dirstate = testAccess.createDirstate(true);
+		// ensure read
+		dirstate.walk(new HgDirstate.Inspector() {
+			public boolean next(EntryKind kind, Record entry) {
+				return false;
+			}
+		});
+		Path[] known = testAccess.checkKnown(dirstate, mixedNonMatching);
+		for (int i = 0; i < known.length; i++) {
+			if (known[i] != null) {
+				fail(expected[i] + " in case-sensitive dirstate matched " + known[i]);
+			}
+		}
+		
+	}
+
+	private static void checkKnownInDirstate(HgInternals testAccess, HgDirstate dirstate, Path[] toCheck, Path[] expected) {
+		Path[] known = testAccess.checkKnown(dirstate, toCheck);
+		for (int i = 0; i < expected.length; i++) {
+			assertTrue(expected[i].equals(known[i]));
+		}
 	}
 }

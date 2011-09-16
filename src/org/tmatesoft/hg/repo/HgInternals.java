@@ -55,7 +55,33 @@ public class HgInternals {
 	}
 
 	public void dumpDirstate() {
-		repo.loadDirstate(new PathPool(new PathRewrite.Empty())).dump();
+		getDirstate().dump();
+	}
+	
+	public HgDirstate getDirstate() {
+		return repo.loadDirstate(new PathPool(new PathRewrite.Empty()));
+	}
+	
+	// tests
+	public HgDirstate createDirstate(boolean caseSensitiveFileSystem) {
+		PathRewrite canonicalPath = null;
+		if (!caseSensitiveFileSystem) {
+			canonicalPath = new PathRewrite() {
+
+				public CharSequence rewrite(CharSequence path) {
+					return path.toString().toLowerCase();
+				}
+			};
+		}
+		return new HgDirstate(repo, new File(repo.getRepositoryRoot(), "dirstate"), new PathPool(new PathRewrite.Empty()), canonicalPath);
+	}
+	
+	public Path[] checkKnown(HgDirstate dirstate, Path[] toCheck) {
+		Path[] rv = new Path[toCheck.length];
+		for (int i = 0; i < toCheck.length; i++) {
+			rv[i] = dirstate.known(toCheck[i]);
+		}
+		return rv;
 	}
 
 	public boolean[] checkIgnored(String... toCheck) {
