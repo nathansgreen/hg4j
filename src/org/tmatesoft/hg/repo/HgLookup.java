@@ -22,10 +22,11 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
-import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidFileException;
+import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
-import org.tmatesoft.hg.internal.Internals;
 
 /**
  * Utility methods to find Mercurial repository at a given location
@@ -36,17 +37,25 @@ import org.tmatesoft.hg.internal.Internals;
 public class HgLookup {
 
 	private ConfigFile globalCfg;
+	private SessionContext sessionContext;
+	
+	public HgLookup() {
+	}
+	
+	public HgLookup(SessionContext ctx) {
+		sessionContext = ctx;
+	}
 
-	public HgRepository detectFromWorkingDir() throws HgException {
+	public HgRepository detectFromWorkingDir() throws HgInvalidFileException {
 		return detect(System.getProperty("user.dir"));
 	}
 
-	public HgRepository detect(String location) throws HgException {
+	public HgRepository detect(String location) throws HgInvalidFileException {
 		return detect(new File(location));
 	}
 
 	// look up in specified location and above
-	public HgRepository detect(File location) throws HgException {
+	public HgRepository detect(File location) throws HgInvalidFileException {
 		File dir = location.getAbsoluteFile();
 		File repository;
 		do {
@@ -64,17 +73,17 @@ public class HgLookup {
 		}
 		try {
 			String repoPath = repository.getParentFile().getCanonicalPath();
-			return new HgRepository(repoPath, repository);
+			return new HgRepository(getContext(), repoPath, repository);
 		} catch (IOException ex) {
-			throw new HgException(location.toString(), ex);
+			throw new HgInvalidFileException(location.toString(), ex, location);
 		}
 	}
 	
-	public HgBundle loadBundle(File location) /*XXX perhaps, HgDataStreamException or anything like HgMalformedDataException? Or RuntimeEx is better?*/{
+	public HgBundle loadBundle(File location) throws HgInvalidFileException {
 		if (location == null || !location.canRead()) {
-			throw new IllegalArgumentException();
+			throw new HgInvalidFileException(String.format("Can't read file %s", location == null ? null : location.getPath()), null, location);
 		}
-		return new HgBundle(new DataAccessProvider(), location).link();
+		return new HgBundle(new DataAccessProvider(getContext()), location).link();
 	}
 	
 	/**
@@ -105,24 +114,36 @@ public class HgLookup {
 				throw new HgBadArgumentException(String.format("Found %s server spec in the config, but failed to initialize with it", key), ex);
 			}
 		}
-		return new HgRemoteRepository(url);
+		return new HgRemoteRepository(getContext(), url);
 	}
 	
-	public HgRemoteRepository detect(URL url) throws HgException {
+	public HgRemoteRepository detect(URL url) throws HgBadArgumentException {
 		if (url == null) {
 			throw new IllegalArgumentException();
 		}
 		if (Boolean.FALSE.booleanValue()) {
 			throw HgRepository.notImplemented();
 		}
-		return new HgRemoteRepository(url);
+		return new HgRemoteRepository(getContext(), url);
 	}
 
 	private ConfigFile getGlobalConfig() {
 		if (globalCfg == null) {
-			globalCfg = new Internals().newConfigFile();
-			globalCfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
+			globalCfg = new ConfigFile();
+			try {
+				globalCfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
+			} catch (IOException ex) {
+				// XXX perhaps, makes sense to let caller/client know that we've failed to read global config? 
+				getContext().getLog().warn(getClass(), ex, null);
+			}
 		}
 		return globalCfg;
+	}
+
+	private SessionContext getContext() {
+		if (sessionContext == null) {
+			sessionContext = new BasicSessionContext(null, null);
+		}
+		return sessionContext;
 	}
 }

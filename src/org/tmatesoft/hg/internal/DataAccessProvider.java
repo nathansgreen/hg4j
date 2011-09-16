@@ -24,6 +24,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.SessionContext;
 
 /**
  * 
@@ -34,12 +35,14 @@ public class DataAccessProvider {
 
 	private final int mapioMagicBoundary;
 	private final int bufferSize;
+	private final SessionContext context;
 
-	public DataAccessProvider() {
-		this(100 * 1024, 8 * 1024);
+	public DataAccessProvider(SessionContext ctx) {
+		this(ctx, 100 * 1024, 8 * 1024);
 	}
 
-	public DataAccessProvider(int mapioBoundary, int regularBufferSize) {
+	public DataAccessProvider(SessionContext ctx, int mapioBoundary, int regularBufferSize) {
+		context = ctx;
 		mapioMagicBoundary = mapioBoundary;
 		bufferSize = regularBufferSize;
 	}
@@ -67,7 +70,7 @@ public class DataAccessProvider {
 			}
 		} catch (IOException ex) {
 			// unlikely to happen, we've made sure file exists.
-			ex.printStackTrace(); // FIXME log error
+			context.getLog().error(getClass(), ex, null);
 		}
 		return new DataAccess(); // non-null, empty.
 	}
@@ -177,7 +180,7 @@ public class DataAccessProvider {
 				try {
 					fileChannel.close();
 				} catch (IOException ex) {
-					ex.printStackTrace(); // log debug
+					StreamLogFacility.newDefault().debug(getClass(), ex, null);
 				}
 				fileChannel = null;
 			}
@@ -298,7 +301,7 @@ public class DataAccessProvider {
 				try {
 					fileChannel.close();
 				} catch (IOException ex) {
-					ex.printStackTrace(); // log debug
+					StreamLogFacility.newDefault().debug(getClass(), ex, null);
 				}
 				fileChannel = null;
 			}

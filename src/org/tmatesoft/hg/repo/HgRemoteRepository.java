@@ -48,8 +48,10 @@ import javax.net.ssl.X509TrustManager;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.core.SessionContext;
 
 /**
  * WORK IN PROGRESS, DO NOT USE
@@ -66,12 +68,14 @@ public class HgRemoteRepository {
 	private final String authInfo;
 	private final boolean debug = Boolean.parseBoolean(System.getProperty("hg4j.remote.debug"));
 	private HgLookup lookupHelper;
+	private final SessionContext sessionContext;
 
-	HgRemoteRepository(URL url) throws HgBadArgumentException {
-		if (url == null) {
+	HgRemoteRepository(SessionContext ctx, URL url) throws HgBadArgumentException {
+		if (url == null || ctx == null) {
 			throw new IllegalArgumentException();
 		}
 		this.url = url;
+		sessionContext = ctx;
 		if ("https".equals(url.getProtocol())) {
 			try {
 				sslContext = SSLContext.getInstance("SSL");
@@ -322,7 +326,7 @@ public class HgRemoteRepository {
 	 * (there's no header like HG10?? with the server output, though, 
 	 * as one may expect according to http://mercurial.selenic.com/wiki/BundleFormat)
 	 */
-	public HgBundle getChanges(List<Nodeid> roots) throws HgRemoteConnectionException {
+	public HgBundle getChanges(List<Nodeid> roots) throws HgRemoteConnectionException, HgInvalidFileException {
 		List<Nodeid> _roots = roots.isEmpty() ? Collections.singletonList(Nodeid.NULL) : roots;
 		StringBuilder sb = new StringBuilder(20 + _roots.size() * 41);
 		sb.append("roots=");
@@ -361,7 +365,7 @@ public class HgRemoteRepository {
 
 	private HgLookup getLookupHelper() {
 		if (lookupHelper == null) {
-			lookupHelper = new HgLookup();
+			lookupHelper = new HgLookup(sessionContext);
 		}
 		return lookupHelper;
 	}

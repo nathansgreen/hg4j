@@ -35,16 +35,17 @@ public class RequiresFile {
 	public RequiresFile() {
 	}
 
-	public void parse(Internals repoImpl, File requiresFile) {
+	public void parse(Internals repoImpl, File requiresFile) throws IOException {
 		if (!requiresFile.exists()) {
 			return;
 		}
+		BufferedReader br = null;
 		try {
 			boolean revlogv1 = false;
 			boolean store = false;
 			boolean fncache = false;
 			boolean dotencode = false;
-			BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(requiresFile)));
+			br = new BufferedReader(new InputStreamReader(new FileInputStream(requiresFile)));
 			String line;
 			while ((line = br.readLine()) != null) {
 				revlogv1 |= "revlogv1".equals(line);
@@ -57,9 +58,10 @@ public class RequiresFile {
 			flags += fncache ? FNCACHE : 0;
 			flags += dotencode ? DOTENCODE : 0;
 			repoImpl.setStorageConfig(revlogv1 ? 1 : 0, flags);
-			br.close();
-		} catch (IOException ex) {
-			ex.printStackTrace(); // FIXME log
+		} finally {
+			if (br != null) {
+				br.close();
+			}
 		}
 	}
 }

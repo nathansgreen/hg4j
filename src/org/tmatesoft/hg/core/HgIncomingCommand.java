@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.core;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -100,10 +99,10 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	 * Reported changes are from any branch (limits set by {@link #branch(String)} are not taken into account. 
 	 *   
 	 * @return list of nodes present at remote and missing locally
-	 * @throws HgException
+	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
 	 * @throws CancelledException
 	 */
-	public List<Nodeid> executeLite() throws HgException, CancelledException {
+	public List<Nodeid> executeLite() throws HgRemoteConnectionException, CancelledException {
 		LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
 		RepositoryComparator repoCompare = getComparator();
 		for (BranchChain bc : getMissingBranches()) {
@@ -121,10 +120,12 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	/**
 	 * Full information about incoming changes
 	 * 
-	 * @throws HgException
+	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
+	 * @throws HgInvalidFileException to indicate failure working with locally downloaded changes in a bundle file
+	 * @throws HgCallbackTargetException to re-throw exception from the handler
 	 * @throws CancelledException
 	 */
-	public void executeFull(final HgChangesetHandler handler) throws HgException/*FIXME specific type*/, HgException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgInvalidFileException, HgCallbackTargetException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
@@ -155,8 +156,6 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 				}
 			});
 			transformer.checkFailure();
-		} catch (IOException ex) {
-			throw new HgException(ex);
 		} finally {
 			ps.done();
 		}

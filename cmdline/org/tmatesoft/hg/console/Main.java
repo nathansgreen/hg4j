@@ -26,35 +26,37 @@ import java.util.Map;
 
 import org.junit.Assert;
 import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgDataStreamException;
-import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgCatCommand;
+import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgFileInformer;
 import org.tmatesoft.hg.core.HgFileRevision;
+import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
+import org.tmatesoft.hg.internal.StreamLogFacility;
 import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgDirstate;
+import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
+import org.tmatesoft.hg.repo.HgDirstate.Record;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgMergeState;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
-import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
-import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
-import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
-import org.tmatesoft.hg.repo.HgDirstate.Record;
 import org.tmatesoft.hg.util.FileWalker;
+import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -65,6 +67,7 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
+@SuppressWarnings("unused")
 public class Main {
 	
 	private Options cmdLineOpts;
@@ -82,6 +85,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
 //		m.testSubrepos();
@@ -94,12 +98,26 @@ public class Main {
 //		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
-		m.dumpDirstate();
+//		m.dumpDirstate();
 //		m.testStatusInternals();
 //		m.catCompleteHistory();
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void testConsoleLog() {
+		LogFacility fc = new StreamLogFacility(true, true, true, System.out);
+		System.out.printf("isDebug: %s, isInfo:%s\n", fc.isDebug(), fc.isInfo());
+		fc.debug(getClass(), "%d", 1);
+		fc.info(getClass(), "%d\n", 2);
+		fc.warn(getClass(), "%d\n", 3);
+		fc.error(getClass(), "%d", 4);
+		Exception ex = new Exception();
+		fc.debug(getClass(), ex, "message");
+		fc.info(getClass(), ex, null);
+		fc.warn(getClass(), ex, null);
+		fc.error(getClass(), ex, "message");
 	}
 	
 	private void testTreeTraversal() throws Exception {

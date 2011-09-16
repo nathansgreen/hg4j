@@ -27,13 +27,13 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
-import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
@@ -73,6 +73,7 @@ public final class HgRepository {
 	private final PathRewrite dataPathHelper;
 	private final PathRewrite repoPathHelper;
 	private final boolean isCaseSensitiveFileSystem;
+	private final SessionContext sessionContext;
 
 	private HgChangelog changelog;
 	private HgManifest manifest;
@@ -95,20 +96,23 @@ public final class HgRepository {
 		dataAccess = null;
 		dataPathHelper = repoPathHelper = null;
 		normalizePath = null;
+		sessionContext = null;
 		isCaseSensitiveFileSystem = !Internals.runningOnWindows();
 	}
 	
-	HgRepository(String repositoryPath, File repositoryRoot) {
+	HgRepository(SessionContext ctx, String repositoryPath, File repositoryRoot) {
 		assert ".hg".equals(repositoryRoot.getName()) && repositoryRoot.isDirectory();
 		assert repositoryPath != null; 
 		assert repositoryRoot != null;
+		assert ctx != null;
 		repoDir = repositoryRoot;
 		workingDir = repoDir.getParentFile();
 		if (workingDir == null) {
 			throw new IllegalArgumentException(repoDir.toString());
 		}
 		repoLocation = repositoryPath;
-		dataAccess = new DataAccessProvider();
+		sessionContext = ctx;
+		dataAccess = new DataAccessProvider(ctx);
 		final boolean runningOnWindows = Internals.runningOnWindows();
 		isCaseSensitiveFileSystem = !runningOnWindows;
 		if (runningOnWindows) {
@@ -127,7 +131,7 @@ public final class HgRepository {
 		} else {
 			normalizePath = new PathRewrite.Empty(); // or strip leading slash, perhaps? 
 		}
-		parseRequires();
+		impl.parseRequires(this, new File(repoDir, "requires"));
 		dataPathHelper = impl.buildDataFilesHelper();
 		repoPathHelper = impl.buildRepositoryFilesHelper();
 	}
@@ -176,20 +180,23 @@ public final class HgRepository {
 							final String content = new String(sink.toArray(), "UTF8");
 							tags.readGlobal(new StringReader(content));
 						} catch (CancelledException ex) {
-							ex.printStackTrace(); // IGNORE, can't happen, we did not configure cancellation
+							 // IGNORE, can't happen, we did not configure cancellation
+							getContext().getLog().debug(getClass(), ex, null);
 						} catch (HgDataStreamException ex) {
-							ex.printStackTrace(); // FIXME need to react
+							getContext().getLog().error(getClass(), ex, null);
+							// FIXME need to react
 						} catch (IOException ex) {
 							// UnsupportedEncodingException can't happen (UTF8)
 							// only from readGlobal. Need to reconsider exceptions thrown from there
-							ex.printStackTrace(); // XXX need to decide what to do this. failure to read single revision shall not break complete cycle
+							getContext().getLog().error(getClass(), ex, null);
+							// XXX need to decide what to do this. failure to read single revision shall not break complete cycle
 						}
 					}
 				}
 				tags.readGlobal(new File(getWorkingDir(), ".hgtags")); // XXX replace with HgDataFile.workingCopy
 				tags.readLocal(new File(repoDir, "localtags"));
 			} catch (IOException ex) {
-				ex.printStackTrace(); // FIXME log or othewise report
+				getContext().getLog().error(getClass(), ex, null);
 			}
 		}
 		return tags;
@@ -302,7 +309,7 @@ public final class HgRepository {
 				File ignoreFile = new File(getWorkingDir(), ".hgignore");
 				ignore.read(ignoreFile);
 			} catch (IOException ex) {
-				ex.printStackTrace(); // log warn
+				getContext().getLog().warn(getClass(), ex, null);
 			}
 		}
 		return ignore;
@@ -334,7 +341,7 @@ public final class HgRepository {
 					fake.deleteOnExit();
 					return new RevlogStream(dataAccess, fake);
 				} catch (IOException ex) {
-					ex.printStackTrace(); // FIXME report in debug
+					getContext().getLog().info(getClass(), ex, null);
 				}
 			}
 		}
@@ -344,11 +351,15 @@ public final class HgRepository {
 	// can't expose internal class, otherwise seems reasonable to have it in API
 	/*package-local*/ ConfigFile getConfigFile() {
 		if (configFile == null) {
-			configFile = impl.newConfigFile();
-			configFile.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
-			// last one, overrides anything else
-			// <repo>/.hg/hgrc
-			configFile.addLocation(new File(getRepositoryRoot(), "hgrc"));
+			configFile = new ConfigFile();
+			try {
+				configFile.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
+				// last one, overrides anything else
+				// <repo>/.hg/hgrc
+				configFile.addLocation(new File(getRepositoryRoot(), "hgrc"));
+			} catch (IOException ex) {
+				getContext().getLog().warn(getClass(), ex, "Errors while reading user configuration file");
+			}
 		}
 		return configFile;
 	}
@@ -363,6 +374,10 @@ public final class HgRepository {
 	
 	/*package-local*/ File getFile(HgDataFile dataFile) {
 		return new File(getWorkingDir(), dataFile.getPath().toString());
+	}
+	
+	/*package-local*/ SessionContext getContext() {
+		return sessionContext;
 	}
 
 	private List<Filter> instantiateFilters(Path p, Filter.Options opts) {
@@ -379,9 +394,4 @@ public final class HgRepository {
 		}
 		return rv;
 	}
-
-	private void parseRequires() {
-		new RequiresFile().parse(impl, new File(repoDir, "requires"));
-	}
-
 }

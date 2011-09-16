@@ -27,6 +27,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
 
@@ -61,7 +62,7 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 			BufferedReader br = new BufferedReader(new FileReader(hgsubFile));
 			return readConfig(br, state);
 		} catch (IOException ex) {
-			ex.printStackTrace(); // XXX log. Generally, shall not happen
+			HgInternals.getContext(repo).getLog().error(getClass(), ex, "Subrepo state read failed");
 		}
 		return Collections.emptyList();
 	}

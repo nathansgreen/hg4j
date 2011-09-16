@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -40,6 +41,15 @@ public class Internals {
 	
 
 	public Internals() {
+	}
+	
+	public void parseRequires(HgRepository hgRepo, File requiresFile) {
+		try {
+			new RequiresFile().parse(this, requiresFile);
+		} catch (IOException ex) {
+			// FIXME not quite sure error reading requires file shall be silently logged only.
+			HgInternals.getContext(hgRepo).getLog().error(getClass(), ex, null);
+		}
 	}
 
 	public/*for tests, otherwise pkg*/ void setStorageConfig(int version, int flags) {
@@ -61,10 +71,6 @@ public class Internals {
 		} else {
 			return new PathRewrite.Empty();
 		}
-	}
-
-	public ConfigFile newConfigFile() {
-		return new ConfigFile();
 	}
 
 	public List<Filter.Factory> getFilters(HgRepository hgRepo, ConfigFile cfg) {

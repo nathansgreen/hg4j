@@ -139,7 +139,7 @@ public class HgDataFile extends Revlog {
 					try {
 						fc.close();
 					} catch (IOException ex) {
-						ex.printStackTrace();
+						getRepo().getContext().getLog().info(getClass(), ex, null);
 					}
 				}
 			}

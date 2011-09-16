@@ -397,59 +397,61 @@ public class HgWorkingCopyStatusCollector {
 	
 	private boolean areTheSame(FileInfo f, final byte[] data, Path p) {
 		ReadableByteChannel is = null;
-		try {
-			try {
-				is = f.newInputChannel();
-				ByteBuffer fb = ByteBuffer.allocate(min(1 + data.length * 2 /*to fit couple of lines appended; never zero*/, 8192));
-				class Check implements ByteChannel {
-					final boolean debug = false; // XXX may want to add global variable to allow clients to turn 
-					boolean sameSoFar = true;
-					int x = 0;
+		class Check implements ByteChannel {
+			final boolean debug = repo.getContext().getLog().isDebug(); 
+			boolean sameSoFar = true;
+			int x = 0;
 
-					public int write(ByteBuffer buffer) {
-						for (int i = buffer.remaining(); i > 0; i--, x++) {
-							if (x >= data.length /*file has been appended*/ || data[x] != buffer.get()) {
-								if (debug) {
-									byte[] xx = new byte[15];
-									if (buffer.position() > 5) {
-										buffer.position(buffer.position() - 5);
-									}
-									buffer.get(xx);
-									System.out.print("expected >>" + new String(data, max(0, x - 4), 20) + "<< but got >>");
-									System.out.println(new String(xx) + "<<");
-								}
-								sameSoFar = false;
-								break;
+			public int write(ByteBuffer buffer) {
+				for (int i = buffer.remaining(); i > 0; i--, x++) {
+					if (x >= data.length /*file has been appended*/ || data[x] != buffer.get()) {
+						if (debug) {
+							byte[] xx = new byte[15];
+							if (buffer.position() > 5) {
+								buffer.position(buffer.position() - 5);
 							}
+							buffer.get(xx, 0, min(xx.length, i));
+							repo.getContext().getLog().debug(getClass(), "expected >>%s<< but got >>%s<<", new String(data, max(0, x - 4), min(data.length - x, 20)), new String(xx));
 						}
-						buffer.position(buffer.limit()); // mark as read
-						return buffer.limit();
+						sameSoFar = false;
+						break;
 					}
-					
-					public boolean sameSoFar() {
-						return sameSoFar;
-					}
-					public boolean ultimatelyTheSame() {
-						return sameSoFar && x == data.length;
-					}
-				};
-				Check check = new Check(); 
-				FilterByteChannel filters = new FilterByteChannel(check, repo.getFiltersFromWorkingDirToRepo(p));
-				while (is.read(fb) != -1 && check.sameSoFar()) {
-					fb.flip();
-					filters.write(fb);
-					fb.compact();
 				}
-				return check.ultimatelyTheSame();
-			} catch (IOException ex) {
-				ex.printStackTrace(); // log warn
-			} finally {
-				if (is != null) {
+				buffer.position(buffer.limit()); // mark as read
+				return buffer.limit();
+			}
+			
+			public boolean sameSoFar() {
+				return sameSoFar;
+			}
+			public boolean ultimatelyTheSame() {
+				return sameSoFar && x == data.length;
+			}
+		};
+		Check check = new Check(); 
+		try {
+			is = f.newInputChannel();
+			ByteBuffer fb = ByteBuffer.allocate(min(1 + data.length * 2 /*to fit couple of lines appended; never zero*/, 8192));
+			FilterByteChannel filters = new FilterByteChannel(check, repo.getFiltersFromWorkingDirToRepo(p));
+			while (is.read(fb) != -1 && check.sameSoFar()) {
+				fb.flip();
+				filters.write(fb);
+				fb.compact();
+			}
+			return check.ultimatelyTheSame();
+		} catch (CancelledException ex) {
+			repo.getContext().getLog().warn(getClass(), ex, "Unexpected cancellation");
+			return check.ultimatelyTheSame();
+		} catch (IOException ex) {
+			repo.getContext().getLog().warn(getClass(), ex, null);
+		} finally {
+			if (is != null) {
+				try {
 					is.close();
+				} catch (IOException ex) {
+					repo.getContext().getLog().info(getClass(), ex, null);
 				}
 			}
-		} catch (/*TODO typed*/Exception ex) {
-			ex.printStackTrace();
 		}
 		return false;
 	}

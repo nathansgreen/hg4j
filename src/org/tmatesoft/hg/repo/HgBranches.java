@@ -89,13 +89,13 @@ public class HgBranches {
 			}
 			return lastInCache;
 		} catch (IOException ex) {
-			ex.printStackTrace(); // XXX log error, but otherwise do nothing 
+			repo.getContext().getLog().warn(getClass(), ex, null); // log error, but otherwise do nothing
 		} finally {
 			if (br != null) {
 				try {
 					br.close();
 				} catch (IOException ex) {
-					ex.printStackTrace(); // ignore
+					repo.getContext().getLog().info(getClass(), ex, null); // ignore
 				}
 			}
 		}
@@ -283,9 +283,8 @@ public class HgBranches {
 				}
 			}
 			bw.close();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		} catch (IOException ex) {
+			repo.getContext().getLog().error(getClass(), ex, "Error writing branch cache file");
 		}
 	}
 

@@ -144,7 +144,8 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				}
 			}
 		} catch (IOException ex) {
-			ex.printStackTrace(); // FIXME log error, clean dirstate?
+			repo.getContext().getLog().error(getClass(), ex, null); 
+			// FIXME clean dirstate?
 		} finally {
 			da.done();
 		}
@@ -218,7 +219,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				branch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
 				r.close();
 			} catch (IOException ex) {
-				ex.printStackTrace(); // XXX log verbose debug, exception might be legal here (i.e. FileNotFound)
+				repo.getContext().getLog().debug(HgDirstate.class, ex, null); // log verbose debug, exception might be legal here (i.e. FileNotFound)
 				// IGNORE
 			}
 		}

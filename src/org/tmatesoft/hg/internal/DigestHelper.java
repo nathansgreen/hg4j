@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 
 
@@ -49,7 +50,7 @@ public class DigestHelper {
 				sha1 = MessageDigest.getInstance("SHA-1");
 			} catch (NoSuchAlgorithmException ex) {
 				// could hardly happen, JDK from Sun always has sha1.
-				ex.printStackTrace(); // FIXME log error
+				throw new HgBadStateException(ex);
 			}
 		}
 		return sha1;

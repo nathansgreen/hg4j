@@ -71,9 +71,9 @@ public class HgCloneCommand {
 		return this;
 	}
 
-	public HgRepository execute() throws HgException, CancelledException {
+	public HgRepository execute() throws HgBadArgumentException, HgRemoteConnectionException, HgInvalidFileException, CancelledException {
 		if (destination == null) {
-			throw new HgBadArgumentException("Destination not set", null);
+			throw new IllegalArgumentException("Destination not set", null);
 		}
 		if (srcRepo == null || srcRepo.isInvalid()) {
 			throw new HgBadArgumentException("Bad source repository", null);
@@ -101,7 +101,7 @@ public class HgCloneCommand {
 			completeChanges.inspectAll(mate);
 			mate.complete();
 		} catch (IOException ex) {
-			throw new HgException(ex);
+			throw new HgInvalidFileException(getClass().getName(), ex);
 		} finally {
 			completeChanges.unlink();
 		}

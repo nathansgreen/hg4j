@@ -16,22 +16,19 @@
  */
 package org.tmatesoft.hg.core;
 
+import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.util.LogFacility;
+
 /**
- * Thrown when client supplied an argument that turned out to be incorrect.
- * E.g. an {@link java.net.URL URL} of remote server  or {@link java.io.File File} destination for a new repository
- * might be otherwise valid, but unsuitable for the purpose of the operation.
- *  
- * Not a replacement for {@link IllegalArgumentException} or {@link NullPointerException}.
+ * WORK IN PROGRESS
  * 
- * TODO review usage to match description
+ * Access to objects that might need to be shared between various distinct operations ran during the same working session 
+ * (i.e. caches, log, etc.). It's unspecified whether session context is per repository or can span multiple repositories 
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@SuppressWarnings("serial")
-public class HgBadArgumentException extends HgException {
-
-	public HgBadArgumentException(String message, Throwable cause) {
-		super(message, cause);
-	}
+@Experimental(reason="Work in progress")
+public interface SessionContext {
+	LogFacility getLog();
 }

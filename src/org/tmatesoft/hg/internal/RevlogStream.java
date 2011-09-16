@@ -79,6 +79,9 @@ public class RevlogStream {
 		return baseRevisions.length;
 	}
 	
+	/**
+	 * @throws HgBadStateException if internal read operation failed
+	 */
 	public int dataLength(int revision) {
 		// XXX in fact, use of iterate() instead of this implementation may be quite reasonable.
 		//
@@ -94,12 +97,15 @@ public class RevlogStream {
 			return actualLen; 
 		} catch (IOException ex) {
 			ex.printStackTrace(); // log error. FIXME better handling
-			throw new IllegalStateException(ex);
+			throw new HgBadStateException(ex);
 		} finally {
 			daIndex.done();
 		}
 	}
 	
+	/**
+	 * @throws HgBadStateException if internal read operation failed
+	 */
 	public byte[] nodeid(int revision) {
 		final int indexSize = revisionCount();
 		if (revision == TIP) {
@@ -117,12 +123,16 @@ public class RevlogStream {
 			return rv;
 		} catch (IOException ex) {
 			ex.printStackTrace();
-			throw new IllegalStateException();
+			throw new HgBadStateException();
 		} finally {
 			daIndex.done();
 		}
 	}
-	
+
+	/**
+	 * Get link field from the index record.
+	 * @throws HgBadStateException if internal read operation failed
+	 */
 	public int linkRevision(int revision) {
 		final int last = revisionCount() - 1;
 		if (revision == TIP) {
@@ -139,7 +149,7 @@ public class RevlogStream {
 			return linkRev;
 		} catch (IOException ex) {
 			ex.printStackTrace();
-			throw new IllegalStateException();
+			throw new HgBadStateException();
 		} finally {
 			daIndex.done();
 		}

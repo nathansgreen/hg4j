@@ -25,6 +25,7 @@ import java.io.Reader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
@@ -113,6 +114,11 @@ public class HgInternals {
 		// even if they might get reused (i.e. after FileIterator#reset() and walking once again),
 		// path caching is better to be done in the code which knows that path are being reused 
 		return new FileWalker(repoRoot, pathSrc, workindDirScope);
+	}
+	
+	// expose othewise package-local information primarily to use in our own o.t.hg.core package
+	public static SessionContext getContext(HgRepository repo) {
+		return repo.getContext();
 	}
 
 

@@ -23,6 +23,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
@@ -93,7 +94,7 @@ public class HgBundle {
 	 * @param hgRepo repository that shall possess base revision for this bundle
 	 * @param inspector callback to get each changeset found 
 	 */
-	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgException, IOException {
+	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgInvalidFileException {
 		Inspector bundleInsp = new Inspector() {
 			DigestHelper dh = new DigestHelper();
 			boolean emptyChangelog = true;
@@ -180,7 +181,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		inspectChangelog(bundleInsp);
 	}
 
-	public void dump() throws IOException {
+	public void dump() throws HgException {
 		Dump dump = new Dump();
 		inspectAll(dump);
 		System.out.println("Total files:" + dump.names.size());
@@ -246,40 +247,51 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
-	public void inspectChangelog(Inspector inspector) throws IOException {
+	public void inspectChangelog(Inspector inspector) throws HgInvalidFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		DataAccess da = getDataStream();
+		DataAccess da = null;
 		try {
+			da = getDataStream();
 			internalInspectChangelog(da, inspector);
+		} catch (IOException ex) {
+			throw new HgInvalidFileException("Bundle.inspectChangelog failed", ex, bundleFile);
 		} finally {
-			da.done();
+			if (da != null) {
+				da.done();
+			}
 		}
 	}
 
-	public void inspectManifest(Inspector inspector) throws IOException {
+	public void inspectManifest(Inspector inspector) throws HgInvalidFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		DataAccess da = getDataStream();
+		DataAccess da = null;
 		try {
+			da = getDataStream();
 			if (da.isEmpty()) {
 				return;
 			}
 			skipGroup(da); // changelog
 			internalInspectManifest(da, inspector);
+		} catch (IOException ex) {
+			throw new HgInvalidFileException("Bundle.inspectManifest failed", ex, bundleFile);
 		} finally {
-			da.done();
+			if (da != null) {
+				da.done();
+			}
 		}
 	}
 
-	public void inspectFiles(Inspector inspector) throws IOException {
+	public void inspectFiles(Inspector inspector) throws HgInvalidFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		DataAccess da = getDataStream();
+		DataAccess da = null;
 		try {
+			da = getDataStream();
 			if (da.isEmpty()) {
 				return;
 			}
@@ -289,22 +301,31 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			}
 			skipGroup(da); // manifest
 			internalInspectFiles(da, inspector);
+		} catch (IOException ex) {
+			throw new HgInvalidFileException("Bundle.inspectFiles failed", ex, bundleFile);
 		} finally {
-			da.done();
+			if (da != null) {
+				da.done();
+			}
 		}
 	}
 
-	public void inspectAll(Inspector inspector) throws IOException {
+	public void inspectAll(Inspector inspector) throws HgInvalidFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		DataAccess da = getDataStream();
+		DataAccess da = null;
 		try {
+			da = getDataStream();
 			internalInspectChangelog(da, inspector);
 			internalInspectManifest(da, inspector);
 			internalInspectFiles(da, inspector);
+		} catch (IOException ex) {
+			throw new HgInvalidFileException("Bundle.inspectAll failed", ex, bundleFile);
 		} finally {
-			da.done();
+			if (da != null) {
+				da.done();
+			}
 		}
 	}
 

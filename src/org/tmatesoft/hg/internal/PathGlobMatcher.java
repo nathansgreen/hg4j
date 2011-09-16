@@ -44,7 +44,6 @@ public class PathGlobMatcher implements Path.Matcher {
 		try {
 			delegate = new PathRegexpMatcher(regexp);
 		} catch (PatternSyntaxException ex) {
-			ex.printStackTrace();
 			throw new IllegalArgumentException(ex);
 		}
 	}

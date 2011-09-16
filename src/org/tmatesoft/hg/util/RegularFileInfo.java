@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 
+import org.tmatesoft.hg.internal.StreamLogFacility;
+
 /**
  *
  * @author Artem Tikhomirov
@@ -54,7 +56,7 @@ public class RegularFileInfo implements FileInfo {
 		try {
 			return new FileInputStream(file).getChannel();
 		} catch (FileNotFoundException ex) {
-			ex.printStackTrace(); // FIXME log debug.
+			StreamLogFacility.newDefault().debug(getClass(), ex, null);
 			// shall not happen, provided this class is used correctly
 			return new ReadableByteChannel() {
 				

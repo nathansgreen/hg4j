@@ -36,10 +36,10 @@ public class ConfigFile {
 	private List<String> sections;
 	private List<Map<String,String>> content;
 
-	ConfigFile() {
+	public ConfigFile() {
 	}
 
-	public void addLocation(File path) {
+	public void addLocation(File path) throws IOException {
 		read(path);
 	}
 	
@@ -92,7 +92,7 @@ public class ConfigFile {
 
 	// TODO handle %include and %unset directives
 	// TODO "" and lists
-	private void read(File f) {
+	private void read(File f) throws IOException {
 		if (f == null || !f.canRead()) {
 			return;
 		}
@@ -100,8 +100,9 @@ public class ConfigFile {
 			sections = new ArrayList<String>();
 			content = new ArrayList<Map<String,String>>();
 		}
+		BufferedReader br = null;
 		try {
-			BufferedReader br = new BufferedReader(new FileReader(f));
+			br = new BufferedReader(new FileReader(f));
 			String line;
 			String sectionName = "";
 			Map<String,String> section = new LinkedHashMap<String, String>();
@@ -140,12 +141,13 @@ public class ConfigFile {
 					section.put(key, value);
 				}
 			}
-			br.close();
-		} catch (IOException ex) {
-			ex.printStackTrace(); // XXX shall outer world care?
+		} finally {
+			((ArrayList<?>) sections).trimToSize();
+			((ArrayList<?>) content).trimToSize();
+			if (br != null) {
+				br.close();
+			}
 		}
-		((ArrayList<?>) sections).trimToSize();
-		((ArrayList<?>) content).trimToSize();
 		assert sections.size() == content.size();
 	}
 }

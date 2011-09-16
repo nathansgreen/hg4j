@@ -23,10 +23,12 @@ import static org.tmatesoft.hg.internal.KeywordFilter.copySlice;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
@@ -177,7 +179,11 @@ public class NewlineFilter implements Filter {
 //			}
 			// XXX perhaps, add HgDataFile.hasWorkingCopy and workingCopyContent()?
 			ConfigFile hgeol = new ConfigFile();
-			hgeol.addLocation(cfgFile);
+			try {
+				hgeol.addLocation(cfgFile);
+			} catch (IOException ex) {
+				HgInternals.getContext(hgRepo).getLog().warn(getClass(), ex, null);
+			}
 			nativeRepoFormat = hgeol.getSection("repository").get("native");
 			if (nativeRepoFormat == null) {
 				nativeRepoFormat = "LF";
@@ -199,7 +205,7 @@ public class NewlineFilter implements Filter {
 				} else if ("BIN".equals(e.getValue())) {
 					binPatterns.add(e.getKey());
 				} else {
-					System.out.printf("Can't recognize .hgeol entry: %s for %s", e.getValue(), e.getKey()); // FIXME log warning
+					HgInternals.getContext(hgRepo).getLog().warn(getClass(), "Can't recognize .hgeol entry: %s for %s", e.getValue(), e.getKey());
 				}
 			}
 			if (!crlfPatterns.isEmpty()) {

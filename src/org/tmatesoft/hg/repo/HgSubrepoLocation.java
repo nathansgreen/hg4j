@@ -19,7 +19,7 @@ package org.tmatesoft.hg.repo;
 import java.io.File;
 
 import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.util.Path;
 
@@ -86,7 +86,7 @@ public class HgSubrepoLocation {
 		return owner;
 	}
 
-	public HgRepository getRepo() throws HgException {
+	public HgRepository getRepo() throws HgInvalidFileException {
 		if (kind != Kind.Hg) {
 			throw new HgBadStateException();
 		}

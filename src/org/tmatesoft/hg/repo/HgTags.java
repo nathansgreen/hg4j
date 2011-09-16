@@ -107,7 +107,7 @@ public class HgTags {
 				continue;
 			}
 			if (line.length() < 40+2 /*nodeid, space and at least single-char tagname*/) {
-				System.out.println("Bad tags line:" + line); // FIXME log or otherwise report (IStatus analog?) 
+				repo.getContext().getLog().warn(getClass(), "Bad tags line: %s", line); 
 				continue;
 			}
 			int spacePos = line.indexOf(' ');
@@ -151,7 +151,7 @@ public class HgTags {
 				}
 				
 			} else {
-				System.out.println("Bad tags line:" + line); // FIXME see above
+				repo.getContext().getLog().warn(getClass(), "Bad tags line: %s", line);
 			}
 		}
 	}

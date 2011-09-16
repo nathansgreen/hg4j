@@ -18,6 +18,7 @@ package org.tmatesoft.hg.core;
 
 import java.io.File;
 
+import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgLookup;
 
@@ -37,8 +38,17 @@ import org.tmatesoft.hg.repo.HgLookup;
  */
 public class HgRepoFacade {
 	private HgRepository repo;
+	private final SessionContext context;
 
 	public HgRepoFacade() {
+		this(new BasicSessionContext(null, null));
+	}
+	
+	public HgRepoFacade(SessionContext ctx) {
+		if (ctx == null) {
+			throw new IllegalArgumentException();
+		}
+		context = ctx;
 	}
 	
 	/**
@@ -57,10 +67,10 @@ public class HgRepoFacade {
 	/**
 	 * Tries to find repository starting from the current working directory.
 	 * @return <code>true</code> if found valid repository
-	 * @throws HgException in case of errors during repository initialization
+	 * @throws HgInvalidFileException in case of errors during repository initialization
 	 */
-	public boolean init() throws HgException {
-		repo = new HgLookup().detectFromWorkingDir();
+	public boolean init() throws HgInvalidFileException {
+		repo = new HgLookup(context).detectFromWorkingDir();
 		return repo != null && !repo.isInvalid();
 	}
 	
@@ -69,14 +79,14 @@ public class HgRepoFacade {
 	 * 
 	 * @param repoLocation path to any folder within structure of a Mercurial repository.
 	 * @return <code>true</code> if found valid repository 
-	 * @throws HgException if there are errors accessing specified location
+	 * @throws HgInvalidFileException if there are errors accessing specified location
 	 * @throws IllegalArgumentException if argument is <code>null</code>
 	 */
-	public boolean initFrom(File repoLocation) throws HgException {
+	public boolean initFrom(File repoLocation) throws HgInvalidFileException {
 		if (repoLocation == null) {
 			throw new IllegalArgumentException();
 		}
-		repo = new HgLookup().detect(repoLocation);
+		repo = new HgLookup(context).detect(repoLocation);
 		return repo != null && !repo.isInvalid();
 	}
 	

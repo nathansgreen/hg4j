@@ -18,6 +18,7 @@ package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
@@ -114,7 +115,7 @@ public class HgFileInformer {
 				}
 			}
 		} catch (HgDataStreamException ex) {
-			ex.printStackTrace(); // XXX log(INFO) 
+			HgInternals.getContext(repo).getLog().warn(getClass(), ex, "Follow copy/rename failed");
 			// ignore now, however if there's IStatus retval, might report error with reasonable explanation.
 			// Perhaps, may add a String reason() method with such info?
 		}

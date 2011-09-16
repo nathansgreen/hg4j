@@ -30,7 +30,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -393,7 +392,7 @@ public class RepositoryComparator {
 	/**
 	 * @return list of nodeids from branchRoot to branchHead, inclusive. IOW, first element of the list is always root of the branch 
 	 */
-	public List<Nodeid> completeBranch(final Nodeid branchRoot, final Nodeid branchHead) throws HgException {
+	public List<Nodeid> completeBranch(final Nodeid branchRoot, final Nodeid branchHead) throws HgRemoteConnectionException {
 		class DataEntry {
 			public final Nodeid queryHead;
 			public final int headIndex;
@@ -512,7 +511,7 @@ public class RepositoryComparator {
 	 *  returns in order from branch root to head
 	 *  for a non-empty BranchChain, shall return modifiable list
 	 */
-	public List<Nodeid> visitBranches(BranchChain bc) throws HgException {
+	public List<Nodeid> visitBranches(BranchChain bc) throws HgRemoteConnectionException {
 		if (bc == null) {
 			return Collections.emptyList();
 		}
