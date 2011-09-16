@@ -207,8 +207,11 @@ public class RevlogStream {
 		if (start < 0 || start >= indexSize) {
 			throw new IllegalArgumentException(String.format("Bad left range boundary %d in [0..%d]", start, indexSize-1));
 		}
-		if (end < start || end >= indexSize) {
+		if (end >= indexSize) {
 			throw new IllegalArgumentException(String.format("Bad right range boundary %d in [0..%d]", end, indexSize-1));
+		}
+		if (end < start) {
+			throw new IllegalArgumentException(String.format("Bad range [%d..%d]", start, end));
 		}
 		// XXX may cache [start .. end] from index with a single read (pre-read)
 		
@@ -521,15 +524,6 @@ public class RevlogStream {
 	}
 
 	
-	private static int[] toArray(List<Integer> l) {
-		int[] rv = new int[l.size()];
-		for (int i = 0; i < rv.length; i++) {
-			rv[i] = l.get(i);
-		}
-		return rv;
-	}
-	
-
 	// mpatch.c : apply()
 	// FIXME need to implement patch merge (fold, combine, gather and discard from aforementioned mpatch.[c|py]), also see Revlog and Mercurial PDF
 	public/*for HgBundle; until moved to better place*/static byte[] apply(DataAccess baseRevisionContent, int outcomeLen, List<PatchRecord> patch) throws IOException {
