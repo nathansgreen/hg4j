@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.console;
 
 import java.io.File;
+import java.util.Collections;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgBundle;
@@ -34,7 +35,7 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
  */
 public class Bundle {
 	public static void main(String[] args) throws Exception {
-		Options cmdLineOpts = Options.parse(args);
+		Options cmdLineOpts = Options.parse(args, Collections.<String>emptySet());
 		final HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());

@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.console;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgCloneCommand;
@@ -33,7 +34,7 @@ public class Clone {
 
 	// ran with args: svnkit c:\temp\hg\test-clone
 	public static void main(String[] args) throws Exception {
-		Options cmdLineOpts = Options.parse(args);
+		Options cmdLineOpts = Options.parse(args, Collections.<String>emptySet());
 		List<String> noOptsArgs = cmdLineOpts.getList("");
 		if (noOptsArgs.isEmpty()) {
 			System.err.println("Need at least one argument pointing to remote server to pull changes from");

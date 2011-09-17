@@ -74,7 +74,7 @@ public class Main {
 	private HgRepository hgRepo;
 
 	public Main(String[] args) throws Exception {
-		cmdLineOpts = Options.parse(args);
+		cmdLineOpts = Options.parse(args, Collections.<String>emptySet());
 		hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());

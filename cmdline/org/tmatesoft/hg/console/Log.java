@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.console;
 
+import static org.tmatesoft.hg.console.Options.asSet;
+
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgFileRevision;
@@ -35,7 +37,7 @@ public class Log {
 	// -agentlib:hprof=heap=sites,depth=10,etc might be handy to debug speed/memory issues
 	
 	public static void main(String[] args) throws Exception {
-		Options cmdLineOpts = Options.parse(args);
+		Options cmdLineOpts = Options.parse(args, asSet("--debug", "-v", "--verbose", "--hg4j-order-direct"));
 		HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());
@@ -49,7 +51,7 @@ public class Log {
 		final Dump dump = new Dump(hgRepo);
 		dump.complete(cmdLineOpts.getBoolean("--debug"));
 		dump.verbose(cmdLineOpts.getBoolean("-v", "--verbose"));
-		final boolean reverseOrder = true;
+		final boolean reverseOrder = !cmdLineOpts.getBoolean("--hg4j-order-direct");
 		dump.reversed(reverseOrder);
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		for (String u : cmdLineOpts.getList("-u", "--user")) {

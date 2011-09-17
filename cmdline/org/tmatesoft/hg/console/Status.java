@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.console;
 
+import static org.tmatesoft.hg.console.Options.asSet;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.core.HgStatus;
@@ -40,7 +42,10 @@ import org.tmatesoft.hg.util.Path;
 public class Status {
 
 	public static void main(String[] args) throws Exception {
-		Options cmdLineOpts = Options.parse(args);
+		final Set<String> flagOpts = asSet("-A", "-all", "-m", "--modified", "-a", "--added", "-r", "--removed", 
+				"--d", "--deleted", "-u", "--unknown", "-c", "--clean", "-i", "--ignored",
+				"-n", "--no-status", "-C", "--copies");
+		Options cmdLineOpts = Options.parse(args, flagOpts);
 		HgRepoFacade hgRepo = new HgRepoFacade();
 		if (!hgRepo.init(cmdLineOpts.findRepository())) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getRepository().getLocation());

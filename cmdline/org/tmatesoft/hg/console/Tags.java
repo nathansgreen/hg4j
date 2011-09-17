@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.console;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,7 +35,7 @@ import org.tmatesoft.hg.repo.HgTags.TagInfo;
 public class Tags {
 
 	public static void main(String[] args) throws Exception {
-		Options cmdLineOpts = Options.parse(args);
+		Options cmdLineOpts = Options.parse(args, Collections.<String>emptySet());
 		HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());

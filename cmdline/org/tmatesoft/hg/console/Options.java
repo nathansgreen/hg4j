@@ -16,10 +16,13 @@
  */
 package org.tmatesoft.hg.console;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -86,7 +89,7 @@ class Options {
 	}
 
 
-	public static Options parse(String[] commandLineArgs) {
+	public static Options parse(String[] commandLineArgs, Set<String> flagOptions) {
 		Options rv = new Options();
 		List<String> values = new LinkedList<String>();
 		rv.opt2values.put("", values); // values with no options
@@ -96,15 +99,28 @@ class Options {
 				if (arg.length() == 1) {
 					throw new IllegalArgumentException("Bad option: -");
 				}
-				values = rv.opt2values.get(arg);
-				if (values == null) {
-					rv.opt2values.put(arg, values = new LinkedList<String>());
+				if (flagOptions.contains(arg)) {
+					rv.opt2values.put(arg, Collections.<String>emptyList());
+					values = rv.opt2values.get("");
+				} else {
+					values = rv.opt2values.get(arg);
+					if (values == null) {
+						rv.opt2values.put(arg, values = new LinkedList<String>());
+					}
 				}
 				// next value, if any, gets into the values list for arg option.
 			} else {
 				values.add(arg);
 				values = rv.opt2values.get("");
 			}
+		}
+		return rv;
+	}
+
+	public static Set<String> asSet(String... ss) {
+		TreeSet<String> rv = new TreeSet<String>();
+		for (String s : ss) {
+			rv.add(s);
 		}
 		return rv;
 	}

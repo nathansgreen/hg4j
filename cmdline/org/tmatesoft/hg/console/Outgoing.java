@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.console;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgOutgoingCommand;
@@ -35,7 +36,7 @@ import org.tmatesoft.hg.repo.HgRemoteRepository;
 public class Outgoing {
 
 	public static void main(String[] args) throws Exception {
-		Options cmdLineOpts = Options.parse(args);
+		Options cmdLineOpts = Options.parse(args, Collections.<String>emptySet());
 		HgRepoFacade hgRepo = new HgRepoFacade();
 		if (!hgRepo.init(cmdLineOpts.findRepository())) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getRepository().getLocation());

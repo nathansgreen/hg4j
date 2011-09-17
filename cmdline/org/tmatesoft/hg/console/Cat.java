@@ -21,6 +21,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -34,7 +35,7 @@ import org.tmatesoft.hg.util.ByteChannel;
 public class Cat {
 
 	public static void main(String[] args) throws Exception {
-		Options cmdLineOpts = Options.parse(args);
+		Options cmdLineOpts = Options.parse(args, Collections.<String>emptySet());
 		HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());

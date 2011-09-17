@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.console;
 
+import static org.tmatesoft.hg.console.Options.asSet;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.core.HgFileRevision;
@@ -33,7 +34,7 @@ import org.tmatesoft.hg.util.Path;
 public class Manifest {
 
 	public static void main(String[] args) throws Exception {
-		Options cmdLineOpts = Options.parse(args);
+		Options cmdLineOpts = Options.parse(args, asSet("--debug", "-v", "--verbose"));
 		HgRepository hgRepo = cmdLineOpts.findRepository();
 		if (hgRepo.isInvalid()) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getLocation());

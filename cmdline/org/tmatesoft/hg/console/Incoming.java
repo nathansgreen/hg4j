@@ -46,7 +46,7 @@ public class Incoming {
 			new SequenceConstructor().test();
 			return;
 		}
-		Options cmdLineOpts = Options.parse(args);
+		Options cmdLineOpts = Options.parse(args, Collections.<String>emptySet());
 		HgRepoFacade hgRepo = new HgRepoFacade();
 		if (!hgRepo.init(cmdLineOpts.findRepository())) {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getRepository().getLocation());
