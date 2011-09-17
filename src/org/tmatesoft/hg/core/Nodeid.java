@@ -92,6 +92,9 @@ public final class Nodeid implements Comparable<Nodeid> {
 		}
 		for (int i = 0; i < 20; i++) {
 			if (binaryData[i] != o.binaryData[i]) {
+				// if we need truly ascending sort, need to respect byte sign 
+				// return (binaryData[i] & 0xFF) < (o.binaryData[i] & 0xFF) ? -1 : 1;
+				// however, for our purposes partial sort is pretty enough
 				return binaryData[i] < o.binaryData[i] ? -1 : 1;
 			}
 		}
