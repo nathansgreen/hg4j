@@ -100,7 +100,20 @@ public class HgStatusCollector {
 	
 	private void initCacheRange(int minRev, int maxRev) {
 		ensureCacheSize();
-		repo.getManifest().walk(minRev, maxRev, new HgManifest.Inspector2() {
+		// In fact, walk(minRev, maxRev) doesn't imply
+		// there would be maxRev-minRev+1 revisions visited. For example,
+		// check cpython repo with 'hg log -r 22418:22420 --debug' and admire
+		// manifest revisions 66650, 21683, 21684.  Thus, innocent walk(22418,22420) results in 40k+ revisions and OOME
+		// Instead, be explicit of what revisions are of interest
+		assert minRev <= maxRev;
+		if (maxRev == 22420) {
+			System.out.println();
+		}
+		int[] revisionsToCollect = new int[maxRev - minRev + 1];
+		for (int x = minRev, i = 0; x <= maxRev; i++, x++) {
+			revisionsToCollect[i] = x;
+		}
+		repo.getManifest().walk(new HgManifest.Inspector2() {
 			private ManifestRevision delegate;
 			private boolean cacheHit; // range may include revisions we already know about, do not re-create them
 
@@ -137,7 +150,7 @@ public class HgStatusCollector {
 				delegate = null;
 				return true;
 			}
-		});
+		}, revisionsToCollect);
 	}
 	
 	/*package-local*/ static ManifestRevision createEmptyManifestRevision() {
