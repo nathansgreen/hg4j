@@ -27,6 +27,7 @@ import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 
 
@@ -204,15 +205,7 @@ public class RevlogStream {
 		if (start == TIP) {
 			start = indexSize - 1;
 		}
-		if (start < 0 || start >= indexSize) {
-			throw new IllegalArgumentException(String.format("Bad left range boundary %d in [0..%d]", start, indexSize-1));
-		}
-		if (end >= indexSize) {
-			throw new IllegalArgumentException(String.format("Bad right range boundary %d in [0..%d]", end, indexSize-1));
-		}
-		if (end < start) {
-			throw new IllegalArgumentException(String.format("Bad range [%d..%d]", start, end));
-		}
+		HgInternals.checkRevlogRange(start, end, indexSize-1);
 		// XXX may cache [start .. end] from index with a single read (pre-read)
 		
 		ReaderN1 r = new ReaderN1(needData, inspector);

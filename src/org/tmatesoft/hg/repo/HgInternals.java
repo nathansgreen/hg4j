@@ -152,4 +152,17 @@ public class HgInternals {
 	public static boolean wrongLocalRevision(int rev) {
 		return rev < 0 && rev != TIP && rev != WORKING_COPY && rev != BAD_REVISION; 
 	}
+
+	// throws IllegalArgumentException if [start..end] range is not a subrange of [0..lastRevision]
+	public static void checkRevlogRange(int start, int end, int lastRevision) {
+		if (start < 0 || start > lastRevision) {
+			throw new IllegalArgumentException(String.format("Bad left range boundary %d in [0..%d]", start, lastRevision));
+		}
+		if (end < 0 || end > lastRevision) {
+			throw new IllegalArgumentException(String.format("Bad right range boundary %d in [0..%d]", end, lastRevision));
+		}
+		if (end < start) {
+			throw new IllegalArgumentException(String.format("Bad range [%d..%d]", start, end));
+		}
+	}
 }

@@ -234,14 +234,14 @@ public class HgDataFile extends Revlog {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
 		}
 		final int last = getLastRevision();
-		if (start < 0 || start > last) {
-			throw new IllegalArgumentException();
-		}
 		if (end == TIP) {
 			end = last;
-		} else if (end < start || end > last) {
-			throw new IllegalArgumentException();
 		}
+		if (start == TIP) {
+			start = last;
+		}
+		HgInternals.checkRevlogRange(start, end, last);
+
 		final int[] commitRevisions = new int[end - start + 1];
 		final boolean[] needsSorting = { false };
 		RevlogStream.Inspector insp = new RevlogStream.Inspector() {

@@ -101,6 +101,12 @@ public class HgManifest extends Revlog {
 		}
 		int start0 = fromChangelog(start);
 		int end0 = fromChangelog(end);
+		if (end0 < start0) {
+			// there are tool-constructed repositories that got order of changeset revisions completely different from that of manifest
+			int x = end0;
+			end0 = start0;
+			start0 = x;
+		}
 		content.iterate(start0, end0, true, new ManifestParser(inspector));
 	}
 	
