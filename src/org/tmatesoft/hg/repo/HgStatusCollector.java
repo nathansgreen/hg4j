@@ -106,9 +106,6 @@ public class HgStatusCollector {
 		// manifest revisions 66650, 21683, 21684.  Thus, innocent walk(22418,22420) results in 40k+ revisions and OOME
 		// Instead, be explicit of what revisions are of interest
 		assert minRev <= maxRev;
-		if (maxRev == 22420) {
-			System.out.println();
-		}
 		int[] revisionsToCollect = new int[maxRev - minRev + 1];
 		for (int x = minRev, i = 0; x <= maxRev; i++, x++) {
 			revisionsToCollect[i] = x;
