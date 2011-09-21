@@ -16,7 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
-import org.tmatesoft.hg.util.SparseSet;
+import org.tmatesoft.hg.util.DirectHashSet;
+
 
 /**
  *
@@ -24,7 +25,7 @@ import org.tmatesoft.hg.util.SparseSet;
  * @author TMate Software Ltd.
  */
 public class Pool2<T> {
-	private final SparseSet<T> unify = new SparseSet<T>();
+	private final DirectHashSet<T> unify = new DirectHashSet<T>();
 	
 	public Pool2() {
 	}
@@ -56,10 +57,6 @@ public class Pool2<T> {
 
 	public int size() {
 		return unify.size();
-	}
-	
-	public void x() {
-		unify.dump();
 	}
 
 	@Override

@@ -29,7 +29,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Lifecycle;
-import org.tmatesoft.hg.internal.Pool;
+import org.tmatesoft.hg.internal.Pool2;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.Path;
 
@@ -281,17 +281,17 @@ public class HgManifest extends Revlog {
 		private boolean gtg = true; // good to go
 		private final Inspector inspector;
 		private final Inspector2 inspector2;
-		private Pool<Nodeid> nodeidPool, thisRevPool;
-		private final Pool<PathProxy> fnamePool;
+		private Pool2<Nodeid> nodeidPool, thisRevPool;
+		private final Pool2<PathProxy> fnamePool;
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
 		
 		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
 			inspector2 = delegate instanceof Inspector2 ? (Inspector2) delegate : null;
-			nodeidPool = new Pool<Nodeid>();
-			fnamePool = new Pool<PathProxy>();
-			thisRevPool = new Pool<Nodeid>();
+			nodeidPool = new Pool2<Nodeid>();
+			fnamePool = new Pool2<PathProxy>();
+			thisRevPool = new Pool2<Nodeid>();
 		}
 		
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
@@ -354,7 +354,7 @@ public class HgManifest extends Revlog {
 				// (next manifest is likely to refer to most of them, although in specific cases 
 				// like commit in another branch a lot may be useless)
 				nodeidPool.clear();
-				Pool<Nodeid> t = nodeidPool;
+				Pool2<Nodeid> t = nodeidPool;
 				nodeidPool = thisRevPool;
 				thisRevPool = t;
 			} catch (IOException ex) {

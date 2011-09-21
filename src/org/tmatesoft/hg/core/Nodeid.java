@@ -76,8 +76,11 @@ public final class Nodeid implements Comparable<Nodeid> {
 	
 	@Override
 	public boolean equals(Object o) {
+		if (o == this) {
+			return true;
+		}
 		if (o instanceof Nodeid) {
-			return this == o || equalsTo(((Nodeid) o).binaryData);
+			return equalsTo(((Nodeid) o).binaryData);
 		}
 		return false;
 	}

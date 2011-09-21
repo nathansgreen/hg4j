@@ -39,8 +39,8 @@ public class MapTagsToFileRevisions {
 //		Pattern p = Pattern.compile("^doc/[^/]*?\\.[0-9]\\.(x|ht)ml");
 //		System.out.println(p.matcher("doc/asd.2.xml").matches());
 //		System.out.println(p.matcher("doc/zxc.6.html").matches());
-		m.collectTagsPerFile();
-//		m.manifestWalk();
+//		m.collectTagsPerFile();
+		m.manifestWalk();
 		m = null;
 		System.gc();
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
@@ -92,6 +92,7 @@ public class MapTagsToFileRevisions {
 		//
 		// With Pool<StringProxy> for fname and flags, Nodeid's ascii2bin through local array, overall byte[] iteration, 
 		// 0..10k is 34 seconds now
+		// Another run, 23 seconds now, seems nothing has been changed. Switched to Pool2 with DirectHashSet: 22,5 seconds
 		System.out.printf("Total time: %d ms\n", System.currentTimeMillis() - start);
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
