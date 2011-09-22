@@ -356,8 +356,8 @@ public class HgDataFile extends Revlog {
 			}
 			
 			public RawChangeset changeset() {
-				
-				return null;
+				final int cs = completeHistory[index].changeset;
+				return getRepo().getChangelog().range(cs, cs).get(0);
 			}
 		};
 	}
