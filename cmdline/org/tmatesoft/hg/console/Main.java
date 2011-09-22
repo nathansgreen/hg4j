@@ -20,6 +20,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -85,7 +86,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testConsoleLog();
+		m.buildFileLog();
+//		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
 //		m.testSubrepos();
@@ -104,6 +106,59 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+
+	private void buildFileLog() {
+		final HgDataFile fn = hgRepo.getFileNode("file1");
+		HgDataFile.HistoryWalker hw = fn.history();
+		while (hw.hasNext()) {
+			hw.next();
+			StringBuilder sb = new StringBuilder();
+			Collection<Nodeid> children = hw.childChangesets();
+			for (Nodeid cc : children) {
+				sb.append(cc.shortNotation());
+				sb.append(", ");
+			}
+			if (hw.isJoin()) {
+				final Pair<Nodeid, Nodeid> parents = hw.parentChangesets();
+				System.out.printf("join[(%s, %s) => %s]\n", parents.first().shortNotation(), parents.second().shortNotation(), hw.changesetRevision().shortNotation());
+			}
+			if (hw.isFork()) {
+				System.out.printf("fork[%s => %s]\n", hw.changesetRevision().shortNotation(), sb);
+			}
+			if (!hw.isFork() && !hw.isJoin() && !children.isEmpty()) {
+				System.out.printf("%s => %s\n", hw.changesetRevision().shortNotation(), sb);
+			}
+		}
+	}
+
+	private void buildFileLogOld() {
+		final HgDataFile fn = hgRepo.getFileNode("file1");
+		final int[] fileChangesetRevisions = new int[fn.getRevisionCount()];
+		fn.history(new HgChangelog.Inspector() {
+			private int fileLocalRevisions = 0;
+			private int[] parentRevisions = new int[2];
+			
+			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+				fileChangesetRevisions[fileLocalRevisions] = revisionNumber;
+				fn.parents(fileLocalRevisions, parentRevisions, null, null);
+				boolean join = parentRevisions[0] != -1 && parentRevisions[1] != -1;
+				if (join) {
+					System.out.print("join[");
+				}
+				if (parentRevisions[0] != -1) {
+					System.out.printf("%2d->%2d, ", fileChangesetRevisions[parentRevisions[0]], revisionNumber);
+				}
+				if (parentRevisions[1] != -1) {
+					System.out.printf("%2d->%2d, ", fileChangesetRevisions[parentRevisions[1]], revisionNumber);
+				}
+				if (join) {
+					System.out.print("]");
+				}
+				fileLocalRevisions++;
+			}
+		});
+		System.out.println();
 	}
 	
 	private void testConsoleLog() {

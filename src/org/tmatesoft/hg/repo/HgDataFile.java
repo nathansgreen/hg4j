@@ -28,18 +28,24 @@ import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.NoSuchElementException;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.FilterDataAccess;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -223,6 +229,137 @@ public class HgDataFile extends Revlog {
 			// shall not happen, unless we changed ContentPipe or its subclass
 			throw new HgDataStreamException(getPath(), ex.getClass().getName(), ex);
 		}
+	}
+	
+	@Experimental(reason="Investigate approaches to build complete file history log")
+	public interface HistoryWalker {
+		void next();
+		boolean hasNext();
+		Nodeid changesetRevision();
+		RawChangeset changeset();
+		boolean isFork();
+		boolean isJoin();
+		Pair<Nodeid, Nodeid> parentChangesets();
+		Collection<Nodeid> childChangesets();
+	}
+	
+	public HistoryWalker history() {
+		final boolean[] needsSorting = { false };
+		class HistoryNode {
+			int changeset;
+			Nodeid cset;
+			HistoryNode parent1, parent2;
+			List<HistoryNode> children;
+
+			public HistoryNode(int cs, HistoryNode p1, HistoryNode p2) {
+				changeset = cs;
+				parent1 = p1;
+				parent2 = p2;
+				if (p1 != null) {
+					p1.addChild(this);
+				}
+				if (p2 != null) {
+					p2.addChild(this);
+				}
+			}
+			
+			public Nodeid changesetRevision() {
+				if (cset == null) {
+					cset = getRepo().getChangelog().getRevision(changeset);
+				}
+				return cset;
+			}
+
+			public void addChild(HistoryNode child) {
+				if (children == null) {
+					children = new ArrayList<HistoryNode>(2);
+				}
+				children.add(child);
+			}
+		}
+		final HistoryNode[] completeHistory = new HistoryNode[getRevisionCount()];
+		final int[] commitRevisions = new int[completeHistory.length];
+		RevlogStream.Inspector insp = new RevlogStream.Inspector() {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+				if (revisionNumber > 0) {
+					if (commitRevisions[revisionNumber-1] > linkRevision) {
+						needsSorting[0] = true;
+					}
+				}
+				HistoryNode p1 = null, p2 = null;
+				if (parent1Revision != -1) {
+					p1 = completeHistory[parent1Revision];
+				}
+				if (parent2Revision != -1) {
+					p2 = completeHistory[parent2Revision];
+				}
+				completeHistory[revisionNumber] = new HistoryNode(linkRevision, p1, p2);
+			}
+		};
+		content.iterate(0, getLastRevision(), false, insp);
+		// XXX may read changeset revisions at once (to avoid numerous changelog.getRevision reads)
+		// but perhaps just nodeids, not RawChangeset (changelog.iterate(data=false)
+		// XXX sort completeHistory according to changeset numbers?
+		return new HistoryWalker() {
+			private int index = -1;
+			
+			public void next() {
+				if (!hasNext()) {
+					throw new NoSuchElementException();
+				}
+				index++;
+			}
+
+			public boolean hasNext() {
+				return index+1 < completeHistory.length;
+			}
+			
+			public Pair<Nodeid, Nodeid> parentChangesets() {
+				HistoryNode p;
+				Nodeid p1, p2;
+				if ((p = completeHistory[index].parent1) != null) {
+					p1 = p.changesetRevision();
+				} else {
+					p1 = Nodeid.NULL;
+				}
+				if ((p = completeHistory[index].parent2) != null) {
+					p2 = p.changesetRevision();
+				} else {
+					p2 = Nodeid.NULL;
+				}
+				return new Pair<Nodeid, Nodeid>(p1, p2);
+			}
+
+			public boolean isJoin() {
+				return completeHistory[index].parent1 != null && completeHistory[index].parent2 != null;
+			}
+			
+			public boolean isFork() {
+				HistoryNode n = completeHistory[index];
+				return n.children != null && n.children.size() > 1;
+			}
+			
+			public Collection<Nodeid> childChangesets() {
+				HistoryNode n = completeHistory[index];
+				if (n.children == null) {
+					return Collections.emptyList();
+				}
+				ArrayList<Nodeid> rv = new ArrayList<Nodeid>(n.children.size());
+				for (HistoryNode hn : n.children) {
+					rv.add(hn.changesetRevision());
+				}
+				return rv;
+			}
+			
+			public Nodeid changesetRevision() {
+				return completeHistory[index].changesetRevision();
+			}
+			
+			public RawChangeset changeset() {
+				
+				return null;
+			}
+		};
 	}
 	
 	public void history(HgChangelog.Inspector inspector) {
