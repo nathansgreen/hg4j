@@ -14,6 +14,7 @@ import org.tmatesoft.hg.core.HgChangesetHandler;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
@@ -36,19 +37,69 @@ public class MapTagsToFileRevisions {
 	public static void main(String[] args) throws Exception {
 		MapTagsToFileRevisions m = new MapTagsToFileRevisions();
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
-//		Pattern p = Pattern.compile("^doc/[^/]*?\\.[0-9]\\.(x|ht)ml");
-//		System.out.println(p.matcher("doc/asd.2.xml").matches());
-//		System.out.println(p.matcher("doc/zxc.6.html").matches());
 //		m.collectTagsPerFile();
-		m.manifestWalk();
+//		m.manifestWalk();
+//		m.changelogWalk();
+		m.revisionMap();
 		m = null;
 		System.gc();
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
 
-	private void changelogWalk() throws Exception {
-		final long start = System.currentTimeMillis();
+	/*
+	 * Each 5000 revisions from cpython, total 15 revisions
+	 * Direct clog.getLocalRevision: ~260 ms
+	 * RevisionMap.localRevision: ~265 ms (almost 100% in #init())
+	 * each 1000'th revision, total 71 revision: 1 230 vs 270
+	 * each 2000'th revision, total 36 revision: 620 vs 270
+	 * each 3000'th revision, total 24 revision: 410 vs 275
+	 */
+	private void revisionMap() throws Exception {
+		ArrayHelper ah = new ArrayHelper();
+		final List<String> initial = Arrays.asList("d", "w", "k", "b", "c", "i", "a", "r", "e", "h");
+		String[] a = (String[]) initial.toArray(); 
+		ah.sort(a);
+		System.out.println(Arrays.toString(initial.toArray()));
+		System.out.println(Arrays.toString(a));
+		System.out.println(Arrays.toString(ah.getReverse()));
+		Object[] rebuilt = new Object[a.length];
+		for (int i = 0; i < a.length; i++) {
+			int indexInOriginal = ah.getReverse()[i];
+			rebuilt[indexInOriginal-1] = a[i];
+		}
+		System.out.println(Arrays.toString(rebuilt));
+		//
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
+		final HgChangelog clog = repository.getChangelog();
+		ArrayList<Nodeid> revisions = new ArrayList<Nodeid>();
+		final int step = 5000;
+		for (int i = 0, top = clog.getLastRevision(); i < top; i += step) {
+			revisions.add(clog.getRevision(i));
+		}
+		final long s1 = System.nanoTime();
+		for (Nodeid n : revisions) {
+			int r = clog.getLocalRevision(n);
+			if (r % step != 0) {
+				throw new IllegalStateException(Integer.toString(r));
+			}
+		}
+		System.out.printf("Direct lookup of %d revisions took %,d ns\n", revisions.size(), System.nanoTime() - s1);
+		HgChangelog.RevisionMap rmap = clog.new RevisionMap();
+		final long s2 = System.nanoTime();
+		rmap.init();
+		final long s3 = System.nanoTime();
+		for (Nodeid n : revisions) {
+			int r = rmap.localRevision(n);
+			if (r % step != 0) {
+				throw new IllegalStateException(Integer.toString(r));
+			}
+		}
+		System.out.printf("RevisionMap time: %d ms, of that init() %,d ns\n", (System.nanoTime() - s2) / 1000000, s3 - s2);
+	}
+
+	private void changelogWalk() throws Exception {
+		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
+		final long start = System.currentTimeMillis();
 		repository.getChangelog().all(new HgChangelog.Inspector() {
 			public int xx = 0;
 			

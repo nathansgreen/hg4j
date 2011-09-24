@@ -30,6 +30,7 @@ import java.util.List;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
@@ -416,7 +417,6 @@ abstract class Revlog {
 			final int revisionCount = Revlog.this.content.revisionCount();
 			sequential = new Nodeid[revisionCount];
 			sorted = new Nodeid[revisionCount];
-			sorted2natural = new int[revisionCount];
 			RevlogStream.Inspector insp = new RevlogStream.Inspector() {
 				
 				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
@@ -425,12 +425,12 @@ abstract class Revlog {
 				}
 			};
 			Revlog.this.content.iterate(0, TIP, false, insp);
-			Arrays.sort(sorted);
-			for (int i = 0; i < revisionCount; i++) {
-				Nodeid n = sequential[i];
-				int x = Arrays.binarySearch(sorted, n);
-				sorted2natural[x] = i;
-			}
+			// next is alternative to Arrays.sort(sorted), and build sorted2natural looking up each element of sequential in sorted.
+			// the way sorted2natural was build is O(n*log n).  
+			final ArrayHelper ah = new ArrayHelper();
+			ah.sort(sorted);
+			// note, values in ArrayHelper#getReversed are 1-based indexes, not 0-based 
+			sorted2natural = ah.getReverse();
 			return this;
 		}
 		
@@ -445,7 +445,7 @@ abstract class Revlog {
 			if (x < 0) {
 				return BAD_REVISION;
 			}
-			return sorted2natural[x];
+			return sorted2natural[x]-1;
 		}
 	}
 
