@@ -357,6 +357,23 @@ abstract class Revlog {
 		}
 		
 		/**
+		 * @return revisions that have supplied revision as their immediate parent
+		 */
+		public List<Nodeid> directChildren(Nodeid nid) {
+			LinkedList<Nodeid> result = new LinkedList<Nodeid>();
+			int x = Arrays.binarySearch(sorted, nid);
+			assertSortedIndex(x);
+			nid = sorted[x]; // canonical instance
+			int start = sorted2natural[x];
+			for (int i = start + 1; i < sequential.length; i++) {
+				if (nid == firstParent[i] || nid == secondParent[i]) {
+					result.add(sequential[i]);
+				}
+			}
+			return result;
+		}
+		
+		/**
 		 * @param nid possibly parent node, shall be {@link #knownNode(Nodeid) known} in this revlog.
 		 * @return <code>true</code> if there's any node in this revlog that has specified node as one of its parents. 
 		 */

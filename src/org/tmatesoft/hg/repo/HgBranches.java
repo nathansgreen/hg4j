@@ -22,11 +22,10 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -63,6 +62,7 @@ public class HgBranches {
 		BufferedReader br = null;
 		final Pattern spacePattern = Pattern.compile(" ");
 		try {
+			final LinkedHashMap<String, List<Nodeid>> branchHeads = new LinkedHashMap<String, List<Nodeid>>();
 			br = new BufferedReader(new FileReader(branchheadsCache));
 			String line = br.readLine();
 			if (line == null || line.trim().length() == 0) {
@@ -74,18 +74,22 @@ public class HgBranches {
 			//
 			while ((line = br.readLine()) != null) {
 				String[] elements = spacePattern.split(line.trim());
-				if (elements.length < 2) {
+				if (elements.length != 2) {
 					// bad entry
 					continue;
 				}
-				Nodeid[] branchHeads = new Nodeid[elements.length - 1];
-				for (int i = 0; i < elements.length - 1; i++) {
-					branchHeads[i] = Nodeid.fromAscii(elements[i]);
-				}
 				// I assume split returns substrings of the original string, hence copy of a branch name
 				String branchName = new String(elements[elements.length-1]);
-				BranchInfo bi = new BranchInfo(branchName, branchHeads);
-				branches.put(branchName, bi);
+				List<Nodeid> heads = branchHeads.get(elements[1]);
+				if (heads == null) {
+					branchHeads.put(branchName, heads = new LinkedList<Nodeid>());
+				}
+				heads.add(Nodeid.fromAscii(elements[0]));
+			}
+			for (Map.Entry<String, List<Nodeid>> e : branchHeads.entrySet()) {
+				Nodeid[] heads = e.getValue().toArray(new Nodeid[e.getValue().size()]);
+				BranchInfo bi = new BranchInfo(e.getKey(), heads);
+				branches.put(e.getKey(), bi);
 			}
 			return lastInCache;
 		} catch (IOException ex) {
@@ -171,10 +175,14 @@ public class HgBranches {
 			final HgChangelog.ParentWalker pw = repo.getChangelog().new ParentWalker();
 			pw.init();
 			ps.worked(repo.getChangelog().getRevisionCount());
+			// first revision branch found at
 			final HashMap<String, Nodeid> branchStart = new HashMap<String, Nodeid>();
+			// last revision seen for the branch
 			final HashMap<String, Nodeid> branchLastSeen = new HashMap<String, Nodeid>();
+			// revisions from the branch that have no children at all
 			final HashMap<String, List<Nodeid>> branchHeads = new HashMap<String, List<Nodeid>>();
-			final HashSet<String> closedBranches = new HashSet<String>();
+			// revisions that are immediate children of a node from a given branch 
+			final HashMap<String, List<Nodeid>> branchHeadCandidates = new HashMap<String, List<Nodeid>>();
 			HgChangelog.Inspector insp = new HgChangelog.Inspector() {
 				
 				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
@@ -182,29 +190,39 @@ public class HgBranches {
 					if (!branchStart.containsKey(branchName)) {
 						branchStart.put(branchName, nodeid);
 						branchHeads.put(branchName, new LinkedList<Nodeid>());
-					}
-					branchLastSeen.remove(branchName);
-					if ("1".equals(cset.extras().get("close"))) {
-						branchHeads.get(branchName).add(nodeid); // XXX what if it still has children?
-								closedBranches.add(branchName);
+						branchHeadCandidates.put(branchName, new LinkedList<Nodeid>());
 					} else {
-						if (pw.hasChildren(nodeid)) {
-							// children may be in another branch
-							// and unless we later came across another element from this branch,
-							// we need to record all these as valid heads
-							// XXX what about next case: head1 with children in different branch, and head2 without children
-							// head1 would get lost
-							branchLastSeen.put(branchName, nodeid);
-						} else {
-							// no more children known for this node, it's (one of the) head of the branch
-							branchHeads.get(branchName).add(nodeid);
+						final List<Nodeid> headCandidates = branchHeadCandidates.get(branchName);
+						if (headCandidates.remove(nodeid)) {
+							// no need to keep parent, as we found at least 1 child thereof to be at the same branch
+							branchLastSeen.remove(branchName);
 						}
+					}
+					List<Nodeid> immediateChildren = pw.directChildren(nodeid);
+					if (immediateChildren.size() > 0) {
+						// 1) children may be in another branch
+						// and unless we later came across another element from this branch,
+						// we need to record all these as potential heads
+						//
+						// 2) head1 with children in different branch, and head2 in this branch without children
+						branchLastSeen.put(branchName, nodeid);
+						branchHeadCandidates.get(branchName).addAll(immediateChildren);
+					} else {
+						// no more children known for this node, it's (one of the) head of the branch
+						branchHeads.get(branchName).add(nodeid);
 					}
 					ps.worked(1);
 				}
 			}; 
 			repo.getChangelog().range(lastCached == -1 ? 0 : lastCached+1, HgRepository.TIP, insp);
+//			System.out.println("HEAD CANDIDATES>>>");
+//			for (String bn : branchHeadCandidates.keySet()) {
+//				System.out.println(bn + ":" + branchHeadCandidates.get(bn).toString());
+//			}
+//			System.out.println("HEAD CANDIDATES<<<");
+			// those last seen revisions from the branch that had no children from the same branch are heads.
 			for (String bn : branchLastSeen.keySet()) {
+				// these are inactive branches? - there were children, but not from the same branch?
 				branchHeads.get(bn).add(branchLastSeen.get(bn));
 			}
 			for (String bn : branchStart.keySet()) {
@@ -229,13 +247,18 @@ public class HgBranches {
 						} // else - oldHead still head for the branch
 					}
 					heads.addAll(branchHeads.get(bn));
-					bi = new BranchInfo(bn, bi.getStart(), heads.toArray(new Nodeid[0]), bi.isClosed() && closedBranches.contains(bn));
+					bi = new BranchInfo(bn, bi.getStart(), heads.toArray(new Nodeid[0]));
 				} else {
 					Nodeid[] heads = branchHeads.get(bn).toArray(new Nodeid[0]);
-					bi = new BranchInfo(bn, branchStart.get(bn), heads, closedBranches.contains(bn));
+					bi = new BranchInfo(bn, branchStart.get(bn), heads);
 				}
 				branches.put(bn, bi);
 			}
+		}
+		final HgChangelog clog = repo.getChangelog();
+		final HgChangelog.RevisionMap rmap = clog.new RevisionMap().init();
+		for (BranchInfo bi : branches.values()) {
+			bi.validate(clog, rmap);
 		}
 		ps.done();
 	}
@@ -295,29 +318,70 @@ public class HgBranches {
 
 	public static class BranchInfo {
 		private final String name;
-		private final List<Nodeid> heads;
-		private final boolean closed;
+		private List<Nodeid> heads;
+		private boolean closed;
 		private final Nodeid start;
 
 		// XXX in fact, few but not all branchHeads might be closed, and isClosed for whole branch is not
 		// possible to determine.
-		BranchInfo(String branchName, Nodeid first, Nodeid[] branchHeads, boolean isClosed) {
+		BranchInfo(String branchName, Nodeid first, Nodeid[] branchHeads) {
 			name = branchName;
 			start = first;
-			heads = Collections.unmodifiableList(new ArrayList<Nodeid>(Arrays.asList(branchHeads)));
-			closed = isClosed;
+			heads = Arrays.asList(branchHeads);
 		}
 		
 		// incomplete branch, there's not enough information at the time of creation. shall be replaced with
 		// proper BI in #collect()
 		BranchInfo(String branchName, Nodeid[] branchHeads) {
-			this(branchName, Nodeid.NULL, branchHeads, false);
+			this(branchName, Nodeid.NULL, branchHeads);
+		}
+		
+		void validate(HgChangelog clog, HgChangelog.RevisionMap rmap) {
+			int[] localCset = new int[heads.size()];
+			int i = 0;
+			for (Nodeid h : heads) {
+				localCset[i++] = rmap.localRevision(h);
+			}
+			// [0] tipmost, [1] tipmost open
+			final Nodeid[] tipmost = new Nodeid[] {null, null};
+			final boolean[] allClosed = new boolean[] { true };
+			clog.range(new HgChangelog.Inspector() {
+				
+				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+					assert heads.contains(nodeid);
+					tipmost[0] = nodeid;
+					if (!"1".equals(cset.extras().get("close"))) {
+						tipmost[1] = nodeid;
+						allClosed[0] = false;
+					}
+				}
+			}, localCset);
+			closed = allClosed[0];
+			Nodeid[] outcome = new Nodeid[localCset.length];
+			i = 0;
+			if (!closed && tipmost[1] != null) { 
+				outcome[i++] = tipmost[1];
+				if (i < outcome.length && !tipmost[0].equals(tipmost[1])) {
+					outcome[i++] = tipmost[0];
+				}
+			} else {
+				outcome[i++] = tipmost[0];
+			}
+			for (Nodeid h : heads) {
+				if (!h.equals(tipmost[0]) && !h.equals(tipmost[1])) {
+					outcome[i++] = h;
+				}
+			}
+			heads = Arrays.asList(outcome);
 		}
 
 		public String getName() {
 			return name;
 		}
-		/*public*/ boolean isClosed() {
+		/**
+		 * @return <code>true</code> if all heads of this branch are marked as closed
+		 */
+		public boolean isClosed() {
 			return closed;
 		}
 		public List<Nodeid> getHeads() {

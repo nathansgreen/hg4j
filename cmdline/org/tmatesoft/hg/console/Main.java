@@ -86,7 +86,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.buildFileLog();
+//		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
@@ -97,7 +97,7 @@ public class Main {
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
-//		m.dumpBranches();
+		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
@@ -362,15 +362,16 @@ public class Main {
 		System.out.println("1:" + (System.currentTimeMillis() - start0));
 		for (HgBranches.BranchInfo bi : b.getAllBranches()) {
 			System.out.print(bi.getName());
-//			if (bi.isClosed()) {
-//				System.out.print("!");
-//			}
 //			System.out.print(" ");
 //			System.out.print(bi.getStart());
 			System.out.print(" ");
-			System.out.println(bi.getHeads());
+			System.out.print(bi.getHeads());
+			if (bi.isClosed()) {
+				System.out.print(" x ");
+			}
+			System.out.println();
 		}
-		b.writeCache();
+//		b.writeCache();
 //		final long start = System.currentTimeMillis();
 //		for (int i = 0; i < 10; i++) {
 //			b.collect(ProgressSupport.Factory.get(null));
