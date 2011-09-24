@@ -29,6 +29,14 @@ public class ArrayHelper {
 //		Object[] aux = (Object[]) a.clone();
 		reverse = new int[a.length];
 		sort1((Comparable<Object>[])a, 0, a.length);
+		for (int i = 0; i < reverse.length; i++) {
+			// element that was not moved don't have an index in reverse.
+			// perhaps, can do it inside sort alg?
+			// TODO tests!
+			if (reverse[i] == 0) {
+				reverse[i] = i+1;
+			}
+		}
 	}
 	
     private void sort1(Comparable<Object> x[], int off, int len) {
