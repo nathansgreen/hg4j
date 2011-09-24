@@ -181,7 +181,10 @@ public class HgBranches {
 			final HashMap<String, Nodeid> branchLastSeen = new HashMap<String, Nodeid>();
 			// revisions from the branch that have no children at all
 			final HashMap<String, List<Nodeid>> branchHeads = new HashMap<String, List<Nodeid>>();
-			// revisions that are immediate children of a node from a given branch 
+			// revisions that are immediate children of a node from a given branch
+			// after iteration, there are some revisions left in this map (children of a branch last revision
+			// that doesn't belong to the branch. No use of this now, perhaps can deduce isInactive (e.g.those 
+			// branches that have non-empty candidates are inactive if all their heads are roots for those left)
 			final HashMap<String, List<Nodeid>> branchHeadCandidates = new HashMap<String, List<Nodeid>>();
 			HgChangelog.Inspector insp = new HgChangelog.Inspector() {
 				
@@ -194,8 +197,14 @@ public class HgBranches {
 					} else {
 						final List<Nodeid> headCandidates = branchHeadCandidates.get(branchName);
 						if (headCandidates.remove(nodeid)) {
-							// no need to keep parent, as we found at least 1 child thereof to be at the same branch
-							branchLastSeen.remove(branchName);
+							// likely we don't need to keep parent anymore, as we found at least 1 child thereof to be at the same branch
+							// however, it's possible the child we found is a result of an earlier fork, and revision in the 
+							// branchLastSeen is 'parallel' head, which needs to be kept
+							Nodeid lastSeenInBranch = branchLastSeen.get(branchName);
+							// check if current revision is on descendant line. Seems direct parents check is enough
+							if (pw.safeFirstParent(nodeid).equals(lastSeenInBranch) || pw.safeSecondParent(nodeid).equals(lastSeenInBranch)) {
+								branchLastSeen.remove(branchName);
+							}
 						}
 					}
 					List<Nodeid> immediateChildren = pw.directChildren(nodeid);
@@ -215,11 +224,6 @@ public class HgBranches {
 				}
 			}; 
 			repo.getChangelog().range(lastCached == -1 ? 0 : lastCached+1, HgRepository.TIP, insp);
-//			System.out.println("HEAD CANDIDATES>>>");
-//			for (String bn : branchHeadCandidates.keySet()) {
-//				System.out.println(bn + ":" + branchHeadCandidates.get(bn).toString());
-//			}
-//			System.out.println("HEAD CANDIDATES<<<");
 			// those last seen revisions from the branch that had no children from the same branch are heads.
 			for (String bn : branchLastSeen.keySet()) {
 				// these are inactive branches? - there were children, but not from the same branch?

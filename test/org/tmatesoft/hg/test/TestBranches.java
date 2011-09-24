@@ -59,10 +59,9 @@ public class TestBranches {
 		BranchInfo b4 = branches.getBranch("branch4");
 		assertNotNull(b4);
 		assertFalse(b4.isClosed());
-//		assertEquals(2, b4.getHeads().size());
+		assertEquals(2, b4.getHeads().size());
 		assertEquals("fceabd402f0193fb30605aed0ee3a9d5feb99f60", b4.getHeads().get(0).toString());
-		// FIXME second branch is not present when HgBranches builds cache itself!!!
-//		assertEquals("892b6a504be7835f1748ba632fe15a9389d4479b", b4.getHeads().get(1).toString());
+		assertEquals("892b6a504be7835f1748ba632fe15a9389d4479b", b4.getHeads().get(1).toString());
 		//
 		BranchInfo b5 = branches.getBranch("branch5");
 		assertNotNull(b5);
