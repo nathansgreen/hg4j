@@ -55,20 +55,6 @@ public class MapTagsToFileRevisions {
 	 * each 3000'th revision, total 24 revision: 410 vs 275
 	 */
 	private void revisionMap() throws Exception {
-		ArrayHelper ah = new ArrayHelper();
-		final List<String> initial = Arrays.asList("d", "w", "k", "b", "c", "i", "a", "r", "e", "h");
-		String[] a = (String[]) initial.toArray(); 
-		ah.sort(a);
-		System.out.println(Arrays.toString(initial.toArray()));
-		System.out.println(Arrays.toString(a));
-		System.out.println(Arrays.toString(ah.getReverse()));
-		Object[] rebuilt = new Object[a.length];
-		for (int i = 0; i < a.length; i++) {
-			int indexInOriginal = ah.getReverse()[i];
-			rebuilt[indexInOriginal-1] = a[i];
-		}
-		System.out.println(Arrays.toString(rebuilt));
-		//
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
 		final HgChangelog clog = repository.getChangelog();
 		ArrayList<Nodeid> revisions = new ArrayList<Nodeid>();

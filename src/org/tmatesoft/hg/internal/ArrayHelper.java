@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.internal;
 
 /**
+ * Internal alternative to Arrays.sort to build reversed index along with sorting
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -32,13 +33,17 @@ public class ArrayHelper {
 		for (int i = 0; i < reverse.length; i++) {
 			// element that was not moved don't have an index in reverse.
 			// perhaps, can do it inside sort alg?
-			// TODO tests!
+			// Alternatively, may start with filling reverse[] array with initial indexes and
+			// avoid != 0 comparisons in #swap altogether?
 			if (reverse[i] == 0) {
 				reverse[i] = i+1;
 			}
 		}
 	}
-	
+
+	/**
+	 * Slightly modified version of Arrays.sort1(int[], int, int) quicksort alg (just to deal with Object[])
+	 */
     private void sort1(Comparable<Object> x[], int off, int len) {
     	// Insertion sort on smallest arrays
     	if (len < 7) {
