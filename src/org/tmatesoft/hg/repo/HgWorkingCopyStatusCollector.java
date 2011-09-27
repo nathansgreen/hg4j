@@ -272,7 +272,11 @@ public class HgWorkingCopyStatusCollector {
 				// check actual content to avoid false modified files
 				HgDataFile df = repo.getFileNode(fname);
 				Nodeid rev = getDirstateParentManifest().nodeid(fname);
-				if (!areTheSame(f, df, rev)) {
+				// rev might be null here if fname comes to dirstate as a result of a merge operation
+				// where one of the parents (first parent) had no fname file, but second parent had.
+				// E.g. fork revision 3, revision 4 gets .hgtags, few modifications and merge(3,12)
+				// see Issue 14 for details
+				if (rev == null || !areTheSame(f, df, rev)) {
 					inspector.modified(df.getPath());
 				} else {
 					inspector.clean(df.getPath());
