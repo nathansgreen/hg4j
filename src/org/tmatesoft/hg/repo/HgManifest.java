@@ -370,6 +370,7 @@ public class HgManifest extends Revlog {
 				Pool2<Nodeid> t = nodeidPool;
 				nodeidPool = thisRevPool;
 				thisRevPool = t;
+				iterateControl.checkCancelled();
 				progressHelper.worked(1);
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);

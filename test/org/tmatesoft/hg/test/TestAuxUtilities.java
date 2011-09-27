@@ -16,16 +16,21 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Path;
 
 /**
  *
@@ -60,20 +65,21 @@ public class TestAuxUtilities {
 		return rebuilt;
 	}
 
-	@Test
-	public void testCancelSupport() throws Exception {
-		HgRepository repository = Configuration.get().find("branches-1"); // any repo with more revisions
-		class CancelImpl implements CancelSupport {
-			private boolean shallStop = false;
-			public void stop() {
-				shallStop = true;
-			}
-			public void checkCancelled() throws CancelledException {
-				if (shallStop) {
-					throw new CancelledException();
-				}
+	static class CancelImpl implements CancelSupport {
+		private boolean shallStop = false;
+		public void stop() {
+			shallStop = true;
+		}
+		public void checkCancelled() throws CancelledException {
+			if (shallStop) {
+				throw new CancelledException();
 			}
 		}
+	}
+
+	@Test
+	public void testChangelogCancelSupport() throws Exception {
+		HgRepository repository = Configuration.get().find("branches-1"); // any repo with more revisions
 		class InspectorImplementsCancel implements HgChangelog.Inspector, CancelSupport {
 			public final int when2stop;
 			public int lastVisitet = 0;
@@ -131,4 +137,51 @@ public class TestAuxUtilities {
 		repository.getChangelog().all(insp2 = new InspectorImplementsAdaptable(10));
 		Assert.assertEquals(insp2.when2stop, insp2.lastVisitet);
 	}
+	
+	@Test
+	public void testManifestCancelSupport() throws Exception {
+		HgRepository repository = Configuration.get().find("branches-1"); // any repo with as many revisions as possible
+		class InspectorImplementsAdaptable implements HgManifest.Inspector2, Adaptable {
+			public final int when2stop;
+			public int lastVisitet = 0;
+			private final CancelImpl cancelImpl = new CancelImpl(); 
+
+			public InspectorImplementsAdaptable(int limit) {
+				when2stop = limit;
+			}
+
+			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
+				if (++lastVisitet == when2stop) {
+					cancelImpl.stop();
+				}
+				return true;
+			}
+
+			public boolean next(Nodeid nid, String fname, String flags) {
+				return true;
+			}
+
+			public boolean end(int manifestRevision) {
+				return true;
+			}
+
+			@SuppressWarnings("unchecked")
+			public <T> T getAdapter(Class<T> adapterClass) {
+				if (CancelSupport.class == adapterClass) {
+					return (T) cancelImpl;
+				}
+				return null;
+			}
+
+			public boolean next(Nodeid nid, Path fname, Flags flags) {
+				return true;
+			}
+		}
+		InspectorImplementsAdaptable insp1;
+		repository.getManifest().walk(0, TIP, insp1= new InspectorImplementsAdaptable(3));
+		Assert.assertEquals(insp1.when2stop, insp1.lastVisitet);
+		repository.getManifest().walk(0, TIP, insp1 = new InspectorImplementsAdaptable(10));
+		Assert.assertEquals(insp1.when2stop, insp1.lastVisitet);
+	}
+	
 }
