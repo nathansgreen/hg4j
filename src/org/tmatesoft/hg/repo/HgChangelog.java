@@ -33,8 +33,12 @@ import java.util.TimeZone;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.IterateControlMediator;
+import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Representation of the Mercurial changelog file (list of ChangeSets)
@@ -338,16 +342,19 @@ public class HgChangelog extends Revlog {
 		}
 	}
 
-	private static class RawCsetParser implements RevlogStream.Inspector {
+	private static class RawCsetParser implements RevlogStream.Inspector, Lifecycle {
 		
 		private final Inspector inspector;
 		private final Pool<String> usersPool;
 		private final RawChangeset cset = new RawChangeset();
+		private final ProgressSupport progressHelper;
+		private IterateControlMediator iterateControl;
 
 		public RawCsetParser(HgChangelog.Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
 			usersPool = new Pool<String>();
+			progressHelper = ProgressSupport.Factory.get(delegate);
 		}
 
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
@@ -356,9 +363,23 @@ public class HgChangelog extends Revlog {
 				cset.init(data, 0, data.length, usersPool);
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
+				progressHelper.worked(1);
 			} catch (Exception ex) {
 				throw new HgBadStateException(ex); // FIXME exception handling
 			}
+			if (iterateControl != null) {
+				iterateControl.checkCancelled();
+			}
+		}
+
+		public void start(int count, Callback callback, Object token) {
+			CancelSupport cs = CancelSupport.Factory.get(inspector, null);
+			iterateControl = cs == null ? null : new IterateControlMediator(cs, callback);
+			progressHelper.start(count);
+		}
+
+		public void finish(Object token) {
+			progressHelper.done();
 		}
 	}
 }

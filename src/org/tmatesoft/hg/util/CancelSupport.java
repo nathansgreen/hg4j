@@ -43,6 +43,17 @@ public interface CancelSupport {
 		 * @return target if it's capable checking cancellation status or no-op implementation that never cancels.
 				 */
 		public static CancelSupport get(Object target) {
+			CancelSupport cs = get(target, null);
+			if (cs != null) {
+				return cs;
+			}
+			return new CancelSupport() {
+				public void checkCancelled() {
+				}
+			};
+		}
+		
+		public static CancelSupport get(Object target, CancelSupport defaultValue) {
 			if (target instanceof  CancelSupport) {
 				return (CancelSupport) target;
 			}
@@ -52,10 +63,7 @@ public interface CancelSupport {
 					return cs;
 				}
 			}
-			return new CancelSupport() {
-				public void checkCancelled() {
-				}
-			};
+			return defaultValue;
 		}
 	}
 

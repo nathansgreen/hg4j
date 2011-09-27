@@ -14,22 +14,42 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.core;
+package org.tmatesoft.hg.internal;
 
+import org.tmatesoft.hg.internal.Lifecycle.Callback;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 
 /**
- * Callback to process {@link HgChangeset changesets}.
- * 
+ *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public interface HgChangesetHandler/*XXX perhaps, shall parameterize with exception clients can throw, like: <E extends Exception>*/ {
-	/**
-	 * @param changeset not necessarily a distinct instance each time, {@link HgChangeset#clone() clone()} if need a copy.
-	 * @throws CancelledException if handler is not interested in more changesets and iteration shall stop
-	 * @throws RuntimeException or any subclass thereof to indicate error. General contract is that RuntimeExceptions 
-	 * will be re-thrown wrapped into {@link HgCallbackTargetException}.  
-	 */
-	void next(HgChangeset changeset) throws CancelledException;
+public class IterateControlMediator {
+
+	private final CancelSupport src;
+	private Callback receiver;
+
+	public IterateControlMediator(CancelSupport source, Lifecycle.Callback target) {
+		assert target != null;
+		src = source;
+		receiver = target;
+	}
+
+	public boolean checkCancelled() {
+		if (src == null) {
+			return false;
+		}
+		try {
+			src.checkCancelled();
+			return false;
+		} catch (CancelledException ex) {
+			receiver.stop();
+			return true;
+		}
+	}
+	
+	public void stop() {
+		receiver.stop();
+	}
 }

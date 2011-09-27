@@ -28,10 +28,13 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Pool2;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 
 /**
@@ -277,13 +280,14 @@ public class HgManifest extends Revlog {
 		}
 	}
 
-	private static class ManifestParser implements RevlogStream.Inspector {
-		private boolean gtg = true; // good to go
+	private static class ManifestParser implements RevlogStream.Inspector, Lifecycle {
 		private final Inspector inspector;
 		private final Inspector2 inspector2;
 		private Pool2<Nodeid> nodeidPool, thisRevPool;
 		private final Pool2<PathProxy> fnamePool;
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
+		private final ProgressSupport progressHelper;
+		private IterateControlMediator iterateControl;
 		
 		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
@@ -292,20 +296,21 @@ public class HgManifest extends Revlog {
 			nodeidPool = new Pool2<Nodeid>();
 			fnamePool = new Pool2<PathProxy>();
 			thisRevPool = new Pool2<Nodeid>();
+			progressHelper = ProgressSupport.Factory.get(delegate);
 		}
 		
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
-			if (!gtg) {
-				return;
-			}
 			try {
-				gtg = gtg && inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision);
+				if (!inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision)) {
+					iterateControl.stop();
+					return;
+				}
 				Path fname = null;
 				Flags flags = null;
 				Nodeid nid = null;
 				int i;
 				byte[] data = da.byteArray();
-				for (i = 0; gtg && i < actualLen; i++) {
+				for (i = 0; i < actualLen; i++) {
 					int x = i;
 					for( ; data[i] != '\n' && i < actualLen; i++) {
 						if (fname == null && data[i] == 0) {
@@ -337,18 +342,26 @@ public class HgManifest extends Revlog {
 						} else {
 							flags = null;
 						}
+						boolean good2go;
 						if (inspector2 == null) {
 							String flagString = flags == null ? null : flags.nativeString();
-							gtg = inspector.next(nid, fname.toString(), flagString);
+							good2go = inspector.next(nid, fname.toString(), flagString);
 						} else {
-							gtg = inspector2.next(nid, fname, flags);
+							good2go = inspector2.next(nid, fname, flags);
+						}
+						if (!good2go) {
+							iterateControl.stop();
+							return;
 						}
 					}
 					nid = null;
 					fname = null;
 					flags = null;
 				}
-				gtg = gtg && inspector.end(revisionNumber);
+				if (!inspector.end(revisionNumber)) {
+					iterateControl.stop();
+					return;
+				}
 				//
 				// keep only actual file revisions, found at this version 
 				// (next manifest is likely to refer to most of them, although in specific cases 
@@ -357,9 +370,20 @@ public class HgManifest extends Revlog {
 				Pool2<Nodeid> t = nodeidPool;
 				nodeidPool = thisRevPool;
 				thisRevPool = t;
+				progressHelper.worked(1);
 			} catch (IOException ex) {
 				throw new HgBadStateException(ex);
 			}
+		}
+
+		public void start(int count, Callback callback, Object token) {
+			CancelSupport cs = CancelSupport.Factory.get(inspector, null);
+			iterateControl = new IterateControlMediator(cs, callback);
+			progressHelper.start(count);
+		}
+
+		public void finish(Object token) {
+			progressHelper.done();
 		}
 	}
 	
