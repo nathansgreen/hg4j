@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -325,6 +326,7 @@ public class HgBranches {
 		private List<Nodeid> heads;
 		private boolean closed;
 		private final Nodeid start;
+		private List<Nodeid> closedHeads; // subset of heads, those that bear 'closed' flag, or null if closed == true
 
 		// XXX in fact, few but not all branchHeads might be closed, and isClosed for whole branch is not
 		// possible to determine.
@@ -349,6 +351,7 @@ public class HgBranches {
 			// [0] tipmost, [1] tipmost open
 			final Nodeid[] tipmost = new Nodeid[] {null, null};
 			final boolean[] allClosed = new boolean[] { true };
+			final ArrayList<Nodeid> _closedHeads = new ArrayList<Nodeid>(heads.size());
 			clog.range(new HgChangelog.Inspector() {
 				
 				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
@@ -357,6 +360,8 @@ public class HgBranches {
 					if (!"1".equals(cset.extras().get("close"))) {
 						tipmost[1] = nodeid;
 						allClosed[0] = false;
+					} else {
+						_closedHeads.add(nodeid);
 					}
 				}
 			}, localCset);
@@ -377,6 +382,13 @@ public class HgBranches {
 				}
 			}
 			heads = Arrays.asList(outcome);
+			if (closed) {
+				// no need
+				closedHeads = null;
+			} else {
+				_closedHeads.trimToSize();
+				closedHeads = _closedHeads;
+			}
 		}
 
 		public String getName() {
@@ -388,8 +400,28 @@ public class HgBranches {
 		public boolean isClosed() {
 			return closed;
 		}
+
+		/**
+		 * @return all heads for the branch, both open and closed, tip-most head first
+		 */
 		public List<Nodeid> getHeads() {
 			return heads;
+		}
+
+		/**
+		 * 
+		 * @param head one of revision from {@link #getHeads() heads} of this branch 
+		 * @return true if this particular head is closed
+		 * @throws IllegalArgumentException if argument is not from {@link #getHeads() heads} of this branch
+		 */
+		public boolean isClosed(Nodeid head) {
+			if (!heads.contains(head)) {
+				throw new IllegalArgumentException(String.format("Revision %s does not belong to heads of %s branch", head, name), null);
+			}
+			if (closed) {
+				return true;
+			}
+			return closedHeads.contains(head);
 		}
 //		public Nodeid getTip() {
 //		}
