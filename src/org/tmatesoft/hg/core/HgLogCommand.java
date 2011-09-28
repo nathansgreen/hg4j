@@ -226,7 +226,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					do {
 						if (handler instanceof FileHistoryHandler) {
 							HgFileRevision src = new HgFileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
-							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), fileNode.getPath());
+							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), fileNode.getPath(), src.getPath());
 							try {
 								((FileHistoryHandler) handler).copy(src, dst);
 							} catch (RuntimeException ex) {

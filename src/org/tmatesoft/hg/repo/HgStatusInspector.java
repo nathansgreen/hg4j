@@ -27,8 +27,12 @@ import org.tmatesoft.hg.util.Path;
 public interface HgStatusInspector {
 	void modified(Path fname);
 	void added(Path fname);
-	// XXX need to specify whether StatusCollector invokes added() along with copied or not!
-	void copied(Path fnameOrigin, Path fnameAdded); // if copied files of no interest, should delegate to self.added(fnameAdded);
+	/**
+	 * This method is invoked for files that we added as a result of a copy/move operation, and it's the sole
+	 * method invoked in this case, that is {@link #added(Path)} method is NOT invoked along with it.
+	 * If copied files of no interest, it is implementation responsibility to delegate to <code>this.added(fnameAdded)</code>
+	 */
+	void copied(Path fnameOrigin, Path fnameAdded);
 	void removed(Path fname);
 	void clean(Path fname);
 	void missing(Path fname); // aka deleted (tracked by Hg, but not available in FS any more

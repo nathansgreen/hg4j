@@ -19,6 +19,7 @@ package org.tmatesoft.hg.core;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -195,14 +196,15 @@ public class HgChangeset implements Cloneable {
 			if (nid == null) {
 				throw new HgBadStateException();
 			}
-			modified.add(new HgFileRevision(repo, nid, s));
+			modified.add(new HgFileRevision(repo, nid, s, null));
 		}
+		final Map<Path, Path> copied = r.getCopied();
 		for (Path s : r.getAdded()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
 				throw new HgBadStateException();
 			}
-			added.add(new HgFileRevision(repo, nid, s));
+			added.add(new HgFileRevision(repo, nid, s, copied.get(s)));
 		}
 		for (Path s : r.getRemoved()) {
 			// with Path from getRemoved, may just copy

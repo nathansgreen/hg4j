@@ -311,6 +311,15 @@ public class HgStatusCollector {
 
 	// XXX for r1..r2 status, only modified, added, removed (and perhaps, clean) make sense
 	// XXX Need to specify whether copy targets are in added or not (@see Inspector#copied above)
+	/**
+	 * Straightforward {@link HgStatusInspector} implementation that collects all status values.
+	 * 
+	 * <p>Naturally, {@link Record Records} originating from {@link HgStatusCollector} would report only <em>modified, added,
+	 * removed</em> and <em>clean</em> values, other are available only when using {@link Record} with {@link HgWorkingCopyStatusCollector}.
+	 * 
+	 * <p>Note, this implementation records copied files as added, thus key values in {@link #getCopied()} map are subset of paths
+	 * from {@link #getAdded()}.  
+	 */
 	public static class Record implements HgStatusInspector {
 		private List<Path> modified, added, removed, clean, missing, unknown, ignored;
 		private Map<Path, Path> copied;
@@ -362,6 +371,9 @@ public class HgStatusCollector {
 			return proper(removed);
 		}
 
+		/**
+		 * Map files from {@link #getAdded()} to their original filenames, if were copied/moved.
+		 */
 		public Map<Path,Path> getCopied() {
 			if (copied == null) {
 				return Collections.emptyMap();
@@ -385,7 +397,7 @@ public class HgStatusCollector {
 			return proper(ignored);
 		}
 		
-		private List<Path> proper(List<Path> l) {
+		private static List<Path> proper(List<Path> l) {
 			if (l == null) {
 				return Collections.emptyList();
 			}
