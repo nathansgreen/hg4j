@@ -22,6 +22,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetHandler;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -63,14 +64,18 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 	}
 
 	public void next(HgChangeset changeset) {
-		final String s = print(changeset);
-		if (reverseOrder) {
-			// XXX in fact, need to insert s into l according to changeset.getRevision()
-			// because when file history is being followed, revisions of the original file (with smaller revNumber)
-			// are reported *after* revisions of present file and with addFirst appear above them
-			l.addFirst(s);
-		} else {
-			System.out.print(s);
+		try {
+			final String s = print(changeset);
+			if (reverseOrder) {
+				// XXX in fact, need to insert s into l according to changeset.getRevision()
+				// because when file history is being followed, revisions of the original file (with smaller revNumber)
+				// are reported *after* revisions of present file and with addFirst appear above them
+				l.addFirst(s);
+			} else {
+				System.out.print(s);
+			}
+		} catch (HgException ex) {
+			ex.printStackTrace();
 		}
 	}
 
@@ -84,13 +89,12 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 		l.clear();
 	}
 
-	private String print(HgChangeset cset) {
+	private String print(HgChangeset cset) throws HgException {
 		StringBuilder sb = new StringBuilder();
 		Formatter f = new Formatter(sb);
 		final Nodeid csetNodeid = cset.getNodeid();
 		f.format("changeset:   %d:%s\n", cset.getRevision(), complete ? csetNodeid : csetNodeid.shortNotation());
 		if (cset.getRevision() == tip || repo.getTags().isTagged(csetNodeid)) {
-
 			sb.append("tag:         ");
 			for (String t : repo.getTags().tags(csetNodeid)) {
 				sb.append(t);
