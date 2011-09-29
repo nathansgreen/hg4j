@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -166,37 +167,42 @@ public final class HgRepository {
 		return this.manifest;
 	}
 	
-	public HgTags getTags() {
+	public HgTags getTags() throws HgInvalidControlFileException {
 		if (tags == null) {
 			tags = new HgTags(this);
-			try {
-				HgDataFile hgTags = getFileNode(".hgtags");
-				if (hgTags.exists()) {
-					for (int i = 0; i <= hgTags.getLastRevision(); i++) { // FIXME in fact, would be handy to have walk(start,end) 
-						// method for data files as well, though it looks odd.
-						try {
-							ByteArrayChannel sink = new ByteArrayChannel();
-							hgTags.content(i, sink);
-							final String content = new String(sink.toArray(), "UTF8");
-							tags.readGlobal(new StringReader(content));
-						} catch (CancelledException ex) {
-							 // IGNORE, can't happen, we did not configure cancellation
-							getContext().getLog().debug(getClass(), ex, null);
-						} catch (HgDataStreamException ex) {
-							getContext().getLog().error(getClass(), ex, null);
-							// FIXME need to react
-						} catch (IOException ex) {
-							// UnsupportedEncodingException can't happen (UTF8)
-							// only from readGlobal. Need to reconsider exceptions thrown from there
-							getContext().getLog().error(getClass(), ex, null);
-							// XXX need to decide what to do this. failure to read single revision shall not break complete cycle
-						}
+			HgDataFile hgTags = getFileNode(".hgtags");
+			if (hgTags.exists()) {
+				for (int i = 0; i <= hgTags.getLastRevision(); i++) { // FIXME in fact, would be handy to have walk(start,end) 
+					// method for data files as well, though it looks odd.
+					try {
+						ByteArrayChannel sink = new ByteArrayChannel();
+						hgTags.content(i, sink);
+						final String content = new String(sink.toArray(), "UTF8");
+						tags.readGlobal(new StringReader(content));
+					} catch (CancelledException ex) {
+						 // IGNORE, can't happen, we did not configure cancellation
+						getContext().getLog().debug(getClass(), ex, null);
+					} catch (HgDataStreamException ex) {
+						getContext().getLog().error(getClass(), ex, null);
+						// FIXME need to react
+					} catch (IOException ex) {
+						// UnsupportedEncodingException can't happen (UTF8)
+						// only from readGlobal. Need to reconsider exceptions thrown from there:
+						// BufferedReader wraps String and unlikely to throw IOException, perhaps, log is enough?
+						getContext().getLog().error(getClass(), ex, null);
+						// XXX need to decide what to do this. failure to read single revision shall not break complete cycle
 					}
 				}
-				tags.readGlobal(new File(getWorkingDir(), ".hgtags")); // XXX replace with HgDataFile.workingCopy
-				tags.readLocal(new File(repoDir, "localtags"));
+			}
+			File file2read = null;
+			try {
+				file2read = new File(getWorkingDir(), ".hgtags");
+				tags.readGlobal(file2read); // XXX replace with HgDataFile.workingCopy
+				file2read = new File(repoDir, "localtags");
+				tags.readLocal(file2read);
 			} catch (IOException ex) {
 				getContext().getLog().error(getClass(), ex, null);
+				throw new HgInvalidControlFileException("Failed to read tags", ex, file2read);
 			}
 		}
 		return tags;
