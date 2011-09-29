@@ -21,6 +21,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -86,6 +87,24 @@ abstract class Revlog {
 	public final Nodeid getRevision(int revision) {
 		// XXX cache nodeids?
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
+	}
+	
+	public final List<Nodeid> getRevisions(int... revisions) {
+		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(revisions.length);
+		Arrays.sort(revisions);
+		getRevisionsInternal(rv, revisions);
+		return rv;
+	}
+	
+	/*package-local*/ void getRevisionsInternal(final List<Nodeid> retVal, int[] sortedRevs) {
+		// once I have getRevisionMap and may find out whether it is avalable from cache,
+		// may use it, perhaps only for small number of revisions
+		content.iterate(sortedRevs, false, new RevlogStream.Inspector() {
+			
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+				retVal.add(Nodeid.fromBinary(nodeid, 0));
+			}
+		});
 	}
 
 	/**
@@ -195,7 +214,7 @@ abstract class Revlog {
 			}
 		}
 	}
-
+	
 	/*
 	 * XXX think over if it's better to do either:
 	 * pw = getChangelog().new ParentWalker(); pw.init() and pass pw instance around as needed

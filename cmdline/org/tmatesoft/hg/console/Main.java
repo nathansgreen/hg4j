@@ -86,7 +86,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-//		m.buildFileLog();
+		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
@@ -97,7 +97,7 @@ public class Main {
 //		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
-		m.dumpBranches();
+//		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
@@ -110,26 +110,28 @@ public class Main {
 
 	private void buildFileLog() {
 		final HgDataFile fn = hgRepo.getFileNode("file1");
-		HgDataFile.HistoryWalker hw = fn.history();
-		while (hw.hasNext()) {
-			hw.next();
-			StringBuilder sb = new StringBuilder();
-			Collection<Nodeid> children = hw.childChangesets();
-			for (Nodeid cc : children) {
-				sb.append(cc.shortNotation());
-				sb.append(", ");
+		HgChangelog.TreeInspector insp = new HgChangelog.TreeInspector() {
+			
+			public void next(Nodeid changesetRevision, Pair<Nodeid, Nodeid> parentChangesets, Collection<Nodeid> childChangesets) {
+				StringBuilder sb = new StringBuilder();
+				for (Nodeid cc : childChangesets) {
+					sb.append(cc.shortNotation());
+					sb.append(", ");
+				}
+				final boolean isJoin = !parentChangesets.first().isNull() && !parentChangesets.second().isNull();
+				final boolean isFork = childChangesets.size() > 1;
+				if (isJoin) {
+					System.out.printf("join[(%s, %s) => %s]\n", parentChangesets.first().shortNotation(), parentChangesets.second().shortNotation(), changesetRevision.shortNotation());
+				}
+				if (isFork) {
+					System.out.printf("fork[%s => %s]\n", changesetRevision.shortNotation(), sb);
+				}
+				if (!isFork && !isJoin && !childChangesets.isEmpty()) {
+					System.out.printf("%s => %s\n", changesetRevision.shortNotation(), sb);
+				}
 			}
-			if (hw.isJoin()) {
-				final Pair<Nodeid, Nodeid> parents = hw.parentChangesets();
-				System.out.printf("join[(%s, %s) => %s]\n", parents.first().shortNotation(), parents.second().shortNotation(), hw.changesetRevision().shortNotation());
-			}
-			if (hw.isFork()) {
-				System.out.printf("fork[%s => %s]\n", hw.changesetRevision().shortNotation(), sb);
-			}
-			if (!hw.isFork() && !hw.isJoin() && !children.isEmpty()) {
-				System.out.printf("%s => %s\n", hw.changesetRevision().shortNotation(), sb);
-			}
-		}
+		};
+		fn.history(insp);
 	}
 
 	private void buildFileLogOld() {
