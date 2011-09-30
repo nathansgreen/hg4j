@@ -84,10 +84,13 @@ public class HgException extends Exception {
 	
 	protected void appendDetails(StringBuilder sb) {
 		if (filename != null) {
+			sb.append("file:'");
 			sb.append(filename);
-			sb.append(':');
+			sb.append('\'');
+			sb.append(';');
 			sb.append(' ');
 		}
+		sb.append("rev:");
 		if (revNumber != BAD_REVISION) {
 			sb.append(revNumber);
 			if (revision != null) {
@@ -99,6 +102,15 @@ public class HgException extends Exception {
 		}
 	}
 
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder(super.toString());
+		sb.append(' ');
+		sb.append('(');
+		appendDetails(sb);
+		sb.append(')');
+		return sb.toString();
+	}
 //	/* XXX CONSIDER capability to pass extra information about errors */
 //	public static class Status {
 //		public Status(String message, Throwable cause, int errorCode, Object extraData) {

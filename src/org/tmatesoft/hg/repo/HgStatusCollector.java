@@ -290,6 +290,10 @@ public class HgStatusCollector {
 	
 	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgDataStreamException {
 		HgDataFile df = hgRepo.getFileNode(fname);
+		if (!df.exists()) {
+			String msg = String.format("Didn't find file '%s' in the repo. Perhaps, bad storage name conversion?", fname);
+			throw new HgDataStreamException(fname, msg, null).setRevisionNumber(originalChangelogRevision);
+		}
 		while (df.isCopy()) {
 			Path original = df.getCopySourceName();
 			if (originals.contains(original)) {

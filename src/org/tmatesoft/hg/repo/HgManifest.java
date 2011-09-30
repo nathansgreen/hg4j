@@ -20,6 +20,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -27,6 +28,7 @@ import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
@@ -268,7 +270,7 @@ public class HgManifest extends Revlog {
 		
 		public Path freeze() {
 			if (result == null) {
-				result = Path.create(new String(data, start, length));
+				result = Path.create(EncodingHelper.fromManifest(data, start, length));
 				// release reference to bigger data array, make a copy of relevant part only
 				// use original bytes, not those from String above to avoid cache misses due to different encodings 
 				byte[] d = new byte[length];
