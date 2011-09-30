@@ -20,7 +20,6 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 

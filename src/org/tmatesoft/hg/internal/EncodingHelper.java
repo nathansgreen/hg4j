@@ -17,7 +17,6 @@
 package org.tmatesoft.hg.internal;
 
 import java.io.UnsupportedEncodingException;
-import java.nio.charset.Charset;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 
