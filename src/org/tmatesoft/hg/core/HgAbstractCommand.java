@@ -49,12 +49,20 @@ class HgAbstractCommand<T extends HgAbstractCommand<?>> implements ProgressSuppo
 		return ProgressSupport.Factory.get(context);
 	}
 
-	// shall not return null
-	protected CancelSupport getCancelSupport(Object context) {
+	// shall not return null if create is true
+	// CancelSupport from context, if any, takes precedence
+	protected CancelSupport getCancelSupport(Object context, boolean create) {
+		CancelSupport rv = CancelSupport.Factory.get(context, null);
+		if (rv != null) {
+			return rv;
+		}
 		if (cancelHelper != null) {
 			return cancelHelper;
 		}
-		return CancelSupport.Factory.get(context);
+		if (create) {
+			return CancelSupport.Factory.get(null);
+		}
+		return null;
 	}
 
 }

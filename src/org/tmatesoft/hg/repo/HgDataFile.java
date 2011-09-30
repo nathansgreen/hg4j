@@ -615,5 +615,15 @@ public class HgDataFile extends Revlog {
 			}
 			return lastEntryStart;
 		}
+
+		@Override
+		public void checkFailed() throws HgException, IOException, CancelledException {
+			super.checkFailed();
+			if (delegate instanceof ErrorHandlingInspector) {
+				// XXX need to add ErrorDestination and pass it around (much like CancelSupport get passed)
+				// so that delegate would be able report its failures directly to caller without this hack
+				((ErrorHandlingInspector) delegate).checkFailed();
+			}
+		}
 	}
 }

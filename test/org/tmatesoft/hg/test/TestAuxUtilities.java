@@ -18,8 +18,12 @@ package org.tmatesoft.hg.test;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+
 import org.junit.Assert;
 import org.junit.Test;
+import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -28,6 +32,7 @@ import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Adaptable;
+import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
@@ -115,10 +120,9 @@ public class TestAuxUtilities {
 					cancelImpl.stop();
 				}
 			}
-			@SuppressWarnings("unchecked")
 			public <T> T getAdapter(Class<T> adapterClass) {
 				if (CancelSupport.class == adapterClass) {
-					return (T) cancelImpl;
+					return adapterClass.cast(cancelImpl);
 				}
 				return null;
 			}
@@ -165,10 +169,9 @@ public class TestAuxUtilities {
 				return true;
 			}
 
-			@SuppressWarnings("unchecked")
 			public <T> T getAdapter(Class<T> adapterClass) {
 				if (CancelSupport.class == adapterClass) {
-					return (T) cancelImpl;
+					return adapterClass.cast(cancelImpl);
 				}
 				return null;
 			}
@@ -184,4 +187,30 @@ public class TestAuxUtilities {
 		Assert.assertEquals(insp1.when2stop, insp1.lastVisitet);
 	}
 	
+	@Test
+	public void testCatCommandCancelSupport() throws Exception {
+		HgRepository repository = Configuration.get().find("branches-1"); // any repo
+		final HgCatCommand cmd = new HgCatCommand(repository);
+		cmd.file(Path.create("file1"));
+		cmd.set(new CancelSupport() {
+			int i = 0;
+			public void checkCancelled() throws CancelledException {
+				if (i++ == 2) {
+					throw new CancelledException();
+				}
+			}
+		});
+		try {
+			cmd.execute(new ByteChannel() {
+				
+				public int write(ByteBuffer buffer) throws IOException, CancelledException {
+					Assert.fail("Shall not get that far provided cancellation from command's CancelSupport is functional");
+					return 0;
+				}
+			});
+			Assert.fail("Command execution shall not fail silently, exception shall propagate");
+		} catch (CancelledException ex) {
+			// good!
+		}
+	}
 }

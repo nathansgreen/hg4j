@@ -133,7 +133,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 		HgBundle changegroup = remoteRepo.getChanges(common);
 		final ProgressSupport ps = getProgressSupport(handler);
 		try {
-			final ChangesetTransformer transformer = new ChangesetTransformer(localRepo, handler, getParentHelper(), ps, getCancelSupport(handler));
+			final ChangesetTransformer transformer = new ChangesetTransformer(localRepo, handler, getParentHelper(), ps, getCancelSupport(handler, true));
 			transformer.limitBranches(branches);
 			changegroup.changes(localRepo, new HgChangelog.Inspector() {
 				private int localIndex;

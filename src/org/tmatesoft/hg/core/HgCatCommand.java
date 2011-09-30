@@ -21,10 +21,14 @@ import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 
@@ -170,6 +174,44 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 		} else {
 			revToExtract = localRevision;
 		}
-		dataFile.contentWithFilters(revToExtract, sink);
+		ByteChannel sinkWrap;
+		if (getCancelSupport(null, false) == null) {
+			// no command-specific cancel helper, no need for extra proxy
+			// sink itself still may supply CS
+			sinkWrap = sink;
+		} else {
+			// try CS from sink, if any. at least there is CS from command 
+			CancelSupport cancelHelper = getCancelSupport(sink, true);
+			cancelHelper.checkCancelled();
+			sinkWrap = new ByteChannelProxy(sink, cancelHelper);
+		}
+		dataFile.contentWithFilters(revToExtract, sinkWrap);
+	}
+
+	private static class ByteChannelProxy implements ByteChannel, Adaptable {
+		private final ByteChannel delegate;
+		private final CancelSupport cancelHelper;
+
+		public ByteChannelProxy(ByteChannel _delegate, CancelSupport cs) {
+			assert _delegate != null;
+			delegate = _delegate;
+			cancelHelper = cs;
+		}
+		public int write(ByteBuffer buffer) throws IOException, CancelledException {
+			return delegate.write(buffer);
+		}
+
+		public <T> T getAdapter(Class<T> adapterClass) {
+			if (CancelSupport.class == adapterClass) {
+				return adapterClass.cast(cancelHelper);
+			}
+			if (delegate instanceof Adaptable) {
+				return ((Adaptable) delegate).getAdapter(adapterClass);
+			}
+			if (adapterClass.isInstance(delegate)) {
+				return adapterClass.cast(delegate);
+			}
+			return null;
+		}
 	}
 }

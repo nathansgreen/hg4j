@@ -211,7 +211,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			}
 			// ChangesetTransfrom creates a blank PathPool, and #file(String, boolean) above 
 			// may utilize it as well. CommandContext? How about StatusCollector there as well?
-			csetTransform = new ChangesetTransformer(repo, handler, pw, progressHelper, getCancelSupport(handler));
+			csetTransform = new ChangesetTransformer(repo, handler, pw, progressHelper, getCancelSupport(handler, true));
 			if (file == null) {
 				progressHelper.start(endRev - startRev + 1);
 				repo.getChangelog().range(startRev, endRev, this);

@@ -98,7 +98,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 		final ProgressSupport ps = getProgressSupport(null);
 		try {
 			ps.start(10);
-			return getComparator(new ProgressSupport.Sub(ps, 5), getCancelSupport(null)).getLocalOnlyRevisions();
+			return getComparator(new ProgressSupport.Sub(ps, 5), getCancelSupport(null, true)).getLocalOnlyRevisions();
 		} finally {
 			ps.done();
 		}
@@ -114,7 +114,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
 		final ProgressSupport ps = getProgressSupport(handler);
-		final CancelSupport cs = getCancelSupport(handler);
+		final CancelSupport cs = getCancelSupport(handler, true);
 		try {
 			ps.start(-1);
 			ChangesetTransformer inspector = new ChangesetTransformer(localRepo, handler, getParentHelper(), ps, cs);
