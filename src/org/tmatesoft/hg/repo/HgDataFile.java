@@ -221,7 +221,7 @@ public class HgDataFile extends Revlog {
 		} catch (HgDataStreamException ex) {
 			throw ex;
 		} catch (IOException ex) {
-			throw new HgDataStreamException(getPath(), ex);
+			throw new HgDataStreamException(getPath(), ex).setRevisionNumber(revision);
 		} catch (HgException ex) {
 			// shall not happen, unless we changed ContentPipe or its subclass
 			throw new HgDataStreamException(getPath(), ex.getClass().getName(), ex);
@@ -439,8 +439,6 @@ public class HgDataFile extends Revlog {
 			});
 		} catch (CancelledException ex) {
 			// it's ok, we did that
-		} catch (Exception ex) {
-			throw new HgDataStreamException(getPath(), "Can't initialize metadata", ex).setRevisionNumber(localRev);
 		}
 	}
 
@@ -573,12 +571,15 @@ public class HgDataFile extends Revlog {
 			ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			String key = null, value = null;
 			boolean byteOne = false;
+			boolean metadataIsComplete = false;
 			for (int i = 2; i < daLength; i++) {
 				byte b = data.readByte();
 				if (b == '\n') {
 					if (byteOne) { // i.e. \n follows 1
 						lastEntryStart = i+1;
+						metadataIsComplete = true;
 						// XXX is it possible to have here incomplete key/value (i.e. if last pair didn't end with \n)
+						// if yes, need to set metadataIsComplete to true in that case as well
 						break;
 					}
 					if (key == null || lastColon == -1 || i <= lastColon) {
@@ -610,7 +611,9 @@ public class HgDataFile extends Revlog {
 					bos.write(b);
 				}
 			}
-			if (data.isEmpty() || !byteOne) {
+			// data.isEmpty is not reliable, renamed files of size==0 keep only metadata
+			if (!metadataIsComplete) {
+				// XXX perhaps, worth a testcase (empty file, renamed, read or ask ifCopy
 				throw new HgDataStreamException(fname, "Metadata is not closed properly", null);
 			}
 			return lastEntryStart;

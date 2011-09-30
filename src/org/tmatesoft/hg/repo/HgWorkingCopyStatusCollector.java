@@ -394,6 +394,7 @@ public class HgWorkingCopyStatusCollector {
 		} catch (CancelledException ex) {
 			// silently ignore - can't happen, ByteArrayChannel is not cancellable
 		} catch (HgException ex) {
+			repo.getContext().getLog().warn(getClass(), ex, null);
 			ioFailed = true;
 		}
 		return !ioFailed && areTheSame(f, bac.toArray(), dataFile.getPath());
