@@ -1,5 +1,7 @@
 package org.tmatesoft.hg.test;
 
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -8,6 +10,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Assert;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetHandler;
@@ -40,10 +43,74 @@ public class MapTagsToFileRevisions {
 //		m.collectTagsPerFile();
 //		m.manifestWalk();
 //		m.changelogWalk();
-		m.revisionMap();
+//		m.revisionMap();
+		m.buildFile2ChangelogRevisionMap();
 		m = null;
 		System.gc();
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
+	}
+	
+	/*
+	 * .hgtags, 261 revisions
+	 * Approach 1: total 83, init: 0, iteration: 82
+	 * Approach 2: total 225, init: 206, iteration: 19
+	 * README, 465 revisions
+	 * Approach 1: total 162, init: 0, iteration: 161
+	 * Approach 2: total 231, init: 198, iteration: 32
+	 * configure.in, 1109 revisions
+	 * Approach 1: total 409, init: 1, iteration: 407
+	 * Approach 2: total 277, init: 203, iteration: 74
+	 */
+	private void buildFile2ChangelogRevisionMap() throws Exception {
+		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
+		final HgChangelog clog = repository.getChangelog();
+		final HgDataFile fileNode = repository.getFileNode("configure.in");
+		// warm-up
+		HgChangelog.RevisionMap clogMap = clog.new RevisionMap().init();
+		HgDataFile.RevisionMap fileMap = fileNode.new RevisionMap().init();
+		//
+		final int latestRevision = fileNode.getLastRevision();
+		//
+		final long start_1 = System.nanoTime();
+		fileMap = fileNode.new RevisionMap().init();
+		final long start_1a = System.nanoTime();
+		final Map<Nodeid, Nodeid> changesetToNodeid_1 = new HashMap<Nodeid, Nodeid>();
+		for (int revision = 0; revision <= latestRevision; revision++) {
+		       final Nodeid nodeId = fileMap.revision(revision);
+//		       final Nodeid changesetId = fileNode.getChangesetRevision(nodeId);
+		       int localCset = fileNode.getChangesetLocalRevision(revision);
+		       final Nodeid changesetId = clog.getRevision(localCset);
+		       changesetToNodeid_1.put(changesetId, nodeId);
+		}
+		final long end_1 = System.nanoTime();
+		//
+		final long start_2 = System.nanoTime();
+		clogMap = clog.new RevisionMap().init();
+		fileMap = fileNode.new RevisionMap().init();
+		final Map<Nodeid, Nodeid> changesetToNodeid_2 = new HashMap<Nodeid, Nodeid>();
+		final long start_2a = System.nanoTime();
+		for (int revision = 0; revision <= latestRevision; revision++) {
+			Nodeid nidFile = fileMap.revision(revision);
+			int localCset = fileNode.getChangesetLocalRevision(revision);
+			Nodeid nidCset = clogMap.revision(localCset);
+			changesetToNodeid_2.put(nidCset, nidFile);
+		}
+		final long end_2 = System.nanoTime();
+		Assert.assertEquals(changesetToNodeid_1, changesetToNodeid_2);
+		//
+		final long start_3 = System.nanoTime();
+		final Map<Nodeid, Nodeid> changesetToNodeid_3 = new HashMap<Nodeid, Nodeid>();
+		fileNode.walk(0, TIP, new HgDataFile.RevisionInspector() {
+
+			public void next(int localRevision, Nodeid revision, int linkedRevision) {
+				changesetToNodeid_3.put(clog.getRevision(linkedRevision), revision);
+			}
+		});
+		final long end_3 = System.nanoTime();
+		Assert.assertEquals(changesetToNodeid_1, changesetToNodeid_3);
+		System.out.printf("Approach 1: total %d, init: %d, iteration: %d\n", (end_1 - start_1)/1000000, (start_1a - start_1)/1000000, (end_1 - start_1a)/1000000);
+		System.out.printf("Approach 2: total %d, init: %d, iteration: %d\n", (end_2 - start_2)/1000000, (start_2a - start_2)/1000000, (end_2 - start_2a)/1000000);
+		System.out.printf("Approach 3: total %d\n", (end_3 - start_3)/1000000);
 	}
 
 	/*

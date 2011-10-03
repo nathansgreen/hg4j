@@ -411,6 +411,7 @@ public class HgManifest extends Revlog {
 			return revisionNumber;
 		}
 
+		// XXX likely can be replaced with Revlog.RevisionInspector
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 			if (changelog2manifest != null) {
 				// next assertion is not an error, rather assumption check, which is too development-related to be explicit exception - 

@@ -33,7 +33,9 @@ import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
@@ -215,6 +217,62 @@ abstract class Revlog {
 		}
 	}
 	
+	@Experimental
+	public void walk(int start, int end, final Revlog.Inspector inspector) {
+		int lastRev = getLastRevision();
+		if (start == TIP) {
+			start = lastRev;
+		}
+		if (end == TIP) {
+			end = lastRev;
+		}
+		final RevisionInspector revisionInsp = getAdapter(inspector, RevisionInspector.class);
+		final ParentInspector parentInsp = getAdapter(inspector, ParentInspector.class);
+		final Nodeid[] allRevisions = parentInsp == null ? null : new Nodeid[end - start + 1]; 
+
+		content.iterate(start, end, false, new RevlogStream.Inspector() {
+			
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+				Nodeid nid = Nodeid.fromBinary(nodeid, 0);
+				if (revisionInsp != null) {
+					revisionInsp.next(revisionNumber, nid, linkRevision);
+				}
+				if (parentInsp != null) {
+					Nodeid p1 = parent1Revision == -1 ? Nodeid.NULL : allRevisions[parent1Revision];
+					Nodeid p2 = parent2Revision == -1 ? Nodeid.NULL : allRevisions[parent2Revision];
+					allRevisions[revisionNumber] = nid;
+					parentInsp.next(revisionNumber, nid, parent1Revision, parent2Revision, p1, p2);
+				}
+			}
+		});
+	}
+	private static <T> T getAdapter(Object o, Class<T> adapterClass) {
+		if (adapterClass.isInstance(o)) {
+			return adapterClass.cast(o);
+		}
+		if (o instanceof Adaptable) {
+			return ((Adaptable) o).getAdapter(adapterClass);
+		}
+		return null;
+	}
+
+	/**
+	 * MARKER 
+	 */
+	@Experimental
+	public interface Inspector {
+	}
+
+	@Experimental
+	public interface RevisionInspector extends Inspector {
+		void next(int localRevision, Nodeid revision, int linkedRevision);
+	}
+
+	@Experimental
+	public interface ParentInspector extends Inspector {
+		void next(int localRevision, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2);
+	}
+	
 	/*
 	 * XXX think over if it's better to do either:
 	 * pw = getChangelog().new ParentWalker(); pw.init() and pass pw instance around as needed
@@ -223,7 +281,7 @@ abstract class Revlog {
 	 * 
 	 *  and yes, walker is not a proper name
 	 */
-	public final class ParentWalker {
+	public final class ParentWalker implements ParentInspector {
 
 		
 		private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
@@ -241,43 +299,31 @@ abstract class Revlog {
 			return Revlog.this.getRepo();
 		}
 		
+		public void next(int revisionNumber, Nodeid revision, int parent1Revision, int parent2Revision, Nodeid nidParent1, Nodeid nidParent2) {
+			if (parent1Revision >= revisionNumber || parent2Revision >= revisionNumber) {
+				throw new IllegalStateException(); // sanity, revisions are sequential
+			}
+			int ix = revisionNumber;
+			sequential[ix] = sorted[ix] = revision;
+			if (parent1Revision != -1) {
+				firstParent[ix] = sequential[parent1Revision];
+			}
+			if (parent2Revision != -1) { // revlog of DataAccess.java has p2 set when p1 is -1
+				secondParent[ix] = sequential[parent2Revision];
+			}
+		}
+		
 		public void init() {
-			final RevlogStream stream = Revlog.this.content;
-			final int revisionCount = stream.revisionCount();
+			final int revisionCount = Revlog.this.getRevisionCount();
 			firstParent = new Nodeid[revisionCount];
 			// although branches/merges are less frequent, and most of secondParent would be -1/null, some sort of 
 			// SparseOrderedList might be handy, provided its inner structures do not overweight simplicity of an array
+			// FIXME IntMap is right candidate?
 			secondParent = new Nodeid[revisionCount];
 			//
 			sequential = new Nodeid[revisionCount];
 			sorted = new Nodeid[revisionCount];
-		
-			RevlogStream.Inspector insp = new RevlogStream.Inspector() {
-				
-				int ix = 0;
-				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
-					if (ix != revisionNumber) {
-						// XXX temp code, just to make sure I understand what's going on here
-						// FIXME check against cpython or another tool-mangled repository
-						throw new IllegalStateException();
-					}
-					if (parent1Revision >= revisionNumber || parent2Revision >= revisionNumber) {
-						throw new IllegalStateException(); // sanity, revisions are sequential
-					}
-					final Nodeid nid = new Nodeid(nodeid, true);
-					sequential[ix] = sorted[ix] = nid;
-					if (parent1Revision != -1) {
-						assert parent1Revision < ix;
-						firstParent[ix] = sequential[parent1Revision];
-					}
-					if (parent2Revision != -1) { // revlog of DataAccess.java has p2 set when p1 is -1
-						assert parent2Revision < ix;
-						secondParent[ix] = sequential[parent2Revision];
-					}
-					ix++;
-				}
-			};
-			stream.iterate(0, TIP, false, insp);
+			Revlog.this.walk(0, TIP, this);
 			Arrays.sort(sorted);
 			sorted2natural = new int[revisionCount];
 			for (int i = 0; i < revisionCount; i++) {
@@ -424,7 +470,7 @@ abstract class Revlog {
 	 * getLocalRevision(Nodeid) with straightforward lookup approach performs O(n/2)
 	 * #localRevision() is log(n), plus initialization is O(n) 
 	 */
-	public final class RevisionMap {
+	public final class RevisionMap implements RevisionInspector {
 		/*
 		 * in fact, initialization is much slower as it instantiates Nodeids, while #getLocalRevision
 		 * compares directly against byte buffer. Measuring cpython with 70k+ gives 3 times difference (47 vs 171)
@@ -432,7 +478,9 @@ abstract class Revlog {
 		 */
 		
 		/*
-		 * XXX 3 * (x * 4) bytes. Can I do better? 
+		 * XXX 3 * (x * 4) bytes. Can I do better?
+		 * It seems, yes. Don't need to keep sorted, always can emulate it with indirect access to sequential through sorted2natural.
+		 * i.e. instead sorted[mid].compareTo(toFind), do sequential[sorted2natural[mid]].compareTo(toFind) 
 		 */
 		private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
 		private Nodeid[] sorted; // for binary search
@@ -444,23 +492,20 @@ abstract class Revlog {
 		public HgRepository getRepo() {
 			return Revlog.this.getRepo();
 		}
+		
+		public void next(int localRevision, Nodeid revision, int linkedRevision) {
+			sequential[localRevision] = sorted[localRevision] = revision;
+		}
 
 		/**
 		 * @return <code>this</code> for convenience.
 		 */
 		public RevisionMap init(/*XXX Pool<Nodeid> to reuse nodeids, if possible. */) {
 			// XXX HgRepository.register((RepoChangeListener) this); // listen to changes in repo, re-init if needed?
-			final int revisionCount = Revlog.this.content.revisionCount();
+			final int revisionCount = Revlog.this.getRevisionCount();
 			sequential = new Nodeid[revisionCount];
 			sorted = new Nodeid[revisionCount];
-			RevlogStream.Inspector insp = new RevlogStream.Inspector() {
-				
-				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
-					final Nodeid nid = new Nodeid(nodeid, true);
-					sequential[revisionNumber] = sorted[revisionNumber] = nid;
-				}
-			};
-			Revlog.this.content.iterate(0, TIP, false, insp);
+			Revlog.this.walk(0, TIP, this);
 			// next is alternative to Arrays.sort(sorted), and build sorted2natural looking up each element of sequential in sorted.
 			// the way sorted2natural was build is O(n*log n).  
 			final ArrayHelper ah = new ArrayHelper();
