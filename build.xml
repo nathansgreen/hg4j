@@ -149,7 +149,12 @@
 
 	<target name="build-cmdline" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="cmdline" destdir="bin" debug="${compile-with-debug}" />
+		<javac srcdir="cmdline" destdir="bin" debug="${compile-with-debug}">
+			<classpath>
+				<pathelement location="${hg4j.jar}"/>
+				<pathelement location="${junit.jar}"/>
+			</classpath>
+		</javac>
 		<jar destfile="${hg4j-console.jar}">
 			<fileset dir="bin/" includes="org/tmatesoft/hg/console/**"/>
 			<fileset file="COPYING"/>
