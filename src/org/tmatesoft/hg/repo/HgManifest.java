@@ -22,6 +22,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -124,19 +126,8 @@ public class HgManifest extends Revlog {
 		if (inspector == null || localRevisions == null) {
 			throw new IllegalArgumentException();
 		}
-		int[] manifestLocalRevs = new int[localRevisions.length];
-		boolean needsSort = false;
-		for (int i = 0; i < localRevisions.length; i++) {
-			final int manifestLocalRev = fromChangelog(localRevisions[i]);
-			manifestLocalRevs[i] = manifestLocalRev;
-			if (i > 0 && manifestLocalRevs[i-1] > manifestLocalRev) {
-				needsSort = true;
-			}
-		}
-		if (needsSort) {
-			Arrays.sort(manifestLocalRevs);
-		}
-		content.iterate(manifestLocalRevs, true, new ManifestParser(inspector));
+		int[] localManifestRevs = toLocalManifestRevisions(localRevisions);
+		content.iterate(localManifestRevs, true, new ManifestParser(inspector));
 	}
 	
 	// manifest revision number that corresponds to the given changeset
@@ -158,15 +149,22 @@ public class HgManifest extends Revlog {
 	/**
 	 * Extracts file revision as it was known at the time of given changeset.
 	 * 
-	 * @param revisionNumber local changeset index 
+	 * @param localChangelogRevision local changeset index 
 	 * @param file path to file in question
 	 * @return file revision or <code>null</code> if manifest at specified revision doesn't list such file
 	 */
-	@Experimental(reason="Perhaps, HgDataFile shall own this method")
-	public Nodeid getFileRevision(int revisionNumber, final Path file) {
-		int rev = fromChangelog(revisionNumber);
-		final Nodeid[] rv = new Nodeid[] { null };
-		content.iterate(rev, rev, true, new RevlogStream.Inspector() {
+	@Experimental(reason="Perhaps, HgDataFile shall own this method, or get a delegate?")
+	public Nodeid getFileRevision(int localChangelogRevision, final Path file) {
+		return getFileRevisions(file, localChangelogRevision).get(localChangelogRevision);
+	}
+	
+	// XXX package-local, IntMap, and HgDataFile getFileRevisionAt(int... localChangelogRevisions)
+	@Experimental(reason="@see #getFileRevision")
+	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... localChangelogRevisions) {
+		// FIXME need tests
+		int[] localManifestRevisions = toLocalManifestRevisions(localChangelogRevisions);
+		final HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>(localChangelogRevisions.length);
+		content.iterate(localManifestRevisions, true, new RevlogStream.Inspector() {
 			
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 				ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -181,8 +179,10 @@ public class HgManifest extends Revlog {
 							if (file.toString().equals(fname)) {
 								byte[] nid = new byte[40];  
 								data.readBytes(nid, 0, 40);
-								rv[0] = Nodeid.fromAscii(nid, 0, 40);
+								rv.put(linkRevision, Nodeid.fromAscii(nid, 0, 40));
 								break;
+							} else {
+								data.skip(40);
 							}
 							// else skip to the end of line
 							while (!data.isEmpty() && (b = data.readByte()) != '\n')
@@ -194,9 +194,26 @@ public class HgManifest extends Revlog {
 				}
 			}
 		});
-		return rv[0];
+		return rv;
 	}
-			
+
+
+	private int[] toLocalManifestRevisions(int[] localChangelogRevisions) {
+		int[] localManifestRevs = new int[localChangelogRevisions.length];
+		boolean needsSort = false;
+		for (int i = 0; i < localChangelogRevisions.length; i++) {
+			final int manifestLocalRev = fromChangelog(localChangelogRevisions[i]);
+			localManifestRevs[i] = manifestLocalRev;
+			if (i > 0 && localManifestRevs[i-1] > manifestLocalRev) {
+				needsSort = true;
+			}
+		}
+		if (needsSort) {
+			Arrays.sort(localManifestRevs);
+		}
+		return localManifestRevs;
+	}
+
 	public interface Inspector {
 		boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision);
 		/**
@@ -211,7 +228,7 @@ public class HgManifest extends Revlog {
 	public interface Inspector2 extends Inspector {
 		boolean next(Nodeid nid, Path fname, Flags flags);
 	}
-	
+
 	/**
 	 * When Pool uses Strings directly,
 	 * ManifestParser creates new String instance with new char[] value, and does byte->char conversion.
