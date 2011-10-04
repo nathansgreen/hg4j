@@ -270,6 +270,7 @@ abstract class Revlog {
 
 	@Experimental
 	public interface ParentInspector extends Inspector {
+		// XXX document whether parentX is -1 or a constant (BAD_REVISION? or dedicated?)
 		void next(int localRevision, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2);
 	}
 	

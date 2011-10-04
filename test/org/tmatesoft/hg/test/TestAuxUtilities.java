@@ -28,6 +28,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -212,5 +213,47 @@ public class TestAuxUtilities {
 		} catch (CancelledException ex) {
 			// good!
 		}
+	}
+
+	@Test
+	public void testRevlogInspectors() throws Exception { // FIXME move to better place
+		HgRepository repository = Configuration.get().find("branches-1"); // any repo
+		repository.getChangelog().walk(0, TIP, new HgChangelog.RevisionInspector() {
+
+			public void next(int localRevision, Nodeid revision, int linkedRevision) {
+				Assert.assertEquals(localRevision, linkedRevision);
+			}
+		});
+		final HgDataFile fileNode = repository.getFileNode("file1");
+		fileNode.walk(0, TIP, new HgDataFile.RevisionInspector() {
+			int i = 0;
+
+			public void next(int localRevision, Nodeid revision, int linkedRevision) {
+				Assert.assertEquals(i++, localRevision);
+				Assert.assertEquals(fileNode.getChangesetLocalRevision(localRevision), linkedRevision);
+				Assert.assertEquals(fileNode.getRevision(localRevision), revision);
+			}
+		});
+		fileNode.walk(0, TIP, new HgDataFile.ParentInspector() {
+			int i = 0;
+			Nodeid[] all = new Nodeid[fileNode.getRevisionCount()];
+
+			public void next(int localRevision, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
+				Assert.assertEquals(i++, localRevision);
+				all[localRevision] = revision;
+				Assert.assertNotNull(revision);
+				Assert.assertFalse(localRevision == 0 && (parent1 != -1 || parent2 != -1));
+				Assert.assertFalse(localRevision > 0 && parent1 == -1 && parent2 == -1);
+				if (parent1 != -1) {
+					Assert.assertNotNull(nidParent1);
+					// deliberately ==, not asserEquals to ensure same instance
+					Assert.assertTrue(nidParent1 == all[parent1]);  
+				}
+				if (parent2 != -1) {
+					Assert.assertNotNull(nidParent2);
+					Assert.assertTrue(nidParent2 == all[parent2]);  
+				}
+			}
+		});
 	}
 }
