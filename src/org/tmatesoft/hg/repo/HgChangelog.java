@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.IterateControlMediator;
@@ -110,7 +111,9 @@ public class HgChangelog extends Revlog {
 	 * Unlike regular {@link Inspector}, this one supplies changeset revision along with its parents and children according
 	 * to parent information of the revlog this inspector visits.
 	 * @see HgDataFile#history(TreeInspector)
+	 * @deprecated use {@link HgChangesetTreeHandler} and HgLogCommand#execute(HgChangesetTreeHandler)}
 	 */
+	@Deprecated
 	public interface TreeInspector {
 		// the reason TreeInsector is in HgChangelog, not in Revlog, because despite the fact it can
 		// be applied to any revlog, it's not meant to provide revisions of any revlog it's beeing applied to, 

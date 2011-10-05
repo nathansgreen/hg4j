@@ -87,10 +87,13 @@ abstract class Revlog {
 	}
 	
 	public final Nodeid getRevision(int revision) {
-		// XXX cache nodeids?
+		// XXX cache nodeids? Rather, if context.getCache(this).getRevisionMap(create == false) != null, use it
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
 	}
 	
+	/**
+	 * FIXME need to be careful about (1) ordering of the revisions in the return list; (2) modifications (sorting) of the argument array 
+	 */
 	public final List<Nodeid> getRevisions(int... revisions) {
 		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(revisions.length);
 		Arrays.sort(revisions);

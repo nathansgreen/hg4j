@@ -22,12 +22,15 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgCatCommand;
+import org.tmatesoft.hg.core.HgChangeset;
+import org.tmatesoft.hg.core.HgChangesetTreeHandler;
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgFileInformer;
 import org.tmatesoft.hg.core.HgFileRevision;
@@ -108,30 +111,46 @@ public class Main {
 //		m.bunchOfTests();
 	}
 
-	private void buildFileLog() {
-		final HgDataFile fn = hgRepo.getFileNode("file1");
-		HgChangelog.TreeInspector insp = new HgChangelog.TreeInspector() {
-			
-			public void next(Nodeid changesetRevision, Pair<Nodeid, Nodeid> parentChangesets, Collection<Nodeid> childChangesets) {
+	private void buildFileLog() throws Exception {
+		HgLogCommand cmd = new HgLogCommand(hgRepo);
+		cmd.file("file1", false);
+		cmd.execute(new HgChangesetTreeHandler() {
+			public void next(org.tmatesoft.hg.core.HgChangesetTreeHandler.TreeElement entry) {
 				StringBuilder sb = new StringBuilder();
-				for (Nodeid cc : childChangesets) {
-					sb.append(cc.shortNotation());
+				HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
+				for (HgChangeset cc : entry.children()) {
+					sb.append(cc.getRevision());
+					sb.append(':');
+					sb.append(cc.getNodeid().shortNotation());
 					sb.append(", ");
 				}
-				final boolean isJoin = !parentChangesets.first().isNull() && !parentChangesets.second().isNull();
-				final boolean isFork = childChangesets.size() > 1;
+				final Pair<Nodeid, Nodeid> parents = entry.parentRevisions();
+				final boolean isJoin = !parents.first().isNull() && !parents.second().isNull();
+				final boolean isFork = entry.children().size() > 1;
+				final HgChangeset cset = entry.changeset();
+				System.out.printf("%d:%s - %s\n", cset.getRevision(), cset.getNodeid().shortNotation(), cset.getComment());
+				if (!isJoin && !isFork && !entry.children().isEmpty()) {
+					System.out.printf("\t=> %s\n", sb);
+				}
 				if (isJoin) {
-					System.out.printf("join[(%s, %s) => %s]\n", parentChangesets.first().shortNotation(), parentChangesets.second().shortNotation(), changesetRevision.shortNotation());
+					HgChangeset p1 = entry.parents().first();
+					HgChangeset p2 = entry.parents().second();
+					System.out.printf("\tjoin <= (%d:%s, %d:%s)", p1.getRevision(), p1.getNodeid().shortNotation(), p2.getRevision(), p2.getNodeid().shortNotation());
+					if (isFork) {
+						System.out.print(", ");
+					}
 				}
 				if (isFork) {
-					System.out.printf("fork[%s => %s]\n", changesetRevision.shortNotation(), sb);
+					if (!isJoin) {
+						System.out.print('\t');
+					}
+					System.out.printf("fork => [%s]", sb);
 				}
-				if (!isFork && !isJoin && !childChangesets.isEmpty()) {
-					System.out.printf("%s => %s\n", changesetRevision.shortNotation(), sb);
+				if (isJoin || isFork) {
+					System.out.println();
 				}
 			}
-		};
-		fn.history(insp);
+		});
 	}
 
 	private void buildFileLogOld() {

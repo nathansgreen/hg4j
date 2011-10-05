@@ -17,11 +17,12 @@
 package org.tmatesoft.hg.internal;
 
 /**
- *
+ * Vector of primitive values
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-class IntVector {
+public class IntVector {
 	
 	private int[] data;
 	private final int increment;

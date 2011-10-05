@@ -33,6 +33,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
@@ -259,6 +260,10 @@ public class HgDataFile extends Revlog {
 		}
 	}
 	
+	/**
+	 * @deprecated use {@link HgLogCommand#execute(org.tmatesoft.hg.core.HgChangesetTreeHandler)} instead
+	 */
+	@Deprecated
 	public void history(HgChangelog.TreeInspector inspector) {
 		final CancelSupport cancelSupport = CancelSupport.Factory.get(inspector);
 		try {

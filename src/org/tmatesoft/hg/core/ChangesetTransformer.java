@@ -37,9 +37,9 @@ import org.tmatesoft.hg.util.ProgressSupport;
  */
 /*package-local*/ class ChangesetTransformer implements HgChangelog.Inspector {
 	private final HgChangesetHandler handler;
-	private final HgChangeset changeset;
 	private final ProgressSupport progressHelper;
 	private final CancelSupport cancelHelper;
+	private final Transformation t;
 	private Set<String> branches;
 	private HgCallbackTargetException failure;
 	private CancelledException cancellation;
@@ -54,11 +54,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 			throw new IllegalArgumentException();
 		}
 		HgStatusCollector statusCollector = new HgStatusCollector(hgRepo);
-		// files listed in a changeset don't need their names to be rewritten (they are normalized already)
-		PathPool pp = new PathPool(new PathRewrite.Empty());
-		statusCollector.setPathPool(pp);
-		changeset = new HgChangeset(statusCollector, pp);
-		changeset.setParentHelper(pw);
+		t = new Transformation(statusCollector, pw);
 		handler = delegate;
 		cancelHelper = cs;
 		progressHelper = ps;
@@ -72,7 +68,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 			return;
 		}
 
-		changeset.init(revisionNumber, nodeid, cset);
+		HgChangeset changeset = t.handle(revisionNumber, nodeid, cset);
 		try {
 			handler.next(changeset);
 			progressHelper.worked(1);
@@ -99,5 +95,23 @@ import org.tmatesoft.hg.util.ProgressSupport;
 	
 	public void limitBranches(Set<String> branches) {
 		this.branches = branches;
+	}
+
+	// part relevant to RawChangeset->HgChangeset transformation
+	static class Transformation {
+		private final HgChangeset changeset;
+
+		public Transformation(HgStatusCollector statusCollector, HgChangelog.ParentWalker pw) {
+			// files listed in a changeset don't need their names to be rewritten (they are normalized already)
+			PathPool pp = new PathPool(new PathRewrite.Empty());
+			statusCollector.setPathPool(pp);
+			changeset = new HgChangeset(statusCollector, pp);
+			changeset.setParentHelper(pw);
+		}
+		
+		HgChangeset handle(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+			changeset.init(revisionNumber, nodeid, cset);
+			return changeset;
+		}
 	}
 }
