@@ -19,7 +19,6 @@ package org.tmatesoft.hg.repo;
 import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
-import java.util.List;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
@@ -31,7 +30,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.InflaterDataAccess;
-import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.internal.Patch;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.CancelledException;
 
@@ -239,7 +238,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 
 		public boolean element(GroupElement ge) {
 			try {
-				System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cset(), ge.patches().size());
+				System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cset(), ge.patch().count());
 			} catch (Exception ex) {
 				ex.printStackTrace(); // FIXME
 			}
@@ -397,10 +396,11 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
+	// FIXME GroupElement exposes some internal API!!! (DataAccess)
 	public static class GroupElement {
 		private final byte[] header; // byte[80] takes 120 bytes, 4 Nodeids - 192
 		private final DataAccess dataAccess;
-		private List<RevlogStream.PatchRecord> patches;
+		private Patch patches;
 
 		GroupElement(byte[] fourNodeids, DataAccess rawDataAccess) {
 			assert fourNodeids != null && fourNodeids.length == 80;
@@ -432,21 +432,17 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			return dataAccess;
 		}
 		
-		public List<RevlogStream.PatchRecord> patches() throws IOException {
+		/*package-local*/ Patch patch() throws IOException {
 			if (patches == null) {
 				dataAccess.reset();
-				LinkedList<RevlogStream.PatchRecord> p = new LinkedList<RevlogStream.PatchRecord>();
-				while (!dataAccess.isEmpty()) {
-					RevlogStream.PatchRecord pr = RevlogStream.PatchRecord.read(dataAccess);
-					p.add(pr);
-				}
-				patches = p;
+				patches = new Patch();
+				patches.read(dataAccess);
 			}
 			return patches;
 		}
 
 		public byte[] apply(DataAccess baseContent) throws IOException {
-			return RevlogStream.apply(baseContent, -1, patches());
+			return patch().apply(baseContent, -1);
 		}
 	}
 }

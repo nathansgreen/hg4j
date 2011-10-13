@@ -57,6 +57,15 @@ public class IntVector {
 	public int size() {
 		return count;
 	}
+	
+	public void clear() {
+		count = 0;
+	}
+	
+	public void trimToSize() {
+		data = toArray(true);
+	}
+
 
 	public int[] toArray() {
 		int[] rv = new int[count];
@@ -77,8 +86,7 @@ public class IntVector {
 
 	private void grow() {
 		if (increment == 0) {
-			// throw specific exception right away
-			return;
+			throw new UnsupportedOperationException("This vector is not allowed to expand");
 		}
 		int newCapacity = increment < 0 ? data.length << 1 : data.length + increment;
 		assert newCapacity > 0 && newCapacity != data.length : newCapacity;

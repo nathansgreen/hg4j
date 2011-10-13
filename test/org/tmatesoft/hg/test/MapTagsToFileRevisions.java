@@ -40,7 +40,8 @@ public class MapTagsToFileRevisions {
 	public static void main(String[] args) throws Exception {
 		MapTagsToFileRevisions m = new MapTagsToFileRevisions();
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
-		m.collectTagsPerFile();
+		m.measurePatchAffectsArbitraryRevisionRead();
+//		m.collectTagsPerFile();
 //		m.manifestWalk();
 //		m.changelogWalk();
 //		m.revisionMap();
@@ -50,6 +51,24 @@ public class MapTagsToFileRevisions {
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
 	
+
+	// revision == 2406  -   5 ms per run (baseRevision == 2406)
+	// revision == 2405  -  69 ms per run (baseRevision == 1403)
+	private void measurePatchAffectsArbitraryRevisionRead() throws Exception {
+		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
+		final DoNothingManifestInspector insp = new DoNothingManifestInspector();
+		final int revision = 2405;
+		// warm-up.
+		repository.getManifest().walk(revision, revision, insp);
+		final int runs = 10;
+		final long start = System.nanoTime();
+		for (int i = 0; i < runs; i++) {
+			repository.getManifest().walk(revision, revision, insp);
+		}
+		final long end = System.nanoTime();
+		System.out.printf("%d ms per run\n", (end - start)/ (runs*1000000));
+	}
+
 	/*
 	 * .hgtags, 261 revisions
 	 * Approach 1: total 83, init: 0, iteration: 82
@@ -174,20 +193,7 @@ public class MapTagsToFileRevisions {
 		System.out.println(System.getProperty("java.version"));
 		final long start = System.currentTimeMillis();
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
-		repository.getManifest().walk(0, 10000, new HgManifest.Inspector2() {
-			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
-				return true;
-			}
-			public boolean next(Nodeid nid, String fname, String flags) {
-				throw new HgBadStateException(HgManifest.Inspector2.class.getName());
-			}
-			public boolean next(Nodeid nid, Path fname, Flags flags) {
-				return true;
-			}
-			public boolean end(int manifestRevision) {
-				return true;
-			}
-		});
+		repository.getManifest().walk(0, 10000, new DoNothingManifestInspector());
 		// cpython: 1,1 sec for 0..1000, 43 sec for 0..10000, 115 sec for 0..20000 (Pool with HashMap)
 		// 2,4 sec for 1000..2000
 		// cpython -r 1000: 484 files, -r 2000: 1015 files. Iteration 1000..2000; fnamePool.size:1019 nodeidPool.size:2989
@@ -240,7 +246,7 @@ public class MapTagsToFileRevisions {
 		final IntMap<List<TagInfo>> tagLocalRev2TagInfo = new IntMap<List<TagInfo>>(allTags.length);
 		System.out.printf("Collecting manifests for %d tags\n", allTags.length);
 		final int[] tagLocalRevs = collectLocalTagRevisions(clogrmap, allTags, tagLocalRev2TagInfo);
-		System.out.printf("Prepared tag revisions to analyze: %d ms\n", System.currentTimeMillis() - start);
+		System.out.printf("Prepared %d tag revisions to analyze: %d ms\n", tagLocalRevs.length, System.currentTimeMillis() - start);
 
 		final Path targetPath = Path.create("README");
 		//
@@ -365,6 +371,21 @@ public class MapTagsToFileRevisions {
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
 
+	static class DoNothingManifestInspector implements HgManifest.Inspector2 {
+		public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
+			return true;
+		}
+		public boolean next(Nodeid nid, String fname, String flags) {
+			throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+		}
+		public boolean next(Nodeid nid, Path fname, Flags flags) {
+			return true;
+		}
+		public boolean end(int manifestRevision) {
+			return true;
+		}
+	}
+	
 	public static void main2(String[] args) throws HgException, CancelledException {
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
 		final Path targetPath = Path.create("README");

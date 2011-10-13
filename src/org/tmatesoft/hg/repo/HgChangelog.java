@@ -32,7 +32,6 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.IterateControlMediator;

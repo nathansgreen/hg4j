@@ -21,8 +21,6 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.HgBadStateException;
@@ -392,20 +390,17 @@ public class RevlogStream {
 		public boolean range(int start, int end) throws IOException {
 			byte[] nodeidBuf = new byte[20];
 			int i;
-			boolean extraReadsToBaseRev = false; // to indicate we read revision prior to start. XXX not sure can't do without
 			// it (i.e. replace with i >= start)
 			if (needData && (i = getBaseRevision(start)) < start) {
 				// if lastRevisionRead in [baseRevision(start), start)  can reuse lastUserData
 				// doesn't make sense to reuse if lastRevisionRead == start (too much to change in the cycle below). 
 				if (lastRevisionRead != BAD_REVISION && i <= lastRevisionRead && lastRevisionRead < start) {
 					i = lastRevisionRead + 1; // start with first not-yet-read revision
-					extraReadsToBaseRev = i < start;
 				} else {
 					if (lastUserData != null) {
 						lastUserData.done();
 						lastUserData = null;
 					}
-					extraReadsToBaseRev = true;
 				}
 			} else {
 				// don't need to clean lastUserData as it's always null when !needData
@@ -415,7 +410,7 @@ public class RevlogStream {
 			daIndex.seek(getIndexOffsetInt(i));
 			//
 			// reuse some instances
-			final ArrayList<PatchRecord> patches = new ArrayList<PatchRecord>();
+			final Patch patch = new Patch();
 			final Inflater inflater = new Inflater();
 			// can share buffer between instances of InflaterDataAccess as I never read any two of them in parallel
 			final byte[] inflaterBuffer = new byte[1024];
@@ -470,12 +465,7 @@ public class RevlogStream {
 					// XXX 
 					if (patchToPrevious) {
 						// this is a patch
-						patches.clear(); // won't hurt to ensure there are no leftovers, even if we already cleaned
-						while (!userDataAccess.isEmpty()) {
-							PatchRecord pr = PatchRecord.read(userDataAccess);
-//							System.out.printf("PatchRecord:%d %d %d\n", pr.start, pr.end, pr.len);
-							patches.add(pr);
-						}
+						patch.read(userDataAccess);
 						userDataAccess.done();
 						//
 						// it shall be reset at the end of prev iteration, when it got assigned from userDataAccess
@@ -483,9 +473,9 @@ public class RevlogStream {
 						// Alternatively, userDataAccess.done() above may be responsible to reset Inflater (if it's InflaterDataAccess)
 						lastUserData.reset();
 //						final long startMeasuring = System.currentTimeMillis(); // TIMING
-						byte[] userData = apply(lastUserData, actualLen, patches);
+						byte[] userData = patch.apply(lastUserData, actualLen);
 //						applyTime += (System.currentTimeMillis() - startMeasuring); // TIMING
-						patches.clear(); // do not keep any reference, allow PatchRecord to be gc'd
+						patch.clear(); // do not keep any reference, allow byte[] data to be gc'd
 						userDataAccess = new ByteArrayDataAccess(userData);
 					}
 				} else {
@@ -493,7 +483,7 @@ public class RevlogStream {
 						daIndex.skip(compressedLen);
 					}
 				}
-				if (!extraReadsToBaseRev || i >= start) {
+				if (i >= start) {
 //					final long startMeasuring = System.currentTimeMillis(); // TIMING
 					inspector.next(i, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeidBuf, userDataAccess);
 //					inspectorTime += (System.currentTimeMillis() - startMeasuring); // TIMING
@@ -517,75 +507,6 @@ public class RevlogStream {
 	}
 
 	
-	// mpatch.c : apply()
-	// FIXME need to implement patch merge (fold, combine, gather and discard from aforementioned mpatch.[c|py]), also see Revlog and Mercurial PDF
-	public/*for HgBundle; until moved to better place*/static byte[] apply(DataAccess baseRevisionContent, int outcomeLen, List<PatchRecord> patch) throws IOException {
-		int last = 0, destIndex = 0;
-		if (outcomeLen == -1) {
-			outcomeLen = baseRevisionContent.length();
-			for (int i = 0, x = patch.size(); i < x; i++) {
-				PatchRecord pr = patch.get(i);
-				outcomeLen += pr.start - last + pr.len;
-				last = pr.end;
-			}
-			outcomeLen -= last;
-			last = 0;
-		}
-		byte[] rv = new byte[outcomeLen];
-		for (int i = 0, x = patch.size(); i < x; i++) {
-			PatchRecord pr = patch.get(i);
-			baseRevisionContent.seek(last);
-			baseRevisionContent.readBytes(rv, destIndex, pr.start-last);
-			destIndex += pr.start - last;
-			System.arraycopy(pr.data, 0, rv, destIndex, pr.data.length);
-			destIndex += pr.data.length;
-			last = pr.end;
-		}
-		baseRevisionContent.seek(last);
-		baseRevisionContent.readBytes(rv, destIndex, (int) (baseRevisionContent.length() - last));
-		return rv;
-	}
-
-	// @see http://mercurial.selenic.com/wiki/BundleFormat, in Changelog group description
-	public static class PatchRecord {
-		/*
-		   Given there are pr1 and pr2:
-		     pr1.start to pr1.end will be replaced with pr's data (of pr1.len)
-		     pr1.end to pr2.start gets copied from base
-		 */
-		public int start, end, len;
-		public byte[] data;
-
-		// TODO consider PatchRecord that only records data position (absolute in data source), and acquires data as needed 
-		private PatchRecord(int p1, int p2, int length, byte[] src) {
-			start = p1;
-			end = p2;
-			len = length;
-			data = src;
-		}
-
-		/*package-local*/ static PatchRecord read(byte[] data, int offset) {
-			final int x = offset; // shorthand
-			int p1 =  ((data[x] & 0xFF)<< 24)    | ((data[x+1] & 0xFF) << 16) | ((data[x+2] & 0xFF) << 8)  | (data[x+3] & 0xFF);
-			int p2 =  ((data[x+4] & 0xFF) << 24) | ((data[x+5] & 0xFF) << 16) | ((data[x+6] & 0xFF) << 8)  | (data[x+7] & 0xFF);
-			int len = ((data[x+8] & 0xFF) << 24) | ((data[x+9] & 0xFF) << 16) | ((data[x+10] & 0xFF) << 8) | (data[x+11] & 0xFF);
-			byte[] dataCopy = new byte[len];
-			System.arraycopy(data, x+12, dataCopy, 0, len);
-			return new PatchRecord(p1, p2, len, dataCopy);
-		}
-
-		public /*for HgBundle*/ static PatchRecord read(DataAccess da) throws IOException {
-			int p1 = da.readInt();
-			int p2 = da.readInt();
-			int len = da.readInt();
-			byte[] src = new byte[len];
-			da.readBytes(src, 0, len);
-			return new PatchRecord(p1, p2, len, src);
-		}
-	}
-
-	// FIXME byte[] data might be too expensive, for few usecases it may be better to have intermediate Access object (when we don't need full data 
-	// instantly - e.g. calculate hash, or comparing two revisions
 	public interface Inspector {
 		// XXX boolean retVal to indicate whether to continue?
 		// TODO specify nodeid and data length, and reuse policy (i.e. if revlog stream doesn't reuse nodeid[] for each call)
