@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- *
+ * .ini / .rc file reader
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -44,17 +44,7 @@ public class ConfigFile {
 	}
 	
 	public boolean hasSection(String sectionName) {
-		return sections == null ? false : sections.indexOf(sectionName) == -1;
-	}
-	
-	// XXX perhaps, should be moved to subclass HgRepoConfig, as it is not common operation for any config file
-	public boolean hasEnabledExtension(String extensionName) {
-		int x = sections != null ? sections.indexOf("extensions") : -1;
-		if (x == -1) {
-			return false;
-		}
-		String value = content.get(x).get(extensionName);
-		return value != null && !"!".equals(value);
+		return sections == null ? false : sections.indexOf(sectionName) != -1;
 	}
 	
 	public List<String> getSectionNames() {
@@ -92,6 +82,7 @@ public class ConfigFile {
 
 	// TODO handle %include and %unset directives
 	// TODO "" and lists
+	// XXX perhaps, single string to keep whole section with substrings for keys/values to minimize number of arrays (String.value)
 	private void read(File f) throws IOException {
 		if (f == null || !f.canRead()) {
 			return;

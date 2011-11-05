@@ -73,7 +73,7 @@ public final class HgRepository {
 	private final PathRewrite normalizePath;
 	private final PathRewrite dataPathHelper;
 	private final PathRewrite repoPathHelper;
-	private final boolean isCaseSensitiveFileSystem;
+	private final boolean isCaseSensitiveFileSystem; // FIXME keep this inside Internals impl and delegate to Internals all os/fs-specific tasks
 	private final SessionContext sessionContext;
 
 	private HgChangelog changelog;
@@ -88,7 +88,7 @@ public final class HgRepository {
 	
 	private final org.tmatesoft.hg.internal.Internals impl = new org.tmatesoft.hg.internal.Internals();
 	private HgIgnore ignore;
-	private ConfigFile configFile;
+	private HgRepoConfig repoConfig;
 	
 	HgRepository(String repositoryPath) {
 		repoDir = null;
@@ -283,6 +283,22 @@ public final class HgRepository {
 		return subRepos.all();
 	}
 
+	
+	public HgRepoConfig getConfiguration() /* XXX throws HgInvalidControlFileException? Description of the exception suggests it is only for files under ./hg/*/ {
+		if (repoConfig == null) {
+			try {
+				ConfigFile configFile = impl.readConfiguration(this, getRepositoryRoot());
+				repoConfig = new HgRepoConfig(configFile);
+			} catch (IOException ex) {
+				String m = "Errors while reading user configuration file";
+				getContext().getLog().warn(getClass(), ex, m);
+				return new HgRepoConfig(new ConfigFile()); // empty config, do not cache, allow to try once again
+				//throw new HgInvalidControlFileException(m, ex, null);
+			}
+		}
+		return repoConfig;
+	}
+
 	// shall be of use only for internal classes 
 	/*package-local*/ File getRepositoryRoot() {
 		return repoDir;
@@ -354,22 +370,6 @@ public final class HgRepository {
 		return null; // XXX empty stream instead?
 	}
 	
-	// can't expose internal class, otherwise seems reasonable to have it in API
-	/*package-local*/ ConfigFile getConfigFile() {
-		if (configFile == null) {
-			configFile = new ConfigFile();
-			try {
-				configFile.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
-				// last one, overrides anything else
-				// <repo>/.hg/hgrc
-				configFile.addLocation(new File(getRepositoryRoot(), "hgrc"));
-			} catch (IOException ex) {
-				getContext().getLog().warn(getClass(), ex, "Errors while reading user configuration file");
-			}
-		}
-		return configFile;
-	}
-	
 	/*package-local*/ List<Filter> getFiltersFromRepoToWorkingDir(Path p) {
 		return instantiateFilters(p, new Filter.Options(Filter.Direction.FromRepo));
 	}
@@ -387,7 +387,7 @@ public final class HgRepository {
 	}
 
 	private List<Filter> instantiateFilters(Path p, Filter.Options opts) {
-		List<Filter.Factory> factories = impl.getFilters(this, getConfigFile());
+		List<Filter.Factory> factories = impl.getFilters(this);
 		if (factories.isEmpty()) {
 			return Collections.emptyList();
 		}

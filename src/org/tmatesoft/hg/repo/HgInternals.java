@@ -26,7 +26,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.util.FileIterator;
@@ -97,10 +96,6 @@ public class HgInternals {
 		return repo.getRepositoryRoot();
 	}
 	
-	public ConfigFile getRepoConfig() {
-		return repo.getConfigFile();
-	}
-	
 	public static HgIgnore newHgIgnore(Reader source) throws IOException {
 		HgIgnore hgIgnore = new HgIgnore();
 		BufferedReader br = source instanceof BufferedReader ? (BufferedReader) source : new BufferedReader(source);
@@ -115,7 +110,7 @@ public class HgInternals {
 		if (hgUser != null && hgUser.trim().length() > 0) {
 			return hgUser.trim();
 		}
-		String configValue = getRepoConfig().getString("ui", "username", null);
+		String configValue = repo.getConfiguration().getStringValue("ui", "username", null);
 		if (configValue != null) {
 			return configValue;
 		}

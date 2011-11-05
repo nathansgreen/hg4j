@@ -33,7 +33,7 @@ public interface Filter {
 	ByteBuffer filter(ByteBuffer src);
 
 	interface Factory {
-		void initialize(HgRepository hgRepo, ConfigFile cfg);
+		void initialize(HgRepository hgRepo);
 		// may return null if for a given path and/or options this filter doesn't make any sense
 		Filter create(Path path, Options opts);
 	}

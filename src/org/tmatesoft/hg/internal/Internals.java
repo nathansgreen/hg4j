@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -73,17 +74,18 @@ public class Internals {
 		}
 	}
 
-	public List<Filter.Factory> getFilters(HgRepository hgRepo, ConfigFile cfg) {
+	public List<Filter.Factory> getFilters(HgRepository hgRepo) {
 		if (filterFactories == null) {
 			filterFactories = new ArrayList<Filter.Factory>();
-			if (cfg.hasEnabledExtension("eol")) {
+			ExtensionsSection cfg = hgRepo.getConfiguration().getExtensions();
+			if (cfg.isEnabled("eol")) {
 				NewlineFilter.Factory ff = new NewlineFilter.Factory();
-				ff.initialize(hgRepo, cfg);
+				ff.initialize(hgRepo);
 				filterFactories.add(ff);
 			}
-			if (cfg.hasEnabledExtension("keyword")) {
+			if (cfg.isEnabled("keyword")) {
 				KeywordFilter.Factory ff = new KeywordFilter.Factory();
-				ff.initialize(hgRepo, cfg);
+				ff.initialize(hgRepo);
 				filterFactories.add(ff);
 			}
 		}
@@ -113,4 +115,13 @@ public class Internals {
 		return System.getProperty("os.name").indexOf("Windows") != -1;
 	}
 
+	public ConfigFile readConfiguration(HgRepository hgRepo, File repoRoot) throws IOException {
+		ConfigFile configFile = new ConfigFile();
+		// FIXME use Unix/Win location according to runningOnWindows
+		configFile.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
+		// last one, overrides anything else
+		// <repo>/.hg/hgrc
+		configFile.addLocation(new File(repoRoot, "hgrc"));
+		return configFile;
+	}
 }

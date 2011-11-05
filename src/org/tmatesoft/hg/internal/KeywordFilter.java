@@ -18,11 +18,11 @@ package org.tmatesoft.hg.internal;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.TreeMap;
 
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -280,12 +280,12 @@ public class KeywordFilter implements Filter {
 		private HgRepository repo;
 		private Path.Matcher matcher;
 
-		public void initialize(HgRepository hgRepo, ConfigFile cfg) {
+		public void initialize(HgRepository hgRepo) {
 			repo = hgRepo;
 			ArrayList<String> patterns = new ArrayList<String>();
-			for (Map.Entry<String,String> e : cfg.getSection("keyword").entrySet()) {
-				if (!"ignore".equalsIgnoreCase(e.getValue())) {
-					patterns.add(e.getKey());
+			for (Pair<String,String> e : hgRepo.getConfiguration().getSection("keyword")) {
+				if (!"ignore".equalsIgnoreCase(e.second())) {
+					patterns.add(e.first());
 				}
 			}
 			matcher = new PathGlobMatcher(patterns.toArray(new String[patterns.size()]));

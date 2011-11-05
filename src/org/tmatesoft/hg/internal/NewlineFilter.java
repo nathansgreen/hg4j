@@ -166,8 +166,8 @@ public class NewlineFilter implements Filter {
 		private String nativeRepoFormat;
 		private String nativeOSFormat;
 
-		public void initialize(HgRepository hgRepo, ConfigFile cfg) {
-			failIfInconsistent = cfg.getBoolean("eol", "only-consistent", true);
+		public void initialize(HgRepository hgRepo) {
+			failIfInconsistent = hgRepo.getConfiguration().getBooleanValue("eol", "only-consistent", true);
 			File cfgFile = new File(hgRepo.getWorkingDir(), ".hgeol");
 			if (!cfgFile.canRead()) {
 				return;
