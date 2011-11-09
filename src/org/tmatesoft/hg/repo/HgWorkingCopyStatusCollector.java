@@ -415,8 +415,15 @@ public class HgWorkingCopyStatusCollector {
 							if (buffer.position() > 5) {
 								buffer.position(buffer.position() - 5);
 							}
-							buffer.get(xx, 0, min(xx.length, i));
-							repo.getContext().getLog().debug(getClass(), "expected >>%s<< but got >>%s<<", new String(data, max(0, x - 4), min(data.length - x, 20)), new String(xx));
+							buffer.get(xx, 0, min(xx.length, i-1 /*-1 for the one potentially read at buffer.get in if() */));
+							String exp;
+							if (x < data.length) {
+								exp = new String(data, max(0, x - 4), min(data.length - x, 20));
+							} else {
+								int offset = max(0, x - 4);
+								exp = new String(data, offset, min(data.length - offset, 20));
+							}
+							repo.getContext().getLog().debug(getClass(), "expected >>%s<< but got >>%s<<", exp, new String(xx));
 						}
 						sameSoFar = false;
 						break;
