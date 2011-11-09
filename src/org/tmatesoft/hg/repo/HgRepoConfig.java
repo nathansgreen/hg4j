@@ -114,6 +114,7 @@ public final class HgRepoConfig /*implements RepoChangeListener, perhaps, also R
 		 * @return defined keys, in the order they appear in the section
 		 */
 		public List<String> getKeys() {
+			// PathsSection depends on return value being modifiable
 			return new ArrayList<String>(config.getSection(section).keySet());
 		}
 		
@@ -170,6 +171,17 @@ public final class HgRepoConfig /*implements RepoChangeListener, perhaps, also R
 	public class PathsSection extends Section {
 		PathsSection() {
 			super("paths");
+		}
+		
+		/**
+		 * Similar to {@link #getKeys()}, but without entries for <b>default</b> and <b>default-push</b> paths
+		 * @return list of path symbolic names
+		 */
+		public List<String> getPathSymbolicNames() {
+			final List<String> rv = getKeys();
+			rv.remove("default");
+			rv.remove("default-push");
+			return rv;
 		}
 
 		public boolean hasDefault() {
