@@ -75,6 +75,11 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 
 	private void read() {
 		normal = added = removed = merged = Collections.<Path, Record>emptyMap();
+		if (canonicalPathRewrite != null) {
+			canonical2dirstateName = new HashMap<Path,Path>();
+		} else {
+			canonical2dirstateName = Collections.emptyMap();
+		}
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return;
 		}
@@ -87,11 +92,6 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		added = new LinkedHashMap<Path, Record>();
 		removed = new LinkedHashMap<Path, Record>();
 		merged = new LinkedHashMap<Path, Record>();
-		if (canonicalPathRewrite != null) {
-			canonical2dirstateName = new HashMap<Path,Path>();
-		} else {
-			canonical2dirstateName = Collections.emptyMap();
-		}
 		try {
 			parents = internalReadParents(da);
 			// hg init; hg up produces an empty repository where dirstate has parents (40 bytes) only
