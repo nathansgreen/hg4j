@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.tmatesoft.hg.util.Path;
 
@@ -41,19 +42,20 @@ public class HgIgnore implements Path.Matcher {
 		entries = Collections.emptyList();
 	}
 
-	/* package-local */void read(File hgignoreFile) throws IOException {
+	/* package-local */List<String> read(File hgignoreFile) throws IOException {
 		if (!hgignoreFile.exists()) {
-			return;
+			return null;
 		}
 		BufferedReader fr = new BufferedReader(new FileReader(hgignoreFile));
 		try {
-			read(fr);
+			return read(fr);
 		} finally {
 			fr.close();
 		}
 	}
 
-	/* package-local */void read(BufferedReader content) throws IOException {
+	/* package-local */List<String> read(BufferedReader content) throws IOException {
+		ArrayList<String> errors = new ArrayList<String>();
 		ArrayList<Pattern> result = new ArrayList<Pattern>(entries); // start with existing
 		String syntax = "regexp"; // or "glob"
 		String line;
@@ -62,7 +64,9 @@ public class HgIgnore implements Path.Matcher {
 			if (line.startsWith("syntax:")) {
 				syntax = line.substring("syntax:".length()).trim();
 				if (!"regexp".equals(syntax) && !"glob".equals(syntax)) {
-					throw new IllegalStateException(line);
+					errors.add(line);
+					continue;
+					//throw new IllegalStateException(line);
 				}
 			} else if (line.length() > 0) {
 				// shall I account for local paths in the file (i.e.
@@ -87,11 +91,16 @@ public class HgIgnore implements Path.Matcher {
 					// however, own attempts make me think '\' on Windows are not treated as escapes
 					line = glob2regex(line);
 				}
-				result.add(Pattern.compile(line)); // case-sensitive
+				try {
+					result.add(Pattern.compile(line)); // case-sensitive
+				} catch (PatternSyntaxException ex) {
+					errors.add(line + "@" + ex.getMessage());
+				}
 			}
 		}
 		result.trimToSize();
 		entries = result;
+		return errors.isEmpty() ? null : errors;
 	}
 
 	// note, #isIgnored(), even if queried for directories and returned positive reply, may still get

@@ -23,7 +23,8 @@ import org.tmatesoft.hg.internal.Experimental;
 /**
  * WORK IN PROGRESS
  * 
- * Subclass of {@link HgInvalidFileException} to indicate failure to deal with one of <b>Mercurial</b> control files (those under .hg/)
+ * Subclass of {@link HgInvalidFileException} to indicate failure to deal with one of <b>Mercurial</b> control files 
+ * (most likely those under .hg/, but also those residing in the repository, with special meaning to the Mercurial, like .hgtags or .hgignore)
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */

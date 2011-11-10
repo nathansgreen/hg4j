@@ -323,15 +323,20 @@ public final class HgRepository {
 	 * Access to configured set of ignored files.
 	 * @see HgIgnore#isIgnored(Path)
 	 */
-	public HgIgnore getIgnore() {
+	public HgIgnore getIgnore() /*throws HgInvalidControlFileException */{
 		// TODO read config for additional locations
 		if (ignore == null) {
 			ignore = new HgIgnore();
+			File ignoreFile = new File(getWorkingDir(), ".hgignore");
 			try {
-				File ignoreFile = new File(getWorkingDir(), ".hgignore");
-				ignore.read(ignoreFile);
+				final List<String> errors = ignore.read(ignoreFile);
+				if (errors != null) {
+					getContext().getLog().warn(getClass(), "Syntax errors parsing .hgignore:\n%s", errors);
+				}
 			} catch (IOException ex) {
-				getContext().getLog().warn(getClass(), ex, null);
+				final String m = "Error reading .hgignore file";
+				getContext().getLog().warn(getClass(), ex, m);
+//				throw new HgInvalidControlFileException(m, ex, ignoreFile);
 			}
 		}
 		return ignore;
