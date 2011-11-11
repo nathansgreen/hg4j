@@ -93,6 +93,7 @@ public class HgMergeState {
 
 	public void refresh() throws IOException/*XXX it's unlikely caller can do anything reasonable about IOException */ {
 		entries = null;
+		wcp1 = wcp2 = stateParent = Nodeid.NULL;
 		final File f = new File(repo.getRepositoryRoot(), "merge/state");
 		if (!f.canRead()) {
 			// empty state
@@ -172,7 +173,11 @@ public class HgMergeState {
 		}
 		return !wcp1.equals(stateParent); 
 	}
-	
+
+	/**
+	 * FIXME decide what to return if there's no merge state altogether (perhaps, separate method to check that)
+	 * @return never <code>null</code>
+	 */
 	public Nodeid getFirstParent() {
 		if (wcp1 == null) {
 			throw new HgBadStateException("Call #refresh() first");
@@ -187,6 +192,9 @@ public class HgMergeState {
 		return wcp2;
 	}
 	
+	/**
+	 * @return revision of the merge state or {@link Nodeid#NULL} if there's no merge state
+	 */
 	public Nodeid getStateParent() {
 		if (stateParent == null) {
 			throw new HgBadStateException("Call #refresh() first");
