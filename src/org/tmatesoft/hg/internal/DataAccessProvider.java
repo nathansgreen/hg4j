@@ -32,18 +32,34 @@ import org.tmatesoft.hg.core.SessionContext;
  * @author TMate Software Ltd.
  */
 public class DataAccessProvider {
+	/**
+	 * Boundary to start using file memory mapping instead of regular file access, in bytes.  
+	 * Set to 0 to indicate mapping files into memory shall not be used.
+	 * If set to -1, file of any size would be mapped in memory.
+	 */
+	public static final String CFG_PROPERTY_MAPIO_LIMIT				= "hg4j.dap.mapio_limit";
+	public static final String CFG_PROPERTY_MAPIO_BUFFER_SIZE		= "hg4j.dap.mapio_buffer";
+	public static final String CFG_PROPERTY_FILE_BUFFER_SIZE		= "hg4j.dap.file_buffer";
 
 	private final int mapioMagicBoundary;
 	private final int bufferSize;
 	private final SessionContext context;
 
 	public DataAccessProvider(SessionContext ctx) {
-		this(ctx, 100 * 1024, 8 * 1024);
+		this(ctx, getConfigOption(ctx, CFG_PROPERTY_MAPIO_LIMIT, 100 * 1024), getConfigOption(ctx, CFG_PROPERTY_FILE_BUFFER_SIZE, 8 * 1024));
+	}
+	
+	private static int getConfigOption(SessionContext ctx, String optName, int defaultValue) {
+		Object v = ctx.getProperty(optName, defaultValue);
+		if (false == v instanceof Number) {
+			v = Integer.parseInt(v.toString());
+		}
+		return ((Number) v).intValue();
 	}
 
 	public DataAccessProvider(SessionContext ctx, int mapioBoundary, int regularBufferSize) {
 		context = ctx;
-		mapioMagicBoundary = mapioBoundary;
+		mapioMagicBoundary = mapioBoundary == 0 ? Integer.MAX_VALUE : mapioBoundary;
 		bufferSize = regularBufferSize;
 	}
 
@@ -59,12 +75,12 @@ public class DataAccessProvider {
 			}
 			if (flen > mapioMagicBoundary) {
 				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
-				return new MemoryMapFileAccess(fc, flen, mapioMagicBoundary);
+				return new MemoryMapFileAccess(fc, flen, getConfigOption(context, CFG_PROPERTY_MAPIO_BUFFER_SIZE, 100*1024 /*same as default boundary*/));
 			} else {
 				// XXX once implementation is more or less stable,
 				// may want to try ByteBuffer.allocateDirect() to see
 				// if there's any performance gain. 
-				boolean useDirectBuffer = false;
+				boolean useDirectBuffer = false; // XXX might be another config option
 				// TESTS: bufferSize of 100 was used to check buffer underflow states when readBytes reads chunks bigger than bufSize
 				return new FileAccess(fc, flen, bufferSize, useDirectBuffer);
 			}
@@ -83,10 +99,10 @@ public class DataAccessProvider {
 		private final int memBufferSize;
 		private MappedByteBuffer buffer;
 
-		public MemoryMapFileAccess(FileChannel fc, int channelSize, int /*long?*/ bufferSize) {
+		public MemoryMapFileAccess(FileChannel fc, int channelSize, int bufferSize) {
 			fileChannel = fc;
 			size = channelSize;
-			memBufferSize = bufferSize;
+			memBufferSize = bufferSize > channelSize ? channelSize : bufferSize; // no reason to waste memory more than there's data 
 		}
 
 		@Override

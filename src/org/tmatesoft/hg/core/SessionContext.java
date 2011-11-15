@@ -31,4 +31,9 @@ import org.tmatesoft.hg.util.LogFacility;
 @Experimental(reason="Work in progress")
 public interface SessionContext {
 	LogFacility getLog();
+	
+	/**
+	 * LIKELY TO CHANGE TO STANDALONE CONFIGURATION OBJECT
+	 */
+	Object getProperty(String name, Object defaultValue);
 }

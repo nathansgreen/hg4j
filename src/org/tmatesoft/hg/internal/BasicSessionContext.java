@@ -48,4 +48,8 @@ public class BasicSessionContext implements SessionContext {
 		return logFacility;
 	}
 
+	public Object getProperty(String name, Object defaultValue) {
+		String value = System.getProperty(name);
+		return value == null ? defaultValue : value;
+	}
 }
