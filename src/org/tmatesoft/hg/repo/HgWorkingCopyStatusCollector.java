@@ -30,6 +30,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -271,6 +272,10 @@ public class HgWorkingCopyStatusCollector {
 				// size is the same or unknown, and, perhaps, different timestamp
 				// check actual content to avoid false modified files
 				HgDataFile df = repo.getFileNode(fname);
+				if (!df.exists()) {
+					String msg = String.format("File %s known as normal in dirstate (%d, %d), doesn't exist at %s", fname, r.modificationTime(), r.size(), repo.getStoragePath(df));
+					throw new HgBadStateException(msg);
+				}
 				Nodeid rev = getDirstateParentManifest().nodeid(fname);
 				// rev might be null here if fname comes to dirstate as a result of a merge operation
 				// where one of the parents (first parent) had no fname file, but second parent had.

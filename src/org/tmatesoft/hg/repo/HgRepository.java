@@ -303,6 +303,11 @@ public final class HgRepository {
 	/*package-local*/ File getRepositoryRoot() {
 		return repoDir;
 	}
+	
+	// FIXME remove once NPE in HgWorkingCopyStatusCollector.areTheSame is solved
+	/*package-local, debug*/String getStoragePath(HgDataFile df) {
+		return dataPathHelper.rewrite(df.getPath().toString()).toString();
+	}
 
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
 	// XXX consider passing Path pool or factory to produce (shared) Path instead of Strings
