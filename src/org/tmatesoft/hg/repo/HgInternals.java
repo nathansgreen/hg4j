@@ -83,15 +83,6 @@ public class HgInternals {
 		return rv;
 	}
 
-	public boolean[] checkIgnored(String... toCheck) {
-		HgIgnore ignore = repo.getIgnore();
-		boolean[] rv = new boolean[toCheck.length];
-		for (int i = 0; i < toCheck.length; i++) {
-			rv[i] = ignore.isIgnored(Path.create(toCheck[i]));
-		}
-		return rv;
-	}
-
 	public File getRepositoryDir() {
 		return repo.getRepositoryRoot();
 	}

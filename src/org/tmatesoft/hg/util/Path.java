@@ -17,6 +17,8 @@
 package org.tmatesoft.hg.util;
 
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
  * Identify repository files (not String nor io.File). Convenient for pattern matching. Memory-friendly.
@@ -60,6 +62,43 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 	@Override
 	public String toString() {
 		return path; // CharSequence demands toString() impl
+	}
+	
+	public Iterable<String> segments() {
+		class SegSeq implements Iterable<String>, Iterator<String> {
+			private int pos; // first char to return
+
+			public Iterator<String> iterator() {
+				reset();
+				return this;
+			}
+			public boolean hasNext() {
+				return pos < path.length();
+			}
+			public String next() {
+				if (pos >= path.length()) {
+					throw new NoSuchElementException();
+				}
+				int x = path.indexOf('/', pos);
+				if (x == -1) {
+					String rv = path.substring(pos);
+					pos = path.length();
+					return rv;
+				} else {
+					String rv = path.substring(pos, x);
+					pos = x+1;
+					return rv;
+				}
+			}
+			public void remove() {
+				throw new UnsupportedOperationException();
+			}
+
+			private void reset() {
+				pos = 0;
+			}
+		};
+		return new SegSeq();
 	}
 
 	public int compareTo(Path o) {

@@ -118,14 +118,7 @@ public class HgIgnore implements Path.Matcher {
 	private static String glob2regex(String line) {
 		assert line.length() > 0;
 		StringBuilder sb = new StringBuilder(line.length() + 10);
-		if (line.charAt(0) != '*') {
-			sb.append('^'); // help avoid matcher.find() to match 'bin' pattern in the middle of the filename
-		}
 		int start = 0, end = line.length() - 1;
-		// '*' at the beginning and end of a line are useless for Pattern
-		// XXX although how about **.txt - such globs can be seen in a config, are they valid for HgIgnore?
-		while (start <= end && line.charAt(start) == '*') start++;
-		while (end > start && line.charAt(end) == '*') end--;
 
 		int inCurly = 0;
 		for (int i = start; i <= end; i++) {
@@ -170,9 +163,17 @@ public class HgIgnore implements Path.Matcher {
 	 * @return <code>true</code> if matches repository configuration of ignored files.
 	 */
 	public boolean isIgnored(Path path) {
+		boolean isDeep = path.toString().indexOf('/') != -1;
 		for (Pattern p : entries) {
-			if (p.matcher(path).find()) {
+			if (p.matcher(path).matches()) {
 				return true;
+			}
+			if (isDeep) {
+				for (String segment : path.segments()) {
+					if (p.matcher(segment).matches()) {
+						return true;
+					}
+				}
 			}
 		}
 		return false;

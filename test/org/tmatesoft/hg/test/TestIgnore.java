@@ -41,6 +41,8 @@ public class TestIgnore {
 		TestIgnore test = new TestIgnore();
 		test.testGlobWithAlternatives();
 		test.testComplexFileParse();
+		test.testSegmentsMatch();
+		test.testWildcardsDoNotMatchDirectorySeparator();
 		test.errorCollector.verify();
 	}
 	
@@ -71,4 +73,55 @@ public class TestIgnore {
 		}
 	}
 
+	@Test
+	public void testSegmentsMatch() throws Exception {
+		String s = "syntax:glob\nbin\n.*\nTEST-*.xml";
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		Path[] toCheck = new Path[] {
+				Path.create("bin/org/sample/First.class"),
+				Path.create(".ignored-file"),
+				Path.create("dir/.ignored-file"),
+				Path.create("dir/.ignored-dir/file"),
+				Path.create("TEST-a.xml"),
+				Path.create("dir/TEST-b.xml"),
+		};
+		for (Path p : toCheck) {
+			errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
+		}
+	}
+	
+	@Test
+	public void testWildcardsDoNotMatchDirectorySeparator() throws Exception {
+		String s = "syntax:glob\na?b\nc*d";
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		// shall not be ignored
+		Path[] toPass = new Path[] {
+				Path.create("a/b"),
+				Path.create("a/b/x"),
+				Path.create("x/a/b"),
+				Path.create("axyb"),
+				Path.create("c/d"),
+				Path.create("c/d/x"),
+				Path.create("x/c/d"),
+		};
+		// shall be ignored
+		Path[] toIgnore = new Path[] {
+				Path.create("axb"),
+				Path.create("a3b"),
+				Path.create("a_b"),
+				Path.create("cd"),
+				Path.create("cxd"),
+				Path.create("cxyd"),
+				Path.create("x/cd"),
+				Path.create("x/cxyd"),
+				Path.create("cd/x"),
+				Path.create("cxyd/x"),
+		};
+		for (Path p : toIgnore) {
+			errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
+		}
+		for (Path p : toPass) {
+			errorCollector.assertTrue(p.toString(), !hgIgnore.isIgnored(p));
+		}
+	}
 }

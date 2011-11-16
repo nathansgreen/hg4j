@@ -49,6 +49,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgDirstate;
 import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
 import org.tmatesoft.hg.repo.HgDirstate.Record;
+import org.tmatesoft.hg.repo.HgIgnore;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
@@ -89,7 +90,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.buildFileLog();
+//		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
@@ -98,7 +99,7 @@ public class Main {
 //		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
-//		m.testMergeState();
+		m.testMergeState();
 //		m.testFileStatus();
 //		m.dumpBranches();
 //		m.inflaterLengthException();
@@ -413,11 +414,10 @@ public class Main {
 	}
 	
 	private void dumpIgnored() {
-		HgInternals debug = new HgInternals(hgRepo);
 		String[] toCheck = new String[] {"design.txt", "src/com/tmate/hgkit/ll/Changelog.java", "src/Extras.java", "bin/com/tmate/hgkit/ll/Changelog.class"};
-		boolean[] checkResult = debug.checkIgnored(toCheck);
+		HgIgnore ignore = hgRepo.getIgnore();
 		for (int i = 0; i < toCheck.length; i++) {
-			System.out.println("Ignored " + toCheck[i] + ": " + checkResult[i]);
+			System.out.println("Ignored " + toCheck[i] + ": " + ignore.isIgnored(Path.create(toCheck[i])));
 		}
 	}
 	
