@@ -93,16 +93,18 @@ public class HgMergeState {
 
 	public void refresh() throws IOException/*XXX it's unlikely caller can do anything reasonable about IOException */ {
 		entries = null;
-		wcp1 = wcp2 = stateParent = Nodeid.NULL;
+		// it's possible there are two parents but no merge/state, we shall report this case as 'merging', with proper
+		// first and second parent values
+		stateParent = Nodeid.NULL;
+		Pool<Nodeid> nodeidPool = new Pool<Nodeid>();
+		Pool<Path> fnamePool = new Pool<Path>();
+		Pair<Nodeid, Nodeid> wcParents = repo.getWorkingCopyParents();
+		wcp1 = nodeidPool.unify(wcParents.first()); wcp2 = nodeidPool.unify(wcParents.second());
 		final File f = new File(repo.getRepositoryRoot(), "merge/state");
 		if (!f.canRead()) {
 			// empty state
 			return;
 		}
-		Pool<Nodeid> nodeidPool = new Pool<Nodeid>();
-		Pool<Path> fnamePool = new Pool<Path>();
-		Pair<Nodeid, Nodeid> wcParents = repo.getWorkingCopyParents();
-		wcp1 = nodeidPool.unify(wcParents.first()); wcp2 = nodeidPool.unify(wcParents.second());
 		ArrayList<Entry> result = new ArrayList<Entry>();
 		// FIXME need to settle use of Pool<Path> and PathPool
 		// latter is pool that can create objects on demand, former is just cache
@@ -159,24 +161,33 @@ public class HgMergeState {
 		pathPool.clear();
 	}
 
-	
+	/**
+	 * Repository is in 'merging' state when changeset to be committed got two parents.
+	 * This method doesn't tell whether there are (un)resolved conflicts in the working copy,
+	 * use {@link #getConflicts()} (which makes sense only when {@link #isStale()} is <code>false</code>). 
+	 * @return <code>true</code> when repository is being merged 
+	 */
 	public boolean isMerging() {
 		return !getFirstParent().isNull() && !getSecondParent().isNull() && !isStale();
 	}
 	
 	/**
+	 * Merge state file may not match actual working copy due to rollback or undo operations.
+	 * Value of {@link #getConflicts()} is reasonable iff this method returned <code>false</code>.
+	 *  
 	 * @return <code>true</code> when recorded merge state doesn't seem to correspond to present working copy
 	 */
 	public boolean isStale() {
 		if (wcp1 == null) {
 			throw new HgBadStateException("Call #refresh() first");
 		}
-		return !wcp1.equals(stateParent); 
+		return !stateParent.isNull() /*there's merge state*/ && !wcp1.equals(stateParent) /*and it doesn't match*/; 
 	}
 
 	/**
-	 * FIXME decide what to return if there's no merge state altogether (perhaps, separate method to check that)
-	 * @return never <code>null</code>
+	 * It's possible for a repository to be in a 'merging' state (@see {@link #isMerging()} without any
+	 * conflict to resolve (no merge state information file).
+	 * @return first parent of the working copy, never <code>null</code>
 	 */
 	public Nodeid getFirstParent() {
 		if (wcp1 == null) {
@@ -185,6 +196,9 @@ public class HgMergeState {
 		return wcp1;
 	}
 	
+	/**
+	 * @return second parent of the working copy, never <code>null</code>
+	 */
 	public Nodeid getSecondParent() {
 		if (wcp2 == null) {
 			throw new HgBadStateException("Call #refresh() first");
@@ -202,6 +216,12 @@ public class HgMergeState {
 		return stateParent;
 	}
 
+	/**
+	 * List of conflicts as recorded in the merge state information file. 
+	 * Note, this information is valid unless {@link #isStale()} is <code>true</code>.
+	 * 
+	 * @return non-<code>null</code> list with both resolved and unresolved conflicts.
+	 */
 	public List<Entry> getConflicts() {
 		return entries == null ? Collections.<Entry>emptyList() : Arrays.asList(entries);
 	}

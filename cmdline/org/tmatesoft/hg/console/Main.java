@@ -99,9 +99,9 @@ public class Main {
 //		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
-//		m.testMergeState();
+		m.testMergeState();
 //		m.testFileStatus();
-		m.dumpBranches();
+//		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();
