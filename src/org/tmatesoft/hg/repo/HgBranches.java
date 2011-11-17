@@ -54,7 +54,7 @@ public class HgBranches {
 		repo = hgRepo;
 	}
 
-	private int readCache() {
+	private int readCache() /*XXX throws parse errors, e.g. may fail with NumberFormatException */{
 		File branchheadsCache = getCacheFile();
 		int lastInCache = -1;
 		if (!branchheadsCache.canRead()) {
@@ -71,8 +71,11 @@ public class HgBranches {
 			}
 			String[] cacheIdentity = spacePattern.split(line.trim());
 			lastInCache = Integer.parseInt(cacheIdentity[1]);
-			// XXX may want to check if nodeid of cset from repo.getChangelog() of lastInCache index match cacheIdentity[0]
-			//
+			final int lastKnownRepoRevIndex = repo.getChangelog().getLastRevision();
+			if (lastInCache > lastKnownRepoRevIndex || !repo.getChangelog().getRevision(lastKnownRepoRevIndex).equals(Nodeid.fromAscii(cacheIdentity[0]))) {
+				// there are chances cache file got invalid entries due to e.g. rollback operation
+				return -1;
+			}
 			while ((line = br.readLine()) != null) {
 				String[] elements = spacePattern.split(line.trim());
 				if (elements.length != 2) {
@@ -112,65 +115,6 @@ public class HgBranches {
 		ps.start(1 + repo.getChangelog().getRevisionCount() * 2);
 		//
 		int lastCached = readCache();
-		/*
-		 * Next code was supposed to fill missing aspects of the BranchInfo, but is too slow
-		 * 
-		if (lastCached != -1 && lastCached <= repo.getChangelog().getLastRevision()) {
-			LinkedList<BranchInfo> incompleteBranches = new LinkedList<HgBranches.BranchInfo>(branches.values());
-			for (BranchInfo bi : incompleteBranches) {
-				LinkedList<Nodeid> closedHeads = new LinkedList<Nodeid>();
-				for (Nodeid h : bi.getHeads()) {
-					if ("1".equals(repo.getChangelog().changeset(h).extras().get("close"))) {
-						closedHeads.add(h);
-					}
-				}
-				HashSet<Nodeid> earliest = new HashSet<Nodeid>(bi.getHeads());
-				HashSet<Nodeid> visited = new HashSet<Nodeid>();
-				ArrayList<Nodeid> parents = new ArrayList<Nodeid>(2);
-				HashSet<Nodeid> candidate = new HashSet<Nodeid>();
-				do {
-					candidate.clear();
-					for (Nodeid e : earliest) {
-						parents.clear();
-						if (pw.appendParentsOf(e, parents)) {
-							// at least one parent
-							Nodeid p1 = parents.get(0);
-							if (p1 != null && !visited.contains(p1) && bi.getName().equals(repo.getChangelog().changeset(p1).branch())) {
-								visited.add(p1);
-								candidate.add(p1);
-							}
-							Nodeid p2 = parents.size() > 1 ? parents.get(1) : null;
-							if (p2 != null && !visited.contains(p2) && bi.getName().equals(repo.getChangelog().changeset(p2).branch())) {
-								visited.add(p2);
-								candidate.add(p2);
-							}
-						}
-					}
-					if (!candidate.isEmpty()) {
-						earliest.clear();
-						earliest.addAll(candidate);
-					}
-				} while (!candidate.isEmpty());
-				// earliest can't be empty, we've started with non-empty heads.
-				Nodeid first = null;
-				if (earliest.size() == 1) {
-					first = earliest.iterator().next();
-				} else {
-					int earliestRevNum = Integer.MAX_VALUE;
-					for (Nodeid e : earliest) {
-						int x = repo.getChangelog().getLocalRevision(e);
-						if (x < earliestRevNum) {
-							earliestRevNum = x;
-							first = e;
-						}
-					}
-				}
-				assert first != null;
-				System.out.println("Updated branch " + bi.getName());
-				branches.put(bi.getName(), new BranchInfo(bi.getName(), first, bi.getHeads().toArray(new Nodeid[0]), closedHeads.size() == bi.getHeads().size()));
-			}
-		}
-		*/
 		isCacheActual = lastCached == repo.getChangelog().getLastRevision();
 		if (!isCacheActual) {
 			final HgChangelog.ParentWalker pw = repo.getChangelog().new ParentWalker();
