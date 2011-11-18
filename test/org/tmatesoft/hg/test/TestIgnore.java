@@ -41,7 +41,7 @@ public class TestIgnore {
 		TestIgnore test = new TestIgnore();
 		test.testGlobWithAlternatives();
 		test.testComplexFileParse();
-		test.testSegmentsMatch();
+		test.testSegmentsGlobMatch();
 		test.testWildcardsDoNotMatchDirectorySeparator();
 		test.errorCollector.verify();
 	}
@@ -74,7 +74,7 @@ public class TestIgnore {
 	}
 
 	@Test
-	public void testSegmentsMatch() throws Exception {
+	public void testSegmentsGlobMatch() throws Exception {
 		String s = "syntax:glob\nbin\n.*\nTEST-*.xml";
 		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
 		Path[] toCheck = new Path[] {
@@ -89,7 +89,27 @@ public class TestIgnore {
 			errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
 		}
 	}
-	
+
+	@Test
+	public void testSegmentsRegexMatch() throws Exception {
+		// regex patterns that don't start with explicit ^ are allowed to match anywhere in the string
+		String s = "syntax:regex\n/\\.git\n^abc\n";
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		Path p = Path.create(".git/aa");
+		errorCollector.assertTrue(p.toString(), !hgIgnore.isIgnored(p));
+		p = Path.create("dir/.git/bb");
+		errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
+		p = Path.create("dir/abc/aa");
+		errorCollector.assertTrue(p.toString(), !hgIgnore.isIgnored(p));
+		p = Path.create("abc/bb");
+		errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
+		// Mercurial (in fact, likely pyton's regex match() function) treats
+		// regex patterns as having .* at the end (unless there's explicit $). 
+		// IOW, matches to the beginning of the string, not to the whole string  
+		p = Path.create("abcde/fg"); 
+		errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
+	}
+
 	@Test
 	public void testWildcardsDoNotMatchDirectorySeparator() throws Exception {
 		String s = "syntax:glob\na?b\nc*d";

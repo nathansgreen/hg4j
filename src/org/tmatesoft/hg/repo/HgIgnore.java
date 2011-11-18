@@ -90,6 +90,10 @@ public class HgIgnore implements Path.Matcher {
 					// hence no special  treatment of Windows path
 					// however, own attempts make me think '\' on Windows are not treated as escapes
 					line = glob2regex(line);
+				} else {
+					assert "regexp".equals(syntax);
+					// regular expression patterns need not match start of the line unless demanded explicitly 
+					line = line.charAt(0) == '^' ? line : ".*" + line;
 				}
 				try {
 					result.add(Pattern.compile(line)); // case-sensitive
@@ -119,6 +123,7 @@ public class HgIgnore implements Path.Matcher {
 		assert line.length() > 0;
 		StringBuilder sb = new StringBuilder(line.length() + 10);
 		int start = 0, end = line.length() - 1;
+		sb.append("(?:|.*/)"); // glob patterns shall match file in any directory
 
 		int inCurly = 0;
 		for (int i = start; i <= end; i++) {
@@ -163,17 +168,18 @@ public class HgIgnore implements Path.Matcher {
 	 * @return <code>true</code> if matches repository configuration of ignored files.
 	 */
 	public boolean isIgnored(Path path) {
-		boolean isDeep = path.toString().indexOf('/') != -1;
+		String ps = path.toString();
 		for (Pattern p : entries) {
-			if (p.matcher(path).matches()) {
+			int x = ps.indexOf('/'); // reset for each pattern
+			if (p.matcher(ps).find()) {
 				return true;
 			}
-			if (isDeep) {
-				for (String segment : path.segments()) {
-					if (p.matcher(segment).matches()) {
-						return true;
-					}
+			while (x != -1 && x+1 != ps.length() /*skip very last segment not to check complete string twice*/) {
+				String fragment = ps.substring(0, x);
+				if (p.matcher(fragment).matches()) {
+					return true;
 				}
+				x = ps.indexOf('/', x+1);
 			}
 		}
 		return false;
