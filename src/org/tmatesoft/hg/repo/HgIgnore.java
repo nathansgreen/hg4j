@@ -160,6 +160,7 @@ public class HgIgnore implements Path.Matcher {
 			}
 			sb.append(ch);
 		}
+		sb.append("(?:/|$)");
 		return sb.toString();
 	}
 

@@ -88,6 +88,14 @@ public class TestIgnore {
 		for (Path p : toCheck) {
 			errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
 		}
+		s = "syntax:glob\n.git";
+		hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		Path p = Path.create(".git/aa");
+		errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
+		p = Path.create("dir/.git/bb");
+		errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
+		p = Path.create("dir/.gittt/cc");
+		errorCollector.assertTrue(p.toString(), !hgIgnore.isIgnored(p));
 	}
 
 	@Test
