@@ -33,6 +33,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -177,7 +178,7 @@ public class HgDataFile extends Revlog {
 //	}
 	
 	/*XXX not sure distinct method contentWithFilters() is the best way to do, perhaps, callers shall add filters themselves?*/
-	public void contentWithFilters(int revision, ByteChannel sink) throws HgDataStreamException, CancelledException {
+	public void contentWithFilters(int revision, ByteChannel sink) throws HgDataStreamException, CancelledException, HgInvalidRevisionException {
 		if (revision == WORKING_COPY) {
 			workingCopy(sink); // pass un-mangled sink
 		} else {
@@ -187,7 +188,7 @@ public class HgDataFile extends Revlog {
 
 	// for data files need to check heading of the file content for possible metadata
 	// @see http://mercurial.selenic.com/wiki/FileFormats#data.2BAC8-
-	public void content(int revision, ByteChannel sink) throws HgDataStreamException, CancelledException {
+	public void content(int revision, ByteChannel sink) throws HgDataStreamException, CancelledException, HgInvalidRevisionException {
 		if (revision == TIP) {
 			revision = getLastRevision();
 		}
@@ -198,7 +199,7 @@ public class HgDataFile extends Revlog {
 			return;
 		}
 		if (wrongLocalRevision(revision) || revision == BAD_REVISION) {
-			throw new IllegalArgumentException(String.valueOf(revision));
+			throw new HgInvalidRevisionException(revision);
 		}
 		if (sink == null) {
 			throw new IllegalArgumentException();
@@ -350,7 +351,7 @@ public class HgDataFile extends Revlog {
 		history(0, getLastRevision(), inspector);
 	}
 
-	public void history(int start, int end, HgChangelog.Inspector inspector) {
+	public void history(int start, int end, HgChangelog.Inspector inspector) throws HgInvalidRevisionException {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
 		}

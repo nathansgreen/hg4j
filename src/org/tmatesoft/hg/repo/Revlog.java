@@ -30,6 +30,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -86,7 +87,7 @@ abstract class Revlog {
 		return content.revisionCount() - 1;
 	}
 	
-	public final Nodeid getRevision(int revision) {
+	public final Nodeid getRevision(int revision) throws HgInvalidRevisionException {
 		// XXX cache nodeids? Rather, if context.getCache(this).getRevisionMap(create == false) != null, use it
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
 	}
@@ -94,14 +95,14 @@ abstract class Revlog {
 	/**
 	 * FIXME need to be careful about (1) ordering of the revisions in the return list; (2) modifications (sorting) of the argument array 
 	 */
-	public final List<Nodeid> getRevisions(int... revisions) {
+	public final List<Nodeid> getRevisions(int... revisions) throws HgInvalidRevisionException {
 		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(revisions.length);
 		Arrays.sort(revisions);
 		getRevisionsInternal(rv, revisions);
 		return rv;
 	}
 	
-	/*package-local*/ void getRevisionsInternal(final List<Nodeid> retVal, int[] sortedRevs) {
+	/*package-local*/ void getRevisionsInternal(final List<Nodeid> retVal, int[] sortedRevs) throws HgInvalidRevisionException {
 		// once I have getRevisionMap and may find out whether it is avalable from cache,
 		// may use it, perhaps only for small number of revisions
 		content.iterate(sortedRevs, false, new RevlogStream.Inspector() {
@@ -114,17 +115,19 @@ abstract class Revlog {
 
 	/**
 	 * Get local revision number (index) of the specified revision.
+	 * If unsure, use {@link #isKnown(Nodeid)} to find out whether nodeid belongs to this revlog.
 	 * 
 	 * For occasional queries, this method works with decent performance, despite its O(n/2) approach.
 	 * Alternatively, if you need to perform multiple queries (e.g. at least 15-20), {@link RevisionMap} may come handy.
-	 *   
+	 * 
 	 * @param nid revision to look up 
-	 * @return revision index, or {@link HgRepository#BAD_REVISION} if specified revision not found. 
+	 * @return revision local index in this revlog
+	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
 	 */
-	public final int getLocalRevision(Nodeid nid) {
+	public final int getLocalRevision(Nodeid nid) throws HgInvalidRevisionException {
 		int revision = content.findLocalRevisionNumber(nid);
 		if (revision == BAD_REVISION) {
-			throw new IllegalArgumentException(String.format("%s doesn't represent a revision of %s", nid.toString(), this /*XXX HgDataFile.getPath might be more suitable here*/));
+			throw new HgInvalidRevisionException(String.format("Bad revision of %s", this /*XXX HgDataFile.getPath might be more suitable here*/), nid, null);
 		}
 		return revision;
 	}
@@ -146,14 +149,14 @@ abstract class Revlog {
 	 * Access to revision data as is (decompressed, but otherwise unprocessed, i.e. not parsed for e.g. changeset or manifest entries) 
 	 * @param nodeid
 	 */
-	protected void rawContent(Nodeid nodeid, ByteChannel sink) throws HgException, IOException, CancelledException {
+	protected void rawContent(Nodeid nodeid, ByteChannel sink) throws HgException, IOException, CancelledException, HgInvalidRevisionException {
 		rawContent(getLocalRevision(nodeid), sink);
 	}
 	
 	/**
 	 * @param revision - repo-local index of this file change (not a changelog revision number!)
 	 */
-	protected void rawContent(int revision, ByteChannel sink) throws HgException, IOException, CancelledException {
+	protected void rawContent(int revision, ByteChannel sink) throws HgException, IOException, CancelledException, HgInvalidRevisionException {
 		if (sink == null) {
 			throw new IllegalArgumentException();
 		}
@@ -170,11 +173,12 @@ abstract class Revlog {
 	 * @param parentRevisions - int[2] to get local revision numbers of parents (e.g. {6, -1})
 	 * @param parent1 - byte[20] or null, if parent's nodeid is not needed
 	 * @param parent2 - byte[20] or null, if second parent's nodeid is not needed
-	 * @return
+	 * @throws HgInvalidRevisionException
+	 * @throws IllegalArgumentException
 	 */
-	public void parents(int revision, int[] parentRevisions, byte[] parent1, byte[] parent2) {
+	public void parents(int revision, int[] parentRevisions, byte[] parent1, byte[] parent2) throws HgInvalidRevisionException {
 		if (revision != TIP && !(revision >= 0 && revision < content.revisionCount())) {
-			throw new IllegalArgumentException(String.valueOf(revision));
+			throw new HgInvalidRevisionException(revision);
 		}
 		if (parentRevisions == null || parentRevisions.length < 2) {
 			throw new IllegalArgumentException(String.valueOf(parentRevisions));
@@ -221,7 +225,7 @@ abstract class Revlog {
 	}
 	
 	@Experimental
-	public void walk(int start, int end, final Revlog.Inspector inspector) {
+	public void walk(int start, int end, final Revlog.Inspector inspector) throws HgInvalidRevisionException {
 		int lastRev = getLastRevision();
 		if (start == TIP) {
 			start = lastRev;

@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -105,13 +106,13 @@ public class RevlogStream {
 	/**
 	 * @throws HgBadStateException if internal read operation failed
 	 */
-	public byte[] nodeid(int revision) {
+	public byte[] nodeid(int revision) throws HgInvalidRevisionException {
 		final int indexSize = revisionCount();
 		if (revision == TIP) {
 			revision = indexSize - 1;
 		}
 		if (revision < 0 || revision >= indexSize) {
-			throw new IllegalArgumentException(Integer.toString(revision));
+			throw new HgInvalidRevisionException(revision).setRevisionIndex(revision, 0, indexSize);
 		}
 		DataAccess daIndex = getIndexStream();
 		try {
@@ -191,7 +192,7 @@ public class RevlogStream {
 
 	// should be possible to use TIP, ALL, or -1, -2, -n notation of Hg
 	// ? boolean needsNodeid
-	public void iterate(int start, int end, boolean needData, Inspector inspector) {
+	public void iterate(int start, int end, boolean needData, Inspector inspector) throws HgInvalidRevisionException {
 		initOutline();
 		final int indexSize = revisionCount();
 		if (indexSize == 0) {
@@ -224,13 +225,16 @@ public class RevlogStream {
 	 * @param needData whether inspector needs access to header only
 	 * @param inspector callback to process entries
 	 */
-	public void iterate(int[] sortedRevisions, boolean needData, Inspector inspector) {
+	public void iterate(int[] sortedRevisions, boolean needData, Inspector inspector) throws HgInvalidRevisionException {
 		final int indexSize = revisionCount();
 		if (indexSize == 0 || sortedRevisions.length == 0) {
 			return;
 		}
-		if (sortedRevisions[0] > indexSize || sortedRevisions[sortedRevisions.length - 1] > indexSize) {
-			throw new IllegalArgumentException(String.format("Can't iterate [%d, %d] in range [0..%d]", sortedRevisions[0], sortedRevisions[sortedRevisions.length - 1], indexSize));
+		if (sortedRevisions[0] > indexSize) {
+			throw new HgInvalidRevisionException(String.format("Can't iterate [%d, %d] in range [0..%d]", sortedRevisions[0], sortedRevisions[sortedRevisions.length - 1], indexSize), null, sortedRevisions[0]);
+		}
+		if (sortedRevisions[sortedRevisions.length - 1] > indexSize) {
+			throw new HgInvalidRevisionException(String.format("Can't iterate [%d, %d] in range [0..%d]", sortedRevisions[0], sortedRevisions[sortedRevisions.length - 1], indexSize), null, sortedRevisions[sortedRevisions.length - 1]);
 		}
 
 		ReaderN1 r = new ReaderN1(needData, inspector);

@@ -25,6 +25,7 @@ import java.io.Reader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
@@ -139,13 +140,15 @@ public class HgInternals {
 		return rev < 0 && rev != TIP && rev != WORKING_COPY && rev != BAD_REVISION; 
 	}
 
-	// throws IllegalArgumentException if [start..end] range is not a subrange of [0..lastRevision]
-	public static void checkRevlogRange(int start, int end, int lastRevision) {
+	// throws HgInvalidRevisionException or IllegalArgumentException if [start..end] range is not a subrange of [0..lastRevision]
+	public static void checkRevlogRange(int start, int end, int lastRevision) throws HgInvalidRevisionException {
 		if (start < 0 || start > lastRevision) {
-			throw new IllegalArgumentException(String.format("Bad left range boundary %d in [0..%d]", start, lastRevision));
+			final String m = String.format("Bad left range boundary %d in [0..%d]", start, lastRevision);
+			throw new HgInvalidRevisionException(m, null, start).setRevisionIndex(start, 0, lastRevision);
 		}
 		if (end < 0 || end > lastRevision) {
-			throw new IllegalArgumentException(String.format("Bad right range boundary %d in [0..%d]", end, lastRevision));
+			final String m = String.format("Bad right range boundary %d in [0..%d]", end, lastRevision);
+			throw new HgInvalidRevisionException(m, null, end).setRevisionIndex(end, 0, lastRevision);
 		}
 		if (end < start) {
 			throw new IllegalArgumentException(String.format("Bad range [%d..%d]", start, end));
