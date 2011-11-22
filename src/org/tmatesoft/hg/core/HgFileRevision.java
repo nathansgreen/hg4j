@@ -21,6 +21,7 @@ import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -35,6 +36,7 @@ public final class HgFileRevision {
 	private final Path path;
 	private Path origin;
 	private Boolean isCopy = null; // null means not yet known
+	private Pair<Nodeid, Nodeid> parents;
 
 	public HgFileRevision(HgRepository hgRepo, Nodeid rev, Path p) {
 		if (hgRepo == null || rev == null || p == null) {
@@ -73,6 +75,27 @@ public final class HgFileRevision {
 			return origin;
 		}
 		return null;
+	}
+
+	/**
+	 * Access revisions this file revision originates from.
+	 * Note, these revisions are records in the file history, not that of the whole repository (aka changeset revisions) 
+	 * In most cases, only one parent revision would be present, only for merge revisions one can expect both.
+	 * 
+	 * @return parent revisions of this file revision, with {@link Nodeid#NULL} for missing values.
+	 */
+	public Pair<Nodeid, Nodeid> getParents() {
+		if (parents == null) {
+			HgDataFile fn = repo.getFileNode(path);
+			int localRevision = fn.getLocalRevision(revision);
+			int[] pr = new int[2];
+			byte[] p1 = new byte[20], p2 = new byte[20];
+			// XXX Revlog#parents is not the best method to use here
+			// need smth that gives Nodeids (piped through Pool<Nodeid> from repo's context)
+			fn.parents(localRevision, pr, p1, p2);
+			parents = new Pair<Nodeid, Nodeid>(Nodeid.fromBinary(p1, 0), Nodeid.fromBinary(p2, 0));
+		}
+		return parents;
 	}
 
 	public void putContentTo(ByteChannel sink) throws HgDataStreamException, CancelledException {

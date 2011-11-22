@@ -99,7 +99,7 @@ public class Main {
 //		m.testParents();
 //		m.testEffectiveFileLog();
 //		m.testCatAtCsetRevision();
-		m.testMergeState();
+//		m.testMergeState();
 //		m.testFileStatus();
 //		m.dumpBranches();
 //		m.inflaterLengthException();
@@ -108,7 +108,7 @@ public class Main {
 //		m.testStatusInternals();
 //		m.catCompleteHistory();
 //		m.dumpCompleteManifestLow();
-//		m.dumpCompleteManifestHigh();
+		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
 	}
 
@@ -495,6 +495,8 @@ public class Main {
 			}
 			public void file(HgFileRevision fileRevision) {
 				System.out.print(fileRevision.getRevision());;
+				System.out.print("   ");
+				System.out.printf("%s %s", fileRevision.getParents().first().shortNotation(), fileRevision.getParents().second().shortNotation());
 				System.out.print("   ");
 				System.out.println(fileRevision.getPath());
 			}
