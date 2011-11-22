@@ -184,7 +184,18 @@ public class HgTags {
 		return rv;
 	}
 	
+	/**
+	 * @deprecated use {@link #getAllTags()} instead
+	 */
+	@Deprecated
 	public Map<String, TagInfo> getTags() {
+		return getAllTags();
+	}
+
+	/**
+	 * All tag entries from the repository, for both active and removed tags
+	 */
+	public Map<String, TagInfo> getAllTags() {
 		if (tags == null) {
 			tags = new TreeMap<String, TagInfo>();
 			for (String t : globalFromName.keySet()) {
@@ -197,6 +208,19 @@ public class HgTags {
 		}
 		return tags;
 	}
+	
+	/**
+	 * Tags that are in use in the repository, unlike {@link #getAllTags()} doesn't list removed tags. 
+	 */
+	public Map<String, TagInfo> getActiveTags() {
+		TreeMap<String, TagInfo> rv = new TreeMap<String, TagInfo>();
+		for (Map.Entry<String, TagInfo> e : getAllTags().entrySet()) {
+			if (!e.getValue().isRemoved()) {
+				rv.put(e.getKey(), e.getValue());
+			}
+		}
+		return rv;
+	}
 
 	
 	public final class TagInfo {
@@ -204,7 +228,7 @@ public class HgTags {
 		private String branch;
 
 		TagInfo(String tagName) {
-			this.name = tagName;
+			name = tagName;
 		}
 		public String name() {
 			return name;
@@ -226,6 +250,13 @@ public class HgTags {
 				return localFromName.get(name).get(0);
 			}
 			return globalFromName.get(name).get(0);
+		}
+
+		/**
+		 * @return <code>true</code> if this tag entry describes tag removal
+		 */
+		public boolean isRemoved() {
+			return revision().isNull();
 		}
 	}
 }
