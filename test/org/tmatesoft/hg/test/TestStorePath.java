@@ -70,4 +70,21 @@ public class TestStorePath {
 		errorCollector.checkThat(storePathHelper.rewrite(n2), CoreMatchers.<CharSequence>equalTo(r2));
 		errorCollector.checkThat(storePathHelper.rewrite(n3), CoreMatchers.<CharSequence>equalTo(r3));
 	}
+
+	@Test
+	public void testIndexFileExtensionIsPartOfTheName() {
+		// with "data/" and ".i" 121 chars
+		String n1 = "src/jgit/main/org.eclipse.jgit.packaging/org.eclipse.jgit.junit.feature/.settings/org.eclipse.core.resources.prefs";
+		String r1 = "store/dh/src/jgit/main/org.ecli/org.ecli/~2esetti/org.eclipse.core.resources.prefs.ie1f4f9eed1009d220cd5afa6e01e7d9a06c02201.i";
+		// with "data/" and ".i" 122 chars
+		String n2 = "src/jgit/main/org.eclipse.jgit.packaging/org.eclipse.jgit.source.feature/.settings/org.eclipse.core.resources.prefs";
+		String r2 = "store/dh/src/jgit/main/org.ecli/org.ecli/~2esetti/org.eclipse.core.resources.prefs.i5193ab724f0225178fa949738444c4aac05e5e00.i";
+		//
+		// with "data/" and ".i" just 118 chars, use as sanity that it's not mangled
+		String n3 = "src/jgit/main/org.eclipse.jgit.packaging/org.eclipse.jgit.updatesite/.settings/org.eclipse.core.resources.prefs";
+		String r3 = "store/data/src/jgit/main/org.eclipse.jgit.packaging/org.eclipse.jgit.updatesite/~2esettings/org.eclipse.core.resources.prefs.i";
+		errorCollector.checkThat(storePathHelper.rewrite(n1), CoreMatchers.<CharSequence>equalTo(r1));
+		errorCollector.checkThat(storePathHelper.rewrite(n2), CoreMatchers.<CharSequence>equalTo(r2));
+		errorCollector.checkThat(storePathHelper.rewrite(n3), CoreMatchers.<CharSequence>equalTo(r3));
+	}
 }

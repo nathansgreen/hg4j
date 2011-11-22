@@ -141,7 +141,16 @@ class StoragePathHelper implements PathRewrite {
 				int left = MAX_PATH_LEN - sb2.length() - 40 /*digest.length()*/ - STR_DH.length() - ".i".length();
 				assert left >= 0;
 				fnameStart++; // move from / to actual name
-				sb2.append(sb, fnameStart, fnameStart + left > sb.length() ? sb.length() : fnameStart+left);
+				if (fnameStart + left > sb.length()) {
+					// there left less chars in the mangled name that we can fit
+					sb2.append(sb, fnameStart, sb.length());
+					int stillAvailable = (fnameStart+left) - sb.length();
+					// stillAvailable > 0;
+					sb2.append(".i", 0, stillAvailable > 2 ? 2 : stillAvailable);
+				} else {
+					// add as much as we can
+					sb2.append(sb, fnameStart, fnameStart+left);
+				}
 				completeHashName.append(sb2);
 			}
 			completeHashName.append(digest);
