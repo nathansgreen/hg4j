@@ -211,7 +211,8 @@ public final class HgRepoConfig /*implements RepoChangeListener, perhaps, also R
 
 		public boolean isEnabled(String extensionName) {
 			String value = config.getSection(section).get(extensionName);
-			return value != null && value.length() > 0 && '!' != value.charAt(0) ;
+			// empty line, just "extension =" is valid way to enable it
+			return value != null && (value.length() == 0 || '!' != value.charAt(0));
 		}
 	}
 }
