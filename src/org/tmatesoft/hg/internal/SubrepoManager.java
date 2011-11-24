@@ -27,7 +27,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
 
@@ -46,25 +46,29 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 		repo = hgRepo;
 	}
 
-	private List<HgSubrepoLocation> readActualState() {
+	private List<HgSubrepoLocation> readActualState() throws HgInvalidControlFileException {
 		File hgsubFile = new File(repo.getWorkingDir(), ".hgsub");
 		if (!hgsubFile.canRead()) {
 			return Collections.emptyList();
 		}
+		Map<String, String> state; // path -> revision
+		File hgstateFile = null;
 		try {
-			Map<String, String> state; // path -> revision
-			File hgstateFile = new File(repo.getWorkingDir(), ".hgsubstate");
+			hgstateFile = new File(repo.getWorkingDir(), ".hgsubstate");
 			if (hgstateFile.canRead()) {
 				state = readState(new BufferedReader(new FileReader(hgstateFile)));
 			} else {
 				state = Collections.emptyMap();
 			}
+		} catch (IOException ex) {
+			throw new HgInvalidControlFileException("Subrepo state read failed", ex, hgstateFile);
+		}
+		try {
 			BufferedReader br = new BufferedReader(new FileReader(hgsubFile));
 			return readConfig(br, state);
 		} catch (IOException ex) {
-			HgInternals.getContext(repo).getLog().error(getClass(), ex, "Subrepo state read failed");
+			throw new HgInvalidControlFileException("Subrepo state read failed", ex, hgsubFile);
 		}
-		return Collections.emptyList();
 	}
 
 	private List<HgSubrepoLocation> readConfig(BufferedReader br, Map<String, String> substate) throws IOException {
@@ -121,10 +125,13 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 		return rv;
 	}
 
+	/*public to allow access from HgRepository, otherwise package-local*/
+	public void read() throws HgInvalidControlFileException {
+		subRepos = readActualState();
+	}
+	
 	public List<HgSubrepoLocation> all(/*int revision, or TIP|WC*/) {
-		if (subRepos == null) {
-			subRepos = readActualState();
-		}
+		assert subRepos != null;
 		return subRepos;
 	}
 }

@@ -20,6 +20,7 @@ import static org.tmatesoft.hg.core.Nodeid.NULL;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Collections;
@@ -28,7 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.util.Pair;
@@ -73,7 +74,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		canonicalPathRewrite = canonicalPath;
 	}
 
-	private void read() {
+	/*package-local*/ void read() throws HgInvalidControlFileException {
 		normal = added = removed = merged = Collections.<Path, Record>emptyMap();
 		if (canonicalPathRewrite != null) {
 			canonical2dirstateName = new HashMap<Path,Path>();
@@ -144,8 +145,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				}
 			}
 		} catch (IOException ex) {
-			repo.getContext().getLog().error(getClass(), ex, null); 
-			// FIXME clean dirstate?
+			throw new HgInvalidControlFileException("Dirstate read failed", ex, dirstateFile); 
 		} finally {
 			da.done();
 		}
@@ -164,16 +164,14 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	 * @return pair of working copy parents, with {@link Nodeid#NULL} for missing values.
 	 */
 	public Pair<Nodeid,Nodeid> parents() {
-		if (parents == null) {
-			parents = readParents(repo, dirstateFile);
-		}
+		assert parents != null; // instance not initialized with #read()
 		return parents;
 	}
 	
 	/**
 	 * @return pair of parents, both {@link Nodeid#NULL} if dirstate is not available
 	 */
-	/*package-local*/ static Pair<Nodeid, Nodeid> readParents(HgRepository repo, File dirstateFile) {
+	/*package-local*/ static Pair<Nodeid, Nodeid> readParents(HgRepository repo, File dirstateFile) throws HgInvalidControlFileException {
 		// do not read whole dirstate if all we need is WC parent information
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return new Pair<Nodeid,Nodeid>(NULL, NULL);
@@ -185,16 +183,17 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		try {
 			return internalReadParents(da);
 		} catch (IOException ex) {
-			throw new HgBadStateException(ex); // XXX in fact, our exception is not the best solution here.
+			throw new HgInvalidControlFileException("Error reading working copy parents from dirstate", ex, dirstateFile);
 		} finally {
 			da.done();
 		}
 	}
 	
 	/**
+	 * FIXME move to a better place, e.g. WorkingCopy container that tracks both dirstate and branches (and, perhaps, undo, lastcommit and other similar information)
 	 * @return branch associated with the working directory
 	 */
-	public String branch() {
+	public String branch() throws HgInvalidControlFileException {
 		// XXX is it really proper place for the method?
 		if (currentBranch == null) {
 			currentBranch = readBranch(repo);
@@ -206,7 +205,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	 * XXX is it really proper place for the method?
 	 * @return branch associated with the working directory
 	 */
-	/*package-local*/ static String readBranch(HgRepository repo) {
+	/*package-local*/ static String readBranch(HgRepository repo) throws HgInvalidControlFileException {
 		String branch = HgRepository.DEFAULT_BRANCH_NAME;
 		File branchFile = new File(repo.getRepositoryRoot(), "branch");
 		if (branchFile.exists()) {
@@ -218,9 +217,11 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				}
 				branch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
 				r.close();
-			} catch (IOException ex) {
-				repo.getContext().getLog().debug(HgDirstate.class, ex, null); // log verbose debug, exception might be legal here (i.e. FileNotFound)
+			} catch (FileNotFoundException ex) {
+				repo.getContext().getLog().debug(HgDirstate.class, ex, null); // log verbose debug, exception might be legal here 
 				// IGNORE
+			} catch (IOException ex) {
+				throw new HgInvalidControlFileException("Error reading file with branch information", ex, branchFile);
 			}
 		}
 		return branch;
@@ -228,9 +229,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 
 	// new, modifiable collection
 	/*package-local*/ TreeSet<Path> all() {
-		if (normal == null) {
-			read();
-		}
+		assert normal != null;
 		TreeSet<Path> rv = new TreeSet<Path>();
 		@SuppressWarnings("unchecked")
 		Map<Path, Record>[] all = new Map[] { normal, added, removed, merged };
@@ -299,28 +298,8 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		return null;
 	}
 
-
-	/*package-local*/ void dump() {
-		read();
-		@SuppressWarnings("unchecked")
-		Map<Path, Record>[] all = new Map[] { normal, added, removed, merged };
-		char[] x = new char[] {'n', 'a', 'r', 'm' };
-		for (int i = 0; i < all.length; i++) {
-			for (Record r : all[i].values()) {
-				System.out.printf("%c %3o%6d %30tc\t\t%s", x[i], r.mode, r.size, (long) r.time * 1000, r.name1);
-				if (r.name2 != null) {
-					System.out.printf(" --> %s", r.name2);
-				}
-				System.out.println();
-			}
-			System.out.println();
-		}
-	}
-	
 	public void walk(Inspector inspector) {
-		if (normal == null) {
-			read();
-		}
+		assert normal != null;
 		@SuppressWarnings("unchecked")
 		Map<Path, Record>[] all = new Map[] { normal, added, removed, merged };
 		for (int i = 0; i < all.length; i++) {
@@ -375,6 +354,10 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 
 		public int size() {
 			return size;
+		}
+		
+		public int mode() {
+			return mode;
 		}
 		
 		@Override

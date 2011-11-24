@@ -25,6 +25,7 @@ import java.io.Reader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Experimental;
@@ -54,16 +55,12 @@ public class HgInternals {
 		repo = hgRepo;
 	}
 
-	public void dumpDirstate() {
-		getDirstate().dump();
-	}
-	
-	public HgDirstate getDirstate() {
+	public HgDirstate getDirstate() throws HgInvalidControlFileException {
 		return repo.loadDirstate(new PathPool(new PathRewrite.Empty()));
 	}
 	
 	// tests
-	public HgDirstate createDirstate(boolean caseSensitiveFileSystem) {
+	public HgDirstate createDirstate(boolean caseSensitiveFileSystem) throws HgInvalidControlFileException {
 		PathRewrite canonicalPath = null;
 		if (!caseSensitiveFileSystem) {
 			canonicalPath = new PathRewrite() {
@@ -73,7 +70,9 @@ public class HgInternals {
 				}
 			};
 		}
-		return new HgDirstate(repo, new File(repo.getRepositoryRoot(), "dirstate"), new PathPool(new PathRewrite.Empty()), canonicalPath);
+		HgDirstate ds = new HgDirstate(repo, new File(repo.getRepositoryRoot(), "dirstate"), new PathPool(new PathRewrite.Empty()), canonicalPath);
+		ds.read();
+		return ds;
 	}
 	
 	public Path[] checkKnown(HgDirstate dirstate, Path[] toCheck) {

@@ -29,6 +29,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgFileRevision;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
@@ -91,7 +92,7 @@ public class HgMergeState {
 		repo = hgRepo;
 	}
 
-	public void refresh() throws IOException/*XXX it's unlikely caller can do anything reasonable about IOException */ {
+	public void refresh() throws HgInvalidControlFileException {
 		entries = null;
 		// it's possible there are two parents but no merge/state, we shall report this case as 'merging', with proper
 		// first and second parent values
@@ -105,60 +106,64 @@ public class HgMergeState {
 			// empty state
 			return;
 		}
-		ArrayList<Entry> result = new ArrayList<Entry>();
-		// FIXME need to settle use of Pool<Path> and PathPool
-		// latter is pool that can create objects on demand, former is just cache
-		PathPool pathPool = new PathPool(new PathRewrite.Empty()); 
-		final ManifestRevision m1 = new ManifestRevision(nodeidPool, fnamePool);
-		final ManifestRevision m2 = new ManifestRevision(nodeidPool, fnamePool);
-		if (!wcp2.isNull()) {
-			final int rp2 = repo.getChangelog().getLocalRevision(wcp2);
-			repo.getManifest().walk(rp2, rp2, m2);
-		}
-		BufferedReader br = new BufferedReader(new FileReader(f));
-		String s = br.readLine();
-		stateParent = nodeidPool.unify(Nodeid.fromAscii(s));
-		final int rp1 = repo.getChangelog().getLocalRevision(stateParent);
-		repo.getManifest().walk(rp1, rp1, m1);
-		while ((s = br.readLine()) != null) {
-			String[] r = s.split("\\00");
-			Path p1fname = pathPool.path(r[3]);
-			Nodeid nidP1 = m1.nodeid(p1fname);
-			Nodeid nidCA = nodeidPool.unify(Nodeid.fromAscii(r[5]));
-			HgFileRevision p1 = new HgFileRevision(repo, nidP1, p1fname);
-			HgFileRevision ca;
-			if (nidCA == nidP1 && r[3].equals(r[4])) {
-				ca = p1;
-			} else {
-				ca = new HgFileRevision(repo, nidCA, pathPool.path(r[4]));
+		try {
+			ArrayList<Entry> result = new ArrayList<Entry>();
+			// FIXME need to settle use of Pool<Path> and PathPool
+			// latter is pool that can create objects on demand, former is just cache
+			PathPool pathPool = new PathPool(new PathRewrite.Empty()); 
+			final ManifestRevision m1 = new ManifestRevision(nodeidPool, fnamePool);
+			final ManifestRevision m2 = new ManifestRevision(nodeidPool, fnamePool);
+			if (!wcp2.isNull()) {
+				final int rp2 = repo.getChangelog().getLocalRevision(wcp2);
+				repo.getManifest().walk(rp2, rp2, m2);
 			}
-			HgFileRevision p2;
-			if (!wcp2.isNull() || !r[6].equals(r[4])) {
-				final Path p2fname = pathPool.path(r[6]);
-				Nodeid nidP2 = m2.nodeid(p2fname);
-				if (nidP2 == null) {
-					assert false : "There's not enough information (or I don't know where to look) in merge/state to find out what's the second parent";
-					nidP2 = NULL;
+			BufferedReader br = new BufferedReader(new FileReader(f));
+			String s = br.readLine();
+			stateParent = nodeidPool.unify(Nodeid.fromAscii(s));
+			final int rp1 = repo.getChangelog().getLocalRevision(stateParent);
+			repo.getManifest().walk(rp1, rp1, m1);
+			while ((s = br.readLine()) != null) {
+				String[] r = s.split("\\00");
+				Path p1fname = pathPool.path(r[3]);
+				Nodeid nidP1 = m1.nodeid(p1fname);
+				Nodeid nidCA = nodeidPool.unify(Nodeid.fromAscii(r[5]));
+				HgFileRevision p1 = new HgFileRevision(repo, nidP1, p1fname);
+				HgFileRevision ca;
+				if (nidCA == nidP1 && r[3].equals(r[4])) {
+					ca = p1;
+				} else {
+					ca = new HgFileRevision(repo, nidCA, pathPool.path(r[4]));
 				}
-				p2 = new HgFileRevision(repo, nidP2, p2fname);
-			} else {
-				// no second parent known. no idea what to do here, assume linear merge, use common ancestor as parent
-				p2 = ca;
+				HgFileRevision p2;
+				if (!wcp2.isNull() || !r[6].equals(r[4])) {
+					final Path p2fname = pathPool.path(r[6]);
+					Nodeid nidP2 = m2.nodeid(p2fname);
+					if (nidP2 == null) {
+						assert false : "There's not enough information (or I don't know where to look) in merge/state to find out what's the second parent";
+						nidP2 = NULL;
+					}
+					p2 = new HgFileRevision(repo, nidP2, p2fname);
+				} else {
+					// no second parent known. no idea what to do here, assume linear merge, use common ancestor as parent
+					p2 = ca;
+				}
+				final Kind k;
+				if ("u".equals(r[1])) {
+					k = Kind.Unresolved;
+				} else if ("r".equals(r[1])) {
+					k = Kind.Resolved;
+				} else {
+					throw new HgBadStateException(r[1]);
+				}
+				Entry e = new Entry(k, pathPool.path(r[0]), p1, p2, ca);
+				result.add(e);
 			}
-			final Kind k;
-			if ("u".equals(r[1])) {
-				k = Kind.Unresolved;
-			} else if ("r".equals(r[1])) {
-				k = Kind.Resolved;
-			} else {
-				throw new HgBadStateException(r[1]);
-			}
-			Entry e = new Entry(k, pathPool.path(r[0]), p1, p2, ca);
-			result.add(e);
+			entries = result.toArray(new Entry[result.size()]);
+			br.close();
+			pathPool.clear();
+		} catch (IOException ex) {
+			throw new HgInvalidControlFileException("Merge state read failed", ex, f);
 		}
-		entries = result.toArray(new Entry[result.size()]);
-		br.close();
-		pathPool.clear();
 	}
 
 	/**

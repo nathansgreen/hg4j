@@ -36,4 +36,9 @@ public class HgInvalidControlFileException extends HgInvalidFileException {
 		super(message, th, file);
 	}
 
+	@Override
+	public HgInvalidControlFileException setFile(File file) {
+		super.setFile(file);
+		return this;
+	}
 }

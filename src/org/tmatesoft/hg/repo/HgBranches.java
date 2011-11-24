@@ -54,7 +54,7 @@ public class HgBranches {
 		repo = hgRepo;
 	}
 
-	private int readCache() /*XXX throws parse errors, e.g. may fail with NumberFormatException */{
+	private int readCache() {
 		File branchheadsCache = getCacheFile();
 		int lastInCache = -1;
 		if (!branchheadsCache.canRead()) {
@@ -97,7 +97,12 @@ public class HgBranches {
 			}
 			return lastInCache;
 		} catch (IOException ex) {
-			repo.getContext().getLog().warn(getClass(), ex, null); // log error, but otherwise do nothing
+			 // log error, but otherwise do nothing
+			repo.getContext().getLog().warn(getClass(), ex, null);
+			// FALL THROUGH to return -1 indicating no cache information 
+		} catch (NumberFormatException ex) {
+			repo.getContext().getLog().warn(getClass(), ex, null);
+			// FALL THROUGH
 		} finally {
 			if (br != null) {
 				try {

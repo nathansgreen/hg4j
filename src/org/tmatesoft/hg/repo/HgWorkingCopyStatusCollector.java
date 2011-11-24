@@ -33,6 +33,7 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.Experimental;
@@ -100,10 +101,14 @@ public class HgWorkingCopyStatusCollector {
 	 * Access to directory state information this collector uses.
 	 * @return directory state holder, never <code>null</code> 
 	 */
-	public HgDirstate getDirstate() {
+	public HgDirstate getDirstate() throws HgInvalidControlFileException {
 		if (dirstate == null) {
 			dirstate = repo.loadDirstate(getPathPool());
 		}
+		return dirstate;
+	}
+	
+	private HgDirstate getDirstateImpl() {
 		return dirstate;
 	}
 	
@@ -123,7 +128,7 @@ public class HgWorkingCopyStatusCollector {
 		// WC not necessarily points to TIP, but may be result of update to any previous revision.
 		// In such case, we need to compare local files not to their TIP content, but to specific version at the time of selected revision
 		if (dirstateParentManifest == null) {
-			Nodeid dirstateParent = getDirstate().parents().first();
+			Nodeid dirstateParent = getDirstateImpl().parents().first();
 			if (dirstateParent.isNull()) {
 				dirstateParentManifest = baseRevisionCollector != null ? baseRevisionCollector.raw(-1) : HgStatusCollector.createEmptyManifestRevision();
 			} else {
@@ -139,6 +144,17 @@ public class HgWorkingCopyStatusCollector {
 	public void walk(int baseRevision, HgStatusInspector inspector) {
 		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
+		}
+		if (getDirstateImpl() == null) {
+			// XXX this is a hack to avoid declaring throws for the #walk() at the moment
+			// once I decide whether to have mediator that collects errors or to use exceptions here
+			// this hack shall be removed in favor of either severe error in mediator or a re-thrown exception.
+			try {
+				getDirstate();
+			} catch (HgInvalidControlFileException ex) {
+				repo.getContext().getLog().error(getClass(), ex, "Can't read dirstate");
+				return;
+			}
 		}
 		ManifestRevision collect = null; // non null indicates we compare against base revision
 		Set<Path> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
@@ -164,7 +180,7 @@ public class HgWorkingCopyStatusCollector {
 		final HgIgnore hgIgnore = repo.getIgnore();
 		repoWalker.reset();
 		TreeSet<Path> processed = new TreeSet<Path>(); // names of files we handled as they known to Dirstate (not FileIterator)
-		final HgDirstate ds = getDirstate();
+		final HgDirstate ds = getDirstateImpl();
 		TreeSet<Path> knownEntries = ds.all(); // here just to get dirstate initialized
 		while (repoWalker.hasNext()) {
 			repoWalker.next();
@@ -261,7 +277,7 @@ public class HgWorkingCopyStatusCollector {
 	
 	private void checkLocalStatusAgainstFile(Path fname, FileInfo f, HgStatusInspector inspector) {
 		HgDirstate.Record r;
-		if ((r = getDirstate().checkNormal(fname)) != null) {
+		if ((r = getDirstateImpl().checkNormal(fname)) != null) {
 			// either clean or modified
 			final boolean timestampEqual = f.lastModified() == r.modificationTime(), sizeEqual = r.size() == f.length();
 			if (timestampEqual && sizeEqual) {
@@ -287,15 +303,15 @@ public class HgWorkingCopyStatusCollector {
 					inspector.clean(df.getPath());
 				}
 			}
-		} else if ((r = getDirstate().checkAdded(fname)) != null) {
+		} else if ((r = getDirstateImpl().checkAdded(fname)) != null) {
 			if (r.copySource() == null) {
 				inspector.added(fname);
 			} else {
 				inspector.copied(r.copySource(), fname);
 			}
-		} else if ((r = getDirstate().checkRemoved(fname)) != null) {
+		} else if ((r = getDirstateImpl().checkRemoved(fname)) != null) {
 			inspector.removed(fname);
-		} else if ((r = getDirstate().checkMerged(fname)) != null) {
+		} else if ((r = getDirstateImpl().checkMerged(fname)) != null) {
 			inspector.modified(fname);
 		}
 	}
@@ -310,7 +326,7 @@ public class HgWorkingCopyStatusCollector {
 			// normal: added?
 			// added: not known at the time of baseRevision, shall report
 			// merged: was not known, report as added?
-			if ((r = getDirstate().checkNormal(fname)) != null) {
+			if ((r = getDirstateImpl().checkNormal(fname)) != null) {
 				try {
 					Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
 					if (origin != null) {
@@ -321,14 +337,14 @@ public class HgWorkingCopyStatusCollector {
 					ex.printStackTrace();
 					// FIXME report to a mediator, continue status collection
 				}
-			} else if ((r = getDirstate().checkAdded(fname)) != null) {
+			} else if ((r = getDirstateImpl().checkAdded(fname)) != null) {
 				if (r.copySource() != null && baseRevNames.contains(r.copySource())) {
 					baseRevNames.remove(r.copySource()); // XXX surely I shall not report rename source as Removed?
 					inspector.copied(r.copySource(), fname);
 					return;
 				}
 				// fall-through, report as added
-			} else if (getDirstate().checkRemoved(fname) != null) {
+			} else if (getDirstateImpl().checkRemoved(fname) != null) {
 				// removed: removed file was not known at the time of baseRevision, and we should not report it as removed
 				return;
 			}
@@ -336,7 +352,7 @@ public class HgWorkingCopyStatusCollector {
 		} else {
 			// was known; check whether clean or modified
 			Nodeid nidFromDirstate = getDirstateParentManifest().nodeid(fname);
-			if ((r = getDirstate().checkNormal(fname)) != null && nid1.equals(nidFromDirstate)) {
+			if ((r = getDirstateImpl().checkNormal(fname)) != null && nid1.equals(nidFromDirstate)) {
 				// regular file, was the same up to WC initialization. Check if was modified since, and, if not, report right away
 				// same code as in #checkLocalStatusAgainstFile
 				final boolean timestampEqual = f.lastModified() == r.modificationTime(), sizeEqual = r.size() == f.length();
@@ -360,7 +376,7 @@ public class HgWorkingCopyStatusCollector {
 				// or nodeid in dirstate is different, but local change might have brought it back to baseRevision state)
 				// FALL THROUGH
 			}
-			if (r != null || (r = getDirstate().checkMerged(fname)) != null || (r = getDirstate().checkAdded(fname)) != null) {
+			if (r != null || (r = getDirstateImpl().checkMerged(fname)) != null || (r = getDirstateImpl().checkAdded(fname)) != null) {
 				// check actual content to see actual changes
 				// when added - seems to be the case of a file added once again, hence need to check if content is different
 				// either clean or modified
@@ -371,7 +387,7 @@ public class HgWorkingCopyStatusCollector {
 					inspector.modified(fname);
 				}
 				baseRevNames.remove(fname); // consumed, processed, handled.
-			} else if (getDirstate().checkRemoved(fname) != null) {
+			} else if (getDirstateImpl().checkRemoved(fname) != null) {
 				// was known, and now marked as removed, report it right away, do not rely on baseRevNames processing later
 				inspector.removed(fname);
 				baseRevNames.remove(fname); // consumed, processed, handled.

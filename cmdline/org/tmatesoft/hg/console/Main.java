@@ -420,9 +420,22 @@ public class Main {
 			System.out.println("Ignored " + toCheck[i] + ": " + ignore.isIgnored(Path.create(toCheck[i])));
 		}
 	}
+
+	static class DirstateDump implements HgDirstate.Inspector {
+		private final char[] x = new char[] {'n', 'a', 'r', 'm' };
+
+		public boolean next(EntryKind kind, Record entry) {
+			System.out.printf("%c %3o%6d %30tc\t\t%s", x[kind.ordinal()], entry.mode(), entry.size(), (long) entry.modificationTime() * 1000, entry.name());
+			if (entry.copySource() != null) {
+				System.out.printf(" --> %s", entry.copySource());
+			}
+			System.out.println();
+			return true;
+		}
+	}
 	
-	private void dumpDirstate() {
-		new HgInternals(hgRepo).dumpDirstate();
+	private void dumpDirstate() throws Exception {
+		new HgInternals(hgRepo).getDirstate().walk(new DirstateDump());
 		HgWorkingCopyStatusCollector wcc = HgWorkingCopyStatusCollector.create(hgRepo, new Path.Matcher.Any());
 		wcc.getDirstate().walk(new HgDirstate.Inspector() {
 			
@@ -508,8 +521,6 @@ public class Main {
 	}
 
 	private void bunchOfTests() throws Exception {
-		HgInternals debug = new HgInternals(hgRepo);
-		debug.dumpDirstate();
 		final StatusDump dump = new StatusDump();
 		dump.showIgnored = false;
 		dump.showClean = false;

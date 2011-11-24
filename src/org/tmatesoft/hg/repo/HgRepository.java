@@ -251,16 +251,18 @@ public final class HgRepository {
 	}
 
 	/**
-	 * @return pair of values, {@link Pair#first()} and {@link Pair#second()} are respective parents, never <code>null</code>. 
+	 * @return pair of values, {@link Pair#first()} and {@link Pair#second()} are respective parents, never <code>null</code>.
+	 * @throws HgInvalidControlFileException if attempt to read information about working copy parents from dirstate failed 
 	 */
-	public Pair<Nodeid,Nodeid> getWorkingCopyParents() {
+	public Pair<Nodeid,Nodeid> getWorkingCopyParents() throws HgInvalidControlFileException {
 		return HgDirstate.readParents(this, new File(repoDir, "dirstate"));
 	}
 	
 	/**
 	 * @return name of the branch associated with working directory, never <code>null</code>.
+	 * @throws HgInvalidControlFileException if attempt to read branch name failed.
 	 */
-	public String getWorkingCopyBranchName() {
+	public String getWorkingCopyBranchName() throws HgInvalidControlFileException {
 		return HgDirstate.readBranch(this);
 	}
 
@@ -276,9 +278,10 @@ public final class HgRepository {
 	 * known, not recursive collection of all nested sub-repositories.
 	 * @return list of all known sub-repositories in this repository, or empty list if none found.
 	 */
-	public List<HgSubrepoLocation> getSubrepositories() {
+	public List<HgSubrepoLocation> getSubrepositories() throws HgInvalidControlFileException {
 		if (subRepos == null) {
 			subRepos = new SubrepoManager(this);
+			subRepos.read();
 		}
 		return subRepos.all();
 	}
@@ -311,7 +314,7 @@ public final class HgRepository {
 
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
 	// XXX consider passing Path pool or factory to produce (shared) Path instead of Strings
-	/*package-local*/ final HgDirstate loadDirstate(PathPool pathPool) {
+	/*package-local*/ final HgDirstate loadDirstate(PathPool pathPool) throws HgInvalidControlFileException {
 		PathRewrite canonicalPath = null;
 		if (!isCaseSensitiveFileSystem) {
 			canonicalPath = new PathRewrite() {
@@ -321,7 +324,9 @@ public final class HgRepository {
 				}
 			};
 		}
-		return new HgDirstate(this, new File(repoDir, "dirstate"), pathPool, canonicalPath);
+		HgDirstate ds = new HgDirstate(this, new File(repoDir, "dirstate"), pathPool, canonicalPath);
+		ds.read();
+		return ds;
 	}
 
 	/**

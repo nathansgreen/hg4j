@@ -101,7 +101,7 @@ public class TestIgnore {
 	@Test
 	public void testSegmentsRegexMatch() throws Exception {
 		// regex patterns that don't start with explicit ^ are allowed to match anywhere in the string
-		String s = "syntax:regex\n/\\.git\n^abc\n";
+		String s = "syntax:regexp\n/\\.git\n^abc\n";
 		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
 		Path p = Path.create(".git/aa");
 		errorCollector.assertTrue(p.toString(), !hgIgnore.isIgnored(p));
