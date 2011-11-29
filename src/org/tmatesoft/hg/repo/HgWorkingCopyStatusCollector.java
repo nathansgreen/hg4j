@@ -141,7 +141,7 @@ public class HgWorkingCopyStatusCollector {
 	
 	// may be invoked few times, TIP or WORKING_COPY indicate comparison shall be run against working copy parent
 	// NOTE, use of TIP constant requires certain care. TIP here doesn't mean latest cset, but actual working copy parent.
-	public void walk(int baseRevision, HgStatusInspector inspector) {
+	public void walk(int baseRevision, HgStatusInspector inspector) throws IOException {
 		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
 		}
@@ -266,7 +266,7 @@ public class HgWorkingCopyStatusCollector {
 		}
 	}
 
-	public HgStatusCollector.Record status(int baseRevision) {
+	public HgStatusCollector.Record status(int baseRevision) throws IOException {
 		HgStatusCollector.Record rv = new HgStatusCollector.Record();
 		walk(baseRevision, rv);
 		return rv;
@@ -607,11 +607,11 @@ public class HgWorkingCopyStatusCollector {
 			walker = fileWalker;
 		}
 
-		public void reset() {
+		public void reset() throws IOException {
 			walker.reset();
 		}
 
-		public boolean hasNext() {
+		public boolean hasNext() throws IOException {
 			while (walker.hasNext()) {
 				walker.next();
 				if (filter.accept(walker.name())) {
@@ -622,7 +622,7 @@ public class HgWorkingCopyStatusCollector {
 			return false;
 		}
 
-		public void next() {
+		public void next() throws IOException {
 			if (didNext) {
 				didNext = false;
 			} else {

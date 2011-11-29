@@ -20,6 +20,7 @@ import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgInternals.wrongLocalRevision;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
+import java.io.IOException;
 import java.util.ConcurrentModificationException;
 import java.util.concurrent.CancellationException;
 
@@ -159,10 +160,11 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	 * Perform status operation according to parameters set.
 	 *  
 	 * @param handler callback to get status information
+	 * @throws IOException if there are (further unspecified) errors while walking working copy
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
 	 */
-	public void execute(Handler statusHandler) throws CancellationException, HgException {
+	public void execute(Handler statusHandler) throws CancellationException, HgException, IOException {
 		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}

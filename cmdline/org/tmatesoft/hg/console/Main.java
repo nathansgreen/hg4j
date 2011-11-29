@@ -19,6 +19,7 @@ package org.tmatesoft.hg.console;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -364,7 +365,7 @@ public class Main {
 		return String.format("%s %s (%d bytes)", r.getPath(), r.getRevision(), sink.toArray().length);
 	}
 	
-	private void testFileStatus() {
+	private void testFileStatus() throws IOException {
 //		final Path path = Path.create("src/org/tmatesoft/hg/util/");
 //		final Path path = Path.create("src/org/tmatesoft/hg/internal/Experimental.java");
 //		final Path path = Path.create("missing-dir/");

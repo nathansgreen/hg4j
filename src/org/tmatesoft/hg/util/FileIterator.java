@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.util;
 
+import java.io.IOException;
+
 import org.tmatesoft.hg.internal.Experimental;
 
 /**
@@ -29,17 +31,17 @@ public interface FileIterator {
 	/**
 	 * Brings iterator into initial state to facilitate new use.
 	 */
-	void reset();
+	void reset() throws IOException;
 
 	/**
 	 * @return whether can shift to next element
 	 */
-	boolean hasNext();
+	boolean hasNext() throws IOException;
 
 	/**
 	 * Shift to next element
 	 */
-	void next();
+	void next() throws IOException;
 
 	/**
 	 * @return repository-local path to the current element.
