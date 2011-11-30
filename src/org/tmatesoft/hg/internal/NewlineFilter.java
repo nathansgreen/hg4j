@@ -21,8 +21,6 @@ import static org.tmatesoft.hg.internal.Filter.Direction.ToRepo;
 import static org.tmatesoft.hg.internal.KeywordFilter.copySlice;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -43,6 +41,15 @@ public class NewlineFilter implements Filter {
 	// i.e. doesn't try to convert them into appropriate newline characters. XXX revisit if Keyword extension behaves differently
 	private final boolean allowInconsistent;
 	private final boolean winToNix;
+
+	// next two factory methods for testsing purposes
+	public static NewlineFilter createWin2Nix(boolean allowMixed) {
+		return new NewlineFilter(!allowMixed, 0);
+	}
+	
+	public static NewlineFilter createNix2Win(boolean allowMixed) {
+		return new NewlineFilter(!allowMixed, 1);
+	}
 
 	private NewlineFilter(boolean failIfInconsistent, int transform) {
 		winToNix = transform == 0;
@@ -250,25 +257,4 @@ public class NewlineFilter implements Filter {
 			return null;
 		}
 	}
-
-	public static void main(String[] args) throws Exception {
-		FileInputStream fis = new FileInputStream(new File("/temp/design.lf.txt"));
-		FileOutputStream fos = new FileOutputStream(new File("/temp/design.newline.out"));
-		ByteBuffer b = ByteBuffer.allocate(12);
-		NewlineFilter nlFilter = new NewlineFilter(true, 1);
-		while (fis.getChannel().read(b) != -1) {
-			b.flip(); // get ready to be read
-			ByteBuffer f = nlFilter.filter(b);
-			fos.getChannel().write(f); // XXX in fact, f may not be fully consumed
-			if (b.hasRemaining()) {
-				b.compact();
-			} else {
-				b.clear();
-			}
-		}
-		fis.close();
-		fos.flush();
-		fos.close();
-	}
-
 }
