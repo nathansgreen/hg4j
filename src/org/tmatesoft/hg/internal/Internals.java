@@ -117,7 +117,26 @@ public class Internals {
 
 	public ConfigFile readConfiguration(HgRepository hgRepo, File repoRoot) throws IOException {
 		ConfigFile configFile = new ConfigFile();
-		// FIXME use Unix/Win location according to runningOnWindows
+		if (runningOnWindows()) {
+			// FIXME read install-dir
+			//
+			// XXX perhaps, makes sense to compare getenv(USERPROFILE) and getenv(HOME) and use 
+			// them if set (and use both if their values do not match). Only if both not set, rely to user.home?
+			configFile.addLocation(new File(System.getProperty("user.home"), "Mercurial.ini"));
+		} else {
+			// FIXME read from install-root
+			//
+			File d = new File("/etc/mercurial/hgrc.d/");
+			if (d.isDirectory()) {
+				for (File f : d.listFiles()) {
+					// XXX in fact, need to sort in alphabetical order 
+					if (f.getName().endsWith(".rc")) {
+						configFile.addLocation(f);
+					}
+				}
+			}
+			configFile.addLocation(new File("/etc/mercurial/hgrc"));
+		}
 		configFile.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		// last one, overrides anything else
 		// <repo>/.hg/hgrc
