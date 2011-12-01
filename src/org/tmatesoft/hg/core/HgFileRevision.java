@@ -84,7 +84,7 @@ public final class HgFileRevision {
 	 * 
 	 * @return parent revisions of this file revision, with {@link Nodeid#NULL} for missing values.
 	 */
-	public Pair<Nodeid, Nodeid> getParents() {
+	public Pair<Nodeid, Nodeid> getParents() throws HgInvalidControlFileException {
 		if (parents == null) {
 			HgDataFile fn = repo.getFileNode(path);
 			int localRevision = fn.getLocalRevision(revision);
@@ -98,7 +98,7 @@ public final class HgFileRevision {
 		return parents;
 	}
 
-	public void putContentTo(ByteChannel sink) throws HgDataStreamException, CancelledException {
+	public void putContentTo(ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException {
 		HgDataFile fn = repo.getFileNode(path);
 		int localRevision = fn.getLocalRevision(revision);
 		fn.contentWithFilters(localRevision, sink);
@@ -116,6 +116,9 @@ public final class HgFileRevision {
 				}
 			}
 		} catch (HgDataStreamException ex) {
+			// FIXME rather throw an exception than log silently
+			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
+		} catch (HgInvalidControlFileException ex) {
 			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
 		}
 		isCopy = Boolean.FALSE;

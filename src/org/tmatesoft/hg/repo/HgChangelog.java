@@ -32,6 +32,8 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.IterateControlMediator;
@@ -54,18 +56,18 @@ public class HgChangelog extends Revlog {
 		super(hgRepo, content);
 	}
 
-	public void all(final HgChangelog.Inspector inspector) {
+	public void all(final HgChangelog.Inspector inspector) throws HgInvalidRevisionException {
 		range(0, getLastRevision(), inspector);
 	}
 
-	public void range(int start, int end, final HgChangelog.Inspector inspector) {
+	public void range(int start, int end, final HgChangelog.Inspector inspector) throws HgInvalidRevisionException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
 		content.iterate(start, end, true, new RawCsetParser(inspector));
 	}
 
-	public List<RawChangeset> range(int start, int end) {
+	public List<RawChangeset> range(int start, int end) throws HgInvalidRevisionException {
 		final RawCsetCollector c = new RawCsetCollector(end - start + 1);
 		range(start, end, c);
 		return c.result;
@@ -77,7 +79,7 @@ public class HgChangelog extends Revlog {
 	 * @param inspector callback to get changesets
 	 * @param revisions revisions to read, unrestricted ordering.
 	 */
-	public void range(final HgChangelog.Inspector inspector, final int... revisions) {
+	public void range(final HgChangelog.Inspector inspector, final int... revisions) throws HgInvalidRevisionException {
 		Arrays.sort(revisions);
 		rangeInternal(inspector, revisions);
 	}
@@ -85,7 +87,7 @@ public class HgChangelog extends Revlog {
 	/**
 	 * Friends-only version of {@link #range(Inspector, int...)}, when callers know array is sorted
 	 */
-	/*package-local*/ void rangeInternal(HgChangelog.Inspector inspector, int[] sortedRevisions) {
+	/*package-local*/ void rangeInternal(HgChangelog.Inspector inspector, int[] sortedRevisions) throws HgInvalidRevisionException {
 		if (sortedRevisions == null || sortedRevisions.length == 0) {
 			return;
 		}
@@ -94,8 +96,12 @@ public class HgChangelog extends Revlog {
 		}
 		content.iterate(sortedRevisions, true, new RawCsetParser(inspector));
 	}
-	
-	public RawChangeset changeset(Nodeid nid) {
+
+	/**
+	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public RawChangeset changeset(Nodeid nid)  throws HgInvalidControlFileException, HgInvalidRevisionException {
 		int x = getLocalRevision(nid);
 		return range(x, x).get(0);
 	}

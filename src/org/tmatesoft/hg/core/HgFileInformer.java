@@ -36,6 +36,8 @@ import org.tmatesoft.hg.util.Path;
  *   }
  * </pre></code>
  *
+ * FIXME need better name. It's more about manifest of specific changeset, rather than informing (about) files
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -87,7 +89,7 @@ public class HgFileInformer {
 	 * @return <code>true</code> if file is known at the selected changeset.
 	 * @throws IllegalArgumentException if {@link #changeset(Nodeid)} not specified or file argument is bad.
 	 */
-	public boolean check(Path file) { // XXX IStatus instead of boolean?
+	public boolean check(Path file) throws HgInvalidControlFileException { // XXX IStatus instead of boolean? If status, shall it handle exceptions as well?
 		fileRevision = null;
 		checked = false;
 		renamed = false;

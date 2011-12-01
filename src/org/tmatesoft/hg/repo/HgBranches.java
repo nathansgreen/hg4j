@@ -34,6 +34,9 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 
+import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -102,6 +105,13 @@ public class HgBranches {
 			// FALL THROUGH to return -1 indicating no cache information 
 		} catch (NumberFormatException ex) {
 			repo.getContext().getLog().warn(getClass(), ex, null);
+			// FALL THROUGH
+		} catch (HgInvalidControlFileException ex) {
+			// shall not happen, thus log as error
+			repo.getContext().getLog().error(getClass(), ex, null);
+			// FALL THROUGH
+		} catch (HgInvalidRevisionException ex) {
+			repo.getContext().getLog().error(getClass(), ex, null);
 			// FALL THROUGH
 		} finally {
 			if (br != null) {
@@ -229,40 +239,38 @@ public class HgBranches {
 	/**
 	 * Writes down information about repository branches in a format Mercurial native client can understand.
 	 * Cache file gets overwritten only if it is out of date (i.e. misses some branch information)
+	 * @throws IOException if write to cache file failed
+	 * @throws HgException subclass of {@link HgException} in case of repository access issue
 	 */
 	@Experimental(reason="Usage of cache isn't supposed to be public knowledge")
-	public void writeCache() {
+	public void writeCache() throws IOException, HgException {
 		if (isCacheActual) {
 			return;
 		}
-		try {
-			File branchheadsCache = getCacheFile();
-			if (!branchheadsCache.exists()) {
-				branchheadsCache.getParentFile().mkdirs(); // just in case cache/ doesn't exist jet
-				branchheadsCache.createNewFile();
-			}
-			if (!branchheadsCache.canWrite()) {
-				return;
-			}
-			final int lastRev = repo.getChangelog().getLastRevision();
-			final Nodeid lastNid = repo.getChangelog().getRevision(lastRev);
-			BufferedWriter bw = new BufferedWriter(new FileWriter(branchheadsCache));
-			bw.write(lastNid.toString());
-			bw.write((int) ' ');
-			bw.write(Integer.toString(lastRev));
-			bw.write("\n");
-			for (BranchInfo bi : branches.values()) {
-				for (Nodeid nid : bi.getHeads()) {
-					bw.write(nid.toString());
-					bw.write((int) ' ');
-					bw.write(bi.getName());
-					bw.write("\n");
-				}
-			}
-			bw.close();
-		} catch (IOException ex) {
-			repo.getContext().getLog().error(getClass(), ex, "Error writing branch cache file");
+		File branchheadsCache = getCacheFile();
+		if (!branchheadsCache.exists()) {
+			branchheadsCache.getParentFile().mkdirs(); // just in case cache/ doesn't exist jet
+			branchheadsCache.createNewFile();
 		}
+		if (!branchheadsCache.canWrite()) {
+			return;
+		}
+		final int lastRev = repo.getChangelog().getLastRevision();
+		final Nodeid lastNid = repo.getChangelog().getRevision(lastRev);
+		BufferedWriter bw = new BufferedWriter(new FileWriter(branchheadsCache));
+		bw.write(lastNid.toString());
+		bw.write((int) ' ');
+		bw.write(Integer.toString(lastRev));
+		bw.write("\n");
+		for (BranchInfo bi : branches.values()) {
+			for (Nodeid nid : bi.getHeads()) {
+				bw.write(nid.toString());
+				bw.write((int) ' ');
+				bw.write(bi.getName());
+				bw.write("\n");
+			}
+		}
+		bw.close();
 	}
 
 	private File getCacheFile() {

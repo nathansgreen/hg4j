@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 
 /**
@@ -238,7 +239,7 @@ public class HgTags {
 			return localFromName.containsKey(name);
 		}
 
-		public String branch() {
+		public String branch() throws HgInvalidControlFileException {
 			if (branch == null) {
 				int x = repo.getChangelog().getLocalRevision(revision());
 				branch = repo.getChangelog().range(x, x).get(0).branch();

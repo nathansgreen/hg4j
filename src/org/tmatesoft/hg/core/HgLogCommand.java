@@ -34,6 +34,7 @@ import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -154,8 +155,10 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * 
 	 * @param nid changeset revision
 	 * @return <code>this</code> for convenience
+	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public HgLogCommand changeset(Nodeid nid) {
+	public HgLogCommand changeset(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		// XXX perhaps, shall support multiple (...) arguments and extend #execute to handle not only range, but also set of revisions.
 		final int csetLocal = repo.getChangelog().getLocalRevision(nid);
 		return range(csetLocal, csetLocal);
@@ -203,7 +206,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * @throws IllegalArgumentException when inspector argument is null
 	 * @throws ConcurrentModificationException if this log command instance is already running
 	 */
-	public void execute(HgChangesetHandler handler) throws HgDataStreamException, HgCallbackTargetException, CancelledException {
+	public void execute(HgChangesetHandler handler) throws HgDataStreamException, HgInvalidControlFileException, HgCallbackTargetException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -594,7 +597,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			if (cs != null) {
 				return cs.getNodeid();
 			} else {
-				return repo.getChangelog().getRevision(changelogRevisionNumber);
+				try {
+					return repo.getChangelog().getRevision(changelogRevisionNumber);
+				} catch (HgException ex) {
+					HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
+					// FIXME propagate, perhaps?
+					return Nodeid.NULL; // FIXME this is quick-n-dirty hack to move forward with introducing exceptions 
+				}
 			}
 		}
 	}

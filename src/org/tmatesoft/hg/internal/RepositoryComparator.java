@@ -30,6 +30,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -90,7 +91,7 @@ public class RepositoryComparator {
 	 * only its revision number. 
 	 * @param inspector delegate to analyze changesets, shall not be <code>null</code>
 	 */
-	public void visitLocalOnlyRevisions(HgChangelog.Inspector inspector) {
+	public void visitLocalOnlyRevisions(HgChangelog.Inspector inspector) throws HgInvalidControlFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}

@@ -18,9 +18,14 @@ package org.tmatesoft.hg.internal;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.TreeMap;
 
+import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
@@ -253,20 +258,37 @@ public class KeywordFilter implements Filter {
 	}
 
 	private String revision() {
-		// FIXME add cset's nodeid into Changeset class 
-		int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);
-		return repo.getChangelog().getRevision(csetRev).shortNotation();
+		try {
+			// FIXME add cset's nodeid into Changeset class
+			int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);
+			return repo.getChangelog().getRevision(csetRev).shortNotation();
+		} catch (HgException ex) {
+			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
+			return Nodeid.NULL.shortNotation(); // XXX perhaps, might return anything better? Not sure how hg approaches this. 
+		}
 	}
 	
 	private String username() {
-		return getChangeset().user();
+		try {
+			return getChangeset().user();
+		} catch (HgException ex) {
+			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
+			return "";
+		}
 	}
 	
 	private String date() {
-		return String.format("%tY/%<tm/%<td %<tH:%<tM:%<tS", getChangeset().date());
+		Date d;
+		try {
+			d = getChangeset().date();
+		} catch (HgException ex) {
+			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
+			d = new Date(0l);
+		}
+		return String.format("%tY/%<tm/%<td %<tH:%<tM:%<tS", d);
 	}
 	
-	private RawChangeset getChangeset() {
+	private RawChangeset getChangeset() throws HgInvalidControlFileException {
 		if (latestFileCset == null) {
 			// XXX consider use of ChangelogHelper
 			int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);

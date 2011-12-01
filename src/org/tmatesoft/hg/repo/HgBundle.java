@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.LinkedList;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -93,7 +94,7 @@ public class HgBundle {
 	 * @param hgRepo repository that shall possess base revision for this bundle
 	 * @param inspector callback to get each changeset found 
 	 */
-	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgInvalidFileException {
+	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgCallbackTargetException, HgInvalidFileException {
 		Inspector bundleInsp = new Inspector() {
 			DigestHelper dh = new DigestHelper();
 			boolean emptyChangelog = true;
@@ -177,7 +178,11 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			public void fileEnd(String name) {}
 
 		};
-		inspectChangelog(bundleInsp);
+		try {
+			inspectChangelog(bundleInsp);
+		} catch (RuntimeException ex) {
+			throw new HgCallbackTargetException(ex);
+		}
 	}
 
 	public void dump() throws HgException {

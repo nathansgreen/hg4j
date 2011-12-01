@@ -29,10 +29,12 @@ import java.util.Map;
 
 import org.junit.Assert;
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetTreeHandler;
 import org.tmatesoft.hg.core.HgDataStreamException;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgFileInformer;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
@@ -117,7 +119,7 @@ public class Main {
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		cmd.file("file1", false);
 		cmd.execute(new HgChangesetTreeHandler() {
-			public void next(org.tmatesoft.hg.core.HgChangesetTreeHandler.TreeElement entry) {
+			public void next(HgChangesetTreeHandler.TreeElement entry) {
 				StringBuilder sb = new StringBuilder();
 				HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
 				for (HgChangeset cc : entry.children()) {
@@ -508,11 +510,15 @@ public class Main {
 				System.out.println(p);
 			}
 			public void file(HgFileRevision fileRevision) {
-				System.out.print(fileRevision.getRevision());;
-				System.out.print("   ");
-				System.out.printf("%s %s", fileRevision.getParents().first().shortNotation(), fileRevision.getParents().second().shortNotation());
-				System.out.print("   ");
-				System.out.println(fileRevision.getPath());
+				try {
+					System.out.print(fileRevision.getRevision());;
+					System.out.print("   ");
+					System.out.printf("%s %s", fileRevision.getParents().first().shortNotation(), fileRevision.getParents().second().shortNotation());
+					System.out.print("   ");
+					System.out.println(fileRevision.getPath());
+				} catch (HgException ex) {
+					throw new HgCallbackTargetException.Wrap(ex);
+				}
 			}
 			
 			public void end(Nodeid manifestRevision) {
@@ -570,7 +576,7 @@ public class Main {
 	}
 
 
-	private void testStatusInternals() throws HgDataStreamException {
+	private void testStatusInternals() throws HgException {
 		HgDataFile n = hgRepo.getFileNode(Path.create("design.txt"));
 		for (String s : new String[] {"011dfd44417c72bd9e54cf89b82828f661b700ed", "e5529faa06d53e06a816e56d218115b42782f1ba", "c18e7111f1fc89a80a00f6a39d51288289a382fc"}) {
 			// expected: 359, 2123, 3079

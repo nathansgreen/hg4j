@@ -41,4 +41,10 @@ public class HgInvalidControlFileException extends HgInvalidFileException {
 		super.setFile(file);
 		return this;
 	}
+	
+	@Override
+	public HgInvalidControlFileException setRevision(Nodeid r) {
+		super.setRevision(r);
+		return this;
+	}
 }

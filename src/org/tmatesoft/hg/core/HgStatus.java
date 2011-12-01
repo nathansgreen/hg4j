@@ -71,7 +71,7 @@ public class HgStatus {
 	/**
 	 * @return <code>null</code> if author for the change can't be deduced (e.g. for clean files it's senseless)
 	 */
-	public String getModificationAuthor() {
+	public String getModificationAuthor() throws HgInvalidControlFileException {
 		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			if (kind == Kind.Modified || kind == Kind.Added || kind == Kind.Removed /*&& RightBoundary is TIP*/) {
@@ -84,7 +84,7 @@ public class HgStatus {
 		return null;
 	}
 
-	public Date getModificationDate() {
+	public Date getModificationDate() throws HgInvalidControlFileException {
 		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			File localFile = new File(logHelper.getRepo().getWorkingDir(), path.toString());

@@ -109,7 +109,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	 * 
 	 * @param handler delegate to process changes
 	 */
-	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgCallbackTargetException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgInvalidControlFileException, HgCallbackTargetException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}

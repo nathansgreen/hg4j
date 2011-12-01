@@ -30,6 +30,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
@@ -86,8 +87,17 @@ abstract class Revlog {
 	public final int getLastRevision() {
 		return content.revisionCount() - 1;
 	}
-	
-	public final Nodeid getRevision(int revision) throws HgInvalidRevisionException {
+
+	/**
+	 * Map revision index to unique revision identifier (nodeid)
+	 *  
+	 * @param revision index of the entry in this revlog
+	 * @return revision nodeid of the entry
+	 * 
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public final Nodeid getRevision(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		// XXX cache nodeids? Rather, if context.getCache(this).getRevisionMap(create == false) != null, use it
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
 	}
@@ -123,8 +133,9 @@ abstract class Revlog {
 	 * @param nid revision to look up 
 	 * @return revision local index in this revlog
 	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public final int getLocalRevision(Nodeid nid) throws HgInvalidRevisionException {
+	public final int getLocalRevision(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		int revision = content.findLocalRevisionNumber(nid);
 		if (revision == BAD_REVISION) {
 			throw new HgInvalidRevisionException(String.format("Bad revision of %s", this /*XXX HgDataFile.getPath might be more suitable here*/), nid, null);
@@ -132,15 +143,21 @@ abstract class Revlog {
 		return revision;
 	}
 
-	// Till now, i follow approach that NULL nodeid is never part of revlog
-	public final boolean isKnown(Nodeid nodeid) {
+	/**
+	 * Note, {@link Nodeid#NULL} nodeid is not reported as known in any revlog.
+	 * 
+	 * @param nodeid
+	 * @return
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public final boolean isKnown(Nodeid nodeid) throws HgInvalidControlFileException {
 		final int rn = content.findLocalRevisionNumber(nodeid);
 		if (BAD_REVISION == rn) {
 			return false;
 		}
 		if (rn < 0 || rn >= content.revisionCount()) {
 			// Sanity check
-			throw new IllegalStateException();
+			throw new HgBadStateException(String.format("Revision index %d found for nodeid %s is not from the range [0..%d]", rn, nodeid.shortNotation(), content.revisionCount()-1));
 		}
 		return true;
 	}
@@ -155,6 +172,7 @@ abstract class Revlog {
 	
 	/**
 	 * @param revision - repo-local index of this file change (not a changelog revision number!)
+	 * FIXME is it necessary to have IOException along with HgException here?
 	 */
 	protected void rawContent(int revision, ByteChannel sink) throws HgException, IOException, CancelledException, HgInvalidRevisionException {
 		if (sink == null) {

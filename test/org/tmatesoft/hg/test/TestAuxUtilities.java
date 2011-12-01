@@ -25,6 +25,7 @@ import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCatCommand;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -234,9 +235,13 @@ public class TestAuxUtilities {
 			int i = 0;
 
 			public void next(int localRevision, Nodeid revision, int linkedRevision) {
-				Assert.assertEquals(i++, localRevision);
-				Assert.assertEquals(fileNode.getChangesetLocalRevision(localRevision), linkedRevision);
-				Assert.assertEquals(fileNode.getRevision(localRevision), revision);
+				try {
+					Assert.assertEquals(i++, localRevision);
+					Assert.assertEquals(fileNode.getChangesetLocalRevision(localRevision), linkedRevision);
+					Assert.assertEquals(fileNode.getRevision(localRevision), revision);
+				} catch (HgException ex) {
+					Assert.fail(ex.toString());
+				}
 			}
 		});
 		fileNode.walk(0, TIP, new HgDataFile.ParentInspector() {

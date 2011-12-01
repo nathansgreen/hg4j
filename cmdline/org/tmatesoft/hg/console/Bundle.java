@@ -19,6 +19,8 @@ package org.tmatesoft.hg.console;
 import java.io.File;
 import java.util.Collections;
 
+import org.tmatesoft.hg.core.HgCallbackTargetException;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -57,12 +59,16 @@ public class Bundle {
 			private final HgChangelog changelog = hgRepo.getChangelog();
 			
 			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-				if (changelog.isKnown(nodeid)) {
-					System.out.print("+");
-				} else {
-					System.out.print("-");
+				try {
+					if (changelog.isKnown(nodeid)) {
+						System.out.print("+");
+					} else {
+						System.out.print("-");
+					}
+					System.out.printf("%d:%s\n%s\n", revisionNumber, nodeid.shortNotation(), cset.toString());
+				} catch (HgException ex) {
+					throw new HgCallbackTargetException.Wrap(ex);
 				}
-				System.out.printf("%d:%s\n%s\n", revisionNumber, nodeid.shortNotation(), cset.toString());
 			}
 		});
 	}

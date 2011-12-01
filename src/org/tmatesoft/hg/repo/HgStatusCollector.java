@@ -29,6 +29,8 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgDataStreamException;
+import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.ManifestRevision;
@@ -268,7 +270,7 @@ public class HgStatusCollector {
 					} else {
 						inspector.added(copyTarget);
 					}
-				} catch (HgDataStreamException ex) {
+				} catch (HgException ex) {
 					ex.printStackTrace();
 					// FIXME perhaps, shall record this exception to dedicated mediator and continue
 					// for a single file not to be irresolvable obstacle for a status operation
@@ -288,7 +290,7 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
-	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgDataStreamException {
+	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgDataStreamException, HgInvalidControlFileException {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		if (!df.exists()) {
 			String msg = String.format("Didn't find file '%s' in the repo. Perhaps, bad storage name conversion?", fname);

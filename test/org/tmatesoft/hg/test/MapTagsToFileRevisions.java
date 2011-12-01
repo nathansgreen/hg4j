@@ -122,7 +122,11 @@ public class MapTagsToFileRevisions {
 		fileNode.walk(0, TIP, new HgDataFile.RevisionInspector() {
 
 			public void next(int localRevision, Nodeid revision, int linkedRevision) {
-				changesetToNodeid_3.put(clog.getRevision(linkedRevision), revision);
+				try {
+					changesetToNodeid_3.put(clog.getRevision(linkedRevision), revision);
+				} catch (HgException ex) {
+					ex.printStackTrace();
+				}
 			}
 		});
 		final long end_3 = System.nanoTime();
@@ -259,7 +263,7 @@ public class MapTagsToFileRevisions {
 		
 	// Approach 1. Build map with all files, their revisions and corresponding tags
 	//
-	private void collectTagsPerFile_Approach_1(final HgChangelog.RevisionMap clogrmap, final int[] tagLocalRevs, final TagInfo[] allTags, Path targetPath) {
+	private void collectTagsPerFile_Approach_1(final HgChangelog.RevisionMap clogrmap, final int[] tagLocalRevs, final TagInfo[] allTags, Path targetPath) throws HgException {
 		HgRepository repository = clogrmap.getRepo();
 		final long start = System.currentTimeMillis();
 		// file2rev2tag value is array of revisions, always of allTags.length. Revision index in the array

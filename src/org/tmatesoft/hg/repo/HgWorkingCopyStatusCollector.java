@@ -31,7 +31,6 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -123,19 +122,20 @@ public class HgWorkingCopyStatusCollector {
 		}
 		return mr;
 	}
-	
-	private ManifestRevision getDirstateParentManifest() {
-		// WC not necessarily points to TIP, but may be result of update to any previous revision.
-		// In such case, we need to compare local files not to their TIP content, but to specific version at the time of selected revision
-		if (dirstateParentManifest == null) {
-			Nodeid dirstateParent = getDirstateImpl().parents().first();
-			if (dirstateParent.isNull()) {
-				dirstateParentManifest = baseRevisionCollector != null ? baseRevisionCollector.raw(-1) : HgStatusCollector.createEmptyManifestRevision();
-			} else {
-				int changelogLocalRev = repo.getChangelog().getLocalRevision(dirstateParent);
-				dirstateParentManifest = getManifest(changelogLocalRev);
-			}
+
+	private void initDirstateParentManifest() throws HgInvalidControlFileException {
+		Nodeid dirstateParent = getDirstateImpl().parents().first();
+		if (dirstateParent.isNull()) {
+			dirstateParentManifest = baseRevisionCollector != null ? baseRevisionCollector.raw(-1) : HgStatusCollector.createEmptyManifestRevision();
+		} else {
+			int changelogLocalRev = repo.getChangelog().getLocalRevision(dirstateParent);
+			dirstateParentManifest = getManifest(changelogLocalRev);
 		}
+	}
+
+	// WC not necessarily points to TIP, but may be result of update to any previous revision.
+	// In such case, we need to compare local files not to their TIP content, but to specific version at the time of selected revision
+	private ManifestRevision getDirstateParentManifest() {
 		return dirstateParentManifest;
 	}
 	
@@ -145,16 +145,19 @@ public class HgWorkingCopyStatusCollector {
 		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
 		}
-		if (getDirstateImpl() == null) {
-			// XXX this is a hack to avoid declaring throws for the #walk() at the moment
-			// once I decide whether to have mediator that collects errors or to use exceptions here
-			// this hack shall be removed in favor of either severe error in mediator or a re-thrown exception.
-			try {
-				getDirstate();
-			} catch (HgInvalidControlFileException ex) {
-				repo.getContext().getLog().error(getClass(), ex, "Can't read dirstate");
-				return;
+		try {
+			if (getDirstateImpl() == null) {
+				// XXX this is a hack to avoid declaring throws for the #walk() at the moment
+				// once I decide whether to have mediator that collects errors or to use exceptions here
+				// this hack shall be removed in favor of either severe error in mediator or a re-thrown exception.
+					getDirstate();
 			}
+			if (getDirstateParentManifest() == null) {
+				initDirstateParentManifest();
+			}
+		} catch (HgInvalidControlFileException ex) {
+			repo.getContext().getLog().error(getClass(), ex, "Failed to initialize with dirstate information");
+			return;
 		}
 		ManifestRevision collect = null; // non null indicates we compare against base revision
 		Set<Path> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
@@ -333,7 +336,7 @@ public class HgWorkingCopyStatusCollector {
 						inspector.copied(getPathPool().path(origin), fname);
 						return;
 					}
-				} catch (HgDataStreamException ex) {
+				} catch (HgException ex) {
 					ex.printStackTrace();
 					// FIXME report to a mediator, continue status collection
 				}

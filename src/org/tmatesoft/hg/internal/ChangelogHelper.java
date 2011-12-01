@@ -18,6 +18,7 @@ package org.tmatesoft.hg.internal;
 
 import java.util.TreeMap;
 
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -32,7 +33,7 @@ import org.tmatesoft.hg.util.Path;
 public class ChangelogHelper {
 	private final int leftBoundary;
 	private final HgRepository repo;
-	private final TreeMap<Integer, RawChangeset> cache = new TreeMap<Integer, RawChangeset>();
+	private final TreeMap<Integer, RawChangeset> cache = new TreeMap<Integer, RawChangeset>(); // FIXME use IntMap instead
 	private String nextCommitAuthor;
 
 	/**
@@ -55,10 +56,9 @@ public class ChangelogHelper {
 	/**
 	 * Walks changelog in reverse order
 	 * @param file
-	 * @return changeset where specified file is mentioned among affected files, or 
-	 * <code>null</code> if none found up to leftBoundary 
+	 * @return changeset where specified file is mentioned among affected files, or <code>null</code> if none found up to leftBoundary
 	 */
-	public RawChangeset findLatestChangeWith(Path file) {
+	public RawChangeset findLatestChangeWith(Path file) throws HgInvalidControlFileException {
 		HgDataFile df = repo.getFileNode(file);
 		if (!df.exists()) {
 			return null;

@@ -136,7 +136,7 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	 * @throws HgDataStreamException 
 	 * @throws IllegalArgumentException when command arguments are incomplete or wrong
 	 */
-	public void execute(ByteChannel sink) throws HgDataStreamException, CancelledException {
+	public void execute(ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException {
 		if (localRevision == BAD_REVISION && revision == null && cset == null) {
 			throw new IllegalArgumentException("File revision, corresponing local number, or a changset nodeid shall be specified");
 		}

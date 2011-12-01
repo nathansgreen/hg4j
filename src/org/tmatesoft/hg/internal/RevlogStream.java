@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -80,50 +81,43 @@ public class RevlogStream {
 	}
 	
 	/**
-	 * @throws HgBadStateException if internal read operation failed
+	 * @throws HgInvalidControlFileException if attempt to read index file failed
+	 * @throws HgInvalidRevisionException if revisionIndex argument doesn't represent a valid record in the revlog
 	 */
-	public int dataLength(int revision) {
+	public int dataLength(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		// XXX in fact, use of iterate() instead of this implementation may be quite reasonable.
 		//
-		final int indexSize = revisionCount();
+		revisionIndex = checkRevisionIndex(revisionIndex);
 		DataAccess daIndex = getIndexStream();
-		if (revision == TIP) {
-			revision = indexSize - 1;
-		}
 		try {
-			int recordOffset = getIndexOffsetInt(revision);
+			int recordOffset = getIndexOffsetInt(revisionIndex);
 			daIndex.seek(recordOffset + 12); // 6+2+4
 			int actualLen = daIndex.readInt();
 			return actualLen; 
 		} catch (IOException ex) {
-			ex.printStackTrace(); // log error. FIXME better handling
-			throw new HgBadStateException(ex);
+			throw new HgInvalidControlFileException(null, ex, indexFile);
 		} finally {
 			daIndex.done();
 		}
 	}
 	
 	/**
-	 * @throws HgBadStateException if internal read operation failed
+	 * Read nodeid at given index
+	 * 
+	 * @throws HgInvalidControlFileException if attempt to read index file failed
+	 * @throws HgInvalidRevisionException if revisionIndex argument doesn't represent a valid record in the revlog
 	 */
-	public byte[] nodeid(int revision) throws HgInvalidRevisionException {
-		final int indexSize = revisionCount();
-		if (revision == TIP) {
-			revision = indexSize - 1;
-		}
-		if (revision < 0 || revision >= indexSize) {
-			throw new HgInvalidRevisionException(revision).setRevisionIndex(revision, 0, indexSize);
-		}
+	public byte[] nodeid(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		revisionIndex = checkRevisionIndex(revisionIndex);
 		DataAccess daIndex = getIndexStream();
 		try {
-			int recordOffset = getIndexOffsetInt(revision);
+			int recordOffset = getIndexOffsetInt(revisionIndex);
 			daIndex.seek(recordOffset + 32);
 			byte[] rv = new byte[20];
 			daIndex.readBytes(rv, 0, 20);
 			return rv;
 		} catch (IOException ex) {
-			ex.printStackTrace();
-			throw new HgBadStateException();
+			throw new HgInvalidControlFileException(null, ex, indexFile);
 		} finally {
 			daIndex.done();
 		}
@@ -131,25 +125,20 @@ public class RevlogStream {
 
 	/**
 	 * Get link field from the index record.
-	 * @throws HgBadStateException if internal read operation failed
+	 * 
+	 * @throws HgInvalidControlFileException if attempt to read index file failed
+	 * @throws HgInvalidRevisionException if revisionIndex argument doesn't represent a valid record in the revlog
 	 */
-	public int linkRevision(int revision) {
-		final int last = revisionCount() - 1;
-		if (revision == TIP) {
-			revision = last;
-		}
-		if (revision < 0 || revision > last) {
-			throw new IllegalArgumentException(Integer.toString(revision));
-		}
+	public int linkRevision(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		revisionIndex = checkRevisionIndex(revisionIndex);
 		DataAccess daIndex = getIndexStream();
 		try {
-			int recordOffset = getIndexOffsetInt(revision);
+			int recordOffset = getIndexOffsetInt(revisionIndex);
 			daIndex.seek(recordOffset + 20);
 			int linkRev = daIndex.readInt();
 			return linkRev;
 		} catch (IOException ex) {
-			ex.printStackTrace();
-			throw new HgBadStateException();
+			throw new HgInvalidControlFileException(null, ex, indexFile);
 		} finally {
 			daIndex.done();
 		}
@@ -161,8 +150,9 @@ public class RevlogStream {
 	// Unlike its counterpart, {@link Revlog#getLocalRevisionNumber()}, doesn't fail with exception if node not found,
 	/**
 	 * @return integer in [0..revisionCount()) or {@link HgRepository#BAD_REVISION} if not found
+	 * @throws HgInvalidControlFileException if attempt to read index file failed
 	 */
-	public int findLocalRevisionNumber(Nodeid nodeid) {
+	public int findLocalRevisionNumber(Nodeid nodeid) throws HgInvalidControlFileException {
 		// XXX this one may be implemented with iterate() once there's mechanism to stop iterations
 		final int indexSize = revisionCount();
 		DataAccess daIndex = getIndexStream();
@@ -179,8 +169,7 @@ public class RevlogStream {
 				daIndex.skip(inline ? 12 + compressedLen : 12);
 			}
 		} catch (IOException ex) {
-			ex.printStackTrace(); // log error. FIXME better handling. Perhaps, shall return BAD_REVISION here as well?
-			throw new IllegalStateException(ex);
+			throw new HgInvalidControlFileException("Failed", ex, indexFile).setRevision(nodeid);
 		} finally {
 			daIndex.done();
 		}
@@ -267,10 +256,23 @@ public class RevlogStream {
 	}
 
 	/**
+	 * @param revisionIndex shall be valid index, [0..baseRevisions.length-1]. 
+	 * It's advised to use {@link #checkRevisionIndex(int)} to ensure argument is correct. 
 	 * @return  offset of the revision's record in the index (.i) stream
 	 */
-	private int getIndexOffsetInt(int revision) {
-		return inline ? indexRecordOffset[revision] : revision * REVLOGV1_RECORD_SIZE;
+	private int getIndexOffsetInt(int revisionIndex) {
+		return inline ? indexRecordOffset[revisionIndex] : revisionIndex * REVLOGV1_RECORD_SIZE;
+	}
+	
+	private int checkRevisionIndex(int revisionIndex) throws HgInvalidRevisionException {
+		final int last = revisionCount() - 1;
+		if (revisionIndex == TIP) {
+			revisionIndex = last;
+		}
+		if (revisionIndex < 0 || revisionIndex > last) {
+			throw new HgInvalidRevisionException(revisionIndex).setRevisionIndex(revisionIndex, 0, last);
+		}
+		return revisionIndex;
 	}
 
 	private void initOutline() {

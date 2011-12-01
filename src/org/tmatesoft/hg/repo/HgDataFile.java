@@ -33,6 +33,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
@@ -86,17 +87,26 @@ public class HgDataFile extends Revlog {
 	}
 
 	/**
+	 * Handy shorthand for {@link #length(int) length(getLocalRevision(nodeid))}
+	 *
+	 * @param nodeid revision of the file
+	 * 
 	 * @return size of the file content at the given revision
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgDataStreamException if attempt to access file metadata failed
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public int length(Nodeid nodeid) throws HgDataStreamException {
+	public int length(Nodeid nodeid) throws HgDataStreamException, HgInvalidControlFileException, HgInvalidRevisionException {
 		return length(getLocalRevision(nodeid));
-		
 	}
 	
 	/**
 	 * @return size of the file content at the revision identified by local revision number.
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgDataStreamException if attempt to access file metadata failed
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public int length(int localRev) throws HgDataStreamException {
+	public int length(int localRev) throws HgDataStreamException, HgInvalidControlFileException, HgInvalidRevisionException {
 		if (metadata == null || !metadata.checked(localRev)) {
 			checkAndRecordMetadata(localRev);
 		}
@@ -387,16 +397,36 @@ public class HgDataFile extends Revlog {
 		changelog.rangeInternal(inspector, commitRevisions);
 	}
 	
-	// for a given local revision of the file, find out local revision in the changelog
-	public int getChangesetLocalRevision(int revision) {
+	/**
+	 * For a given local revision of the file, find out local revision in the changelog.
+	 * FIXME rename to getChangesetRevisionIndex()
+	 *
+	 * @return changeset revision index
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public int getChangesetLocalRevision(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		return content.linkRevision(revision);
 	}
 
-	public Nodeid getChangesetRevision(Nodeid nid) {
+	/**
+	 * Complements {@link #getChangesetLocalRevision(int)} to get changeset revision that corresponds to supplied file revision
+	 * 
+	 * @param nid revision of the file
+	 * @return changeset revision
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public Nodeid getChangesetRevision(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		int changelogRevision = getChangesetLocalRevision(getLocalRevision(nid));
 		return getRepo().getChangelog().getRevision(changelogRevision);
 	}
 
+	/**
+	 * 
+	 * @return
+	 * @throws HgDataStreamException if attempt to access file metadata failed
+	 */
 	public boolean isCopy() throws HgDataStreamException {
 		if (metadata == null || !metadata.checked(0)) {
 			checkAndRecordMetadata(0);
@@ -407,6 +437,13 @@ public class HgDataFile extends Revlog {
 		return metadata.find(0, "copy") != null;
 	}
 
+	/**
+	 * Get name of the file this one was copied from.
+	 * 
+	 * @return name of the file origin
+	 * @throws HgDataStreamException if attempt to access file metadata failed
+	 * @throws UnsupportedOperationException if this file doesn't represent a copy ({@link #isCopy()} was false)
+	 */
 	public Path getCopySourceName() throws HgDataStreamException {
 		if (isCopy()) {
 			return Path.create(metadata.find(0, "copy"));

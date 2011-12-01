@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
@@ -474,7 +475,12 @@ public class HgManifest extends Revlog {
 				Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
 				// FIXME calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
 				// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
-				changelog2manifest[u] = repo.getManifest().getLocalRevision(manifest);
+				try {
+					changelog2manifest[u] = repo.getManifest().getLocalRevision(manifest);
+				} catch (HgInvalidControlFileException ex) {
+					// FIXME need to propagate the error up to client  
+					repo.getContext().getLog().error(getClass(), ex, null);
+				}
 			}
 		}
 	}
