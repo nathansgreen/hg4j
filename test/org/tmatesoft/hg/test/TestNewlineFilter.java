@@ -106,6 +106,61 @@ public class TestNewlineFilter {
 			// fine
 		}
 	}
+	
+	@Test
+	public void testBufferEndInTheMiddle_CRLF_2_LF() {
+		// filter works with ByteBuffer that may end with \r, and the next one starting with \n
+		// need to make sure this is handled correctly.
+		byte[] i1 = "\r\nA\r\nBC\r".getBytes();
+		byte[] i2 = "\n\r\nDEF\r\n".getBytes();
+		NewlineFilter nlFilter = NewlineFilter.createWin2Nix(false);
+		ByteBuffer input = ByteBuffer.allocate(i1.length + i2.length);
+		ByteBuffer res = ByteBuffer.allocate(i1.length + i2.length); // at most of the original size
+		input.put(i1).flip();
+		res.put(nlFilter.filter(input));
+		Assert.assertTrue("Unpocessed chars shall be left in input buffer", input.remaining() > 0);
+		input.compact();
+		input.put(i2);
+		input.flip();
+		res.put(nlFilter.filter(input));
+		Assert.assertTrue("Input shall be consumed completely", input.remaining() == 0);
+		//
+		res.flip();
+		byte[] result = new byte[res.remaining()];
+		res.get(result);
+		Assert.assertArrayEquals(lf_1.getBytes(), result);
+		//
+		//
+		// check the same, with extra \r at the end of first portion
+		nlFilter = NewlineFilter.createWin2Nix(false);
+		res.clear();
+		input.clear();
+		input.put(i1).put("\r\r\r".getBytes()).flip();
+		res.put(nlFilter.filter(input));
+		Assert.assertTrue("Unpocessed chars shall be left in input buffer", input.remaining() > 0);
+		input.compact();
+		input.put(i2);
+		input.flip();
+		res.put(nlFilter.filter(input));
+		Assert.assertTrue("Input shall be consumed completely", input.remaining() == 0);
+		res.flip();
+		result = new byte[res.remaining()];
+		res.get(result);
+		Assert.assertArrayEquals(lf_1.getBytes(), result);
+	}
+	
+	@Test
+	public void testNoConversionLoneCR() {
+		// CRLF -> LF
+		final byte[] input = "\r\nA\rBC\r\rDE\r\nFGH".getBytes();
+		final byte[] output = "\nA\rBC\r\rDE\nFGH".getBytes();
+		byte[] result = apply(NewlineFilter.createWin2Nix(false), input);
+		Assert.assertArrayEquals(output, result);
+		//
+		// LF -> CRLF
+		result = apply(NewlineFilter.createNix2Win(false), output);
+		Assert.assertArrayEquals(input, result);
+	}
 
 
 	@Test
