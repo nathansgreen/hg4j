@@ -18,7 +18,9 @@ package org.tmatesoft.hg.internal;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
@@ -55,6 +57,20 @@ public class FilterByteChannel implements ByteChannel, Adaptable {
 
 	// adapters or implemented interfaces of the original class shall not be obfuscated by filter
 	public <T> T getAdapter(Class<T> adapterClass) {
+		if (adapterClass == Preview.class) {
+			ArrayList<Preview> previewers = new ArrayList<Preview>(filters.length);
+			for (Filter f : filters) {
+				if (f instanceof Preview /*FIXME or getAdapter != null*/) {
+					previewers.add((Preview) f);
+				}
+			}
+			if (!previewers.isEmpty()) {
+				@SuppressWarnings("unchecked")
+				T rv = (T) new PreviewSupport(previewers);
+				return rv;
+			}
+			// fall through to let delegate answer
+		}
 		if (delegate instanceof Adaptable) {
 			return ((Adaptable) delegate).getAdapter(adapterClass);
 		}
@@ -62,5 +78,23 @@ public class FilterByteChannel implements ByteChannel, Adaptable {
 			return adapterClass.cast(delegate);
 		}
 		return null;
+	}
+
+	private static class PreviewSupport implements Preview {
+		private final Preview[] participants;
+
+		public PreviewSupport(List<Preview> previewers) {
+			participants = new Preview[previewers.size()];
+			previewers.toArray(participants);
+		}
+		
+		public void preview(ByteBuffer src) {
+			final int originalPos = src.position();
+			for (Preview p : participants) {
+				p.preview(src);
+				// reset to initial state
+				src.position(originalPos);
+			}
+		}
 	}
 }

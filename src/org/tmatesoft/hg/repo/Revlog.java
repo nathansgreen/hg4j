@@ -36,11 +36,13 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.Preview;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 
@@ -178,7 +180,7 @@ abstract class Revlog {
 		if (sink == null) {
 			throw new IllegalArgumentException();
 		}
-		ContentPipe insp = new ContentPipe(sink, 0);
+		ContentPipe insp = new ContentPipe(sink, 0, repo.getContext().getLog());
 		insp.checkCancelled();
 		content.iterate(revision, revision, true, insp);
 		insp.checkFailed();
@@ -596,16 +598,19 @@ abstract class Revlog {
 	protected static class ContentPipe extends ErrorHandlingInspector implements RevlogStream.Inspector, CancelSupport {
 		private final ByteChannel sink;
 		private final int offset;
+		private final LogFacility logFacility;
 
 		/**
 		 * @param _sink - cannot be <code>null</code>
 		 * @param seekOffset - when positive, orders to pipe bytes to the sink starting from specified offset, not from the first byte available in DataAccess
+		 * @param log optional facility to put warnings/debug messages into, may be null.
 		 */
-		public ContentPipe(ByteChannel _sink, int seekOffset) {
+		public ContentPipe(ByteChannel _sink, int seekOffset, LogFacility log) {
 			assert _sink != null;
 			sink = _sink;
 			setCancelSupport(CancelSupport.Factory.get(_sink));
 			offset = seekOffset;
+			logFacility = log;
 		}
 		
 		protected void prepare(int revisionNumber, DataAccess da) throws HgException, IOException {
@@ -618,16 +623,37 @@ abstract class Revlog {
 			try {
 				prepare(revisionNumber, da); // XXX perhaps, prepare shall return DA (sliced, if needed)
 				final ProgressSupport progressSupport = ProgressSupport.Factory.get(sink);
-				ByteBuffer buf = ByteBuffer.allocate(512);
-				progressSupport.start(da.length());
+				ByteBuffer buf = ByteBuffer.allocate(actualLen > 8192 ? 8192 : actualLen);
+				Preview p = getAdapter(sink, Preview.class);
+				if (p != null) {
+					progressSupport.start(2 * da.length());
+					while (!da.isEmpty()) {
+						checkCancelled();
+						da.readBytes(buf);
+						p.preview(buf);
+						buf.clear();
+					}
+					da.reset();
+					prepare(revisionNumber, da);
+					progressSupport.worked(da.length());
+					buf.clear();
+				} else {
+					progressSupport.start(da.length());
+				}
 				while (!da.isEmpty()) {
 					checkCancelled();
 					da.readBytes(buf);
-					buf.flip();
+					buf.flip(); // post: position == 0
 					// XXX I may not rely on returned number of bytes but track change in buf position instead.
-					int consumed = sink.write(buf); 
-					// FIXME in fact, bad sink implementation (that consumes no bytes) would result in endless loop. Need to account for this 
-					buf.compact();
+					
+					int consumed = sink.write(buf);
+					if ((consumed == 0 || consumed != buf.position()) && logFacility != null) {
+						logFacility.warn(getClass(), "Bad data sink when reading revision %d. Reported %d bytes consumed, byt actually read %d", revisionNumber, consumed, buf.position());
+					}
+					if (buf.position() == 0) {
+						throw new HgBadStateException("Bad sink implementation (consumes no bytes) results in endless loop");
+					}
+					buf.compact(); // ensure (a) there's space for new (b) data starts at 0
 					progressSupport.worked(consumed);
 				}
 				progressSupport.done(); // XXX shall specify whether #done() is invoked always or only if completed successfully.

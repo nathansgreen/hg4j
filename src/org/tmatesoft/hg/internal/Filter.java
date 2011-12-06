@@ -28,10 +28,18 @@ import org.tmatesoft.hg.util.Path;
  */
 public interface Filter {
 
-	// returns a buffer ready to be read. may return original buffer.
-	// original buffer may not be fully consumed, #compact() might be operation to perform 
+	/**
+	 * Filters data and returns a new buffer with data or an original buffer.
+	 * Original buffer may not be fully consumed, #compact() might be operation to perform
+	 * @param src
+	 * @return a buffer ready to be read
+	 */
+	//  
 	ByteBuffer filter(ByteBuffer src);
 
+	/*
+	 * Factory doesn't look into data (i.e. could't do a preview), works solely with path
+	 */
 	interface Factory {
 		void initialize(HgRepository hgRepo);
 		// may return null if for a given path and/or options this filter doesn't make any sense

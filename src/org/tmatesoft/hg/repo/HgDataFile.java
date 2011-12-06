@@ -159,6 +159,8 @@ public class HgDataFile extends Revlog {
 				}
 			}
 		} else {
+			// FIXME not TIP, but revision according to dirstate!!!
+			// add tests for this case
 			contentWithFilters(TIP, sink);
 		}
 	}
@@ -219,12 +221,12 @@ public class HgDataFile extends Revlog {
 		}
 		ErrorHandlingInspector insp;
 		if (metadata.none(revision)) {
-			insp = new ContentPipe(sink, 0);
+			insp = new ContentPipe(sink, 0, getRepo().getContext().getLog());
 		} else if (metadata.known(revision)) {
-			insp = new ContentPipe(sink, metadata.dataOffset(revision));
+			insp = new ContentPipe(sink, metadata.dataOffset(revision), getRepo().getContext().getLog());
 		} else {
 			// do not know if there's metadata
-			insp = new MetadataInspector(metadata, getPath(), new ContentPipe(sink, 0));
+			insp = new MetadataInspector(metadata, getPath(), new ContentPipe(sink, 0, getRepo().getContext().getLog()));
 		}
 		insp.checkCancelled();
 		super.content.iterate(revision, revision, true, insp);

@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 import static org.tmatesoft.hg.internal.Filter.Direction.FromRepo;
 import static org.tmatesoft.hg.internal.Filter.Direction.ToRepo;
 import static org.tmatesoft.hg.internal.KeywordFilter.copySlice;
@@ -26,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
@@ -35,20 +38,25 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class NewlineFilter implements Filter {
+public class NewlineFilter implements Filter, Preview {
 
-	// if allowInconsistent is true, filter simply pass incorrect newline characters (single \r or \r\n on *nix and single \n on Windows) as is,
-	// i.e. doesn't try to convert them into appropriate newline characters. XXX revisit if Keyword extension behaves differently
+	// if processInconsistent is false, filter simply pass incorrect newline characters (single \r or \r\n on *nix and single \n on Windows) as is,
+	// i.e. doesn't try to convert them into appropriate newline characters. 
+	// XXX revisit if Keyword extension behaves differently - WTF???
 	private final boolean processInconsistent;
 	private final boolean winToNix;
+	
+	// NOTE, if processInconsistent == true, foundCRLF and foundLoneLF are not initialized
+	private boolean foundLoneLF = false;
+	private boolean foundCRLF = false;
 
-	// next two factory methods for testsing purposes
-	public static NewlineFilter createWin2Nix(boolean allowMixed) {
-		return new NewlineFilter(!allowMixed, 0);
+	// next two factory methods for test purposes
+	public static NewlineFilter createWin2Nix(boolean processMixed) {
+		return new NewlineFilter(!processMixed, 0);
 	}
 	
-	public static NewlineFilter createNix2Win(boolean allowMixed) {
-		return new NewlineFilter(!allowMixed, 1);
+	public static NewlineFilter createNix2Win(boolean processMixed) {
+		return new NewlineFilter(!processMixed, 1);
 	}
 
 	private NewlineFilter(boolean onlyConsistent, int transform) {
@@ -57,15 +65,70 @@ public class NewlineFilter implements Filter {
 	}
 
 	public ByteBuffer filter(ByteBuffer src) {
+		if (!previewDone) {
+			throw new HgBadStateException("This filter requires preview operation prior to actual filtering");
+		}
+		if (!processInconsistent && foundLoneLF && foundCRLF) {
+			// do not process inconsistent newlines
+			return src;
+		}
 		if (winToNix) {
+			if (!processInconsistent && !foundCRLF) {
+				// no reason to process if no CRLF in the data stream
+				return src;
+			}
 			return win2nix(src);
 		} else {
+			if (!processInconsistent && !foundLoneLF) {
+				return src;
+			}
 			return nix2win(src);
 		}
 	}
 	
-	private boolean foundLoneLF = false;
-	private boolean foundCRLF = false;
+	private boolean prevBufLastByteWasCR = false;
+	private boolean previewDone = false;
+
+	public void preview(ByteBuffer src) {
+		previewDone = true; // guard
+		if (processInconsistent) {
+			// gonna handle them anyway, no need to check. TODO Do not implement Preview directly, but rather 
+			// conditionally through getAdapter when processInconsistent is false (sic!)
+			return;
+		}
+		if (foundLoneLF && foundCRLF) {
+			// already know it's inconsistent
+			return;
+		}
+		final byte CR = (byte) '\r';
+		final byte LF = (byte) '\n';
+		int x = src.position();
+		while (x < src.limit()) {
+			int in = indexOf(LF, src, x);
+			if (in == -1) {
+				// no line feed, but what if it's CRLF broken in the middle?
+				prevBufLastByteWasCR = CR == src.get(src.limit() - 1);
+				return;
+			}
+			if (in == 0) {
+				if (prevBufLastByteWasCR) {
+					foundCRLF = true;
+				} else {
+					foundLoneLF = true;
+				}
+			} else { // in > 0 && in >= x
+				if (src.get(in - 1) == CR) {
+					foundCRLF = true;
+				} else {
+					foundLoneLF = true;
+				}
+			}
+			if (foundCRLF && foundLoneLF) {
+				return;
+			}
+			x = in + 1;
+		}
+	}
 
 	private ByteBuffer win2nix(ByteBuffer src) {
 		int lookupStart = src.position(); // source index
@@ -78,17 +141,21 @@ public class NewlineFilter implements Filter {
 			int in = indexOf(LF, src, lookupStart);
 			if (in != -1) {
 				if (ir == -1 || ir > in) {
-					// lone LF. CR, if present, goes after LF, process up to closest LF, let next iteration decide what to do with CR@ir
-					foundLoneLF = true;
-					// XXX respect onlyConsistent. if foundCRLF then shall not process further
+					// lone LF. CR, if present, goes after LF, process up to that lone, closest LF; let next iteration decide what to do with CR@ir
+					if (!processInconsistent && foundCRLF) {
+						assert foundLoneLF == true : "preview() shall initialize this";
+						fail(src, in);
+					}
 					dst = consume(src, lookupStart, in+1, dst);
 					lookupStart = in + 1;
 				} else {
 					// ir < in
 					if (onlyCRup2limit(src, ir, in)) {
 						// CR...CRLF;
-						foundCRLF = true;
-						// XXX respect onlyConsistent. if foundLoneLF then shall not process further
+						if (!processInconsistent && foundLoneLF) {
+							assert foundCRLF == true : "preview() shall initialize this";
+							fail(src, ir);
+						}
 						dst = consume(src, lookupStart, ir, dst);
 						dst.put(LF);
 						lookupStart = in+1;
@@ -147,8 +214,11 @@ public class NewlineFilter implements Filter {
 			int in = indexOf(LF, src, x);
 			if (in != -1) {
 				if (in > x && src.get(in - 1) == CR) {
-					foundCRLF = true;
-					// XXX respect onlyConsistent. if foundLoneLF then shall not process further
+					// found CRLF
+					if (!processInconsistent && foundLoneLF) {
+						assert foundCRLF == true : "preview() shall initialize this";
+						fail(src, in-1);
+					}
 					if (dst == null) {
 						dst = ByteBuffer.allocate(src.remaining() * 2);
 					}
@@ -156,8 +226,10 @@ public class NewlineFilter implements Filter {
 					x = in + 1;
 				} else {
 					// found stand-alone LF, need to output CRLF
-					foundLoneLF = true;
-					// XXX respect onlyConsistent. if foundCRLF then shall not process further
+					if (!processInconsistent && foundCRLF) {
+						assert foundLoneLF == true : "preview() shall initialize this";
+						fail(src, in);
+					}
 					if (dst == null) {
 						dst = ByteBuffer.allocate(src.remaining() * 2);
 					}
@@ -180,9 +252,13 @@ public class NewlineFilter implements Filter {
 	}
 
 
+	// Test: nlFilter.fail(ByteBuffer.wrap(new "test string".getBytes()), 5);
 	private void fail(ByteBuffer b, int pos) {
-		// FIXME checked(?) HgFilterException instead
-		throw new RuntimeException(String.format("Inconsistent newline characters in the stream (char 0x%x, local index:%d)", b.get(pos), pos));
+		StringBuilder sb = new StringBuilder();
+		for (int i = max(pos-10, 0), x = min(pos + 10, b.limit()); i < x; i++) {
+			sb.append(String.format("%02x ", b.get(i)));
+		}
+		throw new HgBadStateException(String.format("Inconsistent newline characters in the stream %s (char 0x%x, local index:%d)", sb.toString(), b.get(pos), pos));
 	}
 
 	private static int indexOf(byte ch, ByteBuffer b, int from) {

@@ -89,22 +89,16 @@ public class TestNewlineFilter {
 
 	@Test
 	public void testStrictMixed_CRLF_2_LF() {
-		try {
-			byte[] result = apply(NewlineFilter.createWin2Nix(false), crlf_2.getBytes());
-			Assert.fail("Shall fail when eol.only-consistent is true:" + new String(result));
-		} catch (RuntimeException ex) {
-			// fine
-		}
+		final byte[] input = crlf_2.getBytes();
+		byte[] result = apply(NewlineFilter.createWin2Nix(false), input);
+		Assert.assertArrayEquals(input, result);
 	}
 
 	@Test
 	public void testStrictMixed_LF_2_CRLF() {
-		try {
-			byte[] result = apply(NewlineFilter.createNix2Win(false), lf_2.getBytes());
-			Assert.fail("Shall fail when eol.only-consistent is true:" + new String(result));
-		} catch (RuntimeException ex) {
-			// fine
-		}
+		final byte[] input = lf_2.getBytes();
+		byte[] result = apply(NewlineFilter.createNix2Win(false), input);
+		Assert.assertArrayEquals(input, result);
 	}
 	
 	@Test
@@ -116,6 +110,9 @@ public class TestNewlineFilter {
 		NewlineFilter nlFilter = NewlineFilter.createWin2Nix(false);
 		ByteBuffer input = ByteBuffer.allocate(i1.length + i2.length);
 		ByteBuffer res = ByteBuffer.allocate(i1.length + i2.length); // at most of the original size
+		nlFilter.preview(ByteBuffer.wrap(i1));
+		nlFilter.preview(ByteBuffer.wrap(i2));
+		//
 		input.put(i1).flip();
 		res.put(nlFilter.filter(input));
 		Assert.assertTrue("Unpocessed chars shall be left in input buffer", input.remaining() > 0);
@@ -136,6 +133,11 @@ public class TestNewlineFilter {
 		res.clear();
 		input.clear();
 		input.put(i1).put("\r\r\r".getBytes()).flip();
+		// preview requred
+		nlFilter.preview(input);
+		nlFilter.preview(ByteBuffer.wrap(i2));
+		// input.position(0); correctly written preview shall not affect buffer position 
+		//
 		res.put(nlFilter.filter(input));
 		Assert.assertTrue("Unpocessed chars shall be left in input buffer", input.remaining() > 0);
 		input.compact();
@@ -179,7 +181,10 @@ public class TestNewlineFilter {
 	}
 
 	private static byte[] apply(NewlineFilter nlFilter, byte[] input) {
-		ByteBuffer result = nlFilter.filter(ByteBuffer.wrap(input));
+		final ByteBuffer inputBuffer = ByteBuffer.wrap(input);
+		nlFilter.preview(inputBuffer);
+		// inputBuffer.position(0); correctly written filter shall not affect buffer position
+		ByteBuffer result = nlFilter.filter(inputBuffer);
 		byte[] res = new byte[result.remaining()];
 		result.get(res);
 		return res;

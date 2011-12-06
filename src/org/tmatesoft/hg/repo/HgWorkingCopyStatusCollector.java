@@ -39,6 +39,7 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.PathScope;
+import org.tmatesoft.hg.internal.Preview;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.FileInfo;
@@ -469,6 +470,22 @@ public class HgWorkingCopyStatusCollector {
 			is = f.newInputChannel();
 			ByteBuffer fb = ByteBuffer.allocate(min(1 + data.length * 2 /*to fit couple of lines appended; never zero*/, 8192));
 			FilterByteChannel filters = new FilterByteChannel(check, repo.getFiltersFromWorkingDirToRepo(p));
+			Preview preview = filters.getAdapter(Preview.class);
+			if (preview != null) {
+				while (is.read(fb) != -1) {
+					fb.flip();
+					preview.preview(fb);
+					fb.clear();
+				}
+				// reset channel to read once again
+				try {
+					is.close();
+				} catch (IOException ex) {
+					repo.getContext().getLog().info(getClass(), ex, null);
+				}
+				is = f.newInputChannel();
+				fb.clear();
+			}
 			while (is.read(fb) != -1 && check.sameSoFar()) {
 				fb.flip();
 				filters.write(fb);
