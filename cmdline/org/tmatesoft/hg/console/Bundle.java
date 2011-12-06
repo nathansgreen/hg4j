@@ -18,6 +18,7 @@ package org.tmatesoft.hg.console;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.LinkedList;
 
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgException;
@@ -26,6 +27,8 @@ import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgBundle.GroupElement;
+import org.tmatesoft.hg.repo.HgBundle.Inspector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 
 
@@ -45,7 +48,7 @@ public class Bundle {
 		}
 		File bundleFile = new File("/temp/hg/hg-bundle-cpython.tmp");
 		HgBundle hgBundle = new HgLookup().loadBundle(bundleFile);
-		hgBundle.inspectFiles(new HgBundle.Dump());
+		hgBundle.inspectFiles(new Dump());
 		if (Boolean.parseBoolean("true")) {
 			return;
 		}
@@ -100,4 +103,44 @@ public class Bundle {
 			   
 
  */
+
+	public static void dump(HgBundle hgBundle) throws HgException {
+		Dump dump = new Dump();
+		hgBundle.inspectAll(dump);
+		System.out.println("Total files:" + dump.names.size());
+		for (String s : dump.names) {
+			System.out.println(s);
+		}
+	}
+
+	public static class Dump implements Inspector {
+		public final LinkedList<String> names = new LinkedList<String>();
+
+		public void changelogStart() {
+			System.out.println("Changelog group");
+		}
+
+		public void changelogEnd() {
+		}
+
+		public void manifestStart() {
+			System.out.println("Manifest group");
+		}
+
+		public void manifestEnd() {
+		}
+
+		public void fileStart(String name) {
+			names.add(name);
+			System.out.println(name);
+		}
+
+		public void fileEnd(String name) {
+		}
+
+		public boolean element(GroupElement ge) {
+			System.out.printf("  %s\n", ge.toString());
+			return true;
+		}
+	}
 }

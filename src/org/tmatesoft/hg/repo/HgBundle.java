@@ -18,13 +18,12 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.LinkedList;
 
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -45,8 +44,10 @@ public class HgBundle {
 
 	private final File bundleFile;
 	private final DataAccessProvider accessProvider;
+//	private final SessionContext sessionContext;
 
-	HgBundle(DataAccessProvider dap, File bundle) {
+	HgBundle(SessionContext ctx, DataAccessProvider dap, File bundle) {
+//		sessionContext = ctx;
 		accessProvider = dap;
 		bundleFile = bundle;
 	}
@@ -185,15 +186,6 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
-	public void dump() throws HgException {
-		Dump dump = new Dump();
-		inspectAll(dump);
-		System.out.println("Total files:" + dump.names.size());
-		for (String s : dump.names) {
-			System.out.println(s);
-		}
-	}
-
 	// callback to minimize amount of Strings and Nodeids instantiated
 	public interface Inspector {
 		void changelogStart();
@@ -214,41 +206,6 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		 * @return <code>true</code> to continue
 		 */
 		boolean element(GroupElement element);
-	}
-
-	public static class Dump implements Inspector {
-		public final LinkedList<String> names = new LinkedList<String>();
-
-		public void changelogStart() {
-			System.out.println("Changelog group");
-		}
-
-		public void changelogEnd() {
-		}
-
-		public void manifestStart() {
-			System.out.println("Manifest group");
-		}
-
-		public void manifestEnd() {
-		}
-
-		public void fileStart(String name) {
-			names.add(name);
-			System.out.println(name);
-		}
-
-		public void fileEnd(String name) {
-		}
-
-		public boolean element(GroupElement ge) {
-			try {
-				System.out.printf("  %s %s %s %s; patches:%d\n", ge.node(), ge.firstParent(), ge.secondParent(), ge.cset(), ge.patch().count());
-			} catch (Exception ex) {
-				ex.printStackTrace(); // FIXME
-			}
-			return true;
-		}
 	}
 
 	public void inspectChangelog(Inspector inspector) throws HgInvalidFileException {
@@ -448,6 +405,17 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 
 		public byte[] apply(DataAccess baseContent) throws IOException {
 			return patch().apply(baseContent, -1);
+		}
+		
+		public String toString() {
+			int patchCount;
+			try {
+				patchCount = patch().count();
+			} catch (IOException ex) {
+				ex.printStackTrace();
+				patchCount = -1;
+			}
+			return String.format("%s %s %s %s; patches:%d\n", node().shortNotation(), firstParent().shortNotation(), secondParent().shortNotation(), cset().shortNotation(), patchCount);
 		}
 	}
 }

@@ -110,7 +110,7 @@ public class HgRemoteRepository {
 				ai = tempNode.get("xxx", null);
 				tempNode.removeNode();
 			} catch (BackingStoreException ex) {
-				ex.printStackTrace();
+				sessionContext.getLog().info(getClass(), ex, null);
 				// IGNORE
 			}
 			authInfo = ai;

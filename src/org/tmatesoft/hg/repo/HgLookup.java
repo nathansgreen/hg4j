@@ -83,7 +83,7 @@ public class HgLookup {
 		if (location == null || !location.canRead()) {
 			throw new HgInvalidFileException(String.format("Can't read file %s", location == null ? null : location.getPath()), null, location);
 		}
-		return new HgBundle(new DataAccessProvider(getContext()), location).link();
+		return new HgBundle(getContext(), new DataAccessProvider(getContext()), location).link();
 	}
 	
 	/**
