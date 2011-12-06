@@ -31,6 +31,7 @@ import java.util.Map;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -38,7 +39,7 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class NewlineFilter implements Filter, Preview {
+public class NewlineFilter implements Filter, Preview, Adaptable {
 
 	// if processInconsistent is false, filter simply pass incorrect newline characters (single \r or \r\n on *nix and single \n on Windows) as is,
 	// i.e. doesn't try to convert them into appropriate newline characters. 
@@ -65,8 +66,8 @@ public class NewlineFilter implements Filter, Preview {
 	}
 
 	public ByteBuffer filter(ByteBuffer src) {
-		if (!previewDone) {
-			throw new HgBadStateException("This filter requires preview operation prior to actual filtering");
+		if (!processInconsistent && !previewDone) {
+			throw new HgBadStateException("This filter requires preview operation prior to actual filtering when eol.only-consistent is true");
 		}
 		if (!processInconsistent && foundLoneLF && foundCRLF) {
 			// do not process inconsistent newlines
@@ -86,6 +87,18 @@ public class NewlineFilter implements Filter, Preview {
 		}
 	}
 	
+	public <T> T getAdapter(Class<T> adapterClass) {
+		// conditionally through getAdapter 
+		if (Preview.class == adapterClass) {
+			// when processInconsistent is false, we need to preview data stream to ensure line terminators are consistent.
+			// otherwise, no need to look into the stream
+			if (!processInconsistent) {
+				return adapterClass.cast(this);
+			}
+		}
+		return null;
+	}
+	
 	private boolean prevBufLastByteWasCR = false;
 	private boolean previewDone = false;
 
@@ -93,7 +106,6 @@ public class NewlineFilter implements Filter, Preview {
 		previewDone = true; // guard
 		if (processInconsistent) {
 			// gonna handle them anyway, no need to check. TODO Do not implement Preview directly, but rather 
-			// conditionally through getAdapter when processInconsistent is false (sic!)
 			return;
 		}
 		if (foundLoneLF && foundCRLF) {

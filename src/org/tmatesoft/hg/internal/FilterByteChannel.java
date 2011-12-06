@@ -59,9 +59,11 @@ public class FilterByteChannel implements ByteChannel, Adaptable {
 	public <T> T getAdapter(Class<T> adapterClass) {
 		if (adapterClass == Preview.class) {
 			ArrayList<Preview> previewers = new ArrayList<Preview>(filters.length);
+			Adaptable.Factory<Preview> factory = new Adaptable.Factory<Preview>(Preview.class);
 			for (Filter f : filters) {
-				if (f instanceof Preview /*FIXME or getAdapter != null*/) {
-					previewers.add((Preview) f);
+				Preview p = factory.get(f);
+				if (p != null) {
+					previewers.add(p);
 				}
 			}
 			if (!previewers.isEmpty()) {
@@ -71,13 +73,7 @@ public class FilterByteChannel implements ByteChannel, Adaptable {
 			}
 			// fall through to let delegate answer
 		}
-		if (delegate instanceof Adaptable) {
-			return ((Adaptable) delegate).getAdapter(adapterClass);
-		}
-		if (adapterClass != null && adapterClass.isInstance(delegate)) {
-			return adapterClass.cast(delegate);
-		}
-		return null;
+		return Adaptable.Factory.getAdapter(delegate, adapterClass, null);
 	}
 
 	private static class PreviewSupport implements Preview {

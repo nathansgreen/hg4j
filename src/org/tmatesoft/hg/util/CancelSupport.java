@@ -54,16 +54,7 @@ public interface CancelSupport {
 		}
 		
 		public static CancelSupport get(Object target, CancelSupport defaultValue) {
-			if (target instanceof  CancelSupport) {
-				return (CancelSupport) target;
-			}
-			if (target instanceof Adaptable) {
-				CancelSupport cs = ((Adaptable) target).getAdapter(CancelSupport.class);
-				if (cs != null) {
-					return cs;
-				}
-			}
-			return defaultValue;
+			return Adaptable.Factory.getAdapter(target, CancelSupport.class, defaultValue);
 		}
 	}
 

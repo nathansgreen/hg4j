@@ -37,14 +37,9 @@ public interface ProgressSupport {
 		 * @return support object extracted from target or an empty, no-op implementation
 		 */
 		public static ProgressSupport get(Object target) {
-			if (target instanceof ProgressSupport) {
-				return (ProgressSupport) target;
-			}
-			if (target instanceof Adaptable) {
-				ProgressSupport ps = ((Adaptable) target).getAdapter(ProgressSupport.class);
-				if (ps != null) {
-					return ps;
-				}
+			ProgressSupport ps = Adaptable.Factory.getAdapter(target, ProgressSupport.class, null);
+			if (ps != null) {
+				return ps;
 			}
 			return new ProgressSupport() {
 				public void start(int totalUnits) {

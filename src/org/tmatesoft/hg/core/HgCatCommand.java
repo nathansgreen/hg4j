@@ -205,13 +205,7 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 			if (CancelSupport.class == adapterClass) {
 				return adapterClass.cast(cancelHelper);
 			}
-			if (delegate instanceof Adaptable) {
-				return ((Adaptable) delegate).getAdapter(adapterClass);
-			}
-			if (adapterClass.isInstance(delegate)) {
-				return adapterClass.cast(delegate);
-			}
-			return null;
+			return Adaptable.Factory.getAdapter(delegate, adapterClass, null);
 		}
 	}
 }

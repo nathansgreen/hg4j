@@ -253,8 +253,8 @@ abstract class Revlog {
 		if (end == TIP) {
 			end = lastRev;
 		}
-		final RevisionInspector revisionInsp = getAdapter(inspector, RevisionInspector.class);
-		final ParentInspector parentInsp = getAdapter(inspector, ParentInspector.class);
+		final RevisionInspector revisionInsp = Adaptable.Factory.getAdapter(inspector, RevisionInspector.class, null);
+		final ParentInspector parentInsp = Adaptable.Factory.getAdapter(inspector, ParentInspector.class, null);
 		final Nodeid[] allRevisions = parentInsp == null ? null : new Nodeid[end - start + 1]; 
 
 		content.iterate(start, end, false, new RevlogStream.Inspector() {
@@ -272,15 +272,6 @@ abstract class Revlog {
 				}
 			}
 		});
-	}
-	private static <T> T getAdapter(Object o, Class<T> adapterClass) {
-		if (adapterClass.isInstance(o)) {
-			return adapterClass.cast(o);
-		}
-		if (o instanceof Adaptable) {
-			return ((Adaptable) o).getAdapter(adapterClass);
-		}
-		return null;
 	}
 
 	/**
@@ -624,7 +615,7 @@ abstract class Revlog {
 				prepare(revisionNumber, da); // XXX perhaps, prepare shall return DA (sliced, if needed)
 				final ProgressSupport progressSupport = ProgressSupport.Factory.get(sink);
 				ByteBuffer buf = ByteBuffer.allocate(actualLen > 8192 ? 8192 : actualLen);
-				Preview p = getAdapter(sink, Preview.class);
+				Preview p = Adaptable.Factory.getAdapter(sink, Preview.class, null);
 				if (p != null) {
 					progressSupport.start(2 * da.length());
 					while (!da.isEmpty()) {
