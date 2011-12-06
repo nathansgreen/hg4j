@@ -29,6 +29,7 @@ import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.InflaterDataAccess;
 import org.tmatesoft.hg.internal.Patch;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -358,7 +359,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
-	// FIXME GroupElement exposes some internal API!!! (DataAccess)
+	@Experimental(reason="Cumbersome API, rawData and apply with byte[] perhaps need replacement with ByteChannel/ByteBuffer, and better Exceptions. Perhaps, shall split into interface and impl")
 	public static class GroupElement {
 		private final byte[] header; // byte[80] takes 120 bytes, 4 Nodeids - 192
 		private final DataAccess dataAccess;
@@ -370,27 +371,47 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			dataAccess = rawDataAccess;
 		}
 
-		// non-null
+		/**
+		 * <b>node</b> field of the group element
+		 * @return node revision, never <code>null</code>
+		 */
 		public Nodeid node() {
 			return Nodeid.fromBinary(header, 0);
 		}
 
-		// non-null
+		/**
+		 * <b>p1</b> <i>(parent 1)</i> field of the group element
+		 * @return revision of parent 1, never <code>null</code>
+		 */
 		public Nodeid firstParent() {
 			return Nodeid.fromBinary(header, 20);
 		}
 
-		// non-null
+		/**
+		 * <b>p2</b> <i>(parent 2)</i> field of the group element
+		 * @return revision of parent 2, never <code>null</code>
+		 */
 		public Nodeid secondParent() {
 			return Nodeid.fromBinary(header, 40);
 		}
 
-		// non-null
-		public Nodeid cset() { // cs seems to be changeset
+		/**
+		 * <b>cs</b> <i>(changeset link)</i> field of the group element
+		 * @return changeset revision, never <code>null</code>
+		 */
+		public Nodeid cset() {
 			return Nodeid.fromBinary(header, 60);
 		}
+		
+		public byte[] rawDataByteArray() throws IOException { // XXX IOException or HgInvalidFileException?
+			return rawData().byteArray();
+		}
+		
+		public byte[] apply(byte[] baseContent) throws IOException {
+			return apply(new ByteArrayDataAccess(baseContent));
+		}
 
-		public DataAccess rawData() {
+		/*package-local*/ DataAccess rawData() {
 			return dataAccess;
 		}
 		
@@ -403,7 +424,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			return patches;
 		}
 
-		public byte[] apply(DataAccess baseContent) throws IOException {
+		/*package-local*/ byte[] apply(DataAccess baseContent) throws IOException {
 			return patch().apply(baseContent, -1);
 		}
 		

@@ -254,7 +254,7 @@ public class HgCloneCommand {
 					prevRevContent = new ByteArrayDataAccess(new byte[0]);
 					writeComplete = true;
 				}
-				byte[] content = ge.apply(prevRevContent);
+				byte[] content = ge.apply(prevRevContent.byteArray());
 				byte[] calculated = dh.sha1(p1, p2, content).asBinary();
 				final Nodeid node = ge.node();
 				if (!node.equalsTo(calculated)) {
@@ -272,12 +272,12 @@ public class HgCloneCommand {
 					link = csRev.intValue();
 				}
 				final int p1Rev = knownRevision(p1), p2Rev = knownRevision(p2);
-				DataAccess patchContent = ge.rawData();
-				writeComplete = writeComplete || patchContent.length() >= (/* 3/4 of actual */content.length - (content.length >>> 2));
+				byte[] patchContent = ge.rawDataByteArray();
+				writeComplete = writeComplete || patchContent.length >= (/* 3/4 of actual */content.length - (content.length >>> 2));
 				if (writeComplete) {
 					base = revisionSequence.size();
 				}
-				final byte[] sourceData = writeComplete ? content : patchContent.byteArray();
+				final byte[] sourceData = writeComplete ? content : patchContent;
 				final byte[] data;
 				ByteArrayOutputStream bos = new ByteArrayOutputStream(content.length);
 				DeflaterOutputStream dos = new DeflaterOutputStream(bos);
