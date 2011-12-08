@@ -238,6 +238,7 @@ public class HgChangelog extends Revlog {
 			}
 		}
 
+		// FIXME internal class DataAccess as part of API
 		public static RawChangeset parse(DataAccess da) {
 			try {
 				byte[] data = da.byteArray();

@@ -149,7 +149,7 @@ public class HgWorkingCopyStatusCollector {
 		}
 		try {
 			if (getDirstateImpl() == null) {
-				// XXX this is a hack to avoid declaring throws for the #walk() at the moment
+				// FIXME this is a hack to avoid declaring throws for the #walk() at the moment
 				// once I decide whether to have mediator that collects errors or to use exceptions here
 				// this hack shall be removed in favor of either severe error in mediator or a re-thrown exception.
 					getDirstate();
@@ -339,8 +339,8 @@ public class HgWorkingCopyStatusCollector {
 						return;
 					}
 				} catch (HgException ex) {
-					ex.printStackTrace();
-					// FIXME report to a mediator, continue status collection
+					// report failure and continue status collection
+					inspector.invalid(fname, ex);
 				}
 			} else if ((r = getDirstateImpl().checkAdded(fname)) != null) {
 				if (r.copySource() != null && baseRevNames.contains(r.copySource())) {

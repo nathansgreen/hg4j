@@ -35,7 +35,18 @@ public interface HgStatusInspector {
 	void copied(Path fnameOrigin, Path fnameAdded);
 	void removed(Path fname);
 	void clean(Path fname);
-	void missing(Path fname); // aka deleted (tracked by Hg, but not available in FS any more
+	/**
+	 * Reports file tracked by Mercurial, but not available in file system any more, aka deleted. 
+	 */
+	void missing(Path fname); // 
 	void unknown(Path fname); // not tracked
 	void ignored(Path fname);
+	/**
+	 * Reports a single file error during status collecting operation. It's up to client to treat the whole operation as successful or not.
+	 * The error reported is otherwise not critical for the status operation.
+	 *  
+	 * @param fname origin of the error
+	 * @param ex describes an error occurred while accessing the file, never <code>null</code>
+	 */
+	void invalid(Path fname, Exception ex);
 }

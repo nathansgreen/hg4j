@@ -32,6 +32,7 @@ import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.core.HgStatus;
 import org.tmatesoft.hg.core.HgStatus.Kind;
 import org.tmatesoft.hg.core.HgStatusCommand;
+import org.tmatesoft.hg.core.HgStatusHandler;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -68,7 +69,7 @@ public class Status {
 //		cmd.subrepo(cmdLineOpts.getBoolean("-S", "--subrepos"))
 		final boolean noStatusPrefix = cmdLineOpts.getBoolean("-n", "--no-status");
 		final boolean showCopies = cmdLineOpts.getBoolean("-C", "--copies");
-		class StatusHandler implements HgStatusCommand.Handler {
+		class StatusHandler implements HgStatusHandler {
 			
 			final EnumMap<HgStatus.Kind, List<Path>> data = new EnumMap<HgStatus.Kind, List<Path>>(HgStatus.Kind.class);
 			final Map<Path, Path> copies = showCopies ? new HashMap<Path,Path>() : null;
@@ -83,6 +84,11 @@ public class Status {
 				if (s.isCopy() && showCopies) {
 					copies.put(s.getPath(), s.getOriginalPath());
 				}
+			}
+			
+			public void handleError(Path file, org.tmatesoft.hg.util.Status s) {
+				System.out.printf("FAILURE: %s %s\n", s.getMessage(), file);
+				s.getException().printStackTrace(System.out);
 			}
 			
 			public void dump() {

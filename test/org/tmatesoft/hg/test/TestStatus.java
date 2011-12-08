@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -38,12 +39,14 @@ import org.junit.Test;
 import org.tmatesoft.hg.core.HgStatus;
 import org.tmatesoft.hg.core.HgStatus.Kind;
 import org.tmatesoft.hg.core.HgStatusCommand;
+import org.tmatesoft.hg.core.HgStatusHandler;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.Status;
 
 
 /**
@@ -173,9 +176,10 @@ public class TestStatus {
 		// TODO check not -A, but defaults()/custom set of modifications 
 	}
 	
-	private static class StatusCollector implements HgStatusCommand.Handler {
+	private static class StatusCollector implements HgStatusHandler {
 		private final Map<Kind, List<Path>> kind2names = new TreeMap<Kind, List<Path>>();
 		private final Map<Path, List<Kind>> name2kinds = new TreeMap<Path, List<Kind>>();
+		private final Map<Path, Status> name2error = new LinkedHashMap<Path, Status>();
 
 		public void handleStatus(HgStatus s) {
 			List<Path> l = kind2names.get(s.getKind());
@@ -191,6 +195,10 @@ public class TestStatus {
 			k.add(s.getKind());
 		}
 		
+		public void handleError(Path file, Status s) {
+			name2error.put(file, s);
+		}
+		
 		public List<Path> get(Kind k) {
 			List<Path> rv = kind2names.get(k);
 			return rv == null ? Collections.<Path>emptyList() : rv;
@@ -199,6 +207,10 @@ public class TestStatus {
 		public List<Kind> get(Path p) {
 			List<Kind> rv = name2kinds.get(p);
 			return rv == null ? Collections.<Kind>emptyList() : rv;
+		}
+		
+		public Map<Path, Status> getErrors() {
+			return name2error;
 		}
 	}
 
@@ -213,6 +225,7 @@ public class TestStatus {
 		HgStatusCommand cmd = new HgStatusCommand(repo);
 		StatusCollector sc = new StatusCollector();
 		cmd.all().base(7).execute(sc);
+		assertTrue(sc.getErrors().isEmpty());
 		Path file5 = Path.create("dir/file5");
 		// shall not be listed at all
 		assertTrue(sc.get(file5).isEmpty());
@@ -230,6 +243,7 @@ public class TestStatus {
 		HgStatusCommand cmd = new HgStatusCommand(repo);
 		StatusCollector sc = new StatusCollector();
 		cmd.all().execute(sc);
+		assertTrue(sc.getErrors().isEmpty());
 		final Path file2 = Path.create("file2");
 		assertTrue(sc.get(file2).contains(Modified));
 		assertTrue(sc.get(file2).size() == 1);
@@ -246,17 +260,20 @@ public class TestStatus {
 		HgStatusCommand cmd = new HgStatusCommand(repo);
 		StatusCollector sc = new StatusCollector();
 		cmd.all().execute(sc);
+		assertTrue(sc.getErrors().isEmpty());
 		Path file4 = Path.create("dir/file4");
 		assertTrue(sc.get(file4).contains(Removed));
 		assertTrue(sc.get(file4).size() == 1);
 		//
 		// different code path (collect != null)
 		cmd.base(3).execute(sc = new StatusCollector());
+		assertTrue(sc.getErrors().isEmpty());
 		assertTrue(sc.get(file4).contains(Removed));
 		assertTrue(sc.get(file4).size() == 1);
 		//
 		// wasn't there in rev 2, shall not be reported at all
 		cmd.base(2).execute(sc = new StatusCollector());
+		assertTrue(sc.getErrors().isEmpty());
 		assertTrue(sc.get(file4).isEmpty());
 	}
 
@@ -273,20 +290,24 @@ public class TestStatus {
 		HgStatusCommand cmd = new HgStatusCommand(repo);
 		StatusCollector sc = new StatusCollector();
 		cmd.all().execute(sc);
+		assertTrue(sc.getErrors().isEmpty());
 		final Path file3 = Path.create("dir/file3");
 		assertTrue(sc.get(file3).contains(Ignored));
 		assertTrue(sc.get(file3).size() == 1);
 		//
 		cmd.base(3).execute(sc = new StatusCollector());
+		assertTrue(sc.getErrors().isEmpty());
 		assertTrue(sc.get(file3).contains(Ignored));
 		assertTrue(sc.get(file3).contains(Removed));
 		assertTrue(sc.get(file3).size() == 2);
 		//
 		cmd.base(5).execute(sc = new StatusCollector());
+		assertTrue(sc.getErrors().isEmpty());
 		assertTrue(sc.get(file3).contains(Ignored));
 		assertTrue(sc.get(file3).size() == 1);
 		//
 		cmd.base(0).execute(sc = new StatusCollector());
+		assertTrue(sc.getErrors().isEmpty());
 		assertTrue(sc.get(file3).contains(Ignored));
 		assertTrue(sc.get(file3).size() == 1);
 
@@ -304,6 +325,7 @@ public class TestStatus {
 		StatusCollector sc = new StatusCollector();
 		cmd.base(1);
 		cmd.all().execute(sc);
+		assertTrue(sc.getErrors().isEmpty());
 		final Path file1 = Path.create("file1");
 		assertTrue(sc.get(file1).contains(Unknown));
 		assertTrue(sc.get(file1).contains(Removed));
@@ -311,6 +333,7 @@ public class TestStatus {
 		// 
 		// no file1 in rev 2, shall be reported as unknown only
 		cmd.base(2).execute(sc = new StatusCollector());
+		assertTrue(sc.getErrors().isEmpty());
 		assertTrue(sc.get(file1).contains(Unknown));
 		assertTrue(sc.get(file1).size() == 1);
 	}
@@ -322,6 +345,7 @@ public class TestStatus {
 		StatusCollector sc = new StatusCollector();
 		cmd.match(new PathGlobMatcher("*"));
 		cmd.all().execute(sc);
+		assertTrue(sc.getErrors().isEmpty());
 		/*
 		 * C .hgignore
 		 * ? file1
@@ -336,6 +360,7 @@ public class TestStatus {
 		assertTrue(sc.get(Modified).size() == 1);
 		//
 		cmd.match(new PathGlobMatcher("dir/*")).execute(sc = new StatusCollector());
+		assertTrue(sc.getErrors().isEmpty());
 		/*
 		 * I dir/file3
 		 * R dir/file4
@@ -414,6 +439,7 @@ public class TestStatus {
 		cmd.match(new PathGlobMatcher("dir/*"));
 		StatusCollector sc = new StatusCollector();
 		cmd.execute(sc);
+		assertTrue(sc.getErrors().isEmpty());
 		final Path file3 = Path.create("dir/file3");
 		final Path file4 = Path.create("dir/file4");
 		final Path file5 = Path.create("dir/file5");
@@ -464,6 +490,7 @@ public class TestStatus {
 	}
 	
 	private void report(String what, StatusCollector r) {
+		assertTrue(r.getErrors().isEmpty());
 		reportNotEqual(what + "#MODIFIED", r.get(Modified), statusParser.getModified());
 		reportNotEqual(what + "#ADDED", r.get(Added), statusParser.getAdded());
 		reportNotEqual(what + "#REMOVED", r.get(Removed), statusParser.getRemoved());

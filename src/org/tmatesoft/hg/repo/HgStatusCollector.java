@@ -271,9 +271,9 @@ public class HgStatusCollector {
 						inspector.added(copyTarget);
 					}
 				} catch (HgException ex) {
-					ex.printStackTrace();
-					// FIXME perhaps, shall record this exception to dedicated mediator and continue
+					// record exception to a mediator and continue, 
 					// for a single file not to be irresolvable obstacle for a status operation
+					inspector.invalid(r2fname, ex);
 				}
 			}
 		}
@@ -329,6 +329,7 @@ public class HgStatusCollector {
 	public static class Record implements HgStatusInspector {
 		private List<Path> modified, added, removed, clean, missing, unknown, ignored;
 		private Map<Path, Path> copied;
+		private Map<Path, Exception> failures;
 		
 		private int startRev, endRev;
 		private HgStatusCollector statusHelper;
@@ -402,6 +403,13 @@ public class HgStatusCollector {
 		public List<Path> getIgnored() {
 			return proper(ignored);
 		}
+
+		public Map<Path, Exception> getInvalid() {
+			if (failures == null) {
+				return Collections.emptyMap();
+			}
+			return Collections.unmodifiableMap(failures);
+		}
 		
 		private static List<Path> proper(List<Path> l) {
 			if (l == null) {
@@ -447,6 +455,13 @@ public class HgStatusCollector {
 
 		public void ignored(Path fname) {
 			ignored = doAdd(ignored, fname);
+		}
+		
+		public void invalid(Path fname, Exception ex) {
+			if (failures == null) {
+				failures = new LinkedHashMap<Path, Exception>();
+			}
+			failures.put(fname, ex);
 		}
 
 		private static List<Path> doAdd(List<Path> l, Path p) {

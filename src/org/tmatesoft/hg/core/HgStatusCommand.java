@@ -30,6 +30,7 @@ import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.Status;
 
 /**
  * Command to obtain file status information, 'hg status' counterpart. 
@@ -164,7 +165,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
 	 */
-	public void execute(Handler statusHandler) throws CancellationException, HgException, IOException {
+	public void execute(HgStatusHandler statusHandler) throws CancellationException, HgException, IOException {
 		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -189,12 +190,21 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 					sc.walk(startRevision, endRevision, mediator);
 				}
 			}
+		} catch (HgCallbackTargetException.Wrap ex) { 
+			// seems too general to catch RuntimeException, i.e.
+			// unless catch is for very narrow piece of code, it's better not to catch any RTE (which may happen elsewhere, not only in handler)
+			// XXX Perhaps, need more detailed explanation in handlers that are expected to throw Wrap/RTE (i.e. HgChangesetHandler)
+			throw new HgCallbackTargetException(ex).setRevisionNumber(endRevision);
 		} finally {
 			mediator.done();
 		}
 	}
 
-	public interface Handler {
+	/**
+	 * @deprecated replaced with {@link HgStatusHandler}
+	 */
+	@Deprecated
+	public interface Handler extends HgStatusHandler{
 		void handleStatus(HgStatus s);
 	}
 
@@ -207,13 +217,13 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		boolean needClean;
 		boolean needIgnored;
 		boolean needCopies;
-		Handler handler;
+		HgStatusHandler handler;
 		private ChangelogHelper logHelper;
 
 		Mediator() {
 		}
 		
-		public void start(Handler h, ChangelogHelper changelogHelper) {
+		public void start(HgStatusHandler h, ChangelogHelper changelogHelper) {
 			handler = h;
 			logHelper = changelogHelper;
 		}
@@ -267,6 +277,10 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 			if (needIgnored) {
 				handler.handleStatus(new HgStatus(Ignored, fname, logHelper));
 			}
+		}
+		
+		public void invalid(Path fname, Exception ex) {
+			handler.handleError(fname, new Status(Status.Kind.ERROR, "Failed to get file status", ex));
 		}
 	}
 }

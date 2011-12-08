@@ -640,6 +640,11 @@ public class Main {
 			}
 		}
 		
+		public void invalid(Path fname, Exception ex) {
+			System.out.printf("FAILURE: %s\n", fname);
+			ex.printStackTrace(System.out);
+		}
+		
 		private void print(char status, Path fname) {
 			if (!hideStatusPrefix) {
 				System.out.print(status);
