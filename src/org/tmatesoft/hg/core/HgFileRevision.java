@@ -17,7 +17,6 @@
 package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
@@ -58,10 +57,12 @@ public final class HgFileRevision {
 	public Path getPath() {
 		return path;
 	}
+
 	public Nodeid getRevision() {
 		return revision;
 	}
-	public boolean wasCopied() {
+
+	public boolean wasCopied() throws HgException {
 		if (isCopy == null) {
 			checkCopy();
 		}
@@ -70,7 +71,7 @@ public final class HgFileRevision {
 	/**
 	 * @return <code>null</code> if {@link #wasCopied()} is <code>false</code>, name of the copy source otherwise.
 	 */
-	public Path getOriginIfCopy() {
+	public Path getOriginIfCopy() throws HgException {
 		if (wasCopied()) {
 			return origin;
 		}
@@ -104,22 +105,15 @@ public final class HgFileRevision {
 		fn.contentWithFilters(localRevision, sink);
 	}
 
-	private void checkCopy() {
+	private void checkCopy() throws HgInvalidControlFileException, HgDataStreamException {
 		HgDataFile fn = repo.getFileNode(path);
-		try {
-			if (fn.isCopy()) {
-				if (fn.getRevision(0).equals(revision)) {
-					// this HgFileRevision represents first revision of the copy
-					isCopy = Boolean.TRUE;
-					origin = fn.getCopySourceName();
-					return;
-				}
+		if (fn.isCopy()) {
+			if (fn.getRevision(0).equals(revision)) {
+				// this HgFileRevision represents first revision of the copy
+				isCopy = Boolean.TRUE;
+				origin = fn.getCopySourceName();
+				return;
 			}
-		} catch (HgDataStreamException ex) {
-			// FIXME rather throw an exception than log silently
-			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
-		} catch (HgInvalidControlFileException ex) {
-			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
 		}
 		isCopy = Boolean.FALSE;
 	}

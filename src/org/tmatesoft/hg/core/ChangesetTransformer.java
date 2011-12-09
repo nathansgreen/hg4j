@@ -30,7 +30,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Bridges {@link HgChangelog.RawChangeset} with high-level {@link HgChangeset} API
- * FIXME move to .internal
+ * FIXME move to .internal once access to package-local HgChangeset cons is resolved
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
