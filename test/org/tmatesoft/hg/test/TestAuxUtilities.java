@@ -289,6 +289,17 @@ public class TestAuxUtilities {
 		Assert.assertFalse(p.hasDefaultPush() ^ p.getDefaultPush() != null);
 	}
 	
+	@Test
+	public void testChangelogExtrasDecode() {
+		final String s = "abc\u0123\r\ndef\n\txx\\yy";
+		String r = s.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace("\0", "\\0");
+//		System.out.println(r);
+		String r2 = r.replace("\\\\", "\\").replace("\\n", "\n").replace("\\r", "\r").replace("\\0", "\00");
+//		System.out.println(r2);
+		Assert.assertTrue(s.equals(r2));
+	}
+
+	
 	public static void main(String[] args) throws Exception {
 		new TestAuxUtilities().testRepositoryConfig();
 	}

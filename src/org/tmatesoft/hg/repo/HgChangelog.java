@@ -280,10 +280,9 @@ public class HgChangelog extends Revlog {
 			if (space2 == -1) {
 				space2 = _timeString.length();
 			}
-			long unixTime = Long.parseLong(_timeString.substring(0, space1)); // XXX Float, perhaps
+			long unixTime = Long.parseLong(_timeString.substring(0, space1));
 			int _timezone = Integer.parseInt(_timeString.substring(space1 + 1, space2));
-			// XXX not sure need to add timezone here - I can't figure out whether Hg keeps GMT time, and records timezone just for info, or unixTime is taken local
-			// on commit and timezone is recorded to adjust it to UTC.
+			// unixTime is local time, and timezone records difference of the local time to UTC.
 			Date _time = new Date(unixTime * 1000);
 			String _extras = space2 < _timeString.length() ? _timeString.substring(space2 + 1) : null;
 			Map<String, String> _extrasMap;
@@ -293,8 +292,8 @@ public class HgChangelog extends Revlog {
 			} else {
 				_extrasMap = new HashMap<String, String>();
 				for (String pair : _extras.split("\00")) {
+					pair = decode(pair);
 					int eq = pair.indexOf(':');
-					// FIXME need to decode key/value, @see changelog.py:decodeextra
 					_extrasMap.put(pair.substring(0, eq), pair.substring(eq + 1));
 				}
 				if (!_extrasMap.containsKey(extras_branch_key)) {
@@ -351,6 +350,14 @@ public class HgChangelog extends Revlog {
 				}
 			}
 			return -1;
+		}
+		
+		private static String decode(String s) {
+			if (s != null && s.indexOf('\\') != -1) {
+				// TestAuxUtilities#testChangelogExtrasDecode
+				return s.replace("\\\\", "\\").replace("\\n", "\n").replace("\\r", "\r").replace("\\0", "\00");
+			}
+			return s;
 		}
 	}
 
