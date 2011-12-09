@@ -21,6 +21,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.Status;
 
 /**
  * Primary purpose is to provide information about file revisions at specific changeset. Multiple {@link #check(Path)} calls 
@@ -37,6 +38,7 @@ import org.tmatesoft.hg.util.Path;
  * </pre></code>
  *
  * FIXME need better name. It's more about manifest of specific changeset, rather than informing (about) files
+ * TODO may add #manifest(Nodeid) to select manifest according to its revision (not only changeset revision as it's now) 
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -48,7 +50,8 @@ public class HgFileInformer {
 	private Nodeid cset;
 	private ManifestRevision cachedManifest;
 	private HgFileRevision fileRevision;
-	private boolean checked, renamed; 
+	private boolean renamed;
+	private Status checkResult;
 
 	public HgFileInformer(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -83,31 +86,50 @@ public class HgFileInformer {
 	}
 
 	/**
-	 * Find file (or its origin, if {@link #followRenames(boolean)} was set to <code>true</code>) among files known at specified {@link #changeset(Nodeid)}.
+	 * Shortcut to perform {@link #check(Path)} and {@link #exists()}. Result of the check may be accessed via {@link #getCheckStatus()}.
 	 * 
 	 * @param file name of the file in question
 	 * @return <code>true</code> if file is known at the selected changeset.
 	 * @throws IllegalArgumentException if {@link #changeset(Nodeid)} not specified or file argument is bad.
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public boolean check(Path file) throws HgInvalidControlFileException { // XXX IStatus instead of boolean? If status, shall it handle exceptions as well?
+	public boolean checkExists(Path file) throws HgInvalidControlFileException {
+		check(file);
+		if (!checkResult.isOk() && checkResult.getException() instanceof HgInvalidControlFileException) {
+			throw (HgInvalidControlFileException) checkResult.getException();
+		}
+		return checkResult.isOk() && exists();
+	}
+
+	/**
+	 * Find file (or its origin, if {@link #followRenames(boolean)} was set to <code>true</code>) among files known at specified {@link #changeset(Nodeid)}.
+	 * 
+	 * @param file name of the file in question
+	 * @return status object that describes outcome, {@link Status#isOk() Ok} status indicates successful completion of the operation, but doesn't imply
+	 * file existence, use {@link #exists()} for that purpose. Message of the status may provide further hints on what exactly had happened. 
+	 * @throws IllegalArgumentException if {@link #changeset(Nodeid)} not specified or file argument is bad.
+	 */
+	public Status check(Path file) {
 		fileRevision = null;
-		checked = false;
+		checkResult = null;
 		renamed = false;
 		if (cset == null || file == null || file.isDirectory()) {
 			throw new IllegalArgumentException();
 		}
 		HgDataFile dataFile = repo.getFileNode(file);
 		if (!dataFile.exists()) {
-			return false;
+			checkResult = new Status(Status.Kind.OK, String.format("File named %s is not known in the repository", file));
+			return checkResult;
 		}
-		if (cachedManifest == null) {
-			int csetRev = repo.getChangelog().getLocalRevision(cset);
-			cachedManifest = new ManifestRevision(null, null); // XXX how about context and cached manifest revisions
-			repo.getManifest().walk(csetRev, csetRev, cachedManifest);
-			// cachedManifest shall be meaningful - changelog.getLocalRevision above ensures we've got version that exists.
-		}
-		Nodeid toExtract = cachedManifest.nodeid(file);
+		Nodeid toExtract = null;
 		try {
+			if (cachedManifest == null) {
+				int csetRev = repo.getChangelog().getLocalRevision(cset);
+				cachedManifest = new ManifestRevision(null, null); // XXX how about context and cached manifest revisions
+				repo.getManifest().walk(csetRev, csetRev, cachedManifest);
+				// cachedManifest shall be meaningful - changelog.getLocalRevision above ensures we've got version that exists.
+			}
+			toExtract = cachedManifest.nodeid(file);
 			if (toExtract == null && followRenames) {
 				while (toExtract == null && dataFile.isCopy()) {
 					renamed = true;
@@ -116,17 +138,29 @@ public class HgFileInformer {
 					toExtract = cachedManifest.nodeid(file);
 				}
 			}
+		} catch (HgInvalidControlFileException ex) {
+			checkResult = new Status(Status.Kind.ERROR, "", ex);
+			return checkResult;
 		} catch (HgDataStreamException ex) {
-			HgInternals.getContext(repo).getLog().warn(getClass(), ex, "Follow copy/rename failed");
-			// ignore now, however if there's IStatus retval, might report error with reasonable explanation.
-			// Perhaps, may add a String reason() method with such info?
+			checkResult = new Status(Status.Kind.ERROR, "Follow copy/rename failed", ex);
+			HgInternals.getContext(repo).getLog().warn(getClass(), ex, checkResult.getMessage());
+			return checkResult;
 		}
-		checked = true;
 		if (toExtract != null) {
 			fileRevision = new HgFileRevision(repo, toExtract, dataFile.getPath());
-			return true;
-		} // else String.format("File %s nor its origins were not known at repository %s revision", file, cset.shortNotation())
-		return false;
+			checkResult = new Status(Status.Kind.OK, String.format("File %s, revision %s found at changeset %s", dataFile.getPath(), toExtract.shortNotation(), cset.shortNotation()));
+			return checkResult;
+		} 
+		checkResult = new Status(Status.Kind.OK, String.format("File %s nor its origins were not known at repository %s revision", file, cset.shortNotation()));
+		return checkResult;
+	}
+	
+	/**
+	 * Re-get latest check status object
+	 */
+	public Status getCheckStatus() {
+		assertCheckRan();
+		return checkResult;
 	}
 	
 	/**
@@ -174,7 +208,7 @@ public class HgFileInformer {
 	}
 
 	private void assertCheckRan() {
-		if (!checked) {
+		if (checkResult == null) {
 			throw new HgBadStateException("Shall invoke #check(Path) first");
 		}
 	}
