@@ -334,10 +334,10 @@ public class Main {
 		cmd.execute(sink);
 		System.out.println(sink.toArray().length);
 		HgFileInformer i = new HgFileInformer(hgRepo);
-		boolean result = i.changeset(cset).check(file);
+		boolean result = i.changeset(cset).checkExists(file);
 		Assert.assertFalse(result);
 		Assert.assertFalse(i.exists());
-		result = i.followRenames(true).check(file);
+		result = i.followRenames(true).checkExists(file);
 		Assert.assertTrue(result);
 		Assert.assertTrue(i.exists());
 		HgCatCommand cmd2 = new HgCatCommand(hgRepo).revision(i.getFileRevision());
@@ -367,7 +367,7 @@ public class Main {
 		return String.format("%s %s (%d bytes)", r.getPath(), r.getRevision(), sink.toArray().length);
 	}
 	
-	private void testFileStatus() throws IOException {
+	private void testFileStatus() throws HgException, IOException {
 //		final Path path = Path.create("src/org/tmatesoft/hg/util/");
 //		final Path path = Path.create("src/org/tmatesoft/hg/internal/Experimental.java");
 //		final Path path = Path.create("missing-dir/");

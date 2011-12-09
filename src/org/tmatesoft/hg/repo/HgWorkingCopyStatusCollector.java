@@ -65,14 +65,23 @@ public class HgWorkingCopyStatusCollector {
 	private PathPool pathPool;
 	private ManifestRevision dirstateParentManifest;
 
+	/**
+	 * Collector that iterates over complete working copy
+	 */
 	public HgWorkingCopyStatusCollector(HgRepository hgRepo) {
 		this(hgRepo, new HgInternals(hgRepo).createWorkingDirWalker(null));
 	}
 
-	// FIXME document cons
-	public HgWorkingCopyStatusCollector(HgRepository hgRepo, FileIterator hgRepoWalker) {
+	/**
+	 * Collector may analyze and report status for any arbitrary sub-tree of the working copy.
+	 * File iterator shall return names of the files relative to the repository root.
+	 * 
+	 * @param hgRepo status target repository
+	 * @param workingCopyWalker iterator over files in the working copy
+	 */
+	public HgWorkingCopyStatusCollector(HgRepository hgRepo, FileIterator workingCopyWalker) {
 		repo = hgRepo;
-		repoWalker = hgRepoWalker;
+		repoWalker = workingCopyWalker;
 	}
 	
 	/**
@@ -143,23 +152,15 @@ public class HgWorkingCopyStatusCollector {
 	
 	// may be invoked few times, TIP or WORKING_COPY indicate comparison shall be run against working copy parent
 	// NOTE, use of TIP constant requires certain care. TIP here doesn't mean latest cset, but actual working copy parent.
-	public void walk(int baseRevision, HgStatusInspector inspector) throws IOException {
+	public void walk(int baseRevision, HgStatusInspector inspector) throws HgInvalidControlFileException, IOException {
 		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
 		}
-		try {
-			if (getDirstateImpl() == null) {
-				// FIXME this is a hack to avoid declaring throws for the #walk() at the moment
-				// once I decide whether to have mediator that collects errors or to use exceptions here
-				// this hack shall be removed in favor of either severe error in mediator or a re-thrown exception.
-					getDirstate();
-			}
-			if (getDirstateParentManifest() == null) {
-				initDirstateParentManifest();
-			}
-		} catch (HgInvalidControlFileException ex) {
-			repo.getContext().getLog().error(getClass(), ex, "Failed to initialize with dirstate information");
-			return;
+		if (getDirstateImpl() == null) {
+				getDirstate();
+		}
+		if (getDirstateParentManifest() == null) {
+			initDirstateParentManifest();
 		}
 		ManifestRevision collect = null; // non null indicates we compare against base revision
 		Set<Path> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
@@ -271,7 +272,7 @@ public class HgWorkingCopyStatusCollector {
 		}
 	}
 
-	public HgStatusCollector.Record status(int baseRevision) throws IOException {
+	public HgStatusCollector.Record status(int baseRevision) throws HgInvalidControlFileException, IOException {
 		HgStatusCollector.Record rv = new HgStatusCollector.Record();
 		walk(baseRevision, rv);
 		return rv;
