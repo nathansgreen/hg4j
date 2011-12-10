@@ -238,19 +238,15 @@ public class HgChangelog extends Revlog {
 			}
 		}
 
-		// FIXME internal class DataAccess as part of API
-		public static RawChangeset parse(DataAccess da) {
-			try {
-				byte[] data = da.byteArray();
-				RawChangeset rv = new RawChangeset();
-				rv.init(data, 0, data.length, null);
-				return rv;
-			} catch (IOException ex) {
-				throw new HgBadStateException(ex); // FIXME "Error reading changeset data"
-			}
+		/*package*/ static RawChangeset parse(DataAccess da) throws IOException {
+			byte[] data = da.byteArray();
+			RawChangeset rv = new RawChangeset();
+			rv.init(data, 0, data.length, null);
+			return rv;
 		}
 
 		// @param usersPool - it's likely user names get repeated again and again throughout repository. can be null
+		// FIXME throws "Error reading changeset data"
 		/* package-local */void init(byte[] data, int offset, int length, Pool<String> usersPool) {
 			final int bufferEndIndex = offset + length;
 			final byte lineBreak = (byte) '\n';
