@@ -55,8 +55,8 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 
 	/**
 	 * Parameterize command to visit revisions <code>[rev1..rev2]</code>.
-	 * @param rev1 - local revision index to start from. Non-negative. May be {@link HgRepository#TIP} (rev2 argument shall be {@link HgRepository#TIP} as well, then) 
-	 * @param rev2 - local revision index to end with, inclusive. Non-negative, greater or equal to rev1. May be {@link HgRepository#TIP}.
+	 * @param rev1 - revision local index to start from. Non-negative. May be {@link HgRepository#TIP} (rev2 argument shall be {@link HgRepository#TIP} as well, then) 
+	 * @param rev2 - revision local index to end with, inclusive. Non-negative, greater or equal to rev1. May be {@link HgRepository#TIP}.
 	 * @return <code>this</code> for convenience.
 	 * @throws IllegalArgumentException if revision arguments are incorrect (see above).
 	 */

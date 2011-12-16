@@ -134,7 +134,7 @@ public class HgInternals {
 	}
 
 
-	// Convenient check of local revision number for validity (not all negative values are wrong as long as we use negative constants)
+	// Convenient check of revision index for validity (not all negative values are wrong as long as we use negative constants)
 	public static boolean wrongRevisionIndex(int rev) {
 		return rev < 0 && rev != TIP && rev != WORKING_COPY && rev != BAD_REVISION; 
 	}

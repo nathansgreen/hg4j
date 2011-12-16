@@ -121,9 +121,9 @@ public class MapTagsToFileRevisions {
 		final Map<Nodeid, Nodeid> changesetToNodeid_3 = new HashMap<Nodeid, Nodeid>();
 		fileNode.walk(0, TIP, new HgDataFile.RevisionInspector() {
 
-			public void next(int localRevision, Nodeid revision, int linkedRevision) {
+			public void next(int fileRevisionIndex, Nodeid revision, int linkedRevisionIndex) {
 				try {
-					changesetToNodeid_3.put(clog.getRevision(linkedRevision), revision);
+					changesetToNodeid_3.put(clog.getRevision(linkedRevisionIndex), revision);
 				} catch (HgException ex) {
 					ex.printStackTrace();
 				}
@@ -216,12 +216,12 @@ public class MapTagsToFileRevisions {
 		int x = 0;
 		for (int i = 0; i < allTags.length; i++) {
 			final Nodeid tagRevision = allTags[i].revision();
-			final int tagLocalRev = clogrmap.revisionIndex(tagRevision);
-			if (tagLocalRev != HgRepository.BAD_REVISION) {
-				tagLocalRevs[x++] = tagLocalRev;
-				List<TagInfo> tagsAssociatedWithRevision = tagLocalRev2TagInfo.get(tagLocalRev);
+			final int tagRevisionIndex = clogrmap.revisionIndex(tagRevision);
+			if (tagRevisionIndex != HgRepository.BAD_REVISION) {
+				tagLocalRevs[x++] = tagRevisionIndex;
+				List<TagInfo> tagsAssociatedWithRevision = tagLocalRev2TagInfo.get(tagRevisionIndex);
 				if (tagsAssociatedWithRevision == null) {
-					tagLocalRev2TagInfo.put(tagLocalRev, tagsAssociatedWithRevision = new LinkedList<TagInfo>());
+					tagLocalRev2TagInfo.put(tagRevisionIndex, tagsAssociatedWithRevision = new LinkedList<TagInfo>());
 				}
 				tagsAssociatedWithRevision.add(allTags[i]);
 			}
@@ -326,16 +326,16 @@ public class MapTagsToFileRevisions {
 		HgDataFile fileNode = repository.getFileNode(targetPath);
 		final Nodeid[] allTagsOfTheFile = file2rev2tag.get(targetPath);
 		// TODO if fileNode.isCopy, repeat for each getCopySourceName()
-		for (int localFileRev = 0; localFileRev < fileNode.getRevisionCount(); localFileRev++) {
-			Nodeid fileRev = fileNode.getRevision(localFileRev);
-			int changesetLocalRev = fileNode.getChangesetRevisionIndex(localFileRev);
+		for (int fileRevIndex = 0; fileRevIndex < fileNode.getRevisionCount(); fileRevIndex++) {
+			Nodeid fileRev = fileNode.getRevision(fileRevIndex);
+			int changesetRevIndex = fileNode.getChangesetRevisionIndex(fileRevIndex);
 			List<String> associatedTags = new LinkedList<String>();
 			for (int i = 0; i < allTagsOfTheFile.length; i++) {
 				if (fileRev.equals(allTagsOfTheFile[i])) {
 					associatedTags.add(allTags[i].name());
 				}
 			}
-			System.out.printf("%3d%7d%s\n", localFileRev, changesetLocalRev, associatedTags);
+			System.out.printf("%3d%7d%s\n", fileRevIndex, changesetRevIndex, associatedTags);
 		}
 	}
 	
@@ -350,12 +350,11 @@ public class MapTagsToFileRevisions {
 		final long start2a = System.nanoTime();
 		fileNode.walk(0, lastRev, new HgDataFile.RevisionInspector() {
 
-			public void next(int localFileRev, Nodeid fileRevision, int linkedRevision) {
-				int changesetLocalRev = linkedRevision;
+			public void next(int fileRevisionIndex, Nodeid fileRevision, int changesetRevisionIndex) {
 				List<String> associatedTags = new LinkedList<String>();
 				for (int taggetRevision : tagLocalRevs) {
 					// current file revision can't appear in tags that point to earlier changelog revisions (they got own file revision)
-					if (taggetRevision >= changesetLocalRev) {
+					if (taggetRevision >= changesetRevisionIndex) {
 						// z points to some changeset with tag
 						Nodeid wasKnownAs = fileRevisionAtTagRevision.get(taggetRevision);
 						if (wasKnownAs.equals(fileRevision)) {
@@ -368,7 +367,7 @@ public class MapTagsToFileRevisions {
 						}
 					}
 				}
-				System.out.printf("%3d%7d%s\n", localFileRev, changesetLocalRev, associatedTags);
+				System.out.printf("%3d%7d%s\n", fileRevisionIndex, changesetRevisionIndex, associatedTags);
 			}
 		});
 		System.out.printf("Alternative total time: %d ms, of that init: %d ms\n", (System.nanoTime() - start2)/1000000, (start2a-start2)/1000000);

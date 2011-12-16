@@ -20,7 +20,7 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
- * Use of revision or local revision index that is not valid for a given revlog.
+ * Use of revision or revision local index that is not valid for a given revlog.
  *  
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

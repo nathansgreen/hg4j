@@ -132,8 +132,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	/**
 	 * Limit to specified subset of Changelog, [min(rev1,rev2), max(rev1,rev2)], inclusive.
 	 * Revision may be specified with {@link HgRepository#TIP}  
-	 * @param rev1 - local revision index
-	 * @param rev2 - local revision index
+	 * @param rev1 - revision local index
+	 * @param rev2 - revision local index
 	 * @return <code>this</code> instance for convenience
 	 */
 	public HgLogCommand range(int rev1, int rev2) {
@@ -160,8 +160,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 */
 	public HgLogCommand changeset(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		// XXX perhaps, shall support multiple (...) arguments and extend #execute to handle not only range, but also set of revisions.
-		final int csetLocal = repo.getChangelog().getRevisionIndex(nid);
-		return range(csetLocal, csetLocal);
+		final int csetRevIndex = repo.getChangelog().getRevisionIndex(nid);
+		return range(csetRevIndex, csetRevIndex);
 	}
 	
 	/**

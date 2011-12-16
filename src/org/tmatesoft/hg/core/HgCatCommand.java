@@ -65,12 +65,12 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	}
 
 	/**
-	 * Select specific revision of the file to cat with local revision index. Note, revision numbering is of particular file, not that of
+	 * Select specific revision of the file to cat with revision local index. Note, revision numbering is of particular file, not that of
 	 * repository (i.e. revision 0 means initial content of the file, irrespective of changeset revision at the time of commit) 
 	 * 
 	 * Invocation of this method clears revision set with {@link #revision(Nodeid)} or {@link #revision(int)} earlier.
 	 * 
-	 * @param fileRevisionIndex local revision index, non-negative, or one of predefined constants. Note, use of {@link HgRepository#BAD_REVISION}, 
+	 * @param fileRevisionIndex - revision local index, non-negative, or one of predefined constants. Note, use of {@link HgRepository#BAD_REVISION}, 
 	 * although possible, makes little sense (command would fail if executed).  
  	 * @return <code>this</code> for convenience
 	 */
@@ -116,7 +116,7 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	 * Select whatever revision of the file that was actual at the time of the specified changeset. Unlike {@link #revision(int)} or {@link #revision(Nodeid)}, this method 
 	 * operates in terms of repository global revisions (aka changesets). 
 	 * 
-	 * Invocation of this method clears local file revisions selection.
+	 * Invocation of this method clears selection of a file revision with its index.
 	 * 
 	 * @param nodeid changeset revision
 	 * @return <code>this</code> for convenience

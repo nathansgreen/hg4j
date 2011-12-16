@@ -47,7 +47,7 @@ public class HgException extends Exception {
 	}
 
 	/**
-	 * @return not {@link HgRepository#BAD_REVISION} only when local revision index was supplied at the construction time
+	 * @return not {@link HgRepository#BAD_REVISION} only when revision index was supplied at the construction time
 	 */
 	public int getRevisionIndex() {
 		return revNumber;

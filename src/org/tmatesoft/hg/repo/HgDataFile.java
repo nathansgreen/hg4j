@@ -101,7 +101,7 @@ public class HgDataFile extends Revlog {
 	}
 	
 	/**
- 	 * @param fileRevisionIndex local revision index, non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
+ 	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
 	 * @return size of the file content at the revision identified by local revision number.
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
 	 * @throws HgDataStreamException if attempt to access file metadata failed
@@ -202,7 +202,7 @@ public class HgDataFile extends Revlog {
 
 	/**
 	 * 
- 	 * @param fileRevisionIndex local revision index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
+ 	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
 	 * @param sink
 	 * @throws HgDataStreamException FIXME
 	 * @throws HgInvalidControlFileException

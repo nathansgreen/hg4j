@@ -127,16 +127,16 @@ public class HgManifest extends Revlog {
 		if (inspector == null || revisionIndexes == null) {
 			throw new IllegalArgumentException();
 		}
-		int[] localManifestRevs = toManifestRevisionIndexes(revisionIndexes);
-		content.iterate(localManifestRevs, true, new ManifestParser(inspector));
+		int[] manifestRevs = toManifestRevisionIndexes(revisionIndexes);
+		content.iterate(manifestRevs, true, new ManifestParser(inspector));
 	}
 	
 	// manifest revision number that corresponds to the given changeset
-	/*package-local*/ int fromChangelog(int revisionNumber) throws HgInvalidControlFileException {
-		if (HgInternals.wrongRevisionIndex(revisionNumber)) {
-			throw new IllegalArgumentException(String.valueOf(revisionNumber));
+	/*package-local*/ int fromChangelog(int changesetRevisionIndex) throws HgInvalidControlFileException {
+		if (HgInternals.wrongRevisionIndex(changesetRevisionIndex)) {
+			throw new IllegalArgumentException(String.valueOf(changesetRevisionIndex));
 		}
-		if (revisionNumber == HgRepository.WORKING_COPY || revisionNumber == HgRepository.BAD_REVISION) {
+		if (changesetRevisionIndex == HgRepository.WORKING_COPY || changesetRevisionIndex == HgRepository.BAD_REVISION) {
 			throw new IllegalArgumentException("Can't use constants like WORKING_COPY or BAD_REVISION");
 		}
 		// revisionNumber == TIP is processed by RevisionMapper 
@@ -144,7 +144,7 @@ public class HgManifest extends Revlog {
 			revisionMap = new RevisionMapper(getRepo());
 			content.iterate(0, TIP, false, revisionMap);
 		}
-		return revisionMap.at(revisionNumber);
+		return revisionMap.at(changesetRevisionIndex);
 	}
 	
 	/**
@@ -200,19 +200,19 @@ public class HgManifest extends Revlog {
 
 
 	private int[] toManifestRevisionIndexes(int[] changelogRevisionIndexes) throws HgInvalidControlFileException {
-		int[] localManifestRevs = new int[changelogRevisionIndexes.length];
+		int[] manifestRevs = new int[changelogRevisionIndexes.length];
 		boolean needsSort = false;
 		for (int i = 0; i < changelogRevisionIndexes.length; i++) {
 			final int manifestRevisionIndex = fromChangelog(changelogRevisionIndexes[i]);
-			localManifestRevs[i] = manifestRevisionIndex;
-			if (i > 0 && localManifestRevs[i-1] > manifestRevisionIndex) {
+			manifestRevs[i] = manifestRevisionIndex;
+			if (i > 0 && manifestRevs[i-1] > manifestRevisionIndex) {
 				needsSort = true;
 			}
 		}
 		if (needsSort) {
-			Arrays.sort(localManifestRevs);
+			Arrays.sort(manifestRevs);
 		}
-		return localManifestRevs;
+		return manifestRevs;
 	}
 
 	public interface Inspector {

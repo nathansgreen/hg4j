@@ -116,9 +116,9 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	/**
 	 * Revision without base == --change
 	 * Pass {@link HgRepository#WORKING_COPY} or {@link HgRepository#BAD_REVISION} to reset
-	 * @param changesetRevisionIndex - non-negative local revision number, or any of {@link HgRepository#BAD_REVISION}, {@link HgRepository#WORKING_COPY} or {@link HgRepository#TIP}  
+	 * @param changesetRevisionIndex - non-negative changeset revision local index, or any of {@link HgRepository#BAD_REVISION}, {@link HgRepository#WORKING_COPY} or {@link HgRepository#TIP}  
 	 * @return <code>this</code> for convenience
-	 * @throws IllegalArgumentException if local revision number doesn't specify legitimate revision. 
+	 * @throws IllegalArgumentException if revision index doesn't specify legitimate revision. 
 	 */
 	public HgStatusCommand revision(int changesetRevisionIndex) {
 		if (changesetRevisionIndex == BAD_REVISION) {

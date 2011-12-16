@@ -126,7 +126,7 @@ abstract class Revlog {
 	}
 
 	/**
-	 * Get local revision number (index) of the specified revision.
+	 * Get local index of the specified revision.
 	 * If unsure, use {@link #isKnown(Nodeid)} to find out whether nodeid belongs to this revlog.
 	 * 
 	 * For occasional queries, this method works with decent performance, despite its O(n/2) approach.
@@ -182,16 +182,16 @@ abstract class Revlog {
 	}
 	
 	/**
-	 * @param revision - repo-local index of this file change (not a changelog revision number!)
+	 * @param fileRevisionIndex - index of this file change (not a changelog revision index), non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
 	 * FIXME is it necessary to have IOException along with HgException here?
 	 */
-	protected void rawContent(int revision, ByteChannel sink) throws HgException, IOException, CancelledException, HgInvalidRevisionException {
+	protected void rawContent(int fileRevisionIndex, ByteChannel sink) throws HgException, IOException, CancelledException, HgInvalidRevisionException {
 		if (sink == null) {
 			throw new IllegalArgumentException();
 		}
 		ContentPipe insp = new ContentPipe(sink, 0, repo.getContext().getLog());
 		insp.checkCancelled();
-		content.iterate(revision, revision, true, insp);
+		content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
 		insp.checkFailed();
 	}
 
@@ -292,7 +292,7 @@ abstract class Revlog {
 
 	@Experimental
 	public interface RevisionInspector extends Inspector {
-		void next(int revisionIndex, Nodeid revision, int linkedRevision);
+		void next(int revisionIndex, Nodeid revision, int linkedRevisionIndex);
 	}
 
 	@Experimental
@@ -495,12 +495,12 @@ abstract class Revlog {
 	 * Effective int to Nodeid and vice versa translation. It's advised to use this class instead of 
 	 * multiple {@link Revlog#getRevisionIndex(Nodeid)} calls.
 	 * 
-	 * getRevisionIndex(Nodeid) with straightforward lookup approach performs O(n/2)
-	 * #localRevision() is log(n), plus initialization is O(n) 
+	 * {@link Revlog#getRevisionIndex(Nodeid)} with straightforward lookup approach performs O(n/2)
+	 * {@link RevisionMap#revisionIndex(Nodeid)} is log(n), plus initialization is O(n) (just once).
 	 */
 	public final class RevisionMap implements RevisionInspector {
 		/*
-		 * in fact, initialization is much slower as it instantiates Nodeids, while #getLocalRevision
+		 * in fact, initialization is much slower as it instantiates Nodeids, while #getRevisionIndex
 		 * compares directly against byte buffer. Measuring cpython with 70k+ gives 3 times difference (47 vs 171)
 		 * for complete changelog iteration. 
 		 */
