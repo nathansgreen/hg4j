@@ -45,8 +45,8 @@ public class HgDataStreamException extends HgException {
 	}
 	
 	@Override
-	public HgDataStreamException setRevisionNumber(int rev) {
-		return (HgDataStreamException) super.setRevisionNumber(rev);
+	public HgDataStreamException setRevisionIndex(int rev) {
+		return (HgDataStreamException) super.setRevisionIndex(rev);
 	}
 	@Override
 	public HgDataStreamException setFileName(Path name) {

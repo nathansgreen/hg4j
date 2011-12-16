@@ -88,12 +88,12 @@ public final class HgFileRevision {
 	public Pair<Nodeid, Nodeid> getParents() throws HgInvalidControlFileException {
 		if (parents == null) {
 			HgDataFile fn = repo.getFileNode(path);
-			int localRevision = fn.getLocalRevision(revision);
+			int revisionIndex = fn.getRevisionIndex(revision);
 			int[] pr = new int[2];
 			byte[] p1 = new byte[20], p2 = new byte[20];
 			// XXX Revlog#parents is not the best method to use here
 			// need smth that gives Nodeids (piped through Pool<Nodeid> from repo's context)
-			fn.parents(localRevision, pr, p1, p2);
+			fn.parents(revisionIndex, pr, p1, p2);
 			parents = new Pair<Nodeid, Nodeid>(Nodeid.fromBinary(p1, 0), Nodeid.fromBinary(p2, 0));
 		}
 		return parents;
@@ -101,8 +101,8 @@ public final class HgFileRevision {
 
 	public void putContentTo(ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException {
 		HgDataFile fn = repo.getFileNode(path);
-		int localRevision = fn.getLocalRevision(revision);
-		fn.contentWithFilters(localRevision, sink);
+		int revisionIndex = fn.getRevisionIndex(revision);
+		fn.contentWithFilters(revisionIndex, sink);
 	}
 
 	private void checkCopy() throws HgInvalidControlFileException, HgDataStreamException {

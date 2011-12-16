@@ -97,7 +97,7 @@ public class MapTagsToFileRevisions {
 		for (int revision = 0; revision <= latestRevision; revision++) {
 		       final Nodeid nodeId = fileMap.revision(revision);
 //		       final Nodeid changesetId = fileNode.getChangesetRevision(nodeId);
-		       int localCset = fileNode.getChangesetLocalRevision(revision);
+		       int localCset = fileNode.getChangesetRevisionIndex(revision);
 		       final Nodeid changesetId = clog.getRevision(localCset);
 		       changesetToNodeid_1.put(changesetId, nodeId);
 		}
@@ -110,7 +110,7 @@ public class MapTagsToFileRevisions {
 		final long start_2a = System.nanoTime();
 		for (int revision = 0; revision <= latestRevision; revision++) {
 			Nodeid nidFile = fileMap.revision(revision);
-			int localCset = fileNode.getChangesetLocalRevision(revision);
+			int localCset = fileNode.getChangesetRevisionIndex(revision);
 			Nodeid nidCset = clogMap.revision(localCset);
 			changesetToNodeid_2.put(nidCset, nidFile);
 		}
@@ -138,8 +138,8 @@ public class MapTagsToFileRevisions {
 
 	/*
 	 * Each 5000 revisions from cpython, total 15 revisions
-	 * Direct clog.getLocalRevision: ~260 ms
-	 * RevisionMap.localRevision: ~265 ms (almost 100% in #init())
+	 * Direct clog.getRevisionIndex: ~260 ms
+	 * RevisionMap.revisionIndex: ~265 ms (almost 100% in #init())
 	 * each 1000'th revision, total 71 revision: 1 230 vs 270
 	 * each 2000'th revision, total 36 revision: 620 vs 270
 	 * each 3000'th revision, total 24 revision: 410 vs 275
@@ -154,7 +154,7 @@ public class MapTagsToFileRevisions {
 		}
 		final long s1 = System.nanoTime();
 		for (Nodeid n : revisions) {
-			int r = clog.getLocalRevision(n);
+			int r = clog.getRevisionIndex(n);
 			if (r % step != 0) {
 				throw new IllegalStateException(Integer.toString(r));
 			}
@@ -165,7 +165,7 @@ public class MapTagsToFileRevisions {
 		rmap.init();
 		final long s3 = System.nanoTime();
 		for (Nodeid n : revisions) {
-			int r = rmap.localRevision(n);
+			int r = rmap.revisionIndex(n);
 			if (r % step != 0) {
 				throw new IllegalStateException(Integer.toString(r));
 			}
@@ -216,7 +216,7 @@ public class MapTagsToFileRevisions {
 		int x = 0;
 		for (int i = 0; i < allTags.length; i++) {
 			final Nodeid tagRevision = allTags[i].revision();
-			final int tagLocalRev = clogrmap.localRevision(tagRevision);
+			final int tagLocalRev = clogrmap.revisionIndex(tagRevision);
 			if (tagLocalRev != HgRepository.BAD_REVISION) {
 				tagLocalRevs[x++] = tagLocalRev;
 				List<TagInfo> tagsAssociatedWithRevision = tagLocalRev2TagInfo.get(tagLocalRev);
@@ -328,7 +328,7 @@ public class MapTagsToFileRevisions {
 		// TODO if fileNode.isCopy, repeat for each getCopySourceName()
 		for (int localFileRev = 0; localFileRev < fileNode.getRevisionCount(); localFileRev++) {
 			Nodeid fileRev = fileNode.getRevision(localFileRev);
-			int changesetLocalRev = fileNode.getChangesetLocalRevision(localFileRev);
+			int changesetLocalRev = fileNode.getChangesetRevisionIndex(localFileRev);
 			List<String> associatedTags = new LinkedList<String>();
 			for (int i = 0; i < allTagsOfTheFile.length; i++) {
 				if (fileRev.equals(allTagsOfTheFile[i])) {
@@ -402,7 +402,7 @@ public class MapTagsToFileRevisions {
 			final HgTags.TagInfo info = tagToInfo.get(tagName);
 			final Nodeid nodeId = info.revision();
 			// TODO: This is not correct as we can't be sure that file at the corresponding revision is actually our target file (which may have been renamed, etc.)
-			final Nodeid fileRevision = manifest.getFileRevision(repository.getChangelog().getLocalRevision(nodeId), targetPath);
+			final Nodeid fileRevision = manifest.getFileRevision(repository.getChangelog().getRevisionIndex(nodeId), targetPath);
 			if (fileRevision == null) {
 				continue;
 			}

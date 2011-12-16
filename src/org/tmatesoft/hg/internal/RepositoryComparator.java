@@ -107,7 +107,7 @@ public class RepositoryComparator {
 				// hence, we don't need to consider their local revision number
 				continue;
 			}
-			int lr = changelog.getLocalRevision(n);
+			int lr = changelog.getRevisionIndex(n);
 			if (lr < earliestRevision) {
 				earliestRevision = lr;
 			}

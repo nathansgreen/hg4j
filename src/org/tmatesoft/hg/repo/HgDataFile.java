@@ -16,7 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.repo.HgInternals.wrongLocalRevision;
+import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.io.ByteArrayOutputStream;
@@ -87,7 +87,7 @@ public class HgDataFile extends Revlog {
 	}
 
 	/**
-	 * Handy shorthand for {@link #length(int) length(getLocalRevision(nodeid))}
+	 * Handy shorthand for {@link #length(int) length(getRevisionIndex(nodeid))}
 	 *
 	 * @param nodeid revision of the file
 	 * 
@@ -97,22 +97,24 @@ public class HgDataFile extends Revlog {
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public int length(Nodeid nodeid) throws HgDataStreamException, HgInvalidControlFileException, HgInvalidRevisionException {
-		return length(getLocalRevision(nodeid));
+		return length(getRevisionIndex(nodeid));
 	}
 	
 	/**
+ 	 * @param fileRevisionIndex local revision index, non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
 	 * @return size of the file content at the revision identified by local revision number.
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
 	 * @throws HgDataStreamException if attempt to access file metadata failed
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public int length(int localRev) throws HgDataStreamException, HgInvalidControlFileException, HgInvalidRevisionException {
-		if (metadata == null || !metadata.checked(localRev)) {
-			checkAndRecordMetadata(localRev);
+	public int length(int fileRevisionIndex) throws HgDataStreamException, HgInvalidControlFileException, HgInvalidRevisionException {
+		// TODO support WORKING_COPY constant
+		if (metadata == null || !metadata.checked(fileRevisionIndex)) {
+			checkAndRecordMetadata(fileRevisionIndex);
 		}
-		final int dataLen = content.dataLength(localRev);
-		if (metadata.known(localRev)) {
-			return dataLen - metadata.dataOffset(localRev);
+		final int dataLen = content.dataLength(fileRevisionIndex);
+		if (metadata.known(fileRevisionIndex)) {
+			return dataLen - metadata.dataOffset(fileRevisionIndex);
 		}
 		return dataLen;
 	}
@@ -198,20 +200,29 @@ public class HgDataFile extends Revlog {
 		}
 	}
 
-	// for data files need to check heading of the file content for possible metadata
-	// @see http://mercurial.selenic.com/wiki/FileFormats#data.2BAC8-
-	public void content(int revision, ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
-		if (revision == TIP) {
-			revision = getLastRevision();
+	/**
+	 * 
+ 	 * @param fileRevisionIndex local revision index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
+	 * @param sink
+	 * @throws HgDataStreamException FIXME
+	 * @throws HgInvalidControlFileException
+	 * @throws CancelledException
+	 * @throws HgInvalidRevisionException
+	 */
+	public void content(int fileRevisionIndex, ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
+		// for data files need to check heading of the file content for possible metadata
+		// @see http://mercurial.selenic.com/wiki/FileFormats#data.2BAC8-
+		if (fileRevisionIndex == TIP) {
+			fileRevisionIndex = getLastRevision();
 		}
-		if (revision == WORKING_COPY) {
+		if (fileRevisionIndex == WORKING_COPY) {
 			// sink is supposed to come into workingCopy without filters
 			// thus we shall not get here (into #content) from #contentWithFilters(WC)
 			workingCopy(sink);
 			return;
 		}
-		if (wrongLocalRevision(revision) || revision == BAD_REVISION) {
-			throw new HgInvalidRevisionException(revision);
+		if (wrongRevisionIndex(fileRevisionIndex) || fileRevisionIndex == BAD_REVISION) {
+			throw new HgInvalidRevisionException(fileRevisionIndex);
 		}
 		if (sink == null) {
 			throw new IllegalArgumentException();
@@ -220,22 +231,22 @@ public class HgDataFile extends Revlog {
 			metadata = new Metadata();
 		}
 		ErrorHandlingInspector insp;
-		if (metadata.none(revision)) {
+		if (metadata.none(fileRevisionIndex)) {
 			insp = new ContentPipe(sink, 0, getRepo().getContext().getLog());
-		} else if (metadata.known(revision)) {
-			insp = new ContentPipe(sink, metadata.dataOffset(revision), getRepo().getContext().getLog());
+		} else if (metadata.known(fileRevisionIndex)) {
+			insp = new ContentPipe(sink, metadata.dataOffset(fileRevisionIndex), getRepo().getContext().getLog());
 		} else {
 			// do not know if there's metadata
 			insp = new MetadataInspector(metadata, getPath(), new ContentPipe(sink, 0, getRepo().getContext().getLog()));
 		}
 		insp.checkCancelled();
-		super.content.iterate(revision, revision, true, insp);
+		super.content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
 		try {
 			insp.checkFailed(); // XXX is there real need to throw IOException from ContentPipe?
 		} catch (HgDataStreamException ex) {
 			throw ex;
 		} catch (IOException ex) {
-			throw new HgDataStreamException(getPath(), ex).setRevisionNumber(revision);
+			throw new HgDataStreamException(getPath(), ex).setRevisionIndex(fileRevisionIndex);
 		} catch (HgException ex) {
 			// shall not happen, unless we changed ContentPipe or its subclass
 			throw new HgDataStreamException(getPath(), ex.getClass().getName(), ex);
@@ -400,19 +411,25 @@ public class HgDataFile extends Revlog {
 	}
 	
 	/**
-	 * For a given local revision of the file, find out local revision in the changelog.
-	 * FIXME rename to getChangesetRevisionIndex()
+	 * For a given revision of the file (identified with revision index), find out index of the corresponding changeset.
 	 *
 	 * @return changeset revision index
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public int getChangesetLocalRevision(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public int getChangesetRevisionIndex(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		return content.linkRevision(revision);
+	}
+	/**
+	 * @deprecated use {@link #getChangesetRevisionIndex(int)} instead
+	 */
+	@Deprecated
+	public int getChangesetLocalRevision(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		return getChangesetRevisionIndex(revision);
 	}
 
 	/**
-	 * Complements {@link #getChangesetLocalRevision(int)} to get changeset revision that corresponds to supplied file revision
+	 * Complements {@link #getChangesetRevisionIndex(int)} to get changeset revision that corresponds to supplied file revision
 	 * 
 	 * @param nid revision of the file
 	 * @return changeset revision
@@ -420,7 +437,7 @@ public class HgDataFile extends Revlog {
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public Nodeid getChangesetRevision(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
-		int changelogRevision = getChangesetLocalRevision(getLocalRevision(nid));
+		int changelogRevision = getChangesetRevisionIndex(getRevisionIndex(nid));
 		return getRepo().getChangelog().getRevision(changelogRevision);
 	}
 
@@ -605,7 +622,7 @@ public class HgDataFile extends Revlog {
 			} catch (IOException ex) {
 				recordFailure(ex);
 			} catch (HgDataStreamException ex) {
-				recordFailure(ex.setRevisionNumber(revisionNumber));
+				recordFailure(ex.setRevisionIndex(revisionNumber));
 			}
 		}
 

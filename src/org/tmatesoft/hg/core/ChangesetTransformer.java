@@ -74,7 +74,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 			progressHelper.worked(1);
 			cancelHelper.checkCancelled();
 		} catch (RuntimeException ex) {
-			failure = new HgCallbackTargetException(ex).setRevision(nodeid).setRevisionNumber(revisionNumber);
+			failure = new HgCallbackTargetException(ex).setRevision(nodeid).setRevisionIndex(revisionNumber);
 		} catch (CancelledException ex) {
 			cancellation = ex;
 		}

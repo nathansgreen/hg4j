@@ -124,10 +124,10 @@ public class HgFileInformer {
 		Nodeid toExtract = null;
 		try {
 			if (cachedManifest == null) {
-				int csetRev = repo.getChangelog().getLocalRevision(cset);
+				int csetRev = repo.getChangelog().getRevisionIndex(cset);
 				cachedManifest = new ManifestRevision(null, null); // XXX how about context and cached manifest revisions
 				repo.getManifest().walk(csetRev, csetRev, cachedManifest);
-				// cachedManifest shall be meaningful - changelog.getLocalRevision above ensures we've got version that exists.
+				// cachedManifest shall be meaningful - changelog.getRevisionIndex() above ensures we've got version that exists.
 			}
 			toExtract = cachedManifest.nodeid(file);
 			if (toExtract == null && followRenames) {

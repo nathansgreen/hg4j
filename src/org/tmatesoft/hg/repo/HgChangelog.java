@@ -103,7 +103,7 @@ public class HgChangelog extends Revlog {
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public RawChangeset changeset(Nodeid nid)  throws HgInvalidControlFileException, HgInvalidRevisionException {
-		int x = getLocalRevision(nid);
+		int x = getRevisionIndex(nid);
 		return range(x, x).get(0);
 	}
 

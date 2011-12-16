@@ -55,7 +55,7 @@ public class Tags {
 			}
 		});
 		for (TagInfo ti : tags.getTags().values()) {
-			int x = clog.getLocalRevision(ti.revision()); // XXX in fact, performance hog. Need batch localRevision or another improvement
+			int x = clog.getRevisionIndex(ti.revision()); // XXX in fact, performance hog. Need batch revisionIndex or another improvement
 			ti2index.put(ti, x);
 			sorted.add(ti);
 		}

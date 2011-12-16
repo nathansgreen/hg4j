@@ -226,7 +226,7 @@ public class Main {
 	 	3 revisions - 80 ms vs 250 ms (250ms init)
 		4 revisions - 110 ms vs 265 ms (265 ms init)
 		5 revisions - 94 vs 266.
-		complete iteration in changelog.getLocalRevision(tipNodeid) takes 47 ms
+		complete iteration in changelog.getRevisionIndex(tipNodeid) takes 47 ms
 		compared to complete iteration inside RevisionMap.init() of 171 ms.
 		The only difference is latter instantiates Nodeids, while former compares binary content as is.
 		Hence, with 20-30 ms per regular getLocalRevision, it pays off to use RevisionMap with at least 15-20
@@ -245,7 +245,7 @@ public class Main {
 		revs[0] = changelog.getRevision(tip);
 		long start = System.currentTimeMillis();
 		for (int i = 0; i < revs.length; i++) {
-			final int localRev = changelog.getLocalRevision(revs[i]);
+			final int localRev = changelog.getRevisionIndex(revs[i]);
 			System.out.printf("%d:%s\n", localRev, revs[i]);
 		}
 		System.out.println(System.currentTimeMillis() - start);
@@ -255,7 +255,7 @@ public class Main {
 		rmap = changelog.new RevisionMap().init();
 		long s2 = System.currentTimeMillis();
 		for (int i = 0; i < revs.length; i++) {
-			final int localRev = rmap.localRevision(revs[i]);
+			final int localRev = rmap.revisionIndex(revs[i]);
 			System.out.printf("%d:%s\n", localRev, revs[i]);
 		}
 		System.out.println(System.currentTimeMillis() - start);

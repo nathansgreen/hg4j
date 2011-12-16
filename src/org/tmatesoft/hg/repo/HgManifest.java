@@ -121,19 +121,19 @@ public class HgManifest extends Revlog {
 	 * "Sparse" iteration of the manifest
 	 * 
 	 * @param inspector
-	 * @param localRevisions local changeset revisions to visit
+	 * @param revisionIndexes local indexes of changesets to visit
 	 */
-	public void walk(final Inspector inspector, int... localRevisions) throws HgInvalidControlFileException{
-		if (inspector == null || localRevisions == null) {
+	public void walk(final Inspector inspector, int... revisionIndexes) throws HgInvalidControlFileException{
+		if (inspector == null || revisionIndexes == null) {
 			throw new IllegalArgumentException();
 		}
-		int[] localManifestRevs = toLocalManifestRevisions(localRevisions);
+		int[] localManifestRevs = toManifestRevisionIndexes(revisionIndexes);
 		content.iterate(localManifestRevs, true, new ManifestParser(inspector));
 	}
 	
 	// manifest revision number that corresponds to the given changeset
 	/*package-local*/ int fromChangelog(int revisionNumber) throws HgInvalidControlFileException {
-		if (HgInternals.wrongLocalRevision(revisionNumber)) {
+		if (HgInternals.wrongRevisionIndex(revisionNumber)) {
 			throw new IllegalArgumentException(String.valueOf(revisionNumber));
 		}
 		if (revisionNumber == HgRepository.WORKING_COPY || revisionNumber == HgRepository.BAD_REVISION) {
@@ -150,22 +150,22 @@ public class HgManifest extends Revlog {
 	/**
 	 * Extracts file revision as it was known at the time of given changeset.
 	 * 
-	 * @param localChangelogRevision local changeset index 
+	 * @param changelogRevisionIndex local changeset index 
 	 * @param file path to file in question
 	 * @return file revision or <code>null</code> if manifest at specified revision doesn't list such file
 	 */
 	@Experimental(reason="Perhaps, HgDataFile shall own this method, or get a delegate?")
-	public Nodeid getFileRevision(int localChangelogRevision, final Path file) throws HgInvalidControlFileException{
-		return getFileRevisions(file, localChangelogRevision).get(localChangelogRevision);
+	public Nodeid getFileRevision(int changelogRevisionIndex, final Path file) throws HgInvalidControlFileException{
+		return getFileRevisions(file, changelogRevisionIndex).get(changelogRevisionIndex);
 	}
 	
 	// XXX package-local, IntMap, and HgDataFile getFileRevisionAt(int... localChangelogRevisions)
 	@Experimental(reason="@see #getFileRevision")
-	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... localChangelogRevisions) throws HgInvalidControlFileException{
+	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... changelogRevisionIndexes) throws HgInvalidControlFileException{
 		// FIXME need tests
-		int[] localManifestRevisions = toLocalManifestRevisions(localChangelogRevisions);
-		final HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>(localChangelogRevisions.length);
-		content.iterate(localManifestRevisions, true, new RevlogStream.Inspector() {
+		int[] manifestRevisionIndexes = toManifestRevisionIndexes(changelogRevisionIndexes);
+		final HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>(changelogRevisionIndexes.length);
+		content.iterate(manifestRevisionIndexes, true, new RevlogStream.Inspector() {
 			
 			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgException {
 				ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -199,13 +199,13 @@ public class HgManifest extends Revlog {
 	}
 
 
-	private int[] toLocalManifestRevisions(int[] localChangelogRevisions) throws HgInvalidControlFileException {
-		int[] localManifestRevs = new int[localChangelogRevisions.length];
+	private int[] toManifestRevisionIndexes(int[] changelogRevisionIndexes) throws HgInvalidControlFileException {
+		int[] localManifestRevs = new int[changelogRevisionIndexes.length];
 		boolean needsSort = false;
-		for (int i = 0; i < localChangelogRevisions.length; i++) {
-			final int manifestLocalRev = fromChangelog(localChangelogRevisions[i]);
-			localManifestRevs[i] = manifestLocalRev;
-			if (i > 0 && localManifestRevs[i-1] > manifestLocalRev) {
+		for (int i = 0; i < changelogRevisionIndexes.length; i++) {
+			final int manifestRevisionIndex = fromChangelog(changelogRevisionIndexes[i]);
+			localManifestRevs[i] = manifestRevisionIndex;
+			if (i > 0 && localManifestRevs[i-1] > manifestRevisionIndex) {
 				needsSort = true;
 			}
 		}
@@ -476,7 +476,7 @@ public class HgManifest extends Revlog {
 					Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
 					// FIXME calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
 					// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
-					changelog2manifest[u] = repo.getManifest().getLocalRevision(manifest);
+					changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
 				} catch (HgInvalidControlFileException ex) {
 					// FIXME need to propagate the error up to client  
 					repo.getContext().getLog().error(getClass(), ex, null);

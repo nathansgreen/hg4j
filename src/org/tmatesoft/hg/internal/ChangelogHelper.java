@@ -63,7 +63,7 @@ public class ChangelogHelper {
 		if (!df.exists()) {
 			return null;
 		}
-		int changelogRev = df.getChangesetLocalRevision(HgRepository.TIP);
+		int changelogRev = df.getChangesetRevisionIndex(HgRepository.TIP);
 		if (changelogRev >= leftBoundary) {
 			// the method is likely to be invoked for different files, 
 			// while changesets might be the same. Cache 'em not to read too much. 

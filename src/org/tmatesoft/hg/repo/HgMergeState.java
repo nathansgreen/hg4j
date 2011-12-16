@@ -114,13 +114,13 @@ public class HgMergeState {
 			final ManifestRevision m1 = new ManifestRevision(nodeidPool, fnamePool);
 			final ManifestRevision m2 = new ManifestRevision(nodeidPool, fnamePool);
 			if (!wcp2.isNull()) {
-				final int rp2 = repo.getChangelog().getLocalRevision(wcp2);
+				final int rp2 = repo.getChangelog().getRevisionIndex(wcp2);
 				repo.getManifest().walk(rp2, rp2, m2);
 			}
 			BufferedReader br = new BufferedReader(new FileReader(f));
 			String s = br.readLine();
 			stateParent = nodeidPool.unify(Nodeid.fromAscii(s));
-			final int rp1 = repo.getChangelog().getLocalRevision(stateParent);
+			final int rp1 = repo.getChangelog().getRevisionIndex(stateParent);
 			repo.getManifest().walk(rp1, rp1, m1);
 			while ((s = br.readLine()) != null) {
 				String[] r = s.split("\\00");

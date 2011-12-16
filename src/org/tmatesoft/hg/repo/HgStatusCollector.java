@@ -294,13 +294,13 @@ public class HgStatusCollector {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		if (!df.exists()) {
 			String msg = String.format("Didn't find file '%s' in the repo. Perhaps, bad storage name conversion?", fname);
-			throw new HgDataStreamException(fname, msg, null).setRevisionNumber(originalChangelogRevision);
+			throw new HgDataStreamException(fname, msg, null).setRevisionIndex(originalChangelogRevision);
 		}
 		while (df.isCopy()) {
 			Path original = df.getCopySourceName();
 			if (originals.contains(original)) {
 				df = hgRepo.getFileNode(original);
-				int changelogRevision = df.getChangesetLocalRevision(0);
+				int changelogRevision = df.getChangesetRevisionIndex(0);
 				if (changelogRevision <= originalChangelogRevision) {
 					// copy/rename source was known prior to rev1 
 					// (both r1Files.contains is true and original was created earlier than rev1)

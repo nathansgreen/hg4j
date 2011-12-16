@@ -260,7 +260,7 @@ public class KeywordFilter implements Filter {
 	private String revision() {
 		try {
 			// FIXME add cset's nodeid into Changeset class
-			int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);
+			int csetRev = repo.getFileNode(path).getChangesetRevisionIndex(HgRepository.TIP);
 			return repo.getChangelog().getRevision(csetRev).shortNotation();
 		} catch (HgException ex) {
 			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
@@ -291,7 +291,7 @@ public class KeywordFilter implements Filter {
 	private RawChangeset getChangeset() throws HgInvalidControlFileException {
 		if (latestFileCset == null) {
 			// XXX consider use of ChangelogHelper
-			int csetRev = repo.getFileNode(path).getChangesetLocalRevision(HgRepository.TIP);
+			int csetRev = repo.getFileNode(path).getChangesetRevisionIndex(HgRepository.TIP);
 			latestFileCset = repo.getChangelog().range(csetRev, csetRev).get(0);
 		}
 		return latestFileCset;

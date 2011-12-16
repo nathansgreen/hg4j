@@ -241,7 +241,7 @@ public class HgTags {
 
 		public String branch() throws HgInvalidControlFileException {
 			if (branch == null) {
-				int x = repo.getChangelog().getLocalRevision(revision());
+				int x = repo.getChangelog().getRevisionIndex(revision());
 				branch = repo.getChangelog().range(x, x).get(0).branch();
 			}
 			return branch;

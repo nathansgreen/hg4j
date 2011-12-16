@@ -47,15 +47,32 @@ public class HgException extends Exception {
 	}
 
 	/**
-	 * @return not {@link HgRepository#BAD_REVISION} only when local revision number was supplied at the construction time
+	 * @return not {@link HgRepository#BAD_REVISION} only when local revision index was supplied at the construction time
 	 */
-	public int getRevisionNumber() {
+	public int getRevisionIndex() {
 		return revNumber;
 	}
 
-	public HgException setRevisionNumber(int rev) {
+	/**
+	 * @deprecated use {@link #getRevisionIndex()}
+	 */
+	@Deprecated
+	public int getRevisionNumber() {
+		return getRevisionIndex();
+	}
+	
+
+	public HgException setRevisionIndex(int rev) {
 		revNumber = rev;
 		return this;
+	}
+	
+	/**
+	 * @deprecated use {@link #setRevisionIndex(int)}
+	 */
+	@Deprecated
+	public final HgException setRevisionNumber(int rev) {
+		return setRevisionIndex(rev);
 	}
 
 	/**

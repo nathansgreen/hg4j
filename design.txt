@@ -126,3 +126,16 @@ ExecHelper('cmd', OutputParser()).run(). StatusOutputParser, LogOutputParser ext
 
 Need better MethodRule than ErrorCollector for tests run as java app (to print not only MultipleFailureException, but distinct errors)
 Also consider using ExternalResource and TemporaryFolder rules. 
+
+
+=================
+Naming:
+nodeid: revision
+int:	revisionIndex (alternatives: revisionNumber, localRevisionNumber)
+BUT, if class name bears Revision, may use 'index' and 'nodeid'
+NOT nodeid because although fileNodeid and changesetNodeid are ok (less to my likening than fileRevision, however), it's not clear how
+to name integer counterpart, just 'index' is unclear, need to denote nodeid and index are related. 'nodeidIndex' would be odd.
+Unfortunately, Revision would be a nice name for a class <int, Nodeid>. As long as I don't want to keep methods to access int/nodeid separately
+and not to stick to Revision struct only (to avoid massive instances of Revision<int,Nodeid> when only one is sufficient), I'll need to name
+these separate methods anyway. Present opinion is that I don't need the object right now (will have to live with RevisionObject or RevisionDescriptor
+once change my mind) 

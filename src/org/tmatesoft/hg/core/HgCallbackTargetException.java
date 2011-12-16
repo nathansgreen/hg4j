@@ -68,8 +68,8 @@ public class HgCallbackTargetException extends HgException {
 		return (HgCallbackTargetException) super.setRevision(r);
 	}
 	@Override
-	public HgCallbackTargetException setRevisionNumber(int rev) {
-		return (HgCallbackTargetException) super.setRevisionNumber(rev);
+	public HgCallbackTargetException setRevisionIndex(int rev) {
+		return (HgCallbackTargetException) super.setRevisionIndex(rev);
 	}
 	@Override
 	public HgCallbackTargetException setFileName(Path name) {

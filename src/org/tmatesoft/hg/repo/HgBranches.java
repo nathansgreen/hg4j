@@ -303,7 +303,7 @@ public class HgBranches {
 			int[] localCset = new int[heads.size()];
 			int i = 0;
 			for (Nodeid h : heads) {
-				localCset[i++] = rmap.localRevision(h);
+				localCset[i++] = rmap.revisionIndex(h);
 			}
 			// [0] tipmost, [1] tipmost open
 			final Nodeid[] tipmost = new Nodeid[] {null, null};

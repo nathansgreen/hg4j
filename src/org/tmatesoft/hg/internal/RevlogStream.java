@@ -153,7 +153,7 @@ public class RevlogStream {
 	 * @return integer in [0..revisionCount()) or {@link HgRepository#BAD_REVISION} if not found
 	 * @throws HgInvalidControlFileException if attempt to read index file failed
 	 */
-	public int findLocalRevisionNumber(Nodeid nodeid) throws HgInvalidControlFileException {
+	public int findRevisionIndex(Nodeid nodeid) throws HgInvalidControlFileException {
 		// XXX this one may be implemented with iterate() once there's mechanism to stop iterations
 		final int indexSize = revisionCount();
 		DataAccess daIndex = getIndexStream();
@@ -528,6 +528,6 @@ public class RevlogStream {
 		// XXX boolean retVal to indicate whether to continue?
 		// TODO specify nodeid and data length, and reuse policy (i.e. if revlog stream doesn't reuse nodeid[] for each call)
 		// implementers shall not invoke DataAccess.done(), it's accomplished by #iterate at appropraite moment
-		void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data) throws HgException;
+		void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data) throws HgException;
 	}
 }

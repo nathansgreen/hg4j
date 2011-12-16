@@ -17,7 +17,7 @@
 package org.tmatesoft.hg.core;
 
 import static org.tmatesoft.hg.core.HgStatus.Kind.*;
-import static org.tmatesoft.hg.repo.HgInternals.wrongLocalRevision;
+import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.io.IOException;
@@ -98,36 +98,36 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	/**
 	 * If set, either base:revision or base:workingdir
 	 * to unset, pass {@link HgRepository#TIP} or {@link HgRepository#BAD_REVISION}
-	 * @param revision - local revision number to base status from
+	 * @param changesetRevisionIndex - local index of a changeset to base status from
 	 * @return <code>this</code> for convenience
 	 * @throws IllegalArgumentException when revision is negative or {@link HgRepository#WORKING_COPY} 
 	 */
-	public HgStatusCommand base(int revision) {
-		if (revision == WORKING_COPY || wrongLocalRevision(revision)) {
-			throw new IllegalArgumentException(String.valueOf(revision));
+	public HgStatusCommand base(int changesetRevisionIndex) {
+		if (changesetRevisionIndex == WORKING_COPY || wrongRevisionIndex(changesetRevisionIndex)) {
+			throw new IllegalArgumentException(String.valueOf(changesetRevisionIndex));
 		}
-		if (revision == BAD_REVISION) {
-			revision = TIP;
+		if (changesetRevisionIndex == BAD_REVISION) {
+			changesetRevisionIndex = TIP;
 		}
-		startRevision = revision;
+		startRevision = changesetRevisionIndex;
 		return this;
 	}
 	
 	/**
 	 * Revision without base == --change
 	 * Pass {@link HgRepository#WORKING_COPY} or {@link HgRepository#BAD_REVISION} to reset
-	 * @param revision - non-negative local revision number, or any of {@link HgRepository#BAD_REVISION}, {@link HgRepository#WORKING_COPY} or {@link HgRepository#TIP}  
+	 * @param changesetRevisionIndex - non-negative local revision number, or any of {@link HgRepository#BAD_REVISION}, {@link HgRepository#WORKING_COPY} or {@link HgRepository#TIP}  
 	 * @return <code>this</code> for convenience
 	 * @throws IllegalArgumentException if local revision number doesn't specify legitimate revision. 
 	 */
-	public HgStatusCommand revision(int revision) {
-		if (revision == BAD_REVISION) {
-			revision = WORKING_COPY;
+	public HgStatusCommand revision(int changesetRevisionIndex) {
+		if (changesetRevisionIndex == BAD_REVISION) {
+			changesetRevisionIndex = WORKING_COPY;
 		}
-		if (wrongLocalRevision(revision)) {
-			throw new IllegalArgumentException(String.valueOf(revision));
+		if (wrongRevisionIndex(changesetRevisionIndex)) {
+			throw new IllegalArgumentException(String.valueOf(changesetRevisionIndex));
 		}
-		endRevision = revision;
+		endRevision = changesetRevisionIndex;
 		return this;
 	}
 	
@@ -194,7 +194,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 			// seems too general to catch RuntimeException, i.e.
 			// unless catch is for very narrow piece of code, it's better not to catch any RTE (which may happen elsewhere, not only in handler)
 			// XXX Perhaps, need more detailed explanation in handlers that are expected to throw Wrap/RTE (i.e. HgChangesetHandler)
-			throw new HgCallbackTargetException(ex).setRevisionNumber(endRevision);
+			throw new HgCallbackTargetException(ex).setRevisionIndex(endRevision);
 		} finally {
 			mediator.done();
 		}

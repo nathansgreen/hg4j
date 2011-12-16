@@ -237,7 +237,7 @@ public class TestAuxUtilities {
 			public void next(int localRevision, Nodeid revision, int linkedRevision) {
 				try {
 					Assert.assertEquals(i++, localRevision);
-					Assert.assertEquals(fileNode.getChangesetLocalRevision(localRevision), linkedRevision);
+					Assert.assertEquals(fileNode.getChangesetRevisionIndex(localRevision), linkedRevision);
 					Assert.assertEquals(fileNode.getRevision(localRevision), revision);
 				} catch (HgException ex) {
 					Assert.fail(ex.toString());

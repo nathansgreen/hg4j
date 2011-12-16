@@ -137,13 +137,22 @@ abstract class Revlog {
 	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public final int getLocalRevision(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
-		int revision = content.findLocalRevisionNumber(nid);
+	public final int getRevisionIndex(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		int revision = content.findRevisionIndex(nid);
 		if (revision == BAD_REVISION) {
 			throw new HgInvalidRevisionException(String.format("Bad revision of %s", this /*XXX HgDataFile.getPath might be more suitable here*/), nid, null);
 		}
 		return revision;
 	}
+	
+	/**
+	 * @deprecated use {@link #getRevisionIndex(Nodeid)} instead
+	 */
+	@Deprecated
+	public final int getLocalRevision(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		return getRevisionIndex(nid);
+	}
+
 
 	/**
 	 * Note, {@link Nodeid#NULL} nodeid is not reported as known in any revlog.
@@ -153,7 +162,7 @@ abstract class Revlog {
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public final boolean isKnown(Nodeid nodeid) throws HgInvalidControlFileException {
-		final int rn = content.findLocalRevisionNumber(nodeid);
+		final int rn = content.findRevisionIndex(nodeid);
 		if (BAD_REVISION == rn) {
 			return false;
 		}
@@ -169,7 +178,7 @@ abstract class Revlog {
 	 * @param nodeid
 	 */
 	protected void rawContent(Nodeid nodeid, ByteChannel sink) throws HgException, IOException, CancelledException, HgInvalidRevisionException {
-		rawContent(getLocalRevision(nodeid), sink);
+		rawContent(getRevisionIndex(nodeid), sink);
 	}
 	
 	/**
@@ -283,13 +292,13 @@ abstract class Revlog {
 
 	@Experimental
 	public interface RevisionInspector extends Inspector {
-		void next(int localRevision, Nodeid revision, int linkedRevision);
+		void next(int revisionIndex, Nodeid revision, int linkedRevision);
 	}
 
 	@Experimental
 	public interface ParentInspector extends Inspector {
 		// XXX document whether parentX is -1 or a constant (BAD_REVISION? or dedicated?)
-		void next(int localRevision, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2);
+		void next(int revisionIndex, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2);
 	}
 	
 	/*
@@ -484,9 +493,9 @@ abstract class Revlog {
 
 	/**
 	 * Effective int to Nodeid and vice versa translation. It's advised to use this class instead of 
-	 * multiple {@link Revlog#getLocalRevision(Nodeid)} calls.
+	 * multiple {@link Revlog#getRevisionIndex(Nodeid)} calls.
 	 * 
-	 * getLocalRevision(Nodeid) with straightforward lookup approach performs O(n/2)
+	 * getRevisionIndex(Nodeid) with straightforward lookup approach performs O(n/2)
 	 * #localRevision() is log(n), plus initialization is O(n) 
 	 */
 	public final class RevisionMap implements RevisionInspector {
@@ -512,8 +521,8 @@ abstract class Revlog {
 			return Revlog.this.getRepo();
 		}
 		
-		public void next(int localRevision, Nodeid revision, int linkedRevision) {
-			sequential[localRevision] = sorted[localRevision] = revision;
+		public void next(int revisionIndex, Nodeid revision, int linkedRevision) {
+			sequential[revisionIndex] = sorted[revisionIndex] = revision;
 		}
 
 		/**
@@ -534,10 +543,10 @@ abstract class Revlog {
 			return this;
 		}
 		
-		public Nodeid revision(int localRevision) {
-			return sequential[localRevision];
+		public Nodeid revision(int revisionIndex) {
+			return sequential[revisionIndex];
 		}
-		public int localRevision(Nodeid revision) {
+		public int revisionIndex(Nodeid revision) {
 			if (revision == null || revision.isNull()) {
 				return BAD_REVISION;
 			}
@@ -546,6 +555,13 @@ abstract class Revlog {
 				return BAD_REVISION;
 			}
 			return sorted2natural[x]-1;
+		}
+		/**
+		 * @deprecated use {@link #revisionIndex(Nodeid)} instead
+		 */
+		@Deprecated
+		public int localRevision(Nodeid revision) {
+			return revisionIndex(revision);
 		}
 	}
 

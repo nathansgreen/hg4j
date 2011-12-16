@@ -139,8 +139,8 @@ public class HgWorkingCopyStatusCollector {
 		if (dirstateParent.isNull()) {
 			dirstateParentManifest = baseRevisionCollector != null ? baseRevisionCollector.raw(-1) : HgStatusCollector.createEmptyManifestRevision();
 		} else {
-			int changelogLocalRev = repo.getChangelog().getLocalRevision(dirstateParent);
-			dirstateParentManifest = getManifest(changelogLocalRev);
+			int changeloRevIndex = repo.getChangelog().getRevisionIndex(dirstateParent);
+			dirstateParentManifest = getManifest(changeloRevIndex);
 		}
 	}
 
@@ -153,7 +153,7 @@ public class HgWorkingCopyStatusCollector {
 	// may be invoked few times, TIP or WORKING_COPY indicate comparison shall be run against working copy parent
 	// NOTE, use of TIP constant requires certain care. TIP here doesn't mean latest cset, but actual working copy parent.
 	public void walk(int baseRevision, HgStatusInspector inspector) throws HgInvalidControlFileException, IOException {
-		if (HgInternals.wrongLocalRevision(baseRevision) || baseRevision == BAD_REVISION) {
+		if (HgInternals.wrongRevisionIndex(baseRevision) || baseRevision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
 		}
 		if (getDirstateImpl() == null) {
@@ -414,10 +414,10 @@ public class HgWorkingCopyStatusCollector {
 		ByteArrayChannel bac = new ByteArrayChannel();
 		boolean ioFailed = false;
 		try {
-			int localRevision = dataFile.getLocalRevision(revision);
+			int fileRevisionIndex = dataFile.getRevisionIndex(revision);
 			// need content with metadata striped off - although theoretically chances are metadata may be different,
 			// WC doesn't have it anyway 
-			dataFile.content(localRevision, bac);
+			dataFile.content(fileRevisionIndex, bac);
 		} catch (CancelledException ex) {
 			// silently ignore - can't happen, ByteArrayChannel is not cancellable
 		} catch (HgException ex) {
