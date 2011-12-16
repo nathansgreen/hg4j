@@ -125,7 +125,7 @@ public class HgBranches {
 		return -1; // deliberately not lastInCache, to avoid anything but -1 when 1st line was read and there's error is in lines 2..end
 	}
 
-	void collect(final ProgressSupport ps) {
+	void collect(final ProgressSupport ps) throws HgInvalidControlFileException {
 		branches.clear();
 		ps.start(1 + repo.getChangelog().getRevisionCount() * 2);
 		//
@@ -299,7 +299,7 @@ public class HgBranches {
 			this(branchName, Nodeid.NULL, branchHeads);
 		}
 		
-		void validate(HgChangelog clog, HgChangelog.RevisionMap rmap) {
+		void validate(HgChangelog clog, HgChangelog.RevisionMap rmap) throws HgInvalidControlFileException {
 			int[] localCset = new int[heads.size()];
 			int i = 0;
 			for (Nodeid h : heads) {

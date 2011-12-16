@@ -75,7 +75,7 @@ public class HgStatusCollector {
 		return repo;
 	}
 	
-	private ManifestRevision get(int rev) {
+	private ManifestRevision get(int rev) throws HgInvalidControlFileException {
 		ManifestRevision i = cache.get(rev);
 		if (i == null) {
 			if (rev == -1) {
@@ -100,7 +100,7 @@ public class HgStatusCollector {
 		}
 	}
 	
-	private void initCacheRange(int minRev, int maxRev) {
+	private void initCacheRange(int minRev, int maxRev) throws HgInvalidControlFileException {
 		ensureCacheSize();
 		// In fact, walk(minRev, maxRev) doesn't imply
 		// there would be maxRev-minRev+1 revisions visited. For example,
@@ -159,7 +159,7 @@ public class HgStatusCollector {
 		return fakeEmptyRev;
 	}
 	
-	/*package-local*/ ManifestRevision raw(int rev) {
+	/*package-local*/ ManifestRevision raw(int rev) throws HgInvalidControlFileException {
 		return get(rev);
 	}
 	/*package-local*/ PathPool getPathPool() {
@@ -186,7 +186,7 @@ public class HgStatusCollector {
 	}
 	
 	// hg status --change <rev>
-	public void change(int rev, HgStatusInspector inspector) {
+	public void change(int rev, HgStatusInspector inspector) throws /*FIXME HInvalidRevisionException,*/ HgInvalidControlFileException {
 		int[] parents = new int[2];
 		repo.getChangelog().parents(rev, parents, null, null);
 		walk(parents[0], rev, inspector);
@@ -196,7 +196,7 @@ public class HgStatusCollector {
 	// Either rev1 or rev2 may be -1 to indicate comparison to empty repository (XXX this is due to use of 
 	// parents in #change(), I believe. Perhaps, need a constant for this? Otherwise this hidden knowledge gets
 	// exposed to e.g. Record
-	public void walk(int rev1, int rev2, HgStatusInspector inspector) {
+	public void walk(int rev1, int rev2, HgStatusInspector inspector) throws /*FIXME HInvalidRevisionException,*/ HgInvalidControlFileException {
 		if (rev1 == rev2) {
 			throw new IllegalArgumentException();
 		}
@@ -284,7 +284,7 @@ public class HgStatusCollector {
 		}
 	}
 	
-	public Record status(int rev1, int rev2) {
+	public Record status(int rev1, int rev2) throws /*FIXME HInvalidRevisionException,*/ HgInvalidControlFileException {
 		Record rv = new Record();
 		walk(rev1, rev2, rv);
 		return rv;
@@ -347,7 +347,7 @@ public class HgStatusCollector {
 			statusHelper = self;
 		}
 		
-		public Nodeid nodeidBeforeChange(Path fname) {
+		public Nodeid nodeidBeforeChange(Path fname) throws HgInvalidControlFileException {
 			if (statusHelper == null || startRev == BAD_REVISION) {
 				return null;
 			}
@@ -356,7 +356,7 @@ public class HgStatusCollector {
 			}
 			return statusHelper.raw(startRev).nodeid(fname);
 		}
-		public Nodeid nodeidAfterChange(Path fname) {
+		public Nodeid nodeidAfterChange(Path fname) throws HgInvalidControlFileException {
 			if (statusHelper == null || endRev == BAD_REVISION) {
 				return null;
 			}

@@ -101,7 +101,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command is already in use (running)
 	 */
-	public void execute(Handler handler) {
+	public void execute(Handler handler) throws HgException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}

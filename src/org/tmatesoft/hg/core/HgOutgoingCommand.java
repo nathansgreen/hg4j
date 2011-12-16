@@ -93,8 +93,11 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	 * Reported changes are from any branch (limits set by {@link #branch(String)} are not taken into account.
 	 * 
 	 * @return list on local nodes known to be missing at remote server 
+	 * @throws HgRemoteConnectionException FIXME
+	 * @throws HgInvalidControlFileException FIXME
+	 * @throws CancelledException FIXME
 	 */
-	public List<Nodeid> executeLite() throws HgRemoteConnectionException, CancelledException {
+	public List<Nodeid> executeLite() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
 		final ProgressSupport ps = getProgressSupport(null);
 		try {
 			ps.start(10);
@@ -126,7 +129,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 		}
 	}
 
-	private RepositoryComparator getComparator(ProgressSupport ps, CancelSupport cs) throws HgRemoteConnectionException, CancelledException {
+	private RepositoryComparator getComparator(ProgressSupport ps, CancelSupport cs) throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
 		if (remoteRepo == null) {
 			throw new IllegalArgumentException("Shall specify remote repository to compare against");
 		}
@@ -137,7 +140,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 		return comparator;
 	}
 	
-	private HgChangelog.ParentWalker getParentHelper() {
+	private HgChangelog.ParentWalker getParentHelper() throws HgInvalidControlFileException {
 		if (parentHelper == null) {
 			parentHelper = localRepo.getChangelog().new ParentWalker();
 			parentHelper.init();

@@ -31,7 +31,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
-import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgBadArgumentException;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -56,18 +57,18 @@ public class HgChangelog extends Revlog {
 		super(hgRepo, content);
 	}
 
-	public void all(final HgChangelog.Inspector inspector) throws HgInvalidRevisionException {
+	public void all(final HgChangelog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		range(0, getLastRevision(), inspector);
 	}
 
-	public void range(int start, int end, final HgChangelog.Inspector inspector) throws HgInvalidRevisionException {
+	public void range(int start, int end, final HgChangelog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
 		content.iterate(start, end, true, new RawCsetParser(inspector));
 	}
 
-	public List<RawChangeset> range(int start, int end) throws HgInvalidRevisionException {
+	public List<RawChangeset> range(int start, int end) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		final RawCsetCollector c = new RawCsetCollector(end - start + 1);
 		range(start, end, c);
 		return c.result;
@@ -79,7 +80,7 @@ public class HgChangelog extends Revlog {
 	 * @param inspector callback to get changesets
 	 * @param revisions revisions to read, unrestricted ordering.
 	 */
-	public void range(final HgChangelog.Inspector inspector, final int... revisions) throws HgInvalidRevisionException {
+	public void range(final HgChangelog.Inspector inspector, final int... revisions) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		Arrays.sort(revisions);
 		rangeInternal(inspector, revisions);
 	}
@@ -87,7 +88,7 @@ public class HgChangelog extends Revlog {
 	/**
 	 * Friends-only version of {@link #range(Inspector, int...)}, when callers know array is sorted
 	 */
-	/*package-local*/ void rangeInternal(HgChangelog.Inspector inspector, int[] sortedRevisions) throws HgInvalidRevisionException {
+	/*package-local*/ void rangeInternal(HgChangelog.Inspector inspector, int[] sortedRevisions) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (sortedRevisions == null || sortedRevisions.length == 0) {
 			return;
 		}
@@ -238,7 +239,7 @@ public class HgChangelog extends Revlog {
 			}
 		}
 
-		/*package*/ static RawChangeset parse(DataAccess da) throws IOException {
+		/*package*/ static RawChangeset parse(DataAccess da) throws IOException, HgBadArgumentException {
 			byte[] data = da.byteArray();
 			RawChangeset rv = new RawChangeset();
 			rv.init(data, 0, data.length, null);
@@ -246,18 +247,18 @@ public class HgChangelog extends Revlog {
 		}
 
 		// @param usersPool - it's likely user names get repeated again and again throughout repository. can be null
-		// FIXME throws "Error reading changeset data"
-		/* package-local */void init(byte[] data, int offset, int length, Pool<String> usersPool) {
+		// FIXME replace HgBadArgumentException with HgInvalidDataFormatException or HgInvalidControlFileException 
+		/* package-local */void init(byte[] data, int offset, int length, Pool<String> usersPool) throws HgBadArgumentException {
 			final int bufferEndIndex = offset + length;
 			final byte lineBreak = (byte) '\n';
 			int breakIndex1 = indexOf(data, lineBreak, offset, bufferEndIndex);
 			if (breakIndex1 == -1) {
-				throw new IllegalArgumentException("Bad Changeset data");
+				throw new HgBadArgumentException("Bad Changeset data", null);
 			}
 			Nodeid _nodeid = Nodeid.fromAscii(data, 0, breakIndex1);
 			int breakIndex2 = indexOf(data, lineBreak, breakIndex1 + 1, bufferEndIndex);
 			if (breakIndex2 == -1) {
-				throw new IllegalArgumentException("Bad Changeset data");
+				throw new HgBadArgumentException("Bad Changeset data", null);
 			}
 			String _user = new String(data, breakIndex1 + 1, breakIndex2 - breakIndex1 - 1);
 			if (usersPool != null) {
@@ -265,12 +266,12 @@ public class HgChangelog extends Revlog {
 			}
 			int breakIndex3 = indexOf(data, lineBreak, breakIndex2 + 1, bufferEndIndex);
 			if (breakIndex3 == -1) {
-				throw new IllegalArgumentException("Bad Changeset data");
+				throw new HgBadArgumentException("Bad Changeset data", null);
 			}
 			String _timeString = new String(data, breakIndex2 + 1, breakIndex3 - breakIndex2 - 1);
 			int space1 = _timeString.indexOf(' ');
 			if (space1 == -1) {
-				throw new IllegalArgumentException("Bad Changeset data");
+				throw new HgBadArgumentException(String.format("Bad Changeset data: %s in [%d..%d]", "time string", breakIndex2+1, breakIndex3), null);
 			}
 			int space2 = _timeString.indexOf(' ', space1 + 1);
 			if (space2 == -1) {
@@ -316,7 +317,7 @@ public class HgChangelog extends Revlog {
 					}
 				}
 				if (breakIndex4 == -1 || breakIndex4 >= bufferEndIndex) {
-					throw new IllegalArgumentException("Bad Changeset data");
+					throw new HgBadArgumentException("Bad Changeset data", null);
 				}
 			} else {
 				breakIndex4--;
@@ -327,7 +328,8 @@ public class HgChangelog extends Revlog {
 				// FIXME respect ui.fallbackencoding and try to decode if set
 			} catch (UnsupportedEncodingException ex) {
 				_comment = "";
-				throw new IllegalStateException("Could hardly happen");
+				// Could hardly happen
+				throw new HgBadArgumentException("Bad Changeset data", ex);
 			}
 			// change this instance at once, don't leave it partially changes in case of error
 			this.manifest = _nodeid;
@@ -384,15 +386,15 @@ public class HgChangelog extends Revlog {
 			progressHelper = ProgressSupport.Factory.get(delegate);
 		}
 
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) throws HgException {
 			try {
 				byte[] data = da.byteArray();
 				cset.init(data, 0, data.length, usersPool);
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 				progressHelper.worked(1);
-			} catch (Exception ex) {
-				throw new HgBadStateException(ex); // FIXME exception handling
+			} catch (IOException ex) {
+				throw new HgException(ex); // XXX need better exception, perhaps smth like HgChangelogException (extends HgInvalidControlFileException) 
 			}
 			if (iterateControl != null) {
 				iterateControl.checkCancelled();

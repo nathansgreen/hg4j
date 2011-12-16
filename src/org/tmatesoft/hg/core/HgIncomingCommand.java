@@ -100,9 +100,10 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	 *   
 	 * @return list of nodes present at remote and missing locally
 	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
+	 * @throws HgInvalidControlFileException FIXME
 	 * @throws CancelledException
 	 */
-	public List<Nodeid> executeLite() throws HgRemoteConnectionException, CancelledException {
+	public List<Nodeid> executeLite() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
 		LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
 		RepositoryComparator repoCompare = getComparator();
 		for (BranchChain bc : getMissingBranches()) {
@@ -121,11 +122,12 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	 * Full information about incoming changes
 	 * 
 	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
+	 * @throws HgInvalidControlFileException FIXME
 	 * @throws HgInvalidFileException to indicate failure working with locally downloaded changes in a bundle file
 	 * @throws HgCallbackTargetException to re-throw exception from the handler
 	 * @throws CancelledException
 	 */
-	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgInvalidFileException, HgCallbackTargetException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgInvalidControlFileException, HgInvalidFileException, HgCallbackTargetException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
@@ -161,7 +163,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 		}
 	}
 
-	private RepositoryComparator getComparator() throws CancelledException {
+	private RepositoryComparator getComparator() throws HgInvalidControlFileException, CancelledException {
 		if (remoteRepo == null) {
 			throw new IllegalArgumentException("Shall specify remote repository to compare against", null);
 		}
@@ -172,7 +174,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 		return comparator;
 	}
 	
-	private HgChangelog.ParentWalker getParentHelper() {
+	private HgChangelog.ParentWalker getParentHelper() throws HgInvalidControlFileException {
 		if (parentHelper == null) {
 			parentHelper = localRepo.getChangelog().new ParentWalker();
 			parentHelper.init();
@@ -180,14 +182,14 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 		return parentHelper;
 	}
 	
-	private List<BranchChain> getMissingBranches() throws HgRemoteConnectionException, CancelledException {
+	private List<BranchChain> getMissingBranches() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
 		if (missingBranches == null) {
 			missingBranches = getComparator().calculateMissingBranches();
 		}
 		return missingBranches;
 	}
 
-	private List<Nodeid> getCommon() throws HgRemoteConnectionException, CancelledException {
+	private List<Nodeid> getCommon() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
 //		return getComparator(context).getCommon();
 		final LinkedHashSet<Nodeid> common = new LinkedHashSet<Nodeid>();
 		// XXX common can be obtained from repoCompare, but at the moment it would almost duplicate work of calculateMissingBranches

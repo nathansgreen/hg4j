@@ -127,7 +127,7 @@ public class HgDataFile extends Revlog {
 	 * @throws HgDataStreamException to indicate troubles reading repository file
 	 * @throws CancelledException if operation was cancelled
 	 */
-	public void workingCopy(ByteChannel sink) throws HgDataStreamException, CancelledException {
+	public void workingCopy(ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException {
 		File f = getRepo().getFile(this);
 		if (f.exists()) {
 			final CancelSupport cs = CancelSupport.Factory.get(sink);
@@ -190,7 +190,7 @@ public class HgDataFile extends Revlog {
 //	}
 	
 	/*XXX not sure distinct method contentWithFilters() is the best way to do, perhaps, callers shall add filters themselves?*/
-	public void contentWithFilters(int revision, ByteChannel sink) throws HgDataStreamException, CancelledException, HgInvalidRevisionException {
+	public void contentWithFilters(int revision, ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
 		if (revision == WORKING_COPY) {
 			workingCopy(sink); // pass un-mangled sink
 		} else {
@@ -200,7 +200,7 @@ public class HgDataFile extends Revlog {
 
 	// for data files need to check heading of the file content for possible metadata
 	// @see http://mercurial.selenic.com/wiki/FileFormats#data.2BAC8-
-	public void content(int revision, ByteChannel sink) throws HgDataStreamException, CancelledException, HgInvalidRevisionException {
+	public void content(int revision, ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
 		if (revision == TIP) {
 			revision = getLastRevision();
 		}
@@ -277,7 +277,7 @@ public class HgDataFile extends Revlog {
 	 * @deprecated use {@link HgLogCommand#execute(org.tmatesoft.hg.core.HgChangesetTreeHandler)} instead
 	 */
 	@Deprecated
-	public void history(HgChangelog.TreeInspector inspector) {
+	public void history(HgChangelog.TreeInspector inspector) throws HgInvalidControlFileException{
 		final CancelSupport cancelSupport = CancelSupport.Factory.get(inspector);
 		try {
 			final boolean[] needsSorting = { false };
@@ -359,11 +359,11 @@ public class HgDataFile extends Revlog {
 		}
 	}
 	
-	public void history(HgChangelog.Inspector inspector) {
+	public void history(HgChangelog.Inspector inspector) throws HgInvalidControlFileException {
 		history(0, getLastRevision(), inspector);
 	}
 
-	public void history(int start, int end, HgChangelog.Inspector inspector) throws HgInvalidRevisionException {
+	public void history(int start, int end, HgChangelog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
 		}
@@ -484,6 +484,8 @@ public class HgDataFile extends Revlog {
 			});
 		} catch (CancelledException ex) {
 			// it's ok, we did that
+		} catch (HgInvalidControlFileException ex) {
+			throw new HgDataStreamException(getPath(), ex);
 		}
 	}
 
@@ -581,7 +583,7 @@ public class HgDataFile extends Revlog {
 			setCancelSupport(CancelSupport.Factory.get(chain));
 		}
 
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgException {
 			try {
 				final int daLength = data.length();
 				if (daLength < 4 || data.readByte() != 1 || data.readByte() != 10) {

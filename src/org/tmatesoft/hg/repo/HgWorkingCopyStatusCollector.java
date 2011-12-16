@@ -122,7 +122,7 @@ public class HgWorkingCopyStatusCollector {
 		return dirstate;
 	}
 	
-	private ManifestRevision getManifest(int changelogLocalRev) {
+	private ManifestRevision getManifest(int changelogLocalRev) throws HgInvalidControlFileException {
 		assert changelogLocalRev >= 0;
 		ManifestRevision mr;
 		if (baseRevisionCollector != null) {

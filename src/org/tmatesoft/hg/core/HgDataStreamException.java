@@ -20,7 +20,8 @@ import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * Any erroneous state with @link {@link HgDataFile} input/output, read/write operations 
+ * Any erroneous state with @link {@link HgDataFile} input/output, read/write operations
+ * FIXME/REVISIT if HgInvalidControlFileExceptio and HgInvalidFileException is not sufficient? Is there real need for all 3?  
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

@@ -40,10 +40,12 @@ public interface HgChangesetTreeHandler {
 		 * @return revision of the revlog being iterated.
 		 */
 		public Nodeid fileRevision();
+
 		/**
 		 * @return changeset associated with the current revision
+		 * @throws HgException indicates failure dealing with Mercurial data
 		 */
-		public HgChangeset changeset();
+		public HgChangeset changeset() throws HgException;
 
 		/**
 		 * Lightweight alternative to {@link #changeset()}, identifies changeset in which current file node has been modified 
@@ -54,8 +56,9 @@ public interface HgChangesetTreeHandler {
 		/**
 		 * Node, these are not necessarily in direct relation to parents of changeset from {@link #changeset()} 
 		 * @return changesets that correspond to parents of the current file node, either pair element may be <code>null</code>.
+		 * @throws HgException indicates failure dealing with Mercurial data
 		 */
-		public Pair<HgChangeset, HgChangeset> parents();
+		public Pair<HgChangeset, HgChangeset> parents() throws HgException;
 		
 		/**
 		 * Lightweight alternative to {@link #parents()}, give {@link Nodeid nodeids} only
@@ -63,7 +66,12 @@ public interface HgChangesetTreeHandler {
 		 */
 		public Pair<Nodeid, Nodeid> parentRevisions();
 
-		public Collection<HgChangeset> children();
+		/**
+		 * Changes that originate from the given change and bear it as their parent. 
+		 * @return collection (possibly empty) of immediate children of the change
+		 * @throws HgException indicates failure dealing with Mercurial data
+		 */
+		public Collection<HgChangeset> children() throws HgException;
 
 		/**
 		 * Lightweight alternative to {@link #children()}.

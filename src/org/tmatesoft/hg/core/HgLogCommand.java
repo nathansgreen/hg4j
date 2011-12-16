@@ -259,7 +259,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		}
 	}
 	
-	public void execute(HgChangesetTreeHandler handler) throws CancelledException {
+	public void execute(HgChangesetTreeHandler handler) throws CancelledException, HgException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -291,7 +291,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 				completeHistory[revisionNumber] = new HistoryNode(commitRevisions[revisionNumber], revision, p1, p2);
 			}
 			
-			HistoryNode[] go(HgDataFile fileNode) {
+			HistoryNode[] go(HgDataFile fileNode) throws HgInvalidControlFileException {
 				completeHistory = new HistoryNode[fileNode.getRevisionCount()];
 				commitRevisions = new int[completeHistory.length];
 				fileNode.walk(0, TIP, this);
@@ -358,7 +358,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		csetTransform.next(revisionNumber, nodeid, cset);
 	}
 	
-	private HgChangelog.ParentWalker getParentHelper(boolean create) {
+	private HgChangelog.ParentWalker getParentHelper(boolean create) throws HgInvalidControlFileException {
 		if (parentHelper == null && create) {
 			parentHelper = repo.getChangelog().new ParentWalker();
 			parentHelper.init();
@@ -451,11 +451,11 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			return historyNode.fileRevision;
 		}
 
-		public HgChangeset changeset() {
+		public HgChangeset changeset() throws HgException {
 			return get(historyNode.changeset)[0];
 		}
 
-		public Pair<HgChangeset, HgChangeset> parents() {
+		public Pair<HgChangeset, HgChangeset> parents() throws HgException {
 			if (parents != null) {
 				return parents;
 			}
@@ -475,7 +475,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			return parents = new Pair<HgChangeset, HgChangeset>(r[0], r[1]);
 		}
 
-		public Collection<HgChangeset> children() {
+		public Collection<HgChangeset> children() throws HgException {
 			if (children != null) {
 				return children;
 			}
@@ -496,7 +496,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			cachedChangesets.put(cs.getRevision(), cs);
 		}
 		
-		private HgChangeset[] get(int... changelogRevisionNumber) {
+		private HgChangeset[] get(int... changelogRevisionNumber) throws HgInvalidControlFileException {
 			HgChangeset[] rv = new HgChangeset[changelogRevisionNumber.length];
 			IntVector misses = new IntVector(changelogRevisionNumber.length, -1);
 			for (int i = 0; i < changelogRevisionNumber.length; i++) {
@@ -537,7 +537,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		}
 
 		// init only when needed
-		void initTransform() {
+		void initTransform() throws HgInvalidControlFileException {
 			if (transform == null) {
 				transform = new ChangesetTransformer.Transformation(new HgStatusCollector(repo)/*XXX try to reuse from context?*/, getParentHelper(false));
 			}

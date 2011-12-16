@@ -116,36 +116,37 @@ public class HgChangeset implements Cloneable {
 		return rv;
 	}
 
-	public List<HgFileRevision> getModifiedFiles() {
+	public List<HgFileRevision> getModifiedFiles() throws HgInvalidControlFileException {
 		if (modifiedFiles == null) {
 			initFileChanges();
 		}
 		return modifiedFiles;
 	}
 
-	public List<HgFileRevision> getAddedFiles() {
+	public List<HgFileRevision> getAddedFiles() throws HgInvalidControlFileException {
 		if (addedFiles == null) {
 			initFileChanges();
 		}
 		return addedFiles;
 	}
 
-	public List<Path> getRemovedFiles() {
+	public List<Path> getRemovedFiles() throws HgInvalidControlFileException {
 		if (deletedFiles == null) {
 			initFileChanges();
 		}
 		return deletedFiles;
 	}
 
-	public boolean isMerge() {
+	public boolean isMerge() throws HgInvalidControlFileException {
 		// p1 == -1 and p2 != -1 is legitimate case
 		return !(getFirstParentRevision().isNull() || getSecondParentRevision().isNull()); 
 	}
 	
 	/**
 	 * @return never <code>null</code>
+	 * @throws HgInvalidControlFileException FIXME
 	 */
-	public Nodeid getFirstParentRevision() {
+	public Nodeid getFirstParentRevision() throws HgInvalidControlFileException {
 		if (parentHelper != null) {
 			return parentHelper.safeFirstParent(nodeid);
 		}
@@ -160,8 +161,9 @@ public class HgChangeset implements Cloneable {
 	
 	/**
 	 * @return never <code>null</code>
+	 * @throws HgInvalidControlFileException FIXME
 	 */
-	public Nodeid getSecondParentRevision() {
+	public Nodeid getSecondParentRevision() throws HgInvalidControlFileException {
 		if (parentHelper != null) {
 			return parentHelper.safeSecondParent(nodeid);
 		}
@@ -184,7 +186,7 @@ public class HgChangeset implements Cloneable {
 		}
 	}
 
-	private /*synchronized*/ void initFileChanges() {
+	private /*synchronized*/ void initFileChanges() throws HgInvalidControlFileException {
 		ArrayList<Path> deleted = new ArrayList<Path>();
 		ArrayList<HgFileRevision> modified = new ArrayList<HgFileRevision>();
 		ArrayList<HgFileRevision> added = new ArrayList<HgFileRevision>();

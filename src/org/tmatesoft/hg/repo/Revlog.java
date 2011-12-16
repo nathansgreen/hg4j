@@ -99,7 +99,7 @@ abstract class Revlog {
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public final Nodeid getRevision(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public final Nodeid getRevision(int revision) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		// XXX cache nodeids? Rather, if context.getCache(this).getRevisionMap(create == false) != null, use it
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
 	}
@@ -107,14 +107,14 @@ abstract class Revlog {
 	/**
 	 * FIXME need to be careful about (1) ordering of the revisions in the return list; (2) modifications (sorting) of the argument array 
 	 */
-	public final List<Nodeid> getRevisions(int... revisions) throws HgInvalidRevisionException {
+	public final List<Nodeid> getRevisions(int... revisions) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(revisions.length);
 		Arrays.sort(revisions);
 		getRevisionsInternal(rv, revisions);
 		return rv;
 	}
 	
-	/*package-local*/ void getRevisionsInternal(final List<Nodeid> retVal, int[] sortedRevs) throws HgInvalidRevisionException {
+	/*package-local*/ void getRevisionsInternal(final List<Nodeid> retVal, int[] sortedRevs) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		// once I have getRevisionMap and may find out whether it is avalable from cache,
 		// may use it, perhaps only for small number of revisions
 		content.iterate(sortedRevs, false, new RevlogStream.Inspector() {
@@ -196,7 +196,7 @@ abstract class Revlog {
 	 * @throws HgInvalidRevisionException
 	 * @throws IllegalArgumentException
 	 */
-	public void parents(int revision, int[] parentRevisions, byte[] parent1, byte[] parent2) throws HgInvalidRevisionException {
+	public void parents(int revision, int[] parentRevisions, byte[] parent1, byte[] parent2) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (revision != TIP && !(revision >= 0 && revision < content.revisionCount())) {
 			throw new HgInvalidRevisionException(revision);
 		}
@@ -245,7 +245,7 @@ abstract class Revlog {
 	}
 	
 	@Experimental
-	public void walk(int start, int end, final Revlog.Inspector inspector) throws HgInvalidRevisionException {
+	public void walk(int start, int end, final Revlog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		int lastRev = getLastRevision();
 		if (start == TIP) {
 			start = lastRev;
@@ -332,7 +332,7 @@ abstract class Revlog {
 			}
 		}
 		
-		public void init() {
+		public void init() throws HgInvalidControlFileException {
 			final int revisionCount = Revlog.this.getRevisionCount();
 			firstParent = new Nodeid[revisionCount];
 			// although branches/merges are less frequent, and most of secondParent would be -1/null, some sort of 
@@ -519,7 +519,7 @@ abstract class Revlog {
 		/**
 		 * @return <code>this</code> for convenience.
 		 */
-		public RevisionMap init(/*XXX Pool<Nodeid> to reuse nodeids, if possible. */) {
+		public RevisionMap init(/*XXX Pool<Nodeid> to reuse nodeids, if possible. */) throws HgInvalidControlFileException{
 			// XXX HgRepository.register((RepoChangeListener) this); // listen to changes in repo, re-init if needed?
 			final int revisionCount = Revlog.this.getRevisionCount();
 			sequential = new Nodeid[revisionCount];

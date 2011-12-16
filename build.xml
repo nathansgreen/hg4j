@@ -27,7 +27,7 @@
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
 	<property name="ver.qualifier" value="" />
-	<property name="version.lib" value="0.5.0" />
+	<property name="version.lib" value="0.8.0" />
 	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
 	<property name="compile-with-debug" value="yes"/>
 

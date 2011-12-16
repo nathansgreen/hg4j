@@ -339,7 +339,7 @@ public class MapTagsToFileRevisions {
 		}
 	}
 	
-	private void collectTagsPerFile_Approach_2(HgRepository repository, final int[] tagLocalRevs, final IntMap<List<TagInfo>> tagLocalRev2TagInfo, TagInfo[] allTags, Path targetPath) {
+	private void collectTagsPerFile_Approach_2(HgRepository repository, final int[] tagLocalRevs, final IntMap<List<TagInfo>> tagLocalRev2TagInfo, TagInfo[] allTags, Path targetPath) throws HgException {
 		//
 		// Approach 2. No all-file map. Collect file revisions recorded at the time of tagging,
 		// then for each file revision check if it is among those above, and if yes, take corresponding tags

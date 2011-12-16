@@ -120,44 +120,48 @@ public class Main {
 		cmd.file("file1", false);
 		cmd.execute(new HgChangesetTreeHandler() {
 			public void next(HgChangesetTreeHandler.TreeElement entry) {
-				StringBuilder sb = new StringBuilder();
-				HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
-				for (HgChangeset cc : entry.children()) {
-					sb.append(cc.getRevision());
-					sb.append(':');
-					sb.append(cc.getNodeid().shortNotation());
-					sb.append(", ");
-				}
-				final Pair<Nodeid, Nodeid> parents = entry.parentRevisions();
-				final boolean isJoin = !parents.first().isNull() && !parents.second().isNull();
-				final boolean isFork = entry.children().size() > 1;
-				final HgChangeset cset = entry.changeset();
-				System.out.printf("%d:%s - %s\n", cset.getRevision(), cset.getNodeid().shortNotation(), cset.getComment());
-				if (!isJoin && !isFork && !entry.children().isEmpty()) {
-					System.out.printf("\t=> %s\n", sb);
-				}
-				if (isJoin) {
-					HgChangeset p1 = entry.parents().first();
-					HgChangeset p2 = entry.parents().second();
-					System.out.printf("\tjoin <= (%d:%s, %d:%s)", p1.getRevision(), p1.getNodeid().shortNotation(), p2.getRevision(), p2.getNodeid().shortNotation());
+				try {
+					StringBuilder sb = new StringBuilder();
+					HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
+					for (HgChangeset cc : entry.children()) {
+						sb.append(cc.getRevision());
+						sb.append(':');
+						sb.append(cc.getNodeid().shortNotation());
+						sb.append(", ");
+					}
+					final Pair<Nodeid, Nodeid> parents = entry.parentRevisions();
+					final boolean isJoin = !parents.first().isNull() && !parents.second().isNull();
+					final boolean isFork = entry.children().size() > 1;
+					final HgChangeset cset = entry.changeset();
+					System.out.printf("%d:%s - %s\n", cset.getRevision(), cset.getNodeid().shortNotation(), cset.getComment());
+					if (!isJoin && !isFork && !entry.children().isEmpty()) {
+						System.out.printf("\t=> %s\n", sb);
+					}
+					if (isJoin) {
+						HgChangeset p1 = entry.parents().first();
+						HgChangeset p2 = entry.parents().second();
+						System.out.printf("\tjoin <= (%d:%s, %d:%s)", p1.getRevision(), p1.getNodeid().shortNotation(), p2.getRevision(), p2.getNodeid().shortNotation());
+						if (isFork) {
+							System.out.print(", ");
+						}
+					}
 					if (isFork) {
-						System.out.print(", ");
+						if (!isJoin) {
+							System.out.print('\t');
+						}
+						System.out.printf("fork => [%s]", sb);
 					}
-				}
-				if (isFork) {
-					if (!isJoin) {
-						System.out.print('\t');
+					if (isJoin || isFork) {
+						System.out.println();
 					}
-					System.out.printf("fork => [%s]", sb);
-				}
-				if (isJoin || isFork) {
-					System.out.println();
+				} catch (HgException ex) {
+					ex.printStackTrace();
 				}
 			}
 		});
 	}
 
-	private void buildFileLogOld() {
+	private void buildFileLogOld() throws Exception {
 		final HgDataFile fn = hgRepo.getFileNode("file1");
 		final int[] fileChangesetRevisions = new int[fn.getRevisionCount()];
 		fn.history(new HgChangelog.Inspector() {
@@ -165,22 +169,26 @@ public class Main {
 			private int[] parentRevisions = new int[2];
 			
 			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-				fileChangesetRevisions[fileLocalRevisions] = revisionNumber;
-				fn.parents(fileLocalRevisions, parentRevisions, null, null);
-				boolean join = parentRevisions[0] != -1 && parentRevisions[1] != -1;
-				if (join) {
-					System.out.print("join[");
+				try {
+					fileChangesetRevisions[fileLocalRevisions] = revisionNumber;
+					fn.parents(fileLocalRevisions, parentRevisions, null, null);
+					boolean join = parentRevisions[0] != -1 && parentRevisions[1] != -1;
+					if (join) {
+						System.out.print("join[");
+					}
+					if (parentRevisions[0] != -1) {
+						System.out.printf("%2d->%2d, ", fileChangesetRevisions[parentRevisions[0]], revisionNumber);
+					}
+					if (parentRevisions[1] != -1) {
+						System.out.printf("%2d->%2d, ", fileChangesetRevisions[parentRevisions[1]], revisionNumber);
+					}
+					if (join) {
+						System.out.print("]");
+					}
+					fileLocalRevisions++;
+				} catch (HgException ex) {
+					ex.printStackTrace();
 				}
-				if (parentRevisions[0] != -1) {
-					System.out.printf("%2d->%2d, ", fileChangesetRevisions[parentRevisions[0]], revisionNumber);
-				}
-				if (parentRevisions[1] != -1) {
-					System.out.printf("%2d->%2d, ", fileChangesetRevisions[parentRevisions[1]], revisionNumber);
-				}
-				if (join) {
-					System.out.print("]");
-				}
-				fileLocalRevisions++;
 			}
 		});
 		System.out.println();
@@ -307,7 +315,7 @@ public class Main {
 	 *  RevlogStream with separate iterate(int[] sortedRevisions,...)
 	 *  		RevlogStream.ReaderN1.range(): 185										  380 ms 
 	 */
-	private void testEffectiveFileLog() {
+	private void testEffectiveFileLog() throws Exception {
 		for (String fname : cmdLineOpts.getList("")) {
 			System.out.println(fname);
 			final long start = System.currentTimeMillis();
@@ -381,7 +389,7 @@ public class Main {
 	 * First, single run - 18 563
 	 * 10 runs (after 1 warm up) of HgBranches.collect took 167391 ms, ~17 seconds per run.
 	 */
-	private void dumpBranches() {
+	private void dumpBranches() throws Exception {
 		final long start0 = System.currentTimeMillis();
 		HgBranches b = hgRepo.getBranches();
 		System.out.println("1:" + (System.currentTimeMillis() - start0));
@@ -476,7 +484,7 @@ public class Main {
 		}
 	}
 
-	private void dumpCompleteManifestLow() {
+	private void dumpCompleteManifestLow() throws Exception {
 		hgRepo.getManifest().walk(0, TIP, new ManifestDump());
 	}
 
@@ -500,7 +508,7 @@ public class Main {
 		}
 	}
 
-	private void dumpCompleteManifestHigh() {
+	private void dumpCompleteManifestHigh() throws Exception {
 		new HgManifestCommand(hgRepo).dirs(true).execute(new HgManifestCommand.Handler() {
 			
 			public void begin(Nodeid manifestRevision) {

@@ -208,7 +208,7 @@ public final class HgRepository {
 		return tags;
 	}
 	
-	public HgBranches getBranches() {
+	public HgBranches getBranches() throws HgInvalidControlFileException {
 		if (branches == null) {
 			branches = new HgBranches(this);
 			branches.collect(ProgressSupport.Factory.get(null));

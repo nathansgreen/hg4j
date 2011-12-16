@@ -25,7 +25,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -102,7 +102,7 @@ public class HgManifest extends Revlog {
 	 * @param end changelog (not manifest!) revision to stop, inclusive.
 	 * @param inspector can't be <code>null</code>
 	 */
-	public void walk(int start, int end, final Inspector inspector) {
+	public void walk(int start, int end, final Inspector inspector) throws /*FIXME HgInvalidRevisionException,*/ HgInvalidControlFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -123,7 +123,7 @@ public class HgManifest extends Revlog {
 	 * @param inspector
 	 * @param localRevisions local changeset revisions to visit
 	 */
-	public void walk(final Inspector inspector, int... localRevisions) {
+	public void walk(final Inspector inspector, int... localRevisions) throws HgInvalidControlFileException{
 		if (inspector == null || localRevisions == null) {
 			throw new IllegalArgumentException();
 		}
@@ -132,7 +132,7 @@ public class HgManifest extends Revlog {
 	}
 	
 	// manifest revision number that corresponds to the given changeset
-	/*package-local*/ int fromChangelog(int revisionNumber) {
+	/*package-local*/ int fromChangelog(int revisionNumber) throws HgInvalidControlFileException {
 		if (HgInternals.wrongLocalRevision(revisionNumber)) {
 			throw new IllegalArgumentException(String.valueOf(revisionNumber));
 		}
@@ -155,19 +155,19 @@ public class HgManifest extends Revlog {
 	 * @return file revision or <code>null</code> if manifest at specified revision doesn't list such file
 	 */
 	@Experimental(reason="Perhaps, HgDataFile shall own this method, or get a delegate?")
-	public Nodeid getFileRevision(int localChangelogRevision, final Path file) {
+	public Nodeid getFileRevision(int localChangelogRevision, final Path file) throws HgInvalidControlFileException{
 		return getFileRevisions(file, localChangelogRevision).get(localChangelogRevision);
 	}
 	
 	// XXX package-local, IntMap, and HgDataFile getFileRevisionAt(int... localChangelogRevisions)
 	@Experimental(reason="@see #getFileRevision")
-	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... localChangelogRevisions) {
+	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... localChangelogRevisions) throws HgInvalidControlFileException{
 		// FIXME need tests
 		int[] localManifestRevisions = toLocalManifestRevisions(localChangelogRevisions);
 		final HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>(localChangelogRevisions.length);
 		content.iterate(localManifestRevisions, true, new RevlogStream.Inspector() {
 			
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgException {
 				ByteArrayOutputStream bos = new ByteArrayOutputStream();
 				try {
 					byte b;
@@ -191,7 +191,7 @@ public class HgManifest extends Revlog {
 						}
 					}
 				} catch (IOException ex) {
-					throw new HgBadStateException(ex);
+					throw new HgException(ex);
 				}
 			}
 		});
@@ -199,7 +199,7 @@ public class HgManifest extends Revlog {
 	}
 
 
-	private int[] toLocalManifestRevisions(int[] localChangelogRevisions) {
+	private int[] toLocalManifestRevisions(int[] localChangelogRevisions) throws HgInvalidControlFileException {
 		int[] localManifestRevs = new int[localChangelogRevisions.length];
 		boolean needsSort = false;
 		for (int i = 0; i < localChangelogRevisions.length; i++) {
@@ -318,7 +318,7 @@ public class HgManifest extends Revlog {
 			progressHelper = ProgressSupport.Factory.get(delegate);
 		}
 		
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) throws HgException {
 			try {
 				if (!inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision)) {
 					iterateControl.stop();
@@ -392,7 +392,7 @@ public class HgManifest extends Revlog {
 				iterateControl.checkCancelled();
 				progressHelper.worked(1);
 			} catch (IOException ex) {
-				throw new HgBadStateException(ex);
+				throw new HgException(ex);
 			}
 		}
 
@@ -472,10 +472,10 @@ public class HgManifest extends Revlog {
 				}
 			}
 			for (int u : undefinedChangelogRevision) {
-				Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
-				// FIXME calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
-				// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
 				try {
+					Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
+					// FIXME calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
+					// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
 					changelog2manifest[u] = repo.getManifest().getLocalRevision(manifest);
 				} catch (HgInvalidControlFileException ex) {
 					// FIXME need to propagate the error up to client  
