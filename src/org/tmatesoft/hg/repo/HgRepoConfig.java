@@ -210,9 +210,19 @@ public final class HgRepoConfig /*implements RepoChangeListener, perhaps, also R
 		}
 
 		public boolean isEnabled(String extensionName) {
-			String value = config.getSection(section).get(extensionName);
-			// empty line, just "extension =" is valid way to enable it
-			return value != null && (value.length() == 0 || '!' != value.charAt(0));
+			final Map<String, String> sect = config.getSection(section);
+			String value = sect.get(extensionName);
+			if (value == null) {
+				value = sect.get("hgext." + extensionName);
+			}
+			if (value == null) {
+				value = sect.get("hgext/" + extensionName);
+			}
+			if (value != null) {
+				// empty line, just "extension =" is valid way to enable it
+				return value.length() == 0 || '!' != value.charAt(0);
+			}
+			return false;
 		}
 	}
 }
