@@ -21,7 +21,14 @@ import org.tmatesoft.hg.util.Path;
 
 
 /**
- * Checked exception that indicates errors in client code and tries to supply extra information about the context it occured in.
+ * Checked exception that indicates errors in client code and tries to supply extra information about the context it occurred in.
+ * 
+ * Generally, client need to pass own error information/exceptions from within implementations of the callback methods they supply. 
+ * However, there's no straightforward way to alter throws clause for these methods, and alternatives like generic {@link Exception} or
+ * library's own {@link HgException} are rather obscure. Suggested approach is to wrap whatever exception user code produces with
+ * {@link RuntimeException} subclass, {@link Wrap}. Then, unwrap and re-throw with checked {@link HgCallbackTargetException}. 
+ * 
+ * FIXME REVISIT perhaps, shall just throw HgCallbackTargetException from any handler, and do not catch anything in commands at all?
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

@@ -29,9 +29,11 @@ import org.tmatesoft.hg.util.Pair;
 public interface HgChangesetTreeHandler {
 	/**
 	 * @param entry access to various pieces of information about current tree node. Instances might be 
-	 * reused across calls and shall not be kept by client's code 
+	 * reused across calls and shall not be kept by client's code
+	 * @throws HgCallbackTargetException.Wrap wrapper object for any exception user code may produce. Wrapped exception would get re-thrown with {@link HgCallbackTargetException} 
+	 * @throws CancelledException FIXME 
 	 */
-	public void next(HgChangesetTreeHandler.TreeElement entry) throws CancelledException;
+	public void next(HgChangesetTreeHandler.TreeElement entry) throws HgCallbackTargetException.Wrap, CancelledException;
 
 	interface TreeElement {
 		/**

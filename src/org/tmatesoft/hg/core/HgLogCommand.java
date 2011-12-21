@@ -203,10 +203,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	/**
 	 * 
 	 * @param handler callback to process changesets.
+	 * @throws HgCallbackTargetException FIXME
+	 * @throws HgException FIXME
+	 * @throws CancelledException FIXME
 	 * @throws IllegalArgumentException when inspector argument is null
 	 * @throws ConcurrentModificationException if this log command instance is already running
 	 */
-	public void execute(HgChangesetHandler handler) throws HgDataStreamException, HgInvalidControlFileException, HgCallbackTargetException, CancelledException {
+	public void execute(HgChangesetHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -237,7 +240,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), fileNode.getPath(), src.getPath());
 							try {
 								((FileHistoryHandler) handler).copy(src, dst);
-							} catch (RuntimeException ex) {
+							} catch (HgCallbackTargetException.Wrap ex) {
 								throw new HgCallbackTargetException(ex).setRevision(fileNode.getCopySourceRevision()).setFileName(fileNode.getCopySourceName());
 							}
 						}
@@ -259,7 +262,14 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		}
 	}
 	
-	public void execute(HgChangesetTreeHandler handler) throws CancelledException, HgException {
+	/**
+	 * 
+	 * @param handler
+	 * @throws HgCallbackTargetException
+	 * @throws HgException
+	 * @throws CancelledException
+	 */
+	public void execute(HgChangesetTreeHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -318,13 +328,17 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		} else {
 			ph2 = new ProgressSupport.Sub(progressHelper, 3);
 		}
-		ph2.start(completeHistory.length);
-		// XXX shall sort completeHistory according to changeset numbers?
-		for (int i = 0; i < completeHistory.length; i++ ) {
-			final HistoryNode n = completeHistory[i];
-			handler.next(ei.init(n));
-			ph2.worked(1);
-			cancelHelper.checkCancelled();
+		try {
+			ph2.start(completeHistory.length);
+			// XXX shall sort completeHistory according to changeset numbers?
+			for (int i = 0; i < completeHistory.length; i++ ) {
+				final HistoryNode n = completeHistory[i];
+				handler.next(ei.init(n));
+				ph2.worked(1);
+				cancelHelper.checkCancelled();
+			}
+		} catch (HgCallbackTargetException.Wrap ex) {
+			throw new HgCallbackTargetException(ex);
 		}
 		progressHelper.done();
 	}
@@ -379,9 +393,12 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * @author Artem Tikhomirov
 	 * @author TMate Software Ltd.
 	 */
-	public interface FileHistoryHandler extends HgChangesetHandler {
+	public interface FileHistoryHandler extends HgChangesetHandler { // FIXME move to stanalone class file, perhaps?
 		// XXX perhaps, should distinguish copy from rename? And what about merged revisions and following them?
-		void copy(HgFileRevision from, HgFileRevision to);
+		/**
+		 * @throws HgCallbackTargetException.Wrap wrapper object for any exception user code may produce. Wrapped exception would get re-thrown with {@link HgCallbackTargetException} 
+		 */
+		void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException.Wrap;
 	}
 	
 	public static class CollectHandler implements HgChangesetHandler {
