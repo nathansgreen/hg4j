@@ -76,6 +76,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 
 	/*package-local*/ void read() throws HgInvalidControlFileException {
 		normal = added = removed = merged = Collections.<Path, Record>emptyMap();
+		parents = new Pair<Nodeid,Nodeid>(Nodeid.NULL, Nodeid.NULL);
 		if (canonicalPathRewrite != null) {
 			canonical2dirstateName = new HashMap<Path,Path>();
 		} else {
