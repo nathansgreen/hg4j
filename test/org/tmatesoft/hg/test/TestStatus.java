@@ -458,6 +458,23 @@ public class TestStatus {
 
 	}
 	
+	/**
+	 * Issue 22
+	 */
+	@Test
+	public void testOnEmptyRepositoryWithAllFilesDeleted() throws Exception {
+		repo = Configuration.get().find("status-2");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		cmd.all();
+		StatusCollector sc = new StatusCollector();
+		cmd.execute(sc);
+		// shall pass without exception
+		assertTrue(sc.getErrors().isEmpty());
+		for (HgStatus.Kind k : HgStatus.Kind.values()) {
+			assertTrue("Kind " + k.name() + " shall be empty",sc.get(k).isEmpty());
+		}
+	}
+	
 	/*
 	 * With warm-up of previous tests, 10 runs, time in milliseconds
 	 * 'hg status -A': Native client total 953 (95 per run), Java client 94 (9)

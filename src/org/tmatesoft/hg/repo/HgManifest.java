@@ -324,58 +324,61 @@ public class HgManifest extends Revlog {
 					iterateControl.stop();
 					return;
 				}
-				Path fname = null;
-				Flags flags = null;
-				Nodeid nid = null;
-				int i;
-				byte[] data = da.byteArray();
-				for (i = 0; i < actualLen; i++) {
-					int x = i;
-					for( ; data[i] != '\n' && i < actualLen; i++) {
-						if (fname == null && data[i] == 0) {
-							PathProxy px = fnamePool.unify(new PathProxy(data, x, i - x));
-							// if (cached = fnamePool.unify(px))== px then cacheMiss, else cacheHit
-							// cpython 0..10k: hits: 15 989 152, misses: 3020
-							fname = px.freeze();
-							x = i+1;
+				if (!da.isEmpty()) {
+					// although unlikely, manifest entry may be empty, when all files have been deleted from the repository
+					Path fname = null;
+					Flags flags = null;
+					Nodeid nid = null;
+					int i;
+					byte[] data = da.byteArray();
+					for (i = 0; i < actualLen; i++) {
+						int x = i;
+						for( ; data[i] != '\n' && i < actualLen; i++) {
+							if (fname == null && data[i] == 0) {
+								PathProxy px = fnamePool.unify(new PathProxy(data, x, i - x));
+								// if (cached = fnamePool.unify(px))== px then cacheMiss, else cacheHit
+								// cpython 0..10k: hits: 15 989 152, misses: 3020
+								fname = px.freeze();
+								x = i+1;
+							}
 						}
+						if (i < actualLen) {
+							assert data[i] == '\n'; 
+							int nodeidLen = i - x < 40 ? i-x : 40; // if > 40, there are flags
+							DigestHelper.ascii2bin(data, x, nodeidLen, nodeidLookupBuffer); // ignore return value as it's unlikely to have NULL in manifest
+							nid = new Nodeid(nodeidLookupBuffer, false); // this Nodeid is for pool lookup only, mock object
+							Nodeid cached = nodeidPool.unify(nid);
+							if (cached == nid) {
+								// buffer now belongs to the cached nodeid
+								nodeidLookupBuffer = new byte[20];
+							} else {
+								nid = cached; // use existing version, discard the lookup object
+							} // for cpython 0..10k, cache hits are 15 973 301, vs 18871 misses.
+							thisRevPool.record(nid); // memorize revision for the next iteration. 
+							if (nodeidLen + x < i) {
+								// 'x' and 'l' for executable bits and symlinks?
+								// hg --debug manifest shows 644 for each regular file in my repo
+								// for cpython 0..10k, there are 4361062 flag checks, and there's only 1 unique flag
+								flags = Flags.parse(data, x + nodeidLen, i-x-nodeidLen);
+							} else {
+								flags = null;
+							}
+							boolean good2go;
+							if (inspector2 == null) {
+								String flagString = flags == null ? null : flags.nativeString();
+								good2go = inspector.next(nid, fname.toString(), flagString);
+							} else {
+								good2go = inspector2.next(nid, fname, flags);
+							}
+							if (!good2go) {
+								iterateControl.stop();
+								return;
+							}
+						}
+						nid = null;
+						fname = null;
+						flags = null;
 					}
-					if (i < actualLen) {
-						assert data[i] == '\n'; 
-						int nodeidLen = i - x < 40 ? i-x : 40; // if > 40, there are flags
-						DigestHelper.ascii2bin(data, x, nodeidLen, nodeidLookupBuffer); // ignore return value as it's unlikely to have NULL in manifest
-						nid = new Nodeid(nodeidLookupBuffer, false); // this Nodeid is for pool lookup only, mock object
-						Nodeid cached = nodeidPool.unify(nid);
-						if (cached == nid) {
-							// buffer now belongs to the cached nodeid
-							nodeidLookupBuffer = new byte[20];
-						} else {
-							nid = cached; // use existing version, discard the lookup object
-						} // for cpython 0..10k, cache hits are 15 973 301, vs 18871 misses.
-						thisRevPool.record(nid); // memorize revision for the next iteration. 
-						if (nodeidLen + x < i) {
-							// 'x' and 'l' for executable bits and symlinks?
-							// hg --debug manifest shows 644 for each regular file in my repo
-							// for cpython 0..10k, there are 4361062 flag checks, and there's only 1 unique flag
-							flags = Flags.parse(data, x + nodeidLen, i-x-nodeidLen);
-						} else {
-							flags = null;
-						}
-						boolean good2go;
-						if (inspector2 == null) {
-							String flagString = flags == null ? null : flags.nativeString();
-							good2go = inspector.next(nid, fname.toString(), flagString);
-						} else {
-							good2go = inspector2.next(nid, fname, flags);
-						}
-						if (!good2go) {
-							iterateControl.stop();
-							return;
-						}
-					}
-					nid = null;
-					fname = null;
-					flags = null;
 				}
 				if (!inspector.end(revisionNumber)) {
 					iterateControl.stop();
