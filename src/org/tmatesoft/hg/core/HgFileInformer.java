@@ -151,7 +151,7 @@ public class HgFileInformer {
 			checkResult = new Status(Status.Kind.OK, String.format("File %s, revision %s found at changeset %s", dataFile.getPath(), toExtract.shortNotation(), cset.shortNotation()));
 			return checkResult;
 		} 
-		checkResult = new Status(Status.Kind.OK, String.format("File %s nor its origins were not known at repository %s revision", file, cset.shortNotation()));
+		checkResult = new Status(Status.Kind.OK, String.format("File %s nor its origins were known at repository %s revision", file, cset.shortNotation()));
 		return checkResult;
 	}
 	
