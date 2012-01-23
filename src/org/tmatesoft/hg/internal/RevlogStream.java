@@ -480,7 +480,7 @@ public class RevlogStream {
 						}
 					}
 					// XXX 
-					if (patchToPrevious) {
+					if (patchToPrevious && !userDataAccess.isEmpty()) {
 						// this is a patch
 						patch.read(userDataAccess);
 						userDataAccess.done();
