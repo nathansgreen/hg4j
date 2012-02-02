@@ -22,6 +22,8 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.zip.Inflater;
 
 /**
@@ -50,20 +52,24 @@ public class RevlogDump {
 			dumpData = args.length > 2 ? "dumpData".equals(args[2]) : false;
 		}
 		//
-		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(repo + filename))));
+		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(repo, filename))));
 		DataInput di = dis;
 		dis.mark(10);
 		int versionField = di.readInt();
 		dis.reset();
 		final int INLINEDATA = 1 << 16;
 		
-		boolean inlineData = (versionField & INLINEDATA) != 0;
+		final boolean inlineData = (versionField & INLINEDATA) != 0;
 		System.out.printf("%#8x, inline: %b\n", versionField, inlineData);
+		FileChannel dataStream = null; 
+		if (!inlineData && dumpData) {
+			dataStream = new FileInputStream(new File(repo, filename.substring(0, filename.length()-2) + ".d")).getChannel();
+		}
 		System.out.println("Index    Offset      Flags     Packed     Actual   Base Rev   Link Rev  Parent1  Parent2     nodeid");
-		int entryCount = 0;
+		int entryIndex = 0;
 		while (dis.available() > 0) {
 			long l = di.readLong();
-			long offset = l >>> 16;
+			long offset = entryIndex == 0 ? 0 : (l >>> 16);
 			int flags = (int) (l & 0X0FFFF);
 			int compressedLen = di.readInt();
 			int actualLen = di.readInt();
@@ -77,30 +83,40 @@ public class RevlogDump {
 			// CAN'T USE skip() here without extra precautions. E.g. I ran into situation when 
 			// buffer was 8192 and BufferedInputStream was at position 8182 before attempt to skip(12). 
 			// BIS silently skips available bytes and leaves me two extra bytes that ruin the rest of the code.
-			System.out.printf("%4d:%14d %6X %10d %10d %10d %10d %8d %8d     %040x\n", entryCount, offset, flags, compressedLen, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, new BigInteger(buf));
+			System.out.printf("%4d:%14d %6X %10d %10d %10d %10d %8d %8d     %040x\n", entryIndex, offset, flags, compressedLen, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, new BigInteger(buf));
+			String resultString;
+			byte[] data = new byte[compressedLen];
 			if (inlineData) {
-				String resultString;
-				byte[] data = new byte[compressedLen];
 				di.readFully(data);
-				if (data[0] == 0x78 /* 'x' */) {
-					Inflater zlib = new Inflater();
-					zlib.setInput(data, 0, compressedLen);
-					byte[] result = new byte[actualLen*2];
-					int resultLen = zlib.inflate(result);
-					zlib.end();
-					resultString = new String(result, 0, resultLen, "UTF-8");
-				} else if (data[0] == 0x75 /* 'u' */) {
-					resultString = new String(data, 1, data.length - 1, "UTF-8");
-				} else {
-					resultString = new String(data);
-				}
-				if (dumpData) { 
-					System.out.println(resultString);
-				}
+			} else if (dumpData) {
+				dataStream.position(offset);
+				dataStream.read(ByteBuffer.wrap(data));
 			}
-			entryCount++;
+			if (dumpData) {
+				if (compressedLen == 0) {
+					resultString = "<NO DATA>";
+				} else {
+					if (data[0] == 0x78 /* 'x' */) {
+						Inflater zlib = new Inflater();
+						zlib.setInput(data, 0, compressedLen);
+						byte[] result = new byte[actualLen*2];
+						int resultLen = zlib.inflate(result);
+						zlib.end();
+						resultString = new String(result, 0, resultLen, "UTF-8");
+					} else if (data[0] == 0x75 /* 'u' */) {
+						resultString = new String(data, 1, data.length - 1, "UTF-8");
+					} else {
+						resultString = new String(data);
+					}
+				}
+				System.out.println(resultString);
+			}
+			entryIndex++;
 		}
 		dis.close();
+		if (dataStream != null) {
+			dataStream.close();
+		}
 		//
 	}
 }
