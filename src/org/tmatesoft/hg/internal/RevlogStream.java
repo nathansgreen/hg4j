@@ -480,7 +480,7 @@ public class RevlogStream {
 						}
 					}
 					// XXX 
-					if (patchToPrevious && !userDataAccess.isEmpty()) {
+					if (patchToPrevious && !userDataAccess.isEmpty() /* Issue 22, empty patch to an empty base revision*/) {
 						// this is a patch
 						patch.read(userDataAccess);
 						userDataAccess.done();

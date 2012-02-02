@@ -475,6 +475,46 @@ public class TestStatus {
 		}
 	}
 	
+	/**
+	 * Issue 22, two subsequent commits that remove all repository files, each in a different branch.
+	 * Here's excerpt from my RevlogWriter utility:
+	 * <pre>
+	 * 		final List<String> filesList = Collections.singletonList("file1");
+	 *	//
+	 *	file1.writeUncompressed(-1, -1, 0, 0, "garbage".getBytes());
+	 *	//
+	 *	ManifestBuilder mb = new ManifestBuilder();
+	 *	mb.reset().add("file1", file1.getRevision(0));
+	 *	manifest.writeUncompressed(-1, -1, 0, 0, mb.build()); // manifest revision 0
+	 *	final byte[] cset1 = buildChangelogEntry(manifest.getRevision(0), Collections.<String, String>emptyMap(), filesList, "Add a file");
+	 *	changelog.writeUncompressed(-1, -1, 0, 0, cset1);
+	 *	//
+	 *	// pretend we delete all files in a branch 1
+	 *	manifest.writeUncompressed(0, -1, 1, 1, new byte[0]); // manifest revision 1
+	 *	final byte[] cset2 = buildChangelogEntry(manifest.getRevision(1), Collections.singletonMap("branch", "delete-all-1"), filesList, "Delete all files in a first branch");
+	 *	 changelog.writeUncompressed(0, -1, 1, 1, cset2);
+	 *	//
+	 *	// pretend we delete all files in a branch 2 (which is based on revision 0, same as branch 1)
+	 *	manifest.writeUncompressed(1, -1, 1 /*!!! here comes baseRevision != index * /, 2, new byte[0]); // manifest revision 2
+	 *	final byte[] cset3 = buildChangelogEntry(manifest.getRevision(2), Collections.singletonMap("branch", "delete-all-2"), filesList, "Again delete all files but in another branch");
+	 *	changelog.writeUncompressed(0, -1, 2, 2, cset3);
+	 * </pre> 
+	 */
+	@Test
+	public void testOnEmptyRepositoryWithAllFilesDeletedInBranch() throws Exception {
+		repo = Configuration.get().find("status-3");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		cmd.all();
+		StatusCollector sc = new StatusCollector();
+		cmd.execute(sc);
+		// shall pass without exception
+		assertTrue(sc.getErrors().isEmpty());
+		for (HgStatus.Kind k : HgStatus.Kind.values()) {
+			assertTrue("Kind " + k.name() + " shall be empty",sc.get(k).isEmpty());
+		}
+	}
+
+	
 	/*
 	 * With warm-up of previous tests, 10 runs, time in milliseconds
 	 * 'hg status -A': Native client total 953 (95 per run), Java client 94 (9)
