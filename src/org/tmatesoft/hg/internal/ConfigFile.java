@@ -17,11 +17,18 @@
 package org.tmatesoft.hg.internal;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +59,7 @@ public class ConfigFile {
 	}
 
 	public Map<String,String> getSection(String sectionName) {
-		if (sections ==  null) {
+		if (sections == null) {
 			return Collections.emptyMap();
 		}
 		int x = sections.indexOf(sectionName);
@@ -79,7 +86,31 @@ public class ConfigFile {
 		String value = getSection(sectionName).get(key);
 		return value == null ? defaultValue : value;
 	}
-
+	
+	public void putString(String sectionName, String key, String newValue) {
+		Map<String, String> section = null;
+		if (sections == null) {
+			// init, in case we didn't read any file with prev config
+			sections = new ArrayList<String>();
+			content = new ArrayList<Map<String,String>>();
+		}
+		int x = sections.indexOf(sectionName);
+		if (x == -1) {
+			if (newValue == null) {
+				return;
+			}
+			sections.add(sectionName);
+			content.add(section = new LinkedHashMap<String, String>());
+		} else {
+			section = content.get(x);
+		}
+		if (newValue == null) {
+			section.remove(key);
+		} else {
+			section.put(key, newValue);
+		}
+	}
+	
 	// TODO handle %include and %unset directives
 	// TODO "" and lists
 	// XXX perhaps, single string to keep whole section with substrings for keys/values to minimize number of arrays (String.value)
@@ -140,5 +171,43 @@ public class ConfigFile {
 			}
 		}
 		assert sections.size() == content.size();
+	}
+
+	public void writeTo(File f) throws IOException {
+		byte[] data = compose();
+		if (!f.exists()) {
+			f.createNewFile();
+		}
+		FileChannel fc = new FileOutputStream(f).getChannel();
+		FileLock fl = fc.lock();
+		try {
+			fc.write(ByteBuffer.wrap(data));
+		} finally {
+			fl.release();
+			fc.close();
+		}
+	}
+	
+	private byte[] compose() {
+		ByteArrayOutputStream bos = new ByteArrayOutputStream(1024);
+		PrintStream ps = new PrintStream(bos);
+		Iterator<String> sectionNames = sections.iterator();
+		for (Map<String,String> s : content) {
+			final String name = sectionNames.next(); // iterate through names despite section may be empty
+			if (s.isEmpty()) {
+				continue; // do not write an empty section
+			}
+			ps.print('[');
+			ps.print(name);
+			ps.println(']');
+			for (Map.Entry<String, String> e : s.entrySet()) {
+				ps.print(e.getKey());
+				ps.print('=');
+				ps.println(e.getValue());
+			}
+			ps.println();
+		}
+		ps.flush();
+		return bos.toByteArray();
 	}
 }

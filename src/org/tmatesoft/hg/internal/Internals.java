@@ -122,6 +122,7 @@ public class Internals {
 			//
 			// XXX perhaps, makes sense to compare getenv(USERPROFILE) and getenv(HOME) and use 
 			// them if set (and use both if their values do not match). Only if both not set, rely to user.home?
+			// Also respect #getUserConfigurationFileToWrite() below
 			configFile.addLocation(new File(System.getProperty("user.home"), "Mercurial.ini"));
 		} else {
 			// FIXME read from install-root
@@ -142,5 +143,34 @@ public class Internals {
 		// <repo>/.hg/hgrc
 		configFile.addLocation(new File(repoRoot, "hgrc"));
 		return configFile;
+	}
+
+	/**
+	 * @return
+	 */
+	public static File getInstallationConfigurationFileToWrite() {
+		// TODO Auto-generated method stub
+		// FIXME find out install-root 
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * @return
+	 */
+	public static File getUserConfigurationFileToWrite() {
+		final File rv = new File(System.getProperty("user.home"), ".hgrc");
+		if (rv.exists() && rv.canWrite()) {
+			return rv;
+		}
+		if (runningOnWindows()) {
+			// try another well-known location
+			// TODO comment above regarding USERPROFILE and HOME variables applies here as well
+			File f = new File(System.getProperty("user.home"), "Mercurial.ini");
+			if (f.exists() && f.canWrite()) {
+				return f;
+			}
+		}
+		// fallback to default value
+		return rv; 
 	}
 }
