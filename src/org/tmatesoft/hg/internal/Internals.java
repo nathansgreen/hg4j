@@ -22,7 +22,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.StringTokenizer;
 
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
@@ -36,6 +40,8 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author TMate Software Ltd.
  */
 public class Internals {
+	
+	public static final String CFG_PROPERTY_HG_INSTALL_ROOT = "hg4j.hg.install_root";
 	
 	private int requiresFlags = 0;
 	private List<Filter.Factory> filterFactories;
@@ -114,63 +120,159 @@ public class Internals {
 	public static boolean runningOnWindows() {
 		return System.getProperty("os.name").indexOf("Windows") != -1;
 	}
-
+	
+	/**
+	 * For Unix, returns installation root, which is the parent directory of the hg executable (or symlink) being run.
+	 * For Windows, it's Mercurial installation directory itself 
+	 */
+	private static File findHgInstallRoot() {
+		// let clients to override Hg install location 
+		String p = System.getProperty(CFG_PROPERTY_HG_INSTALL_ROOT);
+		if (p != null) {
+			return new File(p);
+		}
+		StringTokenizer st = new StringTokenizer(System.getenv("PATH"), System.getProperty("path.separator"), false);
+		final boolean runsOnWin = runningOnWindows();
+		while (st.hasMoreTokens()) {
+			String pe = st.nextToken();
+			File execCandidate = new File(pe, runsOnWin ? "hg.exe" : "hg");
+			if (execCandidate.exists() && execCandidate.isFile()) {
+				File execDir = execCandidate.getParentFile();
+				// e.g. on Unix runs "/shared/tools/bin/hg", directory of interest is "/shared/tools/" 
+				return runsOnWin ? execDir : execDir.getParentFile();
+			}
+		}
+		return null;
+	}
+	
+	/**
+	 * @see http://www.selenic.com/mercurial/hgrc.5.html
+	 */
 	public ConfigFile readConfiguration(HgRepository hgRepo, File repoRoot) throws IOException {
 		ConfigFile configFile = new ConfigFile();
+		File hgInstallRoot = findHgInstallRoot(); // may be null
+		//
 		if (runningOnWindows()) {
-			// FIXME read install-dir
-			//
-			// XXX perhaps, makes sense to compare getenv(USERPROFILE) and getenv(HOME) and use 
-			// them if set (and use both if their values do not match). Only if both not set, rely to user.home?
-			// Also respect #getUserConfigurationFileToWrite() below
-			configFile.addLocation(new File(System.getProperty("user.home"), "Mercurial.ini"));
+			if (hgInstallRoot != null) {
+				for (File f : getWindowsConfigFilesPerInstall(hgInstallRoot)) {
+					configFile.addLocation(f);
+				}
+			}
+			LinkedHashSet<String> locations = new LinkedHashSet<String>();
+			locations.add(System.getenv("USERPROFILE"));
+			locations.add(System.getenv("HOME"));
+			locations.remove(null);
+			for (String loc : locations) {
+				File location = new File(loc);
+				configFile.addLocation(new File(location, "Mercurial.ini"));
+				configFile.addLocation(new File(location, ".hgrc"));
+			}
 		} else {
-			// FIXME read from install-root
-			//
-			File d = new File("/etc/mercurial/hgrc.d/");
-			if (d.isDirectory()) {
-				for (File f : d.listFiles()) {
-					// XXX in fact, need to sort in alphabetical order 
-					if (f.getName().endsWith(".rc")) {
+			if (hgInstallRoot != null) {
+				File d = new File(hgInstallRoot, "etc/mercurial/hgrc.d/");
+				if (d.isDirectory() && d.canRead()) {
+					for (File f : listConfigFiles(d)) {
 						configFile.addLocation(f);
 					}
 				}
+				configFile.addLocation(new File(hgInstallRoot, "etc/mercurial/hgrc"));
+			}
+			// same, but with absolute paths
+			File d = new File("/etc/mercurial/hgrc.d/");
+			if (d.isDirectory() && d.canRead()) {
+				for (File f : listConfigFiles(d)) {
+					configFile.addLocation(f);
+				}
 			}
 			configFile.addLocation(new File("/etc/mercurial/hgrc"));
+			configFile.addLocation(new File(System.getenv("HOME"), ".hgrc"));
 		}
-		configFile.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		// last one, overrides anything else
 		// <repo>/.hg/hgrc
 		configFile.addLocation(new File(repoRoot, "hgrc"));
 		return configFile;
 	}
-
-	/**
-	 * @return
-	 */
-	public static File getInstallationConfigurationFileToWrite() {
-		// TODO Auto-generated method stub
-		// FIXME find out install-root 
-		throw new UnsupportedOperationException();
-	}
-
-	/**
-	 * @return
-	 */
-	public static File getUserConfigurationFileToWrite() {
-		final File rv = new File(System.getProperty("user.home"), ".hgrc");
-		if (rv.exists() && rv.canWrite()) {
-			return rv;
+	
+	private static List<File> getWindowsConfigFilesPerInstall(File hgInstallDir) {
+		File f = new File(hgInstallDir, "Mercurial.ini");
+		if (f.exists()) {
+			return Collections.singletonList(f);
 		}
-		if (runningOnWindows()) {
-			// try another well-known location
-			// TODO comment above regarding USERPROFILE and HOME variables applies here as well
-			File f = new File(System.getProperty("user.home"), "Mercurial.ini");
-			if (f.exists() && f.canWrite()) {
-				return f;
+		f = new File(hgInstallDir, "hgrc.d/");
+		if (f.canRead() && f.isDirectory()) {
+			return listConfigFiles(f);
+		}
+		// FIXME query registry, e.g. with
+		// Runtime.exec("reg query HKLM\Software\Mercurial")
+		//
+		f = new File("C:\\Mercurial\\Mercurial.ini");
+		if (f.exists()) {
+			return Collections.singletonList(f);
+		}
+		return Collections.emptyList();
+	}
+	
+	private static List<File> listConfigFiles(File dir) {
+		assert dir.canRead();
+		assert dir.isDirectory();
+		final File[] allFiles = dir.listFiles();
+		// File is Comparable, lexicographically by default
+		Arrays.sort(allFiles);
+		ArrayList<File> rv = new ArrayList<File>(allFiles.length);
+		for (File f : allFiles) {
+			if (f.getName().endsWith(".rc")) {
+				rv.add(f);
 			}
 		}
-		// fallback to default value
-		return rv; 
+		return rv;
+	}
+	
+	public static File getInstallationConfigurationFileToWrite() {
+		File hgInstallRoot = findHgInstallRoot(); // may be null
+		// choice of which hgrc to pick here is according to my own pure discretion
+		if (hgInstallRoot != null) {
+			// use this location only if it's writable
+			File cfg = new File(hgInstallRoot, runningOnWindows() ? "Mercurial.ini" : "etc/mercurial/hgrc");
+			if (cfg.canWrite() || cfg.getParentFile().canWrite()) {
+				return cfg;
+			}
+		}
+		// fallback
+		if (runningOnWindows()) {
+			if (hgInstallRoot == null) {
+				return new File("C:\\Mercurial\\Mercurial.ini");
+			} else {
+				// yes, we tried this file already (above) and found it non-writable
+				// let caller fail with can't write
+				return new File(hgInstallRoot, "Mercurial.ini");
+			}
+		} else {
+			return new File("/etc/mercurial/hgrc");
+		}
+	}
+
+	public static File getUserConfigurationFileToWrite() {
+		LinkedHashSet<String> locations = new LinkedHashSet<String>();
+		final boolean runsOnWindows = runningOnWindows();
+		if (runsOnWindows) {
+			locations.add(System.getenv("USERPROFILE"));
+		}
+		locations.add(System.getenv("HOME"));
+		locations.remove(null);
+		for (String loc : locations) {
+			File location = new File(loc);
+			File rv = new File(location, ".hgrc");
+			if (rv.exists() && rv.canWrite()) {
+				return rv;
+			}
+			if (runsOnWindows) {
+				rv = new File(location, "Mercurial.ini");
+				if (rv.exists() && rv.canWrite()) {
+					return rv;
+				}
+			}
+		}
+		// fallback to default, let calling code fail with Exception if can't write
+		return new File(System.getProperty("user.home"), ".hgrc");
 	}
 }
