@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.util.TreeMap;
-
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -33,7 +31,7 @@ import org.tmatesoft.hg.util.Path;
 public class ChangelogHelper {
 	private final int leftBoundary;
 	private final HgRepository repo;
-	private final TreeMap<Integer, RawChangeset> cache = new TreeMap<Integer, RawChangeset>(); // FIXME use IntMap instead
+	private final IntMap<RawChangeset> cache = new IntMap<RawChangeset>(32);
 	private String nextCommitAuthor;
 
 	/**
