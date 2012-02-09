@@ -144,7 +144,7 @@ public class HgChangeset implements Cloneable {
 	
 	/**
 	 * @return never <code>null</code>
-	 * @throws HgInvalidControlFileException FIXME
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public Nodeid getFirstParentRevision() throws HgInvalidControlFileException {
 		if (parentHelper != null) {
@@ -161,7 +161,7 @@ public class HgChangeset implements Cloneable {
 	
 	/**
 	 * @return never <code>null</code>
-	 * @throws HgInvalidControlFileException FIXME
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public Nodeid getSecondParentRevision() throws HgInvalidControlFileException {
 		if (parentHelper != null) {

@@ -55,6 +55,10 @@ Proposed:
 - Revlog iteration in reversed order (either support internally in RevlogStream or externally, windowed access)
 
 
+RELEASE NOTES 1.0
+* Known issues and limitations:
+  ** Configuration files listed under HKEY_LOCAL_MACHINE\SOFTWARE\Mercurial are not processed 
+
 Read-only support, version 1.1
 ==============================
 Committed:

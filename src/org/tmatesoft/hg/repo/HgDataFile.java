@@ -92,7 +92,7 @@ public class HgDataFile extends Revlog {
 	 * @param nodeid revision of the file
 	 * 
 	 * @return size of the file content at the given revision
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
 	 * @throws HgDataStreamException if attempt to access file metadata failed
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
@@ -127,7 +127,7 @@ public class HgDataFile extends Revlog {
 	 *     
 	 * @param sink where to pipe content to
 	 * @throws HgDataStreamException to indicate troubles reading repository file
-	 * @throws CancelledException if operation was cancelled
+	 * @throws CancelledException if execution of the operation was cancelled
 	 */
 	public void workingCopy(ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException {
 		File f = getRepo().getFile(this);
@@ -205,9 +205,9 @@ public class HgDataFile extends Revlog {
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
 	 * @param sink
 	 * @throws HgDataStreamException FIXME
-	 * @throws HgInvalidControlFileException
-	 * @throws CancelledException
-	 * @throws HgInvalidRevisionException
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws CancelledException if execution of the operation was cancelled
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
 	 */
 	public void content(int fileRevisionIndex, ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
 		// for data files need to check heading of the file content for possible metadata

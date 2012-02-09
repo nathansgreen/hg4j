@@ -100,8 +100,8 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	 *   
 	 * @return list of nodes present at remote and missing locally
 	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
-	 * @throws HgInvalidControlFileException FIXME
-	 * @throws CancelledException
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws CancelledException if execution of the command was cancelled
 	 */
 	public List<Nodeid> executeLite() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
 		LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
@@ -122,10 +122,10 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	 * Full information about incoming changes
 	 * 
 	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
-	 * @throws HgInvalidControlFileException FIXME
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 * @throws HgInvalidFileException to indicate failure working with locally downloaded changes in a bundle file
 	 * @throws HgCallbackTargetException to re-throw exception from the handler
-	 * @throws CancelledException
+	 * @throws CancelledException if execution of the command was cancelled
 	 */
 	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgInvalidControlFileException, HgInvalidFileException, HgCallbackTargetException, CancelledException {
 		if (handler == null) {

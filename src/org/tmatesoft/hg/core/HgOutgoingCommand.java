@@ -93,9 +93,9 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	 * Reported changes are from any branch (limits set by {@link #branch(String)} are not taken into account.
 	 * 
 	 * @return list on local nodes known to be missing at remote server 
-	 * @throws HgRemoteConnectionException FIXME
-	 * @throws HgInvalidControlFileException FIXME
-	 * @throws CancelledException FIXME
+	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws CancelledException if execution of the command was cancelled
 	 */
 	public List<Nodeid> executeLite() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
 		final ProgressSupport ps = getProgressSupport(null);
@@ -111,6 +111,10 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	 * Complete information about outgoing changes
 	 * 
 	 * @param handler delegate to process changes
+	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgCallbackTargetException to re-throw exception from the handler
+	 * @throws CancelledException if execution of the command was cancelled
 	 */
 	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgInvalidControlFileException, HgCallbackTargetException, CancelledException {
 		if (handler == null) {
