@@ -28,6 +28,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.StringTokenizer;
 
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -124,10 +125,11 @@ public class Internals {
 	/**
 	 * For Unix, returns installation root, which is the parent directory of the hg executable (or symlink) being run.
 	 * For Windows, it's Mercurial installation directory itself 
+	 * @param ctx 
 	 */
-	private static File findHgInstallRoot() {
+	private static File findHgInstallRoot(SessionContext ctx) {
 		// let clients to override Hg install location 
-		String p = System.getProperty(CFG_PROPERTY_HG_INSTALL_ROOT);
+		String p = (String) ctx.getProperty(CFG_PROPERTY_HG_INSTALL_ROOT, null);
 		if (p != null) {
 			return new File(p);
 		}
@@ -150,7 +152,7 @@ public class Internals {
 	 */
 	public ConfigFile readConfiguration(HgRepository hgRepo, File repoRoot) throws IOException {
 		ConfigFile configFile = new ConfigFile();
-		File hgInstallRoot = findHgInstallRoot(); // may be null
+		File hgInstallRoot = findHgInstallRoot(HgInternals.getContext(hgRepo)); // may be null
 		//
 		if (runningOnWindows()) {
 			if (hgInstallRoot != null) {
@@ -227,8 +229,8 @@ public class Internals {
 		return rv;
 	}
 	
-	public static File getInstallationConfigurationFileToWrite() {
-		File hgInstallRoot = findHgInstallRoot(); // may be null
+	public static File getInstallationConfigurationFileToWrite(SessionContext ctx) {
+		File hgInstallRoot = findHgInstallRoot(ctx); // may be null
 		// choice of which hgrc to pick here is according to my own pure discretion
 		if (hgInstallRoot != null) {
 			// use this location only if it's writable
@@ -251,7 +253,7 @@ public class Internals {
 		}
 	}
 
-	public static File getUserConfigurationFileToWrite() {
+	public static File getUserConfigurationFileToWrite(SessionContext ctx) {
 		LinkedHashSet<String> locations = new LinkedHashSet<String>();
 		final boolean runsOnWindows = runningOnWindows();
 		if (runsOnWindows) {

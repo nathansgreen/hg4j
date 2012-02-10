@@ -83,8 +83,8 @@ public class HgInternals {
 		return rv;
 	}
 
-	public File getRepositoryDir() {
-		return repo.getRepositoryRoot();
+	public static File getRepositoryDir(HgRepository hgRepo) {
+		return hgRepo.getRepositoryRoot();
 	}
 	
 	public static HgIgnore newHgIgnore(Reader source) throws IOException {

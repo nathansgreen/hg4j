@@ -26,6 +26,7 @@ import java.util.Map;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -37,27 +38,26 @@ import org.tmatesoft.hg.repo.HgRepository;
 @Experimental(reason="Investigating approaches to alter Hg configuration files")
 public final class HgUpdateConfigCommand extends HgAbstractCommand<HgUpdateConfigCommand> {
 	
-	private final HgRepository repo;
 	private final File configFile;
 	
 	private Map<String,List<String>> toRemove;
 	private Map<String,Map<String,String>> toSet;
 
-	private HgUpdateConfigCommand(HgRepository hgRepo, File configurationFile) {
-		repo = hgRepo;
+	private HgUpdateConfigCommand(File configurationFile) {
 		configFile = configurationFile;
 	}
 	
 	public static HgUpdateConfigCommand forRepository(HgRepository hgRepo) {
-		return new HgUpdateConfigCommand(hgRepo, new File(".hg/hgrc"));
+		// XXX HgRepository to implement SessionContextProvider (with getContext())?
+		return new HgUpdateConfigCommand(new File(HgInternals.getRepositoryDir(hgRepo), "hgrc"));
 	}
 	
-	public static HgUpdateConfigCommand forUser(HgRepository hgRepo) {
-		return new HgUpdateConfigCommand(null, Internals.getUserConfigurationFileToWrite());
+	public static HgUpdateConfigCommand forUser(SessionContext ctx) {
+		return new HgUpdateConfigCommand(Internals.getUserConfigurationFileToWrite(ctx));
 	}
 	
-	public static HgUpdateConfigCommand forInstallation() {
-		return new HgUpdateConfigCommand(null, Internals.getInstallationConfigurationFileToWrite());
+	public static HgUpdateConfigCommand forInstallation(SessionContext ctx) {
+		return new HgUpdateConfigCommand(Internals.getInstallationConfigurationFileToWrite(ctx));
 	}
 	
 	/**
