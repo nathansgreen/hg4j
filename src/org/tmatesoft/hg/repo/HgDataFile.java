@@ -204,7 +204,7 @@ public class HgDataFile extends Revlog {
 	 * 
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
 	 * @param sink
-	 * @throws HgDataStreamException FIXME
+	 * @throws HgDataStreamException FIXME EXCEPTIONS
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 * @throws CancelledException if execution of the operation was cancelled
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog

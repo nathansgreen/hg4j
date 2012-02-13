@@ -204,7 +204,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * 
 	 * @param handler callback to process changesets.
 	 * @throws HgCallbackTargetException to re-throw exception from the handler
-	 * @throws HgException FIXME
+	 * @throws HgException FIXME EXCEPTIONS
 	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws IllegalArgumentException when inspector argument is null
 	 * @throws ConcurrentModificationException if this log command instance is already running
@@ -266,7 +266,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * TODO documentation 
 	 * @param handler
 	 * @throws HgCallbackTargetException to re-throw exception from the handler
-	 * @throws HgException FIXME
+	 * @throws HgException FIXME EXCEPTIONS
 	 * @throws CancelledException if execution of the command was cancelled
 	 */
 	public void execute(HgChangesetTreeHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
@@ -366,7 +366,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			}
 		}
 		if (date != null) {
-			// FIXME
+			// FIXME implement date support for log
 		}
 		count++;
 		csetTransform.next(revisionNumber, nodeid, cset);

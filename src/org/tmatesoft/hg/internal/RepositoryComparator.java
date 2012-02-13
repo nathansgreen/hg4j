@@ -486,7 +486,7 @@ public class RepositoryComparator {
 			toQuery.clear();
 		}
 		if (rootIndex == -1) {
-			throw new HgBadStateException("Shall not happen, provided between output is correct"); // FIXME
+			throw new HgBadStateException("Shall not happen, provided between output is correct"); // FIXME EXCEPTIONS
 		}
 		result[rootIndex] = branchRoot;
 		boolean resultOk = true;
@@ -503,7 +503,7 @@ public class RepositoryComparator {
 			System.out.println("Total queries:" + totalQueries);
 		}
 		if (!resultOk) {
-			throw new HgBadStateException("See console for details"); // FIXME
+			throw new HgBadStateException("See console for details"); // FIXME EXCEPTIONS
 		}
 		return fromRootToHead;
 	}

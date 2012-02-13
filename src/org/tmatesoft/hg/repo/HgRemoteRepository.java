@@ -124,7 +124,7 @@ public class HgRemoteRepository {
 		if (Boolean.FALSE.booleanValue()) {
 			throw HgRepository.notImplemented();
 		}
-		return false; // FIXME
+		return false; // FIXME implement remote repository hello/check
 	}
 
 	/**

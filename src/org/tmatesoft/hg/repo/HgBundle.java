@@ -169,7 +169,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 				} catch (CancelledException ex) {
 					return false;
 				} catch (Exception ex) {
-					throw new HgBadStateException(ex); // FIXME
+					throw new HgBadStateException(ex); // FIXME EXCEPTIONS
 				}
 				return true;
 			}
