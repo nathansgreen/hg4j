@@ -284,7 +284,7 @@ public class HgChangelog extends Revlog {
 			String _extras = space2 < _timeString.length() ? _timeString.substring(space2 + 1) : null;
 			Map<String, String> _extrasMap;
 			final String extras_branch_key = "branch";
-			if (_extras == null) {
+			if (_extras == null || _extras.trim().length() == 0) {
 				_extrasMap = Collections.singletonMap(extras_branch_key, HgRepository.DEFAULT_BRANCH_NAME);
 			} else {
 				_extrasMap = new HashMap<String, String>();

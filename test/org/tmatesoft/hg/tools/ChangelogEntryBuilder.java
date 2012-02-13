@@ -67,7 +67,7 @@ public class ChangelogEntryBuilder {
 	}
 	
 	public ChangelogEntryBuilder branch(String branchName) {
-		if (branchName == null) {
+		if (branchName == null || "default".equals(branchName)) {
 			extrasMap.remove("branch");
 		} else {
 			extrasMap.put("branch", branchName);
@@ -114,15 +114,17 @@ public class ChangelogEntryBuilder {
 			}
 		}
 		StringBuilder files = new StringBuilder();
-		for (Iterator<String> it = modifiedFiles.iterator(); it.hasNext(); ) {
-			files.append(it.next());
-			if (it.hasNext()) {
-				files.append('\n');
+		if (modifiedFiles != null) {
+			for (Iterator<String> it = modifiedFiles.iterator(); it.hasNext(); ) {
+				files.append(it.next());
+				if (it.hasNext()) {
+					files.append('\n');
+				}
 			}
 		}
 		final long date = csetTime();
 		final int tz = csetTimezone(date);
-		return String.format(f, manifestRevision.toString(), user, date, tz, extras, files, comment).getBytes();
+		return String.format(f, manifestRevision.toString(), user(), date, tz, extras, files, comment).getBytes();
 	}
 
 	private final static CharSequence encodeExtrasPair(String s) {
