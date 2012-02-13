@@ -90,8 +90,8 @@ public class HgInvalidRevisionException extends IllegalArgumentException {
 			return msg;
 		}
 		StringBuilder sb = new StringBuilder();
-		sb.append('[');
 		if (rev != null) {
+			sb.append("Revision:");
 			sb.append(rev.shortNotation());
 			sb.append(' ');
 		}
@@ -109,7 +109,6 @@ public class HgInvalidRevisionException extends IllegalArgumentException {
 				sb.append(sr);
 			}
 		}
-		sb.append(']');
 		return sb.toString();
 	}
 }

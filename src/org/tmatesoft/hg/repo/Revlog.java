@@ -140,7 +140,7 @@ abstract class Revlog {
 	public final int getRevisionIndex(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		int revision = content.findRevisionIndex(nid);
 		if (revision == BAD_REVISION) {
-			throw new HgInvalidRevisionException(String.format("Bad revision of %s", this /*XXX HgDataFile.getPath might be more suitable here*/), nid, null);
+			throw new HgInvalidRevisionException(String.format("Can't find revision %s in %s", nid.shortNotation(), this /*FIXME HgDataFile.getPath might be more suitable here*/), nid, null);
 		}
 		return revision;
 	}

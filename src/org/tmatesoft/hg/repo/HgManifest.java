@@ -479,7 +479,12 @@ public class HgManifest extends Revlog {
 					Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
 					// FIXME calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
 					// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
-					changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
+					if (manifest.isNull()) {
+						repo.getContext().getLog().warn(getClass(), "Changeset %d has no associated manifest entry", u);
+						// keep -1 in the changelog2manifest map. FIXME rest of the code shall accomodate to the fact manifest revision may be missing
+					} else {
+						changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
+					}
 				} catch (HgInvalidControlFileException ex) {
 					// FIXME need to propagate the error up to client  
 					repo.getContext().getLog().error(getClass(), ex, null);
