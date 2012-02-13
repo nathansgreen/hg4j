@@ -513,6 +513,20 @@ public class TestStatus {
 			assertTrue("Kind " + k.name() + " shall be empty",sc.get(k).isEmpty());
 		}
 	}
+	
+	/**
+	 * Issue 23: HgInvalidRevisionException for svn imported repository (changeset 0 references nullid manifest) 
+	 */
+	@Test
+	public void testImportedRepoWithOddManifestRevisions() throws Exception {
+		repo = Configuration.get().find("status-4");
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		cmd.all();
+		StatusCollector sc = new StatusCollector();
+		cmd.execute(sc);
+		// shall pass without exception
+		assertTrue(sc.getErrors().isEmpty());
+	}
 
 	
 	/*
