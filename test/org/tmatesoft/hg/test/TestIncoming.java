@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,6 +32,7 @@ import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgIncomingCommand;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
@@ -134,7 +135,7 @@ public class TestIncoming {
 
 	static File initEmptyTempRepo(String dirName) throws IOException {
 		File dest = createEmptyDir(dirName);
-		Internals implHelper = new Internals();
+		Internals implHelper = new Internals(new BasicSessionContext(null, null, null));
 		implHelper.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
 		implHelper.initEmptyRepository(new File(dest, ".hg"));
 		return dest;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,7 @@ import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -161,9 +162,25 @@ public class HgDataFile extends Revlog {
 				}
 			}
 		} else {
-			// FIXME not TIP, but revision according to dirstate!!!
-			// add tests for this case
-			contentWithFilters(TIP, sink);
+			final Pair<Nodeid, Nodeid> wcParents = getRepo().getWorkingCopyParents();
+			Nodeid p = wcParents.first().isNull() ? wcParents.second() : wcParents.first();
+			if (p.isNull()) {
+				// no dirstate parents - no content 
+				return;
+			}
+			final HgChangelog clog = getRepo().getChangelog();
+			// common case to avoid searching complete changelog for nodeid match
+			final Nodeid tipRev = clog.getRevision(TIP);
+			final int csetRevIndex;
+			if (tipRev.equals(p)) {
+				csetRevIndex = clog.getLastRevision();
+			} else {
+				// bad luck, need to search honestly
+				csetRevIndex = getRepo().getChangelog().getRevisionIndex(p);
+			}
+			Nodeid fileRev = getRepo().getManifest().getFileRevision(csetRevIndex, getPath());
+			final int fileRevIndex = getRevisionIndex(fileRev);
+			contentWithFilters(fileRevIndex, sink);
 		}
 	}
 	
@@ -231,13 +248,14 @@ public class HgDataFile extends Revlog {
 			metadata = new Metadata();
 		}
 		ErrorHandlingInspector insp;
+		final LogFacility lf = getRepo().getContext().getLog();
 		if (metadata.none(fileRevisionIndex)) {
-			insp = new ContentPipe(sink, 0, getRepo().getContext().getLog());
+			insp = new ContentPipe(sink, 0, lf);
 		} else if (metadata.known(fileRevisionIndex)) {
-			insp = new ContentPipe(sink, metadata.dataOffset(fileRevisionIndex), getRepo().getContext().getLog());
+			insp = new ContentPipe(sink, metadata.dataOffset(fileRevisionIndex), lf);
 		} else {
 			// do not know if there's metadata
-			insp = new MetadataInspector(metadata, getPath(), new ContentPipe(sink, 0, getRepo().getContext().getLog()));
+			insp = new MetadataInspector(metadata, lf, getPath(), new ContentPipe(sink, 0, lf));
 		}
 		insp.checkCancelled();
 		super.content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
@@ -509,19 +527,26 @@ public class HgDataFile extends Revlog {
 	private static final class MetadataEntry {
 		private final String entry;
 		private final int valueStart;
+
+		// key may be null
 		/*package-local*/MetadataEntry(String key, String value) {
-			entry = key + value;
-			valueStart = key.length();
+			if (key == null) {
+				entry = value;
+				valueStart = -1; // not 0 to tell between key == null and key == ""
+			} else {
+				entry = key + value;
+				valueStart = key.length();
+			}
 		}
 		/*package-local*/boolean matchKey(String key) {
-			return key.length() == valueStart && entry.startsWith(key);
+			return key == null ? valueStart == -1 : key.length() == valueStart && entry.startsWith(key);
 		}
 //		uncomment once/if needed
 //		public String key() {
 //			return entry.substring(0, valueStart);
 //		}
 		public String value() {
-			return entry.substring(valueStart);
+			return valueStart == -1 ? entry : entry.substring(valueStart);
 		}
 	}
 
@@ -590,12 +615,14 @@ public class HgDataFile extends Revlog {
 
 	private static class MetadataInspector extends ErrorHandlingInspector implements RevlogStream.Inspector {
 		private final Metadata metadata;
-		private final Path fname; // need this only for error reporting
 		private final RevlogStream.Inspector delegate;
+		private final Path fname; // need these only for error reporting
+		private final LogFacility log;
 
-		public MetadataInspector(Metadata _metadata, Path file, RevlogStream.Inspector chain) {
+		public MetadataInspector(Metadata _metadata, LogFacility logFacility, Path file, RevlogStream.Inspector chain) {
 			metadata = _metadata;
 			fname = file;
+			log = logFacility;
 			delegate = chain;
 			setCancelSupport(CancelSupport.Factory.get(chain));
 		}
@@ -647,7 +674,7 @@ public class HgDataFile extends Revlog {
 						break;
 					}
 					if (key == null || lastColon == -1 || i <= lastColon) {
-						throw new IllegalStateException(); // FIXME log instead and record null key in the metadata. Ex just to fail fast during dev
+						log.error(getClass(), "Missing key in file revision metadata at index %d", i);
 					}
 					value = new String(bos.toByteArray()).trim();
 					bos.reset();

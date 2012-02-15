@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ public class ExecHelper {
 				if (new File(pe, cmd[0] + ".exe").exists()) {
 					break;
 				}
-				// PATHEXT controls precedence of .exe, .bat and .cmd files, ususlly .exe wins
+				// PATHEXT controls precedence of .exe, .bat and .cmd files, usually .exe wins
 				if (new File(pe, cmd[0] + ".bat").exists() || new File(pe, cmd[0] + ".cmd").exists()) {
 					ArrayList<String> command = new ArrayList<String>();
 					command.add("cmd.exe");

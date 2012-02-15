@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,15 +40,31 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Internals {
+public final class Internals {
 	
+	/**
+	 * Allows to specify Mercurial installation directory to detect installation-wide configurations.
+	 * Without this property set, hg4j would attempt to deduce this value locating hg executable. 
+	 */
 	public static final String CFG_PROPERTY_HG_INSTALL_ROOT = "hg4j.hg.install_root";
+
+	/**
+	 * Tells repository not to cache files/revlogs
+	 * XXX perhaps, need to respect this property not only for data files, but for manifest and changelog as well?
+	 * (@see HgRepository#getChangelog and #getManifest())  
+	 */
+	public static final String CFG_PROPERTY_REVLOG_STREAM_CACHE = "hg4j.repo.disable_revlog_cache";
 	
 	private int requiresFlags = 0;
 	private List<Filter.Factory> filterFactories;
+	private final boolean isCaseSensitiveFileSystem;
+	private final boolean shallCacheRevlogsInRepo;
 	
 
-	public Internals() {
+	public Internals(SessionContext ctx) {
+		isCaseSensitiveFileSystem = !runningOnWindows();
+		Object p = ctx.getProperty(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
+		shallCacheRevlogsInRepo = p instanceof Boolean ? ((Boolean) p).booleanValue() : Boolean.parseBoolean(String.valueOf(p));
 	}
 	
 	public void parseRequires(HgRepository hgRepo, File requiresFile) {
@@ -62,6 +78,25 @@ public class Internals {
 
 	public/*for tests, otherwise pkg*/ void setStorageConfig(int version, int flags) {
 		requiresFlags = flags;
+	}
+	
+	public PathRewrite buildNormalizePathRewrite() {
+		if (runningOnWindows()) {
+			return new PathRewrite() {
+					
+					public CharSequence rewrite(CharSequence p) {
+						// TODO handle . and .. (although unlikely to face them from GUI client)
+						String path = p.toString();
+						path = path.replace('\\', '/').replace("//", "/");
+						if (path.startsWith("/")) {
+							path = path.substring(1);
+						}
+						return path;
+					}
+				};
+		} else {
+			return new PathRewrite.Empty(); // or strip leading slash, perhaps? 
+		}
 	}
 
 	// XXX perhaps, should keep both fields right here, not in the HgRepository
@@ -116,6 +151,10 @@ public class Internals {
 		requiresFile.write(sb.toString().getBytes());
 		requiresFile.close();
 		new File(hgDir, "store").mkdir(); // with that, hg verify says ok.
+	}
+	
+	public boolean isCaseSensitiveFileSystem() {
+		return isCaseSensitiveFileSystem;
 	}
 
 	public static boolean runningOnWindows() {
@@ -276,5 +315,9 @@ public class Internals {
 		}
 		// fallback to default, let calling code fail with Exception if can't write
 		return new File(System.getProperty("user.home"), ".hgrc");
+	}
+
+	public boolean shallCacheRevlogs() {
+		return shallCacheRevlogsInRepo;
 	}
 }

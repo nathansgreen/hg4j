@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,12 +16,21 @@
  */
 package org.tmatesoft.hg.test;
 
-import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.*;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -83,5 +92,56 @@ public class TestByteChannel {
 		// try once again to make sure metadata records/extracts correct offsets
 		dir_b.content(0, ch = new ByteArrayChannel());
 		assertArrayEquals("a \r\n".getBytes(), ch.toArray());
+	}
+
+	@Test
+	public void testWorkingCopyFileAccess() throws Exception {
+		final File repoDir = TestIncoming.initEmptyTempRepo("testWorkingCopyFileAccess");
+		final Map<String, ?> props = Collections.singletonMap(Internals.CFG_PROPERTY_REVLOG_STREAM_CACHE, false);
+		repo = new HgLookup(new BasicSessionContext(props, null, null)).detect(repoDir);
+		File f1 = new File(repoDir, "file1");
+		final String c1 = "First", c2 = "Second", c3 = "Third";
+		ByteArrayChannel ch;
+		ExecHelper exec = new ExecHelper(new OutputParser.Stub(), repoDir);
+		// commit cset 0
+		write(f1, c1);
+		exec.run("hg", "add");
+		Assert.assertEquals(0, exec.getExitValue());
+		exec.run("hg", "commit", "-m", "c0");
+		Assert.assertEquals(0, exec.getExitValue());
+		// commit cset 1
+		write(f1, c2);
+		exec.run("hg", "commit", "-m", "c1");
+		assertEquals(0, exec.getExitValue());
+		//
+		// modify working copy
+		write(f1, c3);
+		//
+		HgDataFile df = repo.getFileNode(f1.getName());
+		// 1. Shall take content of the file from the dir
+		df.workingCopy(ch = new ByteArrayChannel());
+		assertArrayEquals(c3.getBytes(), ch.toArray());
+		// 2. Shall supply working copy even if no local file is there
+		f1.delete();
+		assertFalse(f1.exists());
+		df = repo.getFileNode(f1.getName());
+		df.workingCopy(ch = new ByteArrayChannel());
+		assertArrayEquals(c2.getBytes(), ch.toArray());
+		//
+		// 3. Shall extract revision of the file that corresponds actual parents (from dirstate) not the TIP as it was  
+		exec.run("hg", "update", "-r", "0");
+		assertEquals(0, exec.getExitValue());
+		f1.delete();
+		assertFalse(f1.exists());
+		// there's no file and workingCopy shall do some extra work to find out actual revision to check out
+		df = repo.getFileNode(f1.getName());
+		df.workingCopy(ch = new ByteArrayChannel());
+		assertArrayEquals(c1.getBytes(), ch.toArray());
+	}
+
+	private static void write(File f, String content) throws IOException {
+		FileWriter fw = new FileWriter(f);
+		fw.write(content);
+		fw.close();
 	}
 }

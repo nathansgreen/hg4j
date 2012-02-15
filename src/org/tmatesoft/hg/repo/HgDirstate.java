@@ -142,7 +142,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				} else if (state == 'm') {
 					merged.put(r.name1, r);
 				} else {
-					// FIXME log error?
+					repo.getContext().getLog().warn(getClass(), "Dirstate record for file %s (size: %d, tstamp:%d) has unknown state '%c'", r.name1, r.size(), r.time, state);
 				}
 			}
 		} catch (IOException ex) {

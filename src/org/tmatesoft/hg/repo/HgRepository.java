@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,6 @@ import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
-import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
@@ -73,7 +72,6 @@ public final class HgRepository {
 	private final PathRewrite normalizePath;
 	private final PathRewrite dataPathHelper;
 	private final PathRewrite repoPathHelper;
-	private final boolean isCaseSensitiveFileSystem; // FIXME keep this inside Internals impl and delegate to Internals all os/fs-specific tasks
 	private final SessionContext sessionContext;
 
 	private HgChangelog changelog;
@@ -86,7 +84,7 @@ public final class HgRepository {
 	// XXX perhaps, shall enable caching explicitly
 	private final HashMap<Path, SoftReference<RevlogStream>> streamsCache = new HashMap<Path, SoftReference<RevlogStream>>();
 	
-	private final org.tmatesoft.hg.internal.Internals impl = new org.tmatesoft.hg.internal.Internals();
+	private final org.tmatesoft.hg.internal.Internals impl;
 	private HgIgnore ignore;
 	private HgRepoConfig repoConfig;
 	
@@ -98,7 +96,7 @@ public final class HgRepository {
 		dataPathHelper = repoPathHelper = null;
 		normalizePath = null;
 		sessionContext = null;
-		isCaseSensitiveFileSystem = !Internals.runningOnWindows();
+		impl = null;
 	}
 	
 	HgRepository(SessionContext ctx, String repositoryPath, File repositoryRoot) {
@@ -111,28 +109,12 @@ public final class HgRepository {
 		if (workingDir == null) {
 			throw new IllegalArgumentException(repoDir.toString());
 		}
+		impl = new org.tmatesoft.hg.internal.Internals(ctx);
 		repoLocation = repositoryPath;
 		sessionContext = ctx;
 		dataAccess = new DataAccessProvider(ctx);
-		final boolean runningOnWindows = Internals.runningOnWindows();
-		isCaseSensitiveFileSystem = !runningOnWindows;
-		if (runningOnWindows) {
-			normalizePath = new PathRewrite() {
-					
-					public CharSequence rewrite(CharSequence p) {
-						// TODO handle . and .. (although unlikely to face them from GUI client)
-						String path = p.toString();
-						path = path.replace('\\', '/').replace("//", "/");
-						if (path.startsWith("/")) {
-							path = path.substring(1);
-						}
-						return path;
-					}
-				};
-		} else {
-			normalizePath = new PathRewrite.Empty(); // or strip leading slash, perhaps? 
-		}
 		impl.parseRequires(this, new File(repoDir, "requires"));
+		normalizePath = impl.buildNormalizePathRewrite(); 
 		dataPathHelper = impl.buildDataFilesHelper();
 		repoPathHelper = impl.buildRepositoryFilesHelper();
 	}
@@ -151,20 +133,20 @@ public final class HgRepository {
 	}
 	
 	public HgChangelog getChangelog() {
-		if (this.changelog == null) {
+		if (changelog == null) {
 			CharSequence storagePath = repoPathHelper.rewrite("00changelog.i");
 			RevlogStream content = resolve(Path.create(storagePath), true);
-			this.changelog = new HgChangelog(this, content);
+			changelog = new HgChangelog(this, content);
 		}
-		return this.changelog;
+		return changelog;
 	}
 	
 	public HgManifest getManifest() {
-		if (this.manifest == null) {
+		if (manifest == null) {
 			RevlogStream content = resolve(Path.create(repoPathHelper.rewrite("00manifest.i")), true);
-			this.manifest = new HgManifest(this, content);
+			manifest = new HgManifest(this, content);
 		}
-		return this.manifest;
+		return manifest;
 	}
 	
 	public HgTags getTags() throws HgInvalidControlFileException {
@@ -316,7 +298,7 @@ public final class HgRepository {
 	// XXX consider passing Path pool or factory to produce (shared) Path instead of Strings
 	/*package-local*/ final HgDirstate loadDirstate(PathPool pathPool) throws HgInvalidControlFileException {
 		PathRewrite canonicalPath = null;
-		if (!isCaseSensitiveFileSystem) {
+		if (!impl.isCaseSensitiveFileSystem()) {
 			canonicalPath = new PathRewrite() {
 
 				public CharSequence rewrite(CharSequence path) {
@@ -369,7 +351,9 @@ public final class HgRepository {
 		File f = new File(repoDir, path.toString());
 		if (f.exists()) {
 			RevlogStream s = new RevlogStream(dataAccess, f);
-			streamsCache.put(path, new SoftReference<RevlogStream>(s));
+			if (impl.shallCacheRevlogs()) {
+				streamsCache.put(path, new SoftReference<RevlogStream>(s));
+			}
 			return s;
 		} else {
 			if (shallFakeNonExistent) {

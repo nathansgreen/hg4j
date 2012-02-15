@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -91,9 +91,9 @@ abstract class Revlog {
 	}
 
 	/**
-	 * Map revision index to unique revision identifier (nodeid)
+	 * Map revision index to unique revision identifier (nodeid).
 	 *  
-	 * @param revision index of the entry in this revlog
+	 * @param revision index of the entry in this revlog, may be {@link HgRepository#TIP}
 	 * @return revision nodeid of the entry
 	 * 
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog

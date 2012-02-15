@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,17 @@ public final class Pair<T1,T2> {
 	}
 	public boolean hasSecond() {
 		return value2 != null;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append('<');
+		sb.append(first());
+		sb.append(':');
+		sb.append(second());
+		sb.append('>');
+		return sb.toString();
 	}
 }
 

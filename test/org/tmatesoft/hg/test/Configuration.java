@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -92,6 +92,9 @@ public class Configuration {
 		return rv;
 	}
 
+	/**
+	 * @return temporary directory to use in tests, may be configured from outside
+	 */
 	public File getTempDir() {
 		if (tempDir == null) {
 			String td = System.getProperty("hg4j.tests.tmpdir", System.getProperty("java.io.tmpdir"));
@@ -100,6 +103,9 @@ public class Configuration {
 		return tempDir;
 	}
 	
+	/**
+	 * @return location with various files used in tests
+	 */
 	public File getTestDataDir() {
 		if (testDataDir == null) {
 			testDataDir = new File(System.getProperty("user.dir"), "test-data");
