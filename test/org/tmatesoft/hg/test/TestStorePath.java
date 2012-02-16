@@ -21,6 +21,7 @@ import junit.framework.Assert;
 import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -44,7 +45,7 @@ public class TestStorePath {
 	}
 	
 	public TestStorePath() {
-		final Internals i = new Internals();
+		final Internals i = new Internals(new BasicSessionContext(null, null));
 		i.setStorageConfig(1, 0x7);
 		storePathHelper = i.buildDataFilesHelper();
 	}
