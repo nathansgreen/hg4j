@@ -30,6 +30,7 @@ import java.util.LinkedList;
 import java.util.TreeMap;
 import java.util.zip.DeflaterOutputStream;
 
+import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
@@ -132,7 +133,7 @@ public class HgCloneCommand {
 
 		public WriteDownMate(File destDir) {
 			hgDir = new File(destDir, ".hg");
-			implHelper = new Internals();
+			implHelper = new Internals(new BasicSessionContext(null, null));
 			implHelper.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
 			storagePathHelper = implHelper.buildDataFilesHelper();
 		}

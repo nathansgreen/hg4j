@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.core.Nodeid.NULL;
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.ByteArrayOutputStream;
@@ -25,6 +27,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -97,41 +100,103 @@ public class HgManifest extends Revlog {
 	}
 
 	/**
+	 * Walks manifest revisions that correspond to specified range of changesets. The order in which manifest versions get reported
+	 * to the inspector corresponds to physical order of manifest revisions, not that of changesets (with few exceptions as noted below).
+	 * That is, for cset-manifest revision pairs:
+	 * <pre>
+	 *   3  8
+	 *   4  7
+	 *   5  9
+	 * </pre>
+	 * call <code>walk(3,5, insp)</code> would yield (4,7), (3,8) and (5,9) to the inspector; 
+	 * different order of arguments, <code>walk(5, 3, insp)</code>, makes no difference.
+	 * 
+	 * <p>Physical layout of mercurial files (revlog) doesn't impose any restriction on whether manifest and changeset revisions shall go 
+	 * incrementally, nor it mandates presence of manifest version for a changeset. Thus, there might be changesets that record {@link Nodeid#NULL}
+	 * as corresponding manifest revision. This situation is deemed exceptional now and what would <code>inspector</code> get depends on whether 
+	 * <code>start</code> or <code>end</code> arguments point to such changeset, or such changeset happen to be somewhere inside the range 
+	 * <code>[start..end]</code>. Implementation does it best to report empty manifests (<code>Inspector.begin(BAD_REVISION, NULL, csetRevIndex);</code>
+	 * followed immediately by <code>Inspector.end(BAD_REVISION)</code> when <code>start</code> and/or <code>end</code> point to changeset with no associated 
+	 * manifest revision. However, if changeset-manifest revision pairs look like:
+	 * <pre>
+	 *   3  8
+	 *   4  -1 (cset records null revision for manifest)
+	 *   5  9
+	 * </pre>
+	 * call <code>walk(3,5, insp)</code> would yield only (3,8) and (5,9) to the inspector, without additional empty 
+	 * <code>Inspector.begin(); Inspector.end()</code> call pair.   
 	 * 
 	 * @param start changelog (not manifest!) revision to begin with
 	 * @param end changelog (not manifest!) revision to stop, inclusive.
-	 * @param inspector can't be <code>null</code>
+	 * @param inspector manifest revision visitor, can't be <code>null</code>
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public void walk(int start, int end, final Inspector inspector) throws /*FIXME HgInvalidRevisionException,*/ HgInvalidControlFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		int start0 = fromChangelog(start);
-		int end0 = fromChangelog(end);
-		if (end0 < start0) {
-			// there are tool-constructed repositories that got order of changeset revisions completely different from that of manifest
-			int x = end0;
-			end0 = start0;
-			start0 = x;
+		final int csetFirst = start <= end ? start : end, csetLast = start > end ? start : end;
+		int manifestFirst, manifestLast, i = 0;
+		do {
+			manifestFirst = fromChangelog(csetFirst+i);
+			if (manifestFirst == -1) {
+				inspector.begin(BAD_REVISION, NULL, csetFirst+i);
+				inspector.end(BAD_REVISION);
+			}
+			i++;
+		} while (manifestFirst == -1 && csetFirst+i <= csetLast);
+		if (manifestFirst == -1) {
+			getRepo().getContext().getLog().info(getClass(), "None of changesets [%d..%d] have associated manifest revision", csetFirst, csetLast);
+			// we ran through all revisions in [start..end] and none of them had manifest.
+			// we reported that to inspector and proceeding is done now.
+			return;
 		}
-		content.iterate(start0, end0, true, new ManifestParser(inspector));
+		i = 0;
+		do {
+			manifestLast = fromChangelog(csetLast-i);
+			if (manifestLast == -1) {
+				inspector.begin(BAD_REVISION, NULL, csetLast-i);
+				inspector.end(BAD_REVISION);
+			}
+			i++;
+		} while (manifestLast == -1 && csetLast-i >= csetFirst);
+		if (manifestLast == -1) {
+			// hmm, manifestFirst != -1 here, hence there's i from [csetFirst..csetLast] for which manifest entry exists, 
+			// and thus it's impossible to run into manifestLast == -1. Nevertheless, never hurts to check.
+			throw new HgBadStateException(String.format("Manifest %d-%d(!) for cset range [%d..%d] ", manifestFirst, manifestLast, csetFirst, csetLast));
+		}
+		if (manifestLast < manifestFirst) {
+			// there are tool-constructed repositories that got order of changeset revisions completely different from that of manifest
+			int x = manifestLast;
+			manifestLast = manifestFirst;
+			manifestFirst = x;
+		}
+		content.iterate(manifestFirst, manifestLast, true, new ManifestParser(inspector));
 	}
 	
 	/**
-	 * "Sparse" iteration of the manifest
+	 * "Sparse" iteration of the manifest, more effective than accessing revisions one by one.
+	 * <p> Inspector is invoked for each changeset revision supplied, even when there's no manifest
+	 * revision associated with a changeset (@see {@link #walk(int, int, Inspector)} for more details when it happens). Order inspector
+	 * gets invoked doesn't resemble order of changeset revisions supplied, manifest revisions are reported in the order they appear 
+	 * in manifest revlog (with exception of changesets with missing manifest that may be reported in any order).   
 	 * 
-	 * @param inspector
-	 * @param revisionIndexes local indexes of changesets to visit
+	 * @param inspector manifest revision visitor, can't be <code>null</code>
+	 * @param revisionIndexes local indexes of changesets to visit, non-<code>null</code>
 	 */
 	public void walk(final Inspector inspector, int... revisionIndexes) throws HgInvalidControlFileException{
 		if (inspector == null || revisionIndexes == null) {
 			throw new IllegalArgumentException();
 		}
-		int[] manifestRevs = toManifestRevisionIndexes(revisionIndexes);
+		int[] manifestRevs = toManifestRevisionIndexes(revisionIndexes, inspector);
 		content.iterate(manifestRevs, true, new ManifestParser(inspector));
 	}
 	
-	// manifest revision number that corresponds to the given changeset
+	// 
+	/**
+	 * Tells manifest revision number that corresponds to the given changeset.
+	 * @return manifest revision index, or -1 if changeset has no associated manifest (cset records NULL nodeid for manifest) 
+	 */
 	/*package-local*/ int fromChangelog(int changesetRevisionIndex) throws HgInvalidControlFileException {
 		if (HgInternals.wrongRevisionIndex(changesetRevisionIndex)) {
 			throw new IllegalArgumentException(String.valueOf(changesetRevisionIndex));
@@ -163,7 +228,7 @@ public class HgManifest extends Revlog {
 	@Experimental(reason="@see #getFileRevision")
 	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... changelogRevisionIndexes) throws HgInvalidControlFileException{
 		// FIXME need tests
-		int[] manifestRevisionIndexes = toManifestRevisionIndexes(changelogRevisionIndexes);
+		int[] manifestRevisionIndexes = toManifestRevisionIndexes(changelogRevisionIndexes, null);
 		final HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>(changelogRevisionIndexes.length);
 		content.iterate(manifestRevisionIndexes, true, new RevlogStream.Inspector() {
 			
@@ -199,20 +264,41 @@ public class HgManifest extends Revlog {
 	}
 
 
-	private int[] toManifestRevisionIndexes(int[] changelogRevisionIndexes) throws HgInvalidControlFileException {
+	/**
+	 * @param changelogRevisionIndexes non-null
+	 * @param inspector may be null if reporting of missing manifests is not needed
+	 */
+	private int[] toManifestRevisionIndexes(int[] changelogRevisionIndexes, Inspector inspector) throws HgInvalidControlFileException {
 		int[] manifestRevs = new int[changelogRevisionIndexes.length];
 		boolean needsSort = false;
+		int j = 0;
 		for (int i = 0; i < changelogRevisionIndexes.length; i++) {
 			final int manifestRevisionIndex = fromChangelog(changelogRevisionIndexes[i]);
-			manifestRevs[i] = manifestRevisionIndex;
-			if (i > 0 && manifestRevs[i-1] > manifestRevisionIndex) {
-				needsSort = true;
+			if (manifestRevisionIndex == -1) {
+				if (inspector != null) {
+					inspector.begin(BAD_REVISION, NULL, changelogRevisionIndexes[i]);
+					inspector.end(BAD_REVISION);
+				}
+				// othrwise, ignore changeset without manifest
+			} else {
+				manifestRevs[j] = manifestRevisionIndex;
+				if (j > 0 && manifestRevs[j-1] > manifestRevisionIndex) {
+					needsSort = true;
+				}
+				j++;
 			}
 		}
 		if (needsSort) {
-			Arrays.sort(manifestRevs);
+			Arrays.sort(manifestRevs, 0, j);
 		}
-		return manifestRevs;
+		if (j == manifestRevs.length) {
+			return manifestRevs;
+		} else {
+			int[] rv = new int[j];
+			//Arrays.copyOfRange
+			System.arraycopy(manifestRevs, 0, rv, 0, j);
+			return rv;
+		}
 	}
 
 	public interface Inspector {
@@ -477,11 +563,11 @@ public class HgManifest extends Revlog {
 			for (int u : undefinedChangelogRevision) {
 				try {
 					Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
-					// FIXME calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
+					// TODO calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
 					// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
 					if (manifest.isNull()) {
 						repo.getContext().getLog().warn(getClass(), "Changeset %d has no associated manifest entry", u);
-						// keep -1 in the changelog2manifest map. FIXME rest of the code shall accomodate to the fact manifest revision may be missing
+						// keep -1 in the changelog2manifest map.
 					} else {
 						changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
 					}
