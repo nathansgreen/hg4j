@@ -127,11 +127,12 @@ public class InflaterDataAccess extends FilterDataAccess {
 	}
 	
 	@Override
-	public void skip(int bytes) throws IOException {
+	public void skip(final int bytesToSkip) throws IOException {
+		int bytes = bytesToSkip;
 		if (bytes < 0) {
 			bytes += decompressedPos;
 			if (bytes < 0) {
-				throw new IOException("Underflow. Rewind past start of the slice.");
+				throw new IOException(String.format("Underflow. Rewind past start of the slice. To skip:%d, decPos:%d, decLen:%d. Left:%d", bytesToSkip, decompressedPos, decompressedLength, bytes));
 			}
 			reset();
 			// fall-through
@@ -141,7 +142,7 @@ public class InflaterDataAccess extends FilterDataAccess {
 			bytes--;
 		}
 		if (bytes != 0) {
-			throw new IOException("Underflow. Rewind past end of the slice");
+			throw new IOException(String.format("Underflow. Rewind past end of the slice. To skip:%d, decPos:%d, decLen:%d. Left:%d", bytesToSkip, decompressedPos, decompressedLength, bytes));
 		}
 	}
 

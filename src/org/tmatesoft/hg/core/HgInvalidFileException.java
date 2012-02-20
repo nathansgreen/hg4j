@@ -59,4 +59,19 @@ public class HgInvalidFileException extends HgException {
 	public File getFile() {
 		return localFile;
 	}
+
+	@Override
+	protected void appendDetails(StringBuilder sb) {
+		super.appendDetails(sb);
+		if (localFile != null) {
+			sb.append(" file:");
+			sb.append(localFile.getPath());
+			sb.append(',');
+			if (localFile.exists()) {
+				sb.append("EXISTS");
+			} else {
+				sb.append("DOESN'T EXIST");
+			}
+		}
+	}
 }
