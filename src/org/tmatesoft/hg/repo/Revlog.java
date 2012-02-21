@@ -140,7 +140,10 @@ abstract class Revlog {
 	public final int getRevisionIndex(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		int revision = content.findRevisionIndex(nid);
 		if (revision == BAD_REVISION) {
-			throw new HgInvalidRevisionException(String.format("Can't find revision %s in %s", nid.shortNotation(), this /*FIXME HgDataFile.getPath might be more suitable here*/), nid, null);
+			// using toString() to identify revlog. HgDataFile.toString includes path, HgManifest and HgChangelog instances 
+			// are fine with default (class name)
+			// Perhaps, more tailored description method would be suitable here
+			throw new HgInvalidRevisionException(String.format("Can't find revision %s in %s", nid.shortNotation(), this), nid, null);
 		}
 		return revision;
 	}
@@ -344,9 +347,9 @@ abstract class Revlog {
 		public void init() throws HgInvalidControlFileException {
 			final int revisionCount = Revlog.this.getRevisionCount();
 			firstParent = new Nodeid[revisionCount];
-			// although branches/merges are less frequent, and most of secondParent would be -1/null, some sort of 
-			// SparseOrderedList might be handy, provided its inner structures do not overweight simplicity of an array
-			// FIXME IntMap is right candidate?
+			// TODO [post 1.0] Branches/merges are less frequent, and most of secondParent would be -1/null, hence 
+			// IntMap might be better alternative here, but need to carefully analyze (test) whether this brings
+			// real improvement (IntMap has 2n capacity, and element lookup is log(n) instead of array's constant)
 			secondParent = new Nodeid[revisionCount];
 			//
 			sequential = new Nodeid[revisionCount];
@@ -368,9 +371,12 @@ abstract class Revlog {
 			}
 		}
 		
-		// FIXME need to decide whether Nodeid(00 * 20) is always known or not
-		// right now Nodeid.NULL is not recognized as known if passed to this method, 
-		// caller is supposed to make explicit check 
+		/**
+		 * Tells whether supplied revision is from the walker's associated revlog.
+		 * Note, {@link Nodeid#NULL}, although implicitly present as parent of a first revision, is not recognized as known. 
+		 * @param nid revision to check, not <code>null</code>
+		 * @return <code>true</code> if revision matches any revision in this revlog
+		 */
 		public boolean knownNode(Nodeid nid) {
 			return Arrays.binarySearch(sorted, nid) >= 0;
 		}
@@ -480,7 +486,7 @@ abstract class Revlog {
 			final Nodeid canonicalNode = sequential[i];
 			i++; // no need to check node itself. child nodes may appear in sequential only after revision in question
 			for (; i < sequential.length; i++) {
-				// FIXME likely, not very effective. 
+				// TODO [post 1.0] likely, not very effective. 
 				// May want to optimize it with another (Tree|Hash)Set, created on demand on first use, 
 				// however, need to be careful with memory usage
 				if (firstParent[i] == canonicalNode || secondParent[i] == canonicalNode) {
