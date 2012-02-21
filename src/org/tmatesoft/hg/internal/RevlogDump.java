@@ -17,10 +17,13 @@
 package org.tmatesoft.hg.internal;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -45,12 +48,15 @@ public class RevlogDump {
 		String filename = "store/00changelog.i";
 //		String filename = "store/data/hello.c.i";
 //		String filename = "store/data/docs/readme.i";
-		boolean dumpData = true;
+		boolean dumpDataFull = true;
+		boolean dumpDataStats = false;
 		if (args.length > 1) {
 			repo = args[0];
 			filename = args[1];
-			dumpData = args.length > 2 ? "dumpData".equals(args[2]) : false;
+			dumpDataFull = args.length > 2 ? "dumpData".equals(args[2]) : false;
+			dumpDataStats = args.length > 2 ? "dumpDataStats".equals(args[2]) : false;
 		}
+		final boolean needRevData = dumpDataFull || dumpDataStats; 
 		//
 		DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(new File(repo, filename))));
 		DataInput di = dis;
@@ -62,7 +68,7 @@ public class RevlogDump {
 		final boolean inlineData = (versionField & INLINEDATA) != 0;
 		System.out.printf("%#8x, inline: %b\n", versionField, inlineData);
 		FileChannel dataStream = null; 
-		if (!inlineData && dumpData) {
+		if (!inlineData && needRevData) {
 			dataStream = new FileInputStream(new File(repo, filename.substring(0, filename.length()-2) + ".d")).getChannel();
 		}
 		System.out.println("Index    Offset      Flags     Packed     Actual   Base Rev   Link Rev  Parent1  Parent2     nodeid");
@@ -88,11 +94,11 @@ public class RevlogDump {
 			byte[] data = new byte[compressedLen];
 			if (inlineData) {
 				di.readFully(data);
-			} else if (dumpData) {
+			} else if (needRevData) {
 				dataStream.position(offset);
 				dataStream.read(ByteBuffer.wrap(data));
 			}
-			if (dumpData) {
+			if (needRevData) {
 				if (compressedLen == 0) {
 					resultString = "<NO DATA>";
 				} else {
@@ -102,11 +108,11 @@ public class RevlogDump {
 						byte[] result = new byte[actualLen*2];
 						int resultLen = zlib.inflate(result);
 						zlib.end();
-						resultString = new String(result, 0, resultLen, "UTF-8");
+						resultString = buildString(result, 0, resultLen, baseRevision != entryIndex, dumpDataFull);
 					} else if (data[0] == 0x75 /* 'u' */) {
-						resultString = new String(data, 1, data.length - 1, "UTF-8");
+						resultString = buildString(data, 1, data.length - 1, baseRevision != entryIndex, dumpDataFull);
 					} else {
-						resultString = new String(data);
+						resultString = buildString(data, 0, data.length, baseRevision != entryIndex, dumpDataFull);
 					}
 				}
 				System.out.println(resultString);
@@ -118,5 +124,34 @@ public class RevlogDump {
 			dataStream.close();
 		}
 		//
+	}
+	
+	private static String buildString(byte[] data, int offset, int len, boolean isPatch, boolean completeDataDump) throws IOException, UnsupportedEncodingException {
+		if (isPatch) {
+			DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data, offset, len));
+			StringBuilder sb = new StringBuilder();
+			sb.append("<PATCH>:\n");
+			while (dis.available() > 0) {
+				int s = dis.readInt();
+				int e = dis.readInt();
+				int l = dis.readInt();
+				sb.append(String.format("%d..%d, %d", s, e, l));
+				if (completeDataDump) {
+					byte[] src = new byte[l];
+					dis.read(src, 0, l);
+					sb.append(":");
+					sb.append(new String(src, 0, l, "UTF-8"));
+				} else {
+					dis.skipBytes(l);
+				}
+				sb.append('\n');
+			}
+			return sb.toString();
+		} else {
+			if (completeDataDump) {
+				return new String(data, offset, len, "UTF-8");
+			}
+			return String.format("<DATA>:%d bytes", len-offset);
+		}
 	}
 }
