@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@ import org.tmatesoft.hg.util.Path;
  * {@link RuntimeException} subclass, {@link Wrap}. Then, unwrap and re-throw with checked {@link HgCallbackTargetException}. 
  * 
  * FIXME REVISIT perhaps, shall just throw HgCallbackTargetException from any handler, and do not catch anything in commands at all?
+ * FIXME decide whether shall root at HgException ("throws HgException, HgCallbackTargetException" looks a bit odd now) 
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

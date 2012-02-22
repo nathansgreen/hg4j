@@ -177,25 +177,54 @@ abstract class Revlog {
 	}
 
 	/**
-	 * Access to revision data as is (decompressed, but otherwise unprocessed, i.e. not parsed for e.g. changeset or manifest entries) 
-	 * @param nodeid
+	 * Access to revision data as is, equivalent to <code>rawContent(getRevisionIndex(nodeid), sink)</code>
+	 * 
+	 * @param nodeid revision to retrieve
+	 * @param sink data destination
+	 * 
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws CancelledException if content retrieval operation was cancelled
+	 * 
+	 * @see #rawContent(int, ByteChannel)
 	 */
-	protected void rawContent(Nodeid nodeid, ByteChannel sink) throws HgException, IOException, CancelledException, HgInvalidRevisionException {
+	protected void rawContent(Nodeid nodeid, ByteChannel sink) throws HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
 		rawContent(getRevisionIndex(nodeid), sink);
 	}
 	
 	/**
-	 * @param fileRevisionIndex - index of this file change (not a changelog revision index), non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
-	 * FIXME is it necessary to have IOException along with HgException here?
+	 * Access to revision data as is (decompressed, but otherwise unprocessed, i.e. not parsed for e.g. changeset or manifest entries).
+	 *  
+	 * @param fileRevisionIndex index of this revlog change (not a changelog revision index), non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense.
+	 * @param sink data destination
+	 * 
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws CancelledException if content retrieval operation was cancelled
 	 */
-	protected void rawContent(int fileRevisionIndex, ByteChannel sink) throws HgException, IOException, CancelledException, HgInvalidRevisionException {
+	protected void rawContent(int fileRevisionIndex, ByteChannel sink) throws HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
 		if (sink == null) {
 			throw new IllegalArgumentException();
 		}
-		ContentPipe insp = new ContentPipe(sink, 0, repo.getContext().getLog());
-		insp.checkCancelled();
-		content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
-		insp.checkFailed();
+		try {
+			ContentPipe insp = new ContentPipe(sink, 0, repo.getContext().getLog());
+			insp.checkCancelled();
+			content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
+			insp.checkFailed();
+		} catch (IOException ex) {
+			HgInvalidControlFileException e = new HgInvalidControlFileException(String.format("Access to revision %d content failed", fileRevisionIndex), ex, null);
+			e.setRevisionIndex(fileRevisionIndex);
+			// FIXME e.setFileName(content.getIndexFile() or this.getHumanFriendlyPath()) - shall decide whether 
+			// protected abstract getPath() with impl in HgDataFile, HgManifest and HgChangelog or path is data of either Revlog or RevlogStream
+			// Do the same (add file name) below
+			throw e;
+		} catch (HgInvalidControlFileException ex) {
+			throw ex;
+		} catch (HgException ex) {
+			HgInvalidControlFileException e = new HgInvalidControlFileException(ex.getClass().getSimpleName(), ex, null);
+			e.setRevisionIndex(fileRevisionIndex);
+			throw e;
+		}
 	}
 
 	/**
@@ -585,6 +614,7 @@ abstract class Revlog {
 			failure = ex;
 		}
 
+		// TODO consider if IOException in addition to HgException is of any real utility
 		public void checkFailed() throws HgException, IOException, CancelledException {
 			if (failure == null) {
 				return;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ import org.tmatesoft.hg.internal.Experimental;
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
-@Experimental(reason="WORK IN PROGRESS. Name is likely to change. Path argument to be added?")
+@Experimental(reason="WORK IN PROGRESS. Name is likely to change")
 public class HgInvalidControlFileException extends HgInvalidFileException {
 
 	public HgInvalidControlFileException(String message, Throwable th, File file) {
@@ -45,6 +45,12 @@ public class HgInvalidControlFileException extends HgInvalidFileException {
 	@Override
 	public HgInvalidControlFileException setRevision(Nodeid r) {
 		super.setRevision(r);
+		return this;
+	}
+
+	@Override
+	public HgException setRevisionIndex(int rev) {
+		super.setRevisionIndex(rev);
 		return this;
 	}
 }

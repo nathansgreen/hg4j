@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -101,7 +101,7 @@ public class HgException extends Exception {
 	
 	protected void appendDetails(StringBuilder sb) {
 		if (filename != null) {
-			sb.append("file:'");
+			sb.append("path:'");
 			sb.append(filename);
 			sb.append('\'');
 			sb.append(';');
