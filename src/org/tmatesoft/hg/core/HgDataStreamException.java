@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,12 +21,14 @@ import org.tmatesoft.hg.util.Path;
 
 /**
  * Any erroneous state with @link {@link HgDataFile} input/output, read/write operations
- * FIXME/REVISIT if HgInvalidControlFileExceptio and HgInvalidFileException is not sufficient? Is there real need for all 3?  
+ * 
+ * @deprecated {@link HgInvalidControlFileException} and {@link HgInvalidFileException} deemed sufficient
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
+@Deprecated
 public class HgDataStreamException extends HgException {
 
 	public HgDataStreamException(Path file, String message, Throwable cause) {

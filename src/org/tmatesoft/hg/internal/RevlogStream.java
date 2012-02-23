@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -56,6 +56,7 @@ public class RevlogStream {
 	private int[] baseRevisions;
 	private boolean inline = false;
 	private final File indexFile;
+	private File dataFile;
 	private final DataAccessProvider dataAccess;
 
 	// if we need anything else from HgRepo, might replace DAP parameter with HgRepo and query it for DAP.
@@ -71,10 +72,33 @@ public class RevlogStream {
 	}
 
 	/*package*/ DataAccess getDataStream() {
-		final String indexName = indexFile.getName();
-		File dataFile = new File(indexFile.getParentFile(), indexName.substring(0, indexName.length() - 1) + "d");
-		return dataAccess.create(dataFile);
+		return dataAccess.create(getDataFile());
 	}
+	
+	/**
+	 * Constructs file object that corresponds to .d revlog counterpart. 
+	 * Note, it's caller responsibility to ensure this file makes any sense (i.e. check {@link #inline} attribute)
+	 */
+	private File getDataFile() {
+		if (dataFile == null) {
+			final String indexName = indexFile.getName();
+			dataFile = new File(indexFile.getParentFile(), indexName.substring(0, indexName.length() - 1) + "d");
+		}
+		return dataFile;
+	}
+	
+	// initialize exception with the file where revlog structure information comes from
+	public HgInvalidControlFileException initWithIndexFile(HgInvalidControlFileException ex) {
+		return ex.setFile(indexFile);
+	}
+
+	// initialize exception with the file where revlog data comes from
+	public HgInvalidControlFileException initWithDataFile(HgInvalidControlFileException ex) {
+		// exceptions are usually raised after read attepmt, hence inline shall be initialized
+		// although honest approach is to call #initOutline() first
+		return ex.setFile(inline ? indexFile : getDataFile());
+	}
+
 	
 	public int revisionCount() {
 		initOutline();

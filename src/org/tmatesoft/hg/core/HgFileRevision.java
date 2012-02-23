@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,13 +99,13 @@ public final class HgFileRevision {
 		return parents;
 	}
 
-	public void putContentTo(ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException {
+	public void putContentTo(ByteChannel sink) throws HgException, CancelledException {
 		HgDataFile fn = repo.getFileNode(path);
 		int revisionIndex = fn.getRevisionIndex(revision);
 		fn.contentWithFilters(revisionIndex, sink);
 	}
 
-	private void checkCopy() throws HgInvalidControlFileException, HgDataStreamException {
+	private void checkCopy() throws HgException {
 		HgDataFile fn = repo.getFileNode(path);
 		if (fn.isCopy()) {
 			if (fn.getRevision(0).equals(revision)) {

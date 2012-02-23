@@ -317,6 +317,7 @@ public class DataAccessProvider {
 				try {
 					fileChannel.close();
 				} catch (IOException ex) {
+					// FIXME/TODO log facility can be obtained from session context 
 					StreamLogFacility.newDefault().debug(getClass(), ex, null);
 				}
 				fileChannel = null;

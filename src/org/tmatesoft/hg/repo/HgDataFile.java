@@ -31,9 +31,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
@@ -93,23 +93,27 @@ public class HgDataFile extends Revlog {
 	 * @param nodeid revision of the file
 	 * 
 	 * @return size of the file content at the given revision
-	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
-	 * @throws HgDataStreamException if attempt to access file metadata failed
+	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog (<em>runtime exception</em>)  
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public int length(Nodeid nodeid) throws HgDataStreamException, HgInvalidControlFileException, HgInvalidRevisionException {
-		return length(getRevisionIndex(nodeid));
+	public int length(Nodeid nodeid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		try {
+			return length(getRevisionIndex(nodeid));
+		} catch (HgInvalidControlFileException ex) {
+			throw ex.isRevisionSet() ? ex : ex.setRevision(nodeid);
+		} catch (HgInvalidRevisionException ex) {
+			throw ex.isRevisionSet() ? ex : ex.setRevision(nodeid);
+		}
 	}
 	
 	/**
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
 	 * @return size of the file content at the revision identified by local revision number.
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
-	 * @throws HgDataStreamException if attempt to access file metadata failed
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public int length(int fileRevisionIndex) throws HgDataStreamException, HgInvalidControlFileException, HgInvalidRevisionException {
-		// TODO support WORKING_COPY constant
+	public int length(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		// FIXME support WORKING_COPY constant
 		if (metadata == null || !metadata.checked(fileRevisionIndex)) {
 			checkAndRecordMetadata(fileRevisionIndex);
 		}
@@ -126,11 +130,12 @@ public class HgDataFile extends Revlog {
 	 * as if it would be refreshed in the working copy, i.e. its corresponding revision 
 	 * (XXX according to dirstate? file tip?) is read from the repository, and filters repo -> working copy get applied.
 	 *     
-	 * @param sink where to pipe content to
-	 * @throws HgDataStreamException to indicate troubles reading repository file
+	 * @param sink content consumer
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgInvalidFileException if access to file in working directory failed
 	 * @throws CancelledException if execution of the operation was cancelled
 	 */
-	public void workingCopy(ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException {
+	public void workingCopy(ByteChannel sink) throws HgException, CancelledException {
 		File f = getRepo().getFile(this);
 		if (f.exists()) {
 			final CancelSupport cs = CancelSupport.Factory.get(sink);
@@ -150,7 +155,7 @@ public class HgDataFile extends Revlog {
 					buf.compact();
 				}
 			} catch (IOException ex) {
-				throw new HgDataStreamException(getPath(), ex);
+				throw new HgInvalidFileException("Working copy read failed", ex, f);
 			} finally {
 				progress.done();
 				if (fc != null) {
@@ -165,7 +170,8 @@ public class HgDataFile extends Revlog {
 			final Pair<Nodeid, Nodeid> wcParents = getRepo().getWorkingCopyParents();
 			Nodeid p = wcParents.first().isNull() ? wcParents.second() : wcParents.first();
 			if (p.isNull()) {
-				// no dirstate parents - no content 
+				// no dirstate parents - no content
+				// XXX what if it's repository with no dirstate? Shall I use TIP then?
 				return;
 			}
 			final HgChangelog clog = getRepo().getChangelog();
@@ -184,49 +190,39 @@ public class HgDataFile extends Revlog {
 		}
 	}
 	
-//	public void content(int revision, ByteChannel sink, boolean applyFilters) throws HgDataStreamException, IOException, CancelledException {
-//		byte[] content = content(revision);
-//		final CancelSupport cancelSupport = CancelSupport.Factory.get(sink);
-//		final ProgressSupport progressSupport = ProgressSupport.Factory.get(sink);
-//		ByteBuffer buf = ByteBuffer.allocate(512);
-//		int left = content.length;
-//		progressSupport.start(left);
-//		int offset = 0;
-//		cancelSupport.checkCancelled();
-//		ByteChannel _sink = applyFilters ? new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())) : sink;
-//		do {
-//			buf.put(content, offset, Math.min(left, buf.remaining()));
-//			buf.flip();
-//			cancelSupport.checkCancelled();
-//			// XXX I may not rely on returned number of bytes but track change in buf position instead.
-//			int consumed = _sink.write(buf);
-//			buf.compact();
-//			offset += consumed;
-//			left -= consumed;
-//			progressSupport.worked(consumed);
-//		} while (left > 0);
-//		progressSupport.done(); // XXX shall specify whether #done() is invoked always or only if completed successfully.
-//	}
-	
-	/*XXX not sure distinct method contentWithFilters() is the best way to do, perhaps, callers shall add filters themselves?*/
-	public void contentWithFilters(int revision, ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
-		if (revision == WORKING_COPY) {
+	/**
+	 * Access content of a file revision
+	 * XXX not sure distinct method contentWithFilters() is the best way to do, perhaps, callers shall add filters themselves?
+	 * 
+ 	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
+	 * @param sink content consumer
+	 * 
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgInvalidFileException if access to file in working directory failed
+	 * @throws CancelledException if execution of the operation was cancelled
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
+	 */
+	public void contentWithFilters(int fileRevisionIndex, ByteChannel sink) throws HgException, CancelledException, HgInvalidRevisionException {
+		if (fileRevisionIndex == WORKING_COPY) {
 			workingCopy(sink); // pass un-mangled sink
 		} else {
-			content(revision, new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())));
+			content(fileRevisionIndex, new FilterByteChannel(sink, getRepo().getFiltersFromRepoToWorkingDir(getPath())));
 		}
 	}
 
 	/**
+	 * Retrieve content of specific revision. Content is provided as is, without any filters (e.g. keywords, eol, etc.) applied.
+	 * For filtered content, use {@link #contentWithFilters(int, ByteChannel)}. 
 	 * 
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
-	 * @param sink
-	 * @throws HgDataStreamException FIXME EXCEPTIONS
+	 * @param sink content consumer
+	 * 
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgInvalidFileException if access to file in working directory failed
 	 * @throws CancelledException if execution of the operation was cancelled
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
 	 */
-	public void content(int fileRevisionIndex, ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
+	public void content(int fileRevisionIndex, ByteChannel sink) throws HgException, CancelledException, HgInvalidRevisionException {
 		// for data files need to check heading of the file content for possible metadata
 		// @see http://mercurial.selenic.com/wiki/FileFormats#data.2BAC8-
 		if (fileRevisionIndex == TIP) {
@@ -255,19 +251,22 @@ public class HgDataFile extends Revlog {
 			insp = new ContentPipe(sink, metadata.dataOffset(fileRevisionIndex), lf);
 		} else {
 			// do not know if there's metadata
-			insp = new MetadataInspector(metadata, lf, getPath(), new ContentPipe(sink, 0, lf));
+			insp = new MetadataInspector(metadata, lf, new ContentPipe(sink, 0, lf));
 		}
 		insp.checkCancelled();
 		super.content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
 		try {
 			insp.checkFailed(); // XXX is there real need to throw IOException from ContentPipe?
-		} catch (HgDataStreamException ex) {
-			throw ex;
+		} catch (HgInvalidControlFileException ex) {
+			ex = ex.setFileName(getPath());
+			throw ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(fileRevisionIndex);
 		} catch (IOException ex) {
-			throw new HgDataStreamException(getPath(), ex).setRevisionIndex(fileRevisionIndex);
+			HgInvalidControlFileException e = new HgInvalidControlFileException("Revision content access failed", ex, null);
+			throw content.initWithIndexFile(e).setFileName(getPath()).setRevisionIndex(fileRevisionIndex);
 		} catch (HgException ex) {
 			// shall not happen, unless we changed ContentPipe or its subclass
-			throw new HgDataStreamException(getPath(), ex.getClass().getName(), ex);
+			HgInvalidControlFileException e = new HgInvalidControlFileException("Revision content access failed", ex, null);
+			throw content.initWithIndexFile(e).setFileName(getPath()).setRevisionIndex(fileRevisionIndex);
 		}
 	}
 	
@@ -460,11 +459,11 @@ public class HgDataFile extends Revlog {
 	}
 
 	/**
-	 * 
-	 * @return
-	 * @throws HgDataStreamException if attempt to access file metadata failed
+	 * Tells whether this file originates from another repository file
+	 * @return <code>true</code> if this file is a copy of another from the repository
+	 * @throws HgInvalidControlFileException if access to revlog or file metadata failed
 	 */
-	public boolean isCopy() throws HgDataStreamException {
+	public boolean isCopy() throws HgInvalidControlFileException {
 		if (metadata == null || !metadata.checked(0)) {
 			checkAndRecordMetadata(0);
 		}
@@ -478,17 +477,17 @@ public class HgDataFile extends Revlog {
 	 * Get name of the file this one was copied from.
 	 * 
 	 * @return name of the file origin
-	 * @throws HgDataStreamException if attempt to access file metadata failed
+	 * @throws HgInvalidControlFileException if access to revlog or file metadata failed
 	 * @throws UnsupportedOperationException if this file doesn't represent a copy ({@link #isCopy()} was false)
 	 */
-	public Path getCopySourceName() throws HgDataStreamException {
+	public Path getCopySourceName() throws HgInvalidControlFileException {
 		if (isCopy()) {
 			return Path.create(metadata.find(0, "copy"));
 		}
 		throw new UnsupportedOperationException(); // XXX REVISIT, think over if Exception is good (clients would check isCopy() anyway, perhaps null is sufficient?)
 	}
 	
-	public Nodeid getCopySourceRevision() throws HgDataStreamException {
+	public Nodeid getCopySourceRevision() throws HgInvalidControlFileException {
 		if (isCopy()) {
 			return Nodeid.fromAscii(metadata.find(0, "copyrev")); // XXX reuse/cache Nodeid
 		}
@@ -504,7 +503,7 @@ public class HgDataFile extends Revlog {
 		return sb.toString();
 	}
 	
-	private void checkAndRecordMetadata(int localRev) throws HgDataStreamException {
+	private void checkAndRecordMetadata(int localRev) throws HgInvalidControlFileException {
 		// content() always initializes metadata.
 		// FIXME this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
 		// Alternatively, may parameterize MetadataContentPipe to do prepare only.
@@ -520,7 +519,10 @@ public class HgDataFile extends Revlog {
 		} catch (CancelledException ex) {
 			// it's ok, we did that
 		} catch (HgInvalidControlFileException ex) {
-			throw new HgDataStreamException(getPath(), ex);
+			throw ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(localRev);
+		} catch (HgException ex) {
+			// metadata comes from the content, hence initWithDataFile
+			throw content.initWithDataFile(new HgInvalidControlFileException(null, ex, null));
 		}
 	}
 
@@ -616,12 +618,10 @@ public class HgDataFile extends Revlog {
 	private static class MetadataInspector extends ErrorHandlingInspector implements RevlogStream.Inspector {
 		private final Metadata metadata;
 		private final RevlogStream.Inspector delegate;
-		private final Path fname; // need these only for error reporting
 		private final LogFacility log;
 
-		public MetadataInspector(Metadata _metadata, LogFacility logFacility, Path file, RevlogStream.Inspector chain) {
+		public MetadataInspector(Metadata _metadata, LogFacility logFacility, RevlogStream.Inspector chain) {
 			metadata = _metadata;
-			fname = file;
 			log = logFacility;
 			delegate = chain;
 			setCancelSupport(CancelSupport.Factory.get(chain));
@@ -648,12 +648,12 @@ public class HgDataFile extends Revlog {
 				}
 			} catch (IOException ex) {
 				recordFailure(ex);
-			} catch (HgDataStreamException ex) {
-				recordFailure(ex.setRevisionIndex(revisionNumber));
+			} catch (HgInvalidControlFileException ex) {
+				recordFailure(ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(revisionNumber));
 			}
 		}
 
-		private int parseMetadata(DataAccess data, final int daLength, ArrayList<MetadataEntry> _metadata) throws IOException, HgDataStreamException {
+		private int parseMetadata(DataAccess data, final int daLength, ArrayList<MetadataEntry> _metadata) throws IOException, HgInvalidControlFileException {
 			int lastEntryStart = 2;
 			int lastColon = -1;
 			// XXX in fact, need smth like ByteArrayBuilder, similar to StringBuilder,
@@ -705,7 +705,7 @@ public class HgDataFile extends Revlog {
 			// data.isEmpty is not reliable, renamed files of size==0 keep only metadata
 			if (!metadataIsComplete) {
 				// XXX perhaps, worth a testcase (empty file, renamed, read or ask ifCopy
-				throw new HgDataStreamException(fname, "Metadata is not closed properly", null);
+				throw new HgInvalidControlFileException("Metadata is not closed properly", null, null);
 			}
 			return lastEntryStart;
 		}

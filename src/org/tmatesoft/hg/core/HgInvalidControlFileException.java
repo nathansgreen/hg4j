@@ -19,12 +19,15 @@ package org.tmatesoft.hg.core;
 import java.io.File;
 
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * WORK IN PROGRESS
  * 
  * Subclass of {@link HgInvalidFileException} to indicate failure to deal with one of <b>Mercurial</b> control files 
  * (most likely those under .hg/, but also those residing in the repository, with special meaning to the Mercurial, like .hgtags or .hgignore)
+ * 
+ * XXX Perhaps, HgInvalidRevlogException?
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -44,13 +47,16 @@ public class HgInvalidControlFileException extends HgInvalidFileException {
 	
 	@Override
 	public HgInvalidControlFileException setRevision(Nodeid r) {
-		super.setRevision(r);
-		return this;
+		return (HgInvalidControlFileException) super.setRevision(r);
 	}
 
 	@Override
-	public HgException setRevisionIndex(int rev) {
-		super.setRevisionIndex(rev);
-		return this;
+	public HgInvalidControlFileException setRevisionIndex(int rev) {
+		return (HgInvalidControlFileException) super.setRevisionIndex(rev);
+	}
+	
+	@Override
+	public HgInvalidControlFileException setFileName(Path name) {
+		return (HgInvalidControlFileException) super.setFileName(name);
 	}
 }

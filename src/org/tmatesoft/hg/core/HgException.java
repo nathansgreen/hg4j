@@ -61,12 +61,15 @@ public class HgException extends Exception {
 		return getRevisionIndex();
 	}
 	
-
 	public HgException setRevisionIndex(int rev) {
 		revNumber = rev;
 		return this;
 	}
 	
+	public boolean isRevisionIndexSet() {
+		return revNumber != BAD_REVISION;
+	}
+
 	/**
 	 * @deprecated use {@link #setRevisionIndex(int)}
 	 */
@@ -85,6 +88,10 @@ public class HgException extends Exception {
 	public HgException setRevision(Nodeid r) {
 		revision = r;
 		return this;
+	}
+	
+	public boolean isRevisionSet() {
+		return revision != null;
 	}
 
 	/**

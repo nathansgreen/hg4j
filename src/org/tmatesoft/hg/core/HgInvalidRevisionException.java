@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,9 @@
  */
 package org.tmatesoft.hg.core;
 
+import static org.tmatesoft.hg.repo.HgRepository.*;
+
 import org.tmatesoft.hg.internal.Experimental;
-import org.tmatesoft.hg.repo.HgRepository;
 
 /**
  * Use of revision or revision local index that is not valid for a given revlog.
@@ -29,7 +30,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 @Experimental(reason="1) Whether to use checked or runtime exception is not yet decided. 2) Perhaps, its use not bound to wrong arguments")
 public class HgInvalidRevisionException extends IllegalArgumentException {
 	private Nodeid rev;
-	private Integer revIdx;
+	private Integer revIdx = BAD_REVISION;
 	// next two make sense only when revIdx is present
 	private int rangeLeftBoundary = -1, rangeRightBoundary = -1;
 
@@ -75,12 +76,20 @@ public class HgInvalidRevisionException extends IllegalArgumentException {
 		revIdx = revisionIndex;
 		return this;
 	}
-
+	
 	public HgInvalidRevisionException setRevisionIndex(int revisionIndex, int rangeLeft, int rangeRight) {
 		revIdx = revisionIndex;
 		rangeLeftBoundary = rangeLeft;
 		rangeRightBoundary = rangeRight;
 		return this;
+	}
+
+	public boolean isRevisionSet() {
+		return rev != null;
+	}
+	
+	public boolean isRevisionIndexSet() {
+		return revIdx != BAD_REVISION;
 	}
 
 	@Override
@@ -98,9 +107,9 @@ public class HgInvalidRevisionException extends IllegalArgumentException {
 		if (revIdx != null) {
 			String sr;
 			switch (revIdx) {
-			case HgRepository.BAD_REVISION : sr = "UNKNOWN"; break;
-			case HgRepository.TIP : sr = "TIP"; break;
-			case HgRepository.WORKING_COPY: sr = "WORKING-COPY"; break;
+			case BAD_REVISION : sr = "UNKNOWN"; break;
+			case TIP : sr = "TIP"; break;
+			case WORKING_COPY: sr = "WORKING-COPY"; break;
 			default : sr = revIdx.toString();
 			}
 			if (rangeLeftBoundary != -1 || rangeRightBoundary != -1) {

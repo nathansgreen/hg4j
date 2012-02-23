@@ -145,6 +145,7 @@
 		<jar destfile="${hg4j-tests.jar}">
 			<fileset dir="bin" includes="org/tmatesoft/hg/test/**"/>
 			<fileset file="COPYING"/>
+			<!-- XXX perhaps, shall include test-data as well? -->
 		</jar>
 	</target>
 

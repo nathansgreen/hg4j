@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,6 @@ package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.Status;
@@ -122,6 +121,7 @@ public class HgFileInformer {
 			return checkResult;
 		}
 		Nodeid toExtract = null;
+		String phaseMsg = "Extract manifest revision failed";
 		try {
 			if (cachedManifest == null) {
 				int csetRev = repo.getChangelog().getRevisionIndex(cset);
@@ -130,6 +130,7 @@ public class HgFileInformer {
 				// cachedManifest shall be meaningful - changelog.getRevisionIndex() above ensures we've got version that exists.
 			}
 			toExtract = cachedManifest.nodeid(file);
+			phaseMsg = "Follow copy/rename failed";
 			if (toExtract == null && followRenames) {
 				while (toExtract == null && dataFile.isCopy()) {
 					renamed = true;
@@ -138,12 +139,8 @@ public class HgFileInformer {
 					toExtract = cachedManifest.nodeid(file);
 				}
 			}
-		} catch (HgInvalidControlFileException ex) {
-			checkResult = new Status(Status.Kind.ERROR, "", ex);
-			return checkResult;
-		} catch (HgDataStreamException ex) {
-			checkResult = new Status(Status.Kind.ERROR, "Follow copy/rename failed", ex);
-			HgInternals.getContext(repo).getLog().warn(getClass(), ex, checkResult.getMessage());
+		} catch (HgException ex) {
+			checkResult = new Status(Status.Kind.ERROR, phaseMsg, ex);
 			return checkResult;
 		}
 		if (toExtract != null) {

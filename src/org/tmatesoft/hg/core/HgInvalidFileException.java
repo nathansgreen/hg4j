@@ -64,6 +64,8 @@ public class HgInvalidFileException extends HgException {
 	protected void appendDetails(StringBuilder sb) {
 		super.appendDetails(sb);
 		if (localFile != null) {
+			sb.append(';');
+			sb.append(' ');
 			sb.append(" file:");
 			sb.append(localFile.getPath());
 			sb.append(',');

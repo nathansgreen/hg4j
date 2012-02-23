@@ -25,7 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgDataStreamException;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
@@ -164,7 +164,7 @@ public final class HgRepository {
 					} catch (CancelledException ex) {
 						 // IGNORE, can't happen, we did not configure cancellation
 						getContext().getLog().debug(getClass(), ex, null);
-					} catch (HgDataStreamException ex) {
+					} catch (HgException ex) {
 						getContext().getLog().error(getClass(), ex, null);
 						// FIXME need to react
 					} catch (IOException ex) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -186,15 +186,12 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	/**
 	 * Similar to {@link #execute(org.tmatesoft.hg.repo.RawChangeset.Inspector)}, collects and return result as a list.
 	 */
-	public List<HgChangeset> execute() throws HgDataStreamException {
+	public List<HgChangeset> execute() throws HgException {
 		CollectHandler collector = new CollectHandler();
 		try {
 			execute(collector);
-		} catch (HgException ex) {
-			// can't happen as long as our CollectHandler doesn't throw any exception
-			throw new HgBadStateException(ex.getCause());
 		} catch (CancelledException ex) {
-			// can't happen, see above
+			// can't happen as long as our CollectHandler doesn't throw any exception
 			throw new HgBadStateException(ex);
 		}
 		return collector.getChanges();

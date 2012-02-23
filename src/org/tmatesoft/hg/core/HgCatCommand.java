@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -132,10 +131,17 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	 * Runs the command with current set of parameters and pipes data to provided sink.
 	 * 
 	 * @param sink output channel to write data to.
-	 * @throws HgDataStreamException 
+	 * 
+	 * @throws HgBadArgumentException if no target file node found 
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgInvalidFileException if access to file in working directory failed
+	 * @throws HgException in case of some other library issue 
+	 * @throws CancelledException if execution of the operation was cancelled
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
 	 * @throws IllegalArgumentException when command arguments are incomplete or wrong
 	 */
-	public void execute(ByteChannel sink) throws HgDataStreamException, HgInvalidControlFileException, CancelledException {
+	public void execute(ByteChannel sink) throws HgException, CancelledException {
+		// XXX perhaps, IAE together with HgBadArgumentException is not the best idea
 		if (revisionIndex == BAD_REVISION && revision == null && cset == null) {
 			throw new IllegalArgumentException("File revision, corresponing local number, or a changset nodeid shall be specified");
 		}
@@ -147,7 +153,8 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 		}
 		HgDataFile dataFile = repo.getFileNode(file);
 		if (!dataFile.exists()) {
-			throw new HgDataStreamException(file, new FileNotFoundException(file.toString()));
+			// TODO may benefit from repo.getStoragePath to print revlog location in addition to human-friendly file path 
+			throw new HgBadArgumentException(String.format("File %s not found in the repository", file), null).setFileName(file);
 		}
 		int revToExtract;
 		if (cset != null) {

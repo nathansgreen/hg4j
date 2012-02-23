@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,6 @@ import java.util.Map;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -290,11 +289,11 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
-	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgDataStreamException, HgInvalidControlFileException {
+	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgException {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		if (!df.exists()) {
 			String msg = String.format("Didn't find file '%s' in the repo. Perhaps, bad storage name conversion?", fname);
-			throw new HgDataStreamException(fname, msg, null).setRevisionIndex(originalChangelogRevision);
+			throw new HgException(msg).setFileName(fname).setRevisionIndex(originalChangelogRevision);
 		}
 		while (df.isCopy()) {
 			Path original = df.getCopySourceName();
