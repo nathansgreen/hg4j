@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,9 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.Experimental;
@@ -291,22 +291,27 @@ public class HgWorkingCopyStatusCollector {
 			} else if (!sizeEqual && r.size() >= 0) {
 				inspector.modified(fname);
 			} else {
-				// size is the same or unknown, and, perhaps, different timestamp
-				// check actual content to avoid false modified files
-				HgDataFile df = repo.getFileNode(fname);
-				if (!df.exists()) {
-					String msg = String.format("File %s known as normal in dirstate (%d, %d), doesn't exist at %s", fname, r.modificationTime(), r.size(), repo.getStoragePath(df));
-					throw new HgBadStateException(msg);
-				}
-				Nodeid rev = getDirstateParentManifest().nodeid(fname);
-				// rev might be null here if fname comes to dirstate as a result of a merge operation
-				// where one of the parents (first parent) had no fname file, but second parent had.
-				// E.g. fork revision 3, revision 4 gets .hgtags, few modifications and merge(3,12)
-				// see Issue 14 for details
-				if (rev == null || !areTheSame(f, df, rev)) {
-					inspector.modified(df.getPath());
-				} else {
-					inspector.clean(df.getPath());
+				try {
+					// size is the same or unknown, and, perhaps, different timestamp
+					// check actual content to avoid false modified files
+					HgDataFile df = repo.getFileNode(fname);
+					if (!df.exists()) {
+						String msg = String.format("File %s known as normal in dirstate (%d, %d), doesn't exist at %s", fname, r.modificationTime(), r.size(), repo.getStoragePath(df));
+						throw new HgInvalidFileException(msg, null).setFileName(fname);
+					}
+					Nodeid rev = getDirstateParentManifest().nodeid(fname);
+					// rev might be null here if fname comes to dirstate as a result of a merge operation
+					// where one of the parents (first parent) had no fname file, but second parent had.
+					// E.g. fork revision 3, revision 4 gets .hgtags, few modifications and merge(3,12)
+					// see Issue 14 for details
+					if (rev == null || !areTheSame(f, df, rev)) {
+						inspector.modified(df.getPath());
+					} else {
+						inspector.clean(df.getPath());
+					}
+				} catch (HgException ex) {
+					repo.getContext().getLog().warn(getClass(), ex, null);
+					inspector.invalid(fname, ex);
 				}
 			}
 		} else if ((r = getDirstateImpl().checkAdded(fname)) != null) {
@@ -383,14 +388,19 @@ public class HgWorkingCopyStatusCollector {
 				// FALL THROUGH
 			}
 			if (r != null || (r = getDirstateImpl().checkMerged(fname)) != null || (r = getDirstateImpl().checkAdded(fname)) != null) {
-				// check actual content to see actual changes
-				// when added - seems to be the case of a file added once again, hence need to check if content is different
-				// either clean or modified
-				HgDataFile fileNode = repo.getFileNode(fname);
-				if (areTheSame(f, fileNode, nid1)) {
-					inspector.clean(fname);
-				} else {
-					inspector.modified(fname);
+				try {
+					// check actual content to see actual changes
+					// when added - seems to be the case of a file added once again, hence need to check if content is different
+					// either clean or modified
+					HgDataFile fileNode = repo.getFileNode(fname);
+					if (areTheSame(f, fileNode, nid1)) {
+						inspector.clean(fname);
+					} else {
+						inspector.modified(fname);
+					}
+				} catch (HgException ex) {
+					repo.getContext().getLog().warn(getClass(), ex, null);
+					inspector.invalid(fname, ex);
 				}
 				baseRevNames.remove(fname); // consumed, processed, handled.
 			} else if (getDirstateImpl().checkRemoved(fname) != null) {
@@ -409,10 +419,9 @@ public class HgWorkingCopyStatusCollector {
 		// The question is whether original Hg treats this case (same content, different parents and hence nodeids) as 'modified' or 'clean'
 	}
 
-	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) {
+	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) throws HgException {
 		// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
 		ByteArrayChannel bac = new ByteArrayChannel();
-		boolean ioFailed = false;
 		try {
 			int fileRevisionIndex = dataFile.getRevisionIndex(revision);
 			// need content with metadata striped off - although theoretically chances are metadata may be different,
@@ -420,14 +429,11 @@ public class HgWorkingCopyStatusCollector {
 			dataFile.content(fileRevisionIndex, bac);
 		} catch (CancelledException ex) {
 			// silently ignore - can't happen, ByteArrayChannel is not cancellable
-		} catch (HgException ex) {
-			repo.getContext().getLog().warn(getClass(), ex, null);
-			ioFailed = true;
 		}
-		return !ioFailed && areTheSame(f, bac.toArray(), dataFile.getPath());
+		return areTheSame(f, bac.toArray(), dataFile.getPath());
 	}
 	
-	private boolean areTheSame(FileInfo f, final byte[] data, Path p) {
+	private boolean areTheSame(FileInfo f, final byte[] data, Path p) throws HgException {
 		ReadableByteChannel is = null;
 		class Check implements ByteChannel {
 			final boolean debug = repo.getContext().getLog().isDebug(); 
@@ -498,7 +504,7 @@ public class HgWorkingCopyStatusCollector {
 			repo.getContext().getLog().warn(getClass(), ex, "Unexpected cancellation");
 			return check.ultimatelyTheSame();
 		} catch (IOException ex) {
-			repo.getContext().getLog().warn(getClass(), ex, null);
+			throw new HgInvalidFileException("File comparison failed", ex).setFileName(p);
 		} finally {
 			if (is != null) {
 				try {
@@ -508,7 +514,6 @@ public class HgWorkingCopyStatusCollector {
 				}
 			}
 		}
-		return false;
 	}
 
 	private static boolean todoCheckFlagsEqual(FileInfo f, HgManifest.Flags originalManifestFlags) {
