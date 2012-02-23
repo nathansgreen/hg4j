@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -88,7 +88,7 @@ public class FilterDataAccess extends DataAccess {
 	@Override
 	public byte readByte() throws IOException {
 		if (count <= 0) {
-			throw new IllegalArgumentException("Underflow"); // XXX be descriptive
+			throw new IOException(String.format("Underflow. Bytes left: %d. FilterDA[offset: %d, length: %d]", count, offset, length));
 		}
 		if (count == length) {
 			dataAccess.seek(offset);
@@ -103,7 +103,7 @@ public class FilterDataAccess extends DataAccess {
 			return;
 		}
 		if (count <= 0 || len > count) {
-			throw new IllegalArgumentException(String.format("Underflow. Bytes left: %d, asked to read %d", count, len));
+			throw new IOException(String.format("Underflow. Bytes left: %d, asked to read %d. FilterDA[offset: %d, length: %d]", count, len, offset, length));
 		}
 		if (count == length) {
 			dataAccess.seek(offset);

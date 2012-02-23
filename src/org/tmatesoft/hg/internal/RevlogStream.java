@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -464,7 +464,7 @@ public class RevlogStream {
 						daData.seek(streamOffset);
 					}
 					final boolean patchToPrevious = baseRevision != i; // the only way I found to tell if it's a patch
-					if (streamDataAccess.isEmpty()) {
+					if (streamDataAccess.isEmpty() || compressedLen == 0) {
 						userDataAccess = new DataAccess(); // empty
 					} else {
 						final byte firstByte = streamDataAccess.readByte();
@@ -474,26 +474,37 @@ public class RevlogStream {
 						} else if (firstByte == 0x75 /* 'u' */) {
 							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
 						} else {
-							// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0'
-							// but I don't see reason not to return data as is 
+							// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0' but I don't see reason not to return data as is
+							//
+							// although firstByte is already read from the streamDataAccess, FilterDataAccess#readByte would seek to
+							// initial offset before first attempt to read a byte
 							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
 						}
 					}
-					// XXX 
-					if (patchToPrevious && !userDataAccess.isEmpty() /* Issue 22, empty patch to an empty base revision*/) {
+					// userDataAccess is revision content, either complete revision, patch of a previous content, or an empty patch
+					if (patchToPrevious) {
 						// this is a patch
-						patch.read(userDataAccess);
-						userDataAccess.done();
-						//
-						// it shall be reset at the end of prev iteration, when it got assigned from userDataAccess
-						// however, actual userDataAccess and lastUserData may share Inflater object, which needs to be reset
-						// Alternatively, userDataAccess.done() above may be responsible to reset Inflater (if it's InflaterDataAccess)
-						lastUserData.reset();
-//						final long startMeasuring = System.currentTimeMillis(); // TIMING
-						byte[] userData = patch.apply(lastUserData, actualLen);
-//						applyTime += (System.currentTimeMillis() - startMeasuring); // TIMING
-						patch.clear(); // do not keep any reference, allow byte[] data to be gc'd
-						userDataAccess = new ByteArrayDataAccess(userData);
+						if (userDataAccess.isEmpty()) {
+							// Issue 22, empty patch to an empty base revision
+							// Issue 24, empty patch to non-empty base revision
+							// empty patch modifies nothing, use content of a previous revision (shall present - it's a patch here)
+							//
+							assert lastUserData.length() == actualLen; // with no patch, data size shall be the same
+							userDataAccess = lastUserData;
+						} else {
+							patch.read(userDataAccess);
+							userDataAccess.done();
+							//
+							// it shall be reset at the end of prev iteration, when it got assigned from userDataAccess
+							// however, actual userDataAccess and lastUserData may share Inflater object, which needs to be reset
+							// Alternatively, userDataAccess.done() above may be responsible to reset Inflater (if it's InflaterDataAccess)
+							lastUserData.reset();
+//							final long startMeasuring = System.currentTimeMillis(); // TIMING
+							byte[] userData = patch.apply(lastUserData, actualLen);
+//							applyTime += (System.currentTimeMillis() - startMeasuring); // TIMING
+							patch.clear(); // do not keep any reference, allow byte[] data to be gc'd
+							userDataAccess = new ByteArrayDataAccess(userData);
+						}
 					}
 				} else {
 					if (inline) {
@@ -513,7 +524,9 @@ public class RevlogStream {
 				if (userDataAccess != null) {
 					userDataAccess.reset(); // not sure this is necessary here, as lastUserData would get reset anyway before next use.
 				}
-				if (lastUserData != null) {
+				if (lastUserData != null && lastUserData != userDataAccess /* empty patch case, reuse of recent data in actual revision */) {
+					// release lastUserData only if we didn't reuse it in actual revision due to empty patch:
+					// empty patch means we have previous revision and didn't alter it with a patch, hence use lastUserData for userDataAccess above
 					lastUserData.done();
 				}
 				lastUserData = userDataAccess;

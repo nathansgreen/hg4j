@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -525,6 +526,76 @@ public class TestStatus {
 		StatusCollector sc = new StatusCollector();
 		cmd.execute(sc);
 		// shall pass without exception
+		assertTrue(sc.getErrors().isEmpty());
+	}
+	
+	/**
+	 * Issue 24: IllegalArgumentException in FilterDataAccess
+	 * There were two related defects in RevlogStream
+	 *  a) for compressedLen == 0, a byte was read and FilterDataAccess  (of length 0, but it didn't help too much) was created - first byte happen to be 0.
+	 *     Patch was not applied (userDataAccess.isEmpty() check thanks to Issue 22)
+	 *  b) That FilterDataAccess (with 0 size represents patch more or less relevantly, but didn't represent actual revision) get successfully
+	 *     reassigned as lastUserData for the next iteration. And at the next step attempt to apply patch recorded in the next revision failed
+	 *     because baseRevisionData is 0 length FilterDataAccess
+	 *
+	 * Sample:
+	 *  status-5/file1 has 3 revisions, second is zero-length patch:
+	 *  Index	   	 Offset    Packed     Actual   Base Rev
+	 *     0:             0     8          7          0
+	 *  DATA
+	 *     1:             8     0          7          0
+	 *  NO DATA
+	 *     2:             8     14         6          0
+	 *  PATCH
+	 */
+	@Test
+	public void testZeroLengthPatchAgainstNonEmptyBaseRev() throws Exception{
+		repo = Configuration.get().find("status-5");
+		// pretend we modified file in the working copy
+		// for HgWorkingCopyStatusCollector to go and retrieve its content from repository 
+		File f1 = new File(repo.getWorkingDir(), "file1");
+		f1.setLastModified(System.currentTimeMillis());
+		//
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		cmd.all();
+		StatusCollector sc = new StatusCollector();
+		cmd.execute(sc);
+		// shall pass without exception
+		//
+		for (Map.Entry<Path,Status> e : sc.getErrors().entrySet()) {
+			System.out.printf("%s : (%s %s)\n", e.getKey(), e.getValue().getKind(), e.getValue().getMessage());
+		}
+		assertTrue(sc.getErrors().isEmpty());
+	}
+
+	/**
+	 * Issue 26: UnsupportedOperationException when patching empty base revision
+	 * 
+	 * Sample:
+	 *  status-5/file2 has 3 revisions, second is patch (complete revision content in a form of the patch) for empty base revision:
+	 *  Index    Offset      Packed     Actual   Base Rev
+	 *     0:         0      0          0          0
+	 *  NO DATA
+	 *     1:         0      20         7          0
+	 *  PATCH: 0..0, 7:garbage
+	 *     2:        20      16         7          0
+	 */
+	@Test
+	public void testPatchZeroLengthBaseRevision() throws Exception {
+		repo = Configuration.get().find("status-5");
+		// touch the file to force content retrieval
+		File f2 = new File(repo.getWorkingDir(), "file2");
+		f2.setLastModified(System.currentTimeMillis());
+		//
+		HgStatusCommand cmd = new HgStatusCommand(repo);
+		cmd.all();
+		StatusCollector sc = new StatusCollector();
+		cmd.execute(sc);
+		// shall pass without exception
+		//
+		for (Map.Entry<Path,Status> e : sc.getErrors().entrySet()) {
+			System.out.printf("%s : (%s %s)\n", e.getKey(), e.getValue().getKind(), e.getValue().getMessage());
+		}
 		assertTrue(sc.getErrors().isEmpty());
 	}
 

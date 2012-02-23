@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,11 +46,18 @@ public class DataAccess {
 	}
 	// absolute positioning
 	public void seek(int offset) throws IOException {
-		throw new UnsupportedOperationException();
+		if (offset == 0) {
+			// perfectly OK for the "empty slice" instance
+			return;
+		}
+		throw new IOException(String.format("No data, can't seek %d bytes", offset));
 	}
 	// relative positioning
 	public void skip(int bytes) throws IOException {
-		throw new UnsupportedOperationException();
+		if (bytes == 0) {
+			return;
+		}
+		throw new IOException(String.format("No data, can't skip %d bytes", bytes));
 	}
 	// shall be called once this object no longer needed
 	public void done() {
@@ -69,7 +76,10 @@ public class DataAccess {
 		return ((long) i1) << 32 | ((long) i2 & 0xFFFFFFFFl);
 	}
 	public void readBytes(byte[] buf, int offset, int length) throws IOException {
-		throw new UnsupportedOperationException();
+		if (length == 0) {
+			return;
+		}
+		throw new IOException(String.format("No data, can't read %d bytes", length));
 	}
 	// reads bytes into ByteBuffer, up to its limit or total data length, whichever smaller
 	// FIXME perhaps, in DataAccess paradigm (when we read known number of bytes, we shall pass specific byte count to read) 
