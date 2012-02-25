@@ -537,6 +537,10 @@ public class TestStatus {
 	 *  b) That FilterDataAccess (with 0 size represents patch more or less relevantly, but didn't represent actual revision) get successfully
 	 *     reassigned as lastUserData for the next iteration. And at the next step attempt to apply patch recorded in the next revision failed
 	 *     because baseRevisionData is 0 length FilterDataAccess
+	 * 
+	 * Same applies for 
+	 * Issue 25: IOException: Underflow. Rewind past end of the slice in InflaterDataAccess
+	 * with the difference in separate .i and .d (thus not 0 but 'x' first byte was read)
 	 *
 	 * Sample:
 	 *  status-5/file1 has 3 revisions, second is zero-length patch:
@@ -551,10 +555,12 @@ public class TestStatus {
 	@Test
 	public void testZeroLengthPatchAgainstNonEmptyBaseRev() throws Exception{
 		repo = Configuration.get().find("status-5");
-		// pretend we modified file in the working copy
+		// pretend we modified files in the working copy
 		// for HgWorkingCopyStatusCollector to go and retrieve its content from repository 
 		File f1 = new File(repo.getWorkingDir(), "file1");
 		f1.setLastModified(System.currentTimeMillis());
+		File f3 = new File(repo.getWorkingDir(), "file3");
+		f3.setLastModified(System.currentTimeMillis());
 		//
 		HgStatusCommand cmd = new HgStatusCommand(repo);
 		cmd.all();

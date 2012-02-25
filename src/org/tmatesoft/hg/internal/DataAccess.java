@@ -32,6 +32,7 @@ public class DataAccess {
 	public boolean isEmpty() {
 		return true;
 	}
+	// TODO throws IOException (few subclasses have non-trivial length() operation)
 	public int length() {
 		return 0;
 	}
@@ -68,6 +69,10 @@ public class DataAccess {
 		readBytes(b, 0, 4);
 		return b[0] << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
 	}
+
+	/**
+	 * Read 8 bytes as long value, big-endian.
+	 */
 	public long readLong() throws IOException {
 		byte[] b = new byte[8];
 		readBytes(b, 0, 8);

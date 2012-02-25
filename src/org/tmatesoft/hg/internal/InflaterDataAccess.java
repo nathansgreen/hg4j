@@ -158,20 +158,20 @@ public class InflaterDataAccess extends FilterDataAccess {
 		    int n;
 		    while (len > 0) {
 			    while ((n = inflater.inflate(b, off, len)) == 0) {
-			    	// FIXME few last bytes (checksum?) may be ignored by inflater, thus inflate may return 0 in
+			    	// XXX few last bytes (checksum?) may be ignored by inflater, thus inflate may return 0 in
 			    	// perfectly legal conditions (when all data already expanded, but there are still some bytes
-			    	// in the input stream
-					if (inflater.finished() || inflater.needsDictionary()) {
-	                    throw new EOFException();
-					}
-					if (inflater.needsInput()) {
+			    	// in the input stream)
+					int toRead = -1;
+					if (inflater.needsInput() && (toRead = super.available()) > 0) {
 						// fill:
-						int toRead = super.available();
 						if (toRead > buffer.length) {
 							toRead = buffer.length;
 						}
 						super.readBytes(buffer, 0, toRead);
 						inflater.setInput(buffer, 0, toRead);
+					} else {
+						// prevent hang up in this cycle if no more data is available, see Issue 25
+						throw new EOFException(String.format("No more compressed data is available to satisfy request for %d bytes. [finished:%b, needDict:%b, needInp:%b, available:%d", len, inflater.finished(), inflater.needsDictionary(), inflater.needsInput(), toRead));
 					}
 			    }
 				off += n;
