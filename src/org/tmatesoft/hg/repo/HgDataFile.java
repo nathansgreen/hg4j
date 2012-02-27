@@ -113,7 +113,22 @@ public class HgDataFile extends Revlog {
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public int length(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
-		// FIXME support WORKING_COPY constant
+		if (wrongRevisionIndex(fileRevisionIndex) || fileRevisionIndex == BAD_REVISION) {
+			throw new HgInvalidRevisionException(fileRevisionIndex);
+		}
+		if (fileRevisionIndex == TIP) {
+			fileRevisionIndex = getLastRevision();
+		} else if (fileRevisionIndex == WORKING_COPY) {
+			File f = getRepo().getFile(this);
+			if (f.exists()) {
+				return (int) /*FIXME long!*/ f.length();
+			}
+			Nodeid fileRev = getWorkingCopyRevision();
+			if (fileRev == null) {
+				throw new HgInvalidRevisionException(String.format("File %s is not part of working copy", getPath()), null, fileRevisionIndex);
+			}
+			fileRevisionIndex = getRevisionIndex(fileRev);
+		}
 		if (metadata == null || !metadata.checked(fileRevisionIndex)) {
 			checkAndRecordMetadata(fileRevisionIndex);
 		}
@@ -127,8 +142,11 @@ public class HgDataFile extends Revlog {
 	/**
 	 * Reads content of the file from working directory. If file present in the working directory, its actual content without
 	 * any filters is supplied through the sink. If file does not exist in the working dir, this method provides content of a file 
-	 * as if it would be refreshed in the working copy, i.e. its corresponding revision 
-	 * (XXX according to dirstate? file tip?) is read from the repository, and filters repo -> working copy get applied.
+	 * as if it would be refreshed in the working copy, i.e. its corresponding revision (according to dirstate) is read from the 
+	 * repository, and filters repo -> working copy get applied.
+	 * 
+	 * NOTE, if file is missing from the working directory and is not part of the dirstate (but otherwise legal repository file,
+	 * e.g. from another branch), no content would be supplied.
 	 *     
 	 * @param sink content consumer
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
@@ -167,27 +185,50 @@ public class HgDataFile extends Revlog {
 				}
 			}
 		} else {
-			final Pair<Nodeid, Nodeid> wcParents = getRepo().getWorkingCopyParents();
-			Nodeid p = wcParents.first().isNull() ? wcParents.second() : wcParents.first();
-			if (p.isNull()) {
-				// no dirstate parents - no content
-				// XXX what if it's repository with no dirstate? Shall I use TIP then?
+			Nodeid fileRev = getWorkingCopyRevision();
+			if (fileRev == null) {
+				// no content for this data file in the working copy - it is not part of the actual working state.
+				// XXX perhaps, shall report this to caller somehow, not silently pass no data?
 				return;
 			}
-			final HgChangelog clog = getRepo().getChangelog();
+			final int fileRevIndex = getRevisionIndex(fileRev);
+			contentWithFilters(fileRevIndex, sink);
+		}
+	}
+	
+	/**
+	 * @return file revision as recorded in repository manifest for dirstate parent, or <code>null</code> if no file revision can be found 
+	 */
+	private Nodeid getWorkingCopyRevision() throws HgInvalidControlFileException {
+		final Pair<Nodeid, Nodeid> wcParents = getRepo().getWorkingCopyParents();
+		Nodeid p = wcParents.first().isNull() ? wcParents.second() : wcParents.first();
+		final HgChangelog clog = getRepo().getChangelog();
+		final int csetRevIndex;
+		if (p.isNull()) {
+			// no dirstate parents 
+			getRepo().getContext().getLog().info(getClass(), "No dirstate parents, resort to TIP", getPath());
+			// if it's a repository with no dirstate, use TIP then
+			csetRevIndex = clog.getLastRevision();
+			if (csetRevIndex == -1) {
+				// shall not happen provided there's .i for this data file (hence at least one cset)
+				// and perhaps exception is better here. However, null as "can't find" indication seems reasonable.
+				return null;
+			}
+		} else {
 			// common case to avoid searching complete changelog for nodeid match
 			final Nodeid tipRev = clog.getRevision(TIP);
-			final int csetRevIndex;
 			if (tipRev.equals(p)) {
 				csetRevIndex = clog.getLastRevision();
 			} else {
 				// bad luck, need to search honestly
 				csetRevIndex = getRepo().getChangelog().getRevisionIndex(p);
 			}
-			Nodeid fileRev = getRepo().getManifest().getFileRevision(csetRevIndex, getPath());
-			final int fileRevIndex = getRevisionIndex(fileRev);
-			contentWithFilters(fileRevIndex, sink);
 		}
+		Nodeid fileRev = getRepo().getManifest().getFileRevision(csetRevIndex, getPath());
+		// it's possible for a file to be in working dir and have store/.i but to belong e.g. to a different
+		// branch than the one from dirstate. Thus it's possible to get null fileRev
+		// which would serve as an indication this data file is not part of working copy
+		return fileRev;
 	}
 	
 	/**
@@ -505,7 +546,7 @@ public class HgDataFile extends Revlog {
 	
 	private void checkAndRecordMetadata(int localRev) throws HgInvalidControlFileException {
 		// content() always initializes metadata.
-		// FIXME this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
+		// TODO [post-1.0] this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
 		// Alternatively, may parameterize MetadataContentPipe to do prepare only.
 		// For reference, when throwing CancelledException, hg status -A --rev 3:80 takes 70 ms
 		// however, if we just consume buffer instead (buffer.position(buffer.limit()), same command takes ~320ms
