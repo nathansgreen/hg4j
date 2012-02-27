@@ -198,10 +198,12 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	}
 
 	/**
+	 * Iterate over range of changesets configured in the command.
 	 * 
 	 * @param handler callback to process changesets.
 	 * @throws HgCallbackTargetException to re-throw exception from the handler
-	 * @throws HgException FIXME EXCEPTIONS
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgException in case of some other library issue 
 	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws IllegalArgumentException when inspector argument is null
 	 * @throws ConcurrentModificationException if this log command instance is already running
@@ -260,11 +262,15 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	}
 	
 	/**
-	 * TODO documentation 
-	 * @param handler
+	 * Tree-wise iteration of a file history, with handy access to parent-child relations between changesets. 
+	 *  
+	 * @param handler callback to process changesets.
 	 * @throws HgCallbackTargetException to re-throw exception from the handler
-	 * @throws HgException FIXME EXCEPTIONS
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgException in case of some other library issue 
 	 * @throws CancelledException if execution of the command was cancelled
+	 * @throws IllegalArgumentException if command is not satisfied with its arguments 
+	 * @throws ConcurrentModificationException if this log command instance is already running
 	 */
 	public void execute(HgChangesetTreeHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
 		if (handler == null) {
