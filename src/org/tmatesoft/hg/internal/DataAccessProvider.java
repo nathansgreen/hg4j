@@ -237,7 +237,7 @@ public class DataAccessProvider {
 		@Override
 		public void seek(int offset) throws IOException {
 			if (offset > size) {
-				throw new IllegalArgumentException();
+				throw new IllegalArgumentException(String.format("Can't seek to %d for the file of size %d (buffer start:%d)", offset, size, bufferStartInFile));
 			}
 			if (offset < bufferStartInFile + buffer.limit() && offset >= bufferStartInFile) {
 				buffer.position((int) (offset - bufferStartInFile));
