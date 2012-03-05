@@ -128,17 +128,18 @@ public class HgInternals {
 		return new FileWalker(repoRoot, pathSrc, workindDirScope);
 	}
 	
-	// expose othewise package-local information primarily to use in our own o.t.hg.core package
+	// expose otherwise package-local information primarily to use in our own o.t.hg.core package
 	public static SessionContext getContext(HgRepository repo) {
 		return repo.getContext();
 	}
 
 
 	// Convenient check of revision index for validity (not all negative values are wrong as long as we use negative constants)
-	public static boolean wrongRevisionIndex(int rev) {
+	public static boolean wrongRevisionIndex(int rev) { // FIXME guess, usages shall throw HgInvalidRevision. \
+		// TODO Another method to check,throw and expand TIP at once
 		return rev < 0 && rev != TIP && rev != WORKING_COPY && rev != BAD_REVISION; 
 	}
-
+	
 	// throws HgInvalidRevisionException or IllegalArgumentException if [start..end] range is not a subrange of [0..lastRevision]
 	public static void checkRevlogRange(int start, int end, int lastRevision) throws HgInvalidRevisionException {
 		if (start < 0 || start > lastRevision) {

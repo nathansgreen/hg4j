@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,18 +78,52 @@ public class HgChangeset implements Cloneable {
 		}
 	}
 
+	/**
+	 * Index of the changeset in local repository. Note, this number is relevant only for local repositories/operations, use 
+	 * {@link Nodeid nodeid} to uniquely identify a revision.
+	 *   
+	 * @return index of the changeset revision
+	 */
+	public int getRevisionIndex() {
+		return revNumber;
+	}
+
+	/**
+	 * @deprecated use {@link #getRevisionIndex()}
+	 */
+	@Deprecated
 	public int getRevision() {
 		return revNumber;
 	}
+
+	/**
+	 * Unique identity of this changeset revision
+	 * @return revision identifier, never <code>null</code>
+	 */
 	public Nodeid getNodeid() {
 		return nodeid;
 	}
+
+	/**
+	 * Name of the user who made this commit
+	 * @return author of the commit, never <code>null</code>
+	 */
 	public String getUser() {
 		return changeset.user();
 	}
+	
+	/**
+	 * Commit description
+	 * @return content of the corresponding field in changeset record; empty string if none specified.
+	 */
 	public String getComment() {
 		return changeset.comment();
 	}
+
+	/**
+	 * Name of the branch this commit was made in. Returns "default" for main branch.
+	 * @return name of the branch, non-empty string
+	 */
 	public String getBranch() {
 		return changeset.branch();
 	}
@@ -100,10 +134,26 @@ public class HgChangeset implements Cloneable {
 	public HgDate getDate() {
 		return new HgDate(changeset.date().getTime(), changeset.timezone());
 	}
+
+	/**
+	 * Indicates revision of manifest that tracks state of repository at the moment of this commit.
+	 * Note, may be {@link Nodeid#NULL} in certain scenarios (e.g. first changeset in an empty repository, usually by bogus tools)
+	 *  
+	 * @return revision identifier, never <code>null</code>
+	 */
 	public Nodeid getManifestRevision() {
 		return changeset.manifest();
 	}
 
+	/**
+	 * Lists names of files affected by this commit, as recorded in the changeset itself. Unlike {@link #getAddedFiles()}, 
+	 * {@link #getModifiedFiles()} and {@link #getRemovedFiles()}, this method doesn't analyze actual changes done 
+	 * in the commit, rather extracts value from the changeset record.
+	 * 
+	 * List returned by this method may be empty, while aforementioned methods may produce non-empty result.
+	 *   
+	 * @return list of filenames, never <code>null</code>
+	 */
 	public List<Path> getAffectedFiles() {
 		// reports files as recorded in changelog. Note, merge revisions may have no
 		// files listed, and thus this method would return empty list, while
@@ -116,21 +166,42 @@ public class HgChangeset implements Cloneable {
 		return rv;
 	}
 
-	public List<HgFileRevision> getModifiedFiles() throws HgInvalidControlFileException {
+	/**
+	 * Figures out files and specific revisions thereof that were modified in this commit
+	 *  
+	 * @return revisions of files modified in this commit
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+ 	 * @throws HgException in case of some other library issue 
+	 */
+	public List<HgFileRevision> getModifiedFiles() throws HgException {
 		if (modifiedFiles == null) {
 			initFileChanges();
 		}
 		return modifiedFiles;
 	}
 
-	public List<HgFileRevision> getAddedFiles() throws HgInvalidControlFileException {
+	/**
+	 * Figures out files added in this commit
+	 * 
+	 * @return revisions of files added in this commit
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgException in case of some other library issue 
+	 */
+	public List<HgFileRevision> getAddedFiles() throws HgException {
 		if (addedFiles == null) {
 			initFileChanges();
 		}
 		return addedFiles;
 	}
 
-	public List<Path> getRemovedFiles() throws HgInvalidControlFileException {
+	/**
+	 * Figures out files that were deleted as part of this commit
+	 * 
+	 * @return revisions of files deleted in this commit
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgException in case of some other library issue 
+	 */
+	public List<Path> getRemovedFiles() throws HgException {
 		if (deletedFiles == null) {
 			initFileChanges();
 		}
@@ -175,6 +246,9 @@ public class HgChangeset implements Cloneable {
 		return Nodeid.fromBinary(parent2, 0);
 	}
 
+	/**
+	 * Create a copy of this changeset 
+	 */
 	@Override
 	public HgChangeset clone() {
 		try {
@@ -186,7 +260,7 @@ public class HgChangeset implements Cloneable {
 		}
 	}
 
-	private /*synchronized*/ void initFileChanges() throws HgInvalidControlFileException {
+	private /*synchronized*/ void initFileChanges() throws HgException {
 		ArrayList<Path> deleted = new ArrayList<Path>();
 		ArrayList<HgFileRevision> modified = new ArrayList<HgFileRevision>();
 		ArrayList<HgFileRevision> added = new ArrayList<HgFileRevision>();
@@ -196,7 +270,7 @@ public class HgChangeset implements Cloneable {
 		for (Path s : r.getModified()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
-				throw new HgBadStateException();
+				throw new HgException(String.format("For the file %s recorded as modified couldn't find revision after change", s));
 			}
 			modified.add(new HgFileRevision(repo, nid, s, null));
 		}
@@ -204,7 +278,7 @@ public class HgChangeset implements Cloneable {
 		for (Path s : r.getAdded()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
-				throw new HgBadStateException();
+				throw new HgException(String.format("For the file %s recorded as added couldn't find revision after change", s));
 			}
 			added.add(new HgFileRevision(repo, nid, s, copied.get(s)));
 		}

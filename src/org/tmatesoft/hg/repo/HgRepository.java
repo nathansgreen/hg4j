@@ -55,7 +55,7 @@ public final class HgRepository {
 
 	// if new constants added, consider fixing HgInternals#wrongRevisionIndex
 	public static final int TIP = -3;
-	public static final int BAD_REVISION = Integer.MIN_VALUE;
+	public static final int BAD_REVISION = Integer.MIN_VALUE; // XXX INVALID_REVISION?
 	public static final int WORKING_COPY = -2;
 	
 	public static final String DEFAULT_BRANCH_NAME = "default";

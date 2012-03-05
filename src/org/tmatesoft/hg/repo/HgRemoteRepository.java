@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -232,12 +232,12 @@ public class HgRemoteRepository {
 						assert currRange == null;
 						assert currRangeList == null;
 						if (!rangeItr.hasNext()) {
-							throw new HgBadStateException();
+							throw new HgBadStateException("Internal error");
 						}
 						rv.put(rangeItr.next(), Collections.<Nodeid>emptyList());
 					} else {
 						if (currRange == null || currRangeList == null) {
-							throw new HgBadStateException();
+							throw new HgBadStateException("Internal error");
 						}
 						// indicate next range value is needed
 						currRange = null;
@@ -248,7 +248,7 @@ public class HgRemoteRepository {
 					possiblyEmptyNextLine = false;
 					if (currRange == null) {
 						if (!rangeItr.hasNext()) {
-							throw new HgBadStateException();
+							throw new HgBadStateException("Internal error");
 						}
 						currRange = rangeItr.next();
 						currRangeList = new LinkedList<Nodeid>();

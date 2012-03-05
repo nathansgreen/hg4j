@@ -30,6 +30,7 @@ import java.util.Map;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
@@ -129,9 +130,11 @@ public class HgManifest extends Revlog {
 	 * @param start changelog (not manifest!) revision to begin with
 	 * @param end changelog (not manifest!) revision to stop, inclusive.
 	 * @param inspector manifest revision visitor, can't be <code>null</code>
+	 * @throws HgInvalidRevisionException if start or end specify non-existent revision index
+	 * @throws IllegalArgumentException if start or end is not a revision index
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public void walk(int start, int end, final Inspector inspector) throws /*FIXME HgInvalidRevisionException,*/ HgInvalidControlFileException {
+	public void walk(int start, int end, final Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -139,13 +142,13 @@ public class HgManifest extends Revlog {
 		int manifestFirst, manifestLast, i = 0;
 		do {
 			manifestFirst = fromChangelog(csetFirst+i);
-			if (manifestFirst == -1) {
+			if (manifestFirst == BAD_REVISION) {
 				inspector.begin(BAD_REVISION, NULL, csetFirst+i);
 				inspector.end(BAD_REVISION);
 			}
 			i++;
-		} while (manifestFirst == -1 && csetFirst+i <= csetLast);
-		if (manifestFirst == -1) {
+		} while (manifestFirst == BAD_REVISION && csetFirst+i <= csetLast);
+		if (manifestFirst == BAD_REVISION) {
 			getRepo().getContext().getLog().info(getClass(), "None of changesets [%d..%d] have associated manifest revision", csetFirst, csetLast);
 			// we ran through all revisions in [start..end] and none of them had manifest.
 			// we reported that to inspector and proceeding is done now.
@@ -154,13 +157,13 @@ public class HgManifest extends Revlog {
 		i = 0;
 		do {
 			manifestLast = fromChangelog(csetLast-i);
-			if (manifestLast == -1) {
+			if (manifestLast == BAD_REVISION) {
 				inspector.begin(BAD_REVISION, NULL, csetLast-i);
 				inspector.end(BAD_REVISION);
 			}
 			i++;
-		} while (manifestLast == -1 && csetLast-i >= csetFirst);
-		if (manifestLast == -1) {
+		} while (manifestLast == BAD_REVISION && csetLast-i >= csetFirst);
+		if (manifestLast == BAD_REVISION) {
 			// hmm, manifestFirst != -1 here, hence there's i from [csetFirst..csetLast] for which manifest entry exists, 
 			// and thus it's impossible to run into manifestLast == -1. Nevertheless, never hurts to check.
 			throw new HgBadStateException(String.format("Manifest %d-%d(!) for cset range [%d..%d] ", manifestFirst, manifestLast, csetFirst, csetLast));
@@ -183,8 +186,10 @@ public class HgManifest extends Revlog {
 	 * 
 	 * @param inspector manifest revision visitor, can't be <code>null</code>
 	 * @param revisionIndexes local indexes of changesets to visit, non-<code>null</code>
+	 * @throws HgInvalidRevisionException if argument specifies non-existent revision index
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public void walk(final Inspector inspector, int... revisionIndexes) throws HgInvalidControlFileException{
+	public void walk(final Inspector inspector, int... revisionIndexes) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (inspector == null || revisionIndexes == null) {
 			throw new IllegalArgumentException();
 		}
@@ -194,10 +199,14 @@ public class HgManifest extends Revlog {
 	
 	// 
 	/**
-	 * Tells manifest revision number that corresponds to the given changeset.
-	 * @return manifest revision index, or -1 if changeset has no associated manifest (cset records NULL nodeid for manifest) 
+	 * Tells manifest revision number that corresponds to the given changeset. May return {@link HgRepository#BAD_REVISION} 
+	 * if changeset has no associated manifest (cset records NULL nodeid for manifest).
+	 * @return manifest revision index, non-negative, or {@link HgRepository#BAD_REVISION}.
+	 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index
+	 * @throws IllegalArgumentException if argument is not a revision index
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	/*package-local*/ int fromChangelog(int changesetRevisionIndex) throws HgInvalidControlFileException {
+	/*package-local*/ int fromChangelog(int changesetRevisionIndex) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (HgInternals.wrongRevisionIndex(changesetRevisionIndex)) {
 			throw new IllegalArgumentException(String.valueOf(changesetRevisionIndex));
 		}
@@ -218,16 +227,18 @@ public class HgManifest extends Revlog {
 	 * @param changelogRevisionIndex local changeset index 
 	 * @param file path to file in question
 	 * @return file revision or <code>null</code> if manifest at specified revision doesn't list such file
+	 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	@Experimental(reason="Perhaps, HgDataFile shall own this method, or get a delegate?")
-	public Nodeid getFileRevision(int changelogRevisionIndex, final Path file) throws HgInvalidControlFileException{
+	public Nodeid getFileRevision(int changelogRevisionIndex, final Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		return getFileRevisions(file, changelogRevisionIndex).get(changelogRevisionIndex);
 	}
 	
 	// XXX package-local, IntMap, and HgDataFile getFileRevisionAt(int... localChangelogRevisions)
 	@Experimental(reason="@see #getFileRevision")
-	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... changelogRevisionIndexes) throws HgInvalidControlFileException{
-		// FIXME need tests
+	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... changelogRevisionIndexes) throws HgInvalidRevisionException, HgInvalidControlFileException {
+		// TODO need tests
 		int[] manifestRevisionIndexes = toManifestRevisionIndexes(changelogRevisionIndexes, null);
 		final HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>(changelogRevisionIndexes.length);
 		content.iterate(manifestRevisionIndexes, true, new RevlogStream.Inspector() {
@@ -267,14 +278,17 @@ public class HgManifest extends Revlog {
 	/**
 	 * @param changelogRevisionIndexes non-null
 	 * @param inspector may be null if reporting of missing manifests is not needed
+	 * @throws HgInvalidRevisionException if arguments specify non-existent revision index
+	 * @throws IllegalArgumentException if any index argument is not a revision index
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	private int[] toManifestRevisionIndexes(int[] changelogRevisionIndexes, Inspector inspector) throws HgInvalidControlFileException {
+	private int[] toManifestRevisionIndexes(int[] changelogRevisionIndexes, Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		int[] manifestRevs = new int[changelogRevisionIndexes.length];
 		boolean needsSort = false;
 		int j = 0;
 		for (int i = 0; i < changelogRevisionIndexes.length; i++) {
 			final int manifestRevisionIndex = fromChangelog(changelogRevisionIndexes[i]);
-			if (manifestRevisionIndex == -1) {
+			if (manifestRevisionIndex == BAD_REVISION) {
 				if (inspector != null) {
 					inspector.begin(BAD_REVISION, NULL, changelogRevisionIndexes[i]);
 					inspector.end(BAD_REVISION);
@@ -498,24 +512,32 @@ public class HgManifest extends Revlog {
 	
 	private static class RevisionMapper implements RevlogStream.Inspector, Lifecycle {
 		
-		private final int changelogRevisions;
+		private final int changelogRevisionCount;
 		private int[] changelog2manifest;
 		private final HgRepository repo;
 
 		public RevisionMapper(HgRepository hgRepo) {
 			repo = hgRepo;
-			changelogRevisions = repo.getChangelog().getRevisionCount();
+			changelogRevisionCount = repo.getChangelog().getRevisionCount();
 		}
 
-		// respects TIP
-		public int at(int revisionNumber) {
-			if (revisionNumber == TIP) {
-				revisionNumber = changelogRevisions - 1;
+		/**
+		 * Get index of manifest revision that corresponds to specified changeset
+		 * @param changesetRevisionIndex non-negative index of changelog revision, or {@link HgRepository#TIP}
+		 * @return index of manifest revision, or {@link HgRepository#BAD_REVISION} if changeset doesn't reference a valid manifest
+		 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index
+		 */
+		public int at(int changesetRevisionIndex) throws HgInvalidRevisionException {
+			if (changesetRevisionIndex == TIP) {
+				changesetRevisionIndex = changelogRevisionCount - 1;
+			}
+			if (changesetRevisionIndex >= changelogRevisionCount) {
+				throw new HgInvalidRevisionException(changesetRevisionIndex);
 			}
 			if (changelog2manifest != null) {
-				return changelog2manifest[revisionNumber];
+				return changelog2manifest[changesetRevisionIndex];
 			}
-			return revisionNumber;
+			return changesetRevisionIndex;
 		}
 
 		// XXX likely can be replaced with Revlog.RevisionInspector
@@ -524,12 +546,12 @@ public class HgManifest extends Revlog {
 				// next assertion is not an error, rather assumption check, which is too development-related to be explicit exception - 
 				// I just wonder if there are manifests that have two entries pointing to single changeset. It seems unrealistic, though -
 				// changeset records one and only one manifest nodeid
-				assert changelog2manifest[linkRevision] == -1 : String.format("revision:%d, link:%d, already linked to revision:%d", revisionNumber, linkRevision, changelog2manifest[linkRevision]);
+				assert changelog2manifest[linkRevision] == BAD_REVISION : String.format("revision:%d, link:%d, already linked to revision:%d", revisionNumber, linkRevision, changelog2manifest[linkRevision]);
 				changelog2manifest[linkRevision] = revisionNumber;
 			} else {
 				if (revisionNumber != linkRevision) {
-					changelog2manifest = new int[changelogRevisions];
-					Arrays.fill(changelog2manifest, -1);
+					changelog2manifest = new int[changelogRevisionCount];
+					Arrays.fill(changelog2manifest, BAD_REVISION);
 					for (int i = 0; i < revisionNumber; changelog2manifest[i] = i, i++)
 						;
 					changelog2manifest[linkRevision] = revisionNumber;
@@ -538,14 +560,14 @@ public class HgManifest extends Revlog {
 		}
 		
 		public void start(int count, Callback callback, Object token) {
-			if (count != changelogRevisions) {
-				assert count < changelogRevisions; // no idea what to do if manifest has more revisions than changelog
+			if (count != changelogRevisionCount) {
+				assert count < changelogRevisionCount; // no idea what to do if manifest has more revisions than changelog
 				// the way how manifest may contain more revisions than changelog, as I can imagine, is a result of  
 				// some kind of an import tool (e.g. from SVN or CVS), that creates manifest and changelog independently.
 				// Note, it's pure guess, I didn't see such repository yet (although the way manifest revisions
 				// in cpython repo are numbered makes me think aforementioned way) 
-				changelog2manifest = new int[changelogRevisions];
-				Arrays.fill(changelog2manifest, -1);
+				changelog2manifest = new int[changelogRevisionCount];
+				Arrays.fill(changelog2manifest, BAD_REVISION);
 			}
 		}
 
@@ -556,7 +578,7 @@ public class HgManifest extends Revlog {
 			// I assume there'd be not too many revisions we don't know manifest of
 			ArrayList<Integer> undefinedChangelogRevision = new ArrayList<Integer>();
 			for (int i = 0; i < changelog2manifest.length; i++) {
-				if (changelog2manifest[i] == -1) {
+				if (changelog2manifest[i] == BAD_REVISION) {
 					undefinedChangelogRevision.add(i);
 				}
 			}

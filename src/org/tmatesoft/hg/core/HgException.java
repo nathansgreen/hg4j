@@ -16,8 +16,7 @@
  */
 package org.tmatesoft.hg.core;
 
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
-
+import org.tmatesoft.hg.internal.ExceptionInfo;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
@@ -29,10 +28,8 @@ import org.tmatesoft.hg.util.Path;
  */
 @SuppressWarnings("serial")
 public class HgException extends Exception {
-
-	protected int revNumber = BAD_REVISION;
-	protected Nodeid revision;
-	protected Path filename;
+	
+	protected final ExceptionInfo<HgException> extras = new ExceptionInfo<HgException>(this);
 
 	public HgException(String reason) {
 		super(reason);
@@ -50,7 +47,7 @@ public class HgException extends Exception {
 	 * @return not {@link HgRepository#BAD_REVISION} only when revision index was supplied at the construction time
 	 */
 	public int getRevisionIndex() {
-		return revNumber;
+		return extras.getRevisionIndex();
 	}
 
 	/**
@@ -62,12 +59,11 @@ public class HgException extends Exception {
 	}
 	
 	public HgException setRevisionIndex(int rev) {
-		revNumber = rev;
-		return this;
+		return extras.setRevisionIndex(rev);
 	}
 	
 	public boolean isRevisionIndexSet() {
-		return revNumber != BAD_REVISION;
+		return extras.isRevisionIndexSet();
 	}
 
 	/**
@@ -82,48 +78,26 @@ public class HgException extends Exception {
 	 * @return non-null only when revision was supplied at construction time
 	 */
 	public Nodeid getRevision() {
-		return revision;
+		return extras.getRevision();
 	}
 
 	public HgException setRevision(Nodeid r) {
-		revision = r;
-		return this;
+		return extras.setRevision(r);
 	}
 	
 	public boolean isRevisionSet() {
-		return revision != null;
+		return extras.isRevisionSet();
 	}
 
 	/**
 	 * @return non-null only if file name was set at construction time
 	 */
 	public Path getFileName() {
-		return filename;
+		return extras.getFileName();
 	}
 
 	public HgException setFileName(Path name) {
-		filename = name;
-		return this;
-	}
-	
-	protected void appendDetails(StringBuilder sb) {
-		if (filename != null) {
-			sb.append("path:'");
-			sb.append(filename);
-			sb.append('\'');
-			sb.append(';');
-			sb.append(' ');
-		}
-		sb.append("rev:");
-		if (revNumber != BAD_REVISION) {
-			sb.append(revNumber);
-			if (revision != null) {
-				sb.append(':');
-			}
-		}
-		if (revision != null) {
-			sb.append(revision.shortNotation());
-		}
+		return extras.setFileName(name);
 	}
 
 	@Override
@@ -131,7 +105,7 @@ public class HgException extends Exception {
 		StringBuilder sb = new StringBuilder(super.toString());
 		sb.append(' ');
 		sb.append('(');
-		appendDetails(sb);
+		extras.appendDetails(sb);
 		sb.append(')');
 		return sb.toString();
 	}

@@ -36,20 +36,18 @@ import java.io.IOException;
 @SuppressWarnings("serial")
 public class HgInvalidFileException extends HgException {
 
-	private File localFile;
-
 	public HgInvalidFileException(String message, Throwable th) {
 		super(message, th);
 	}
 
 	public HgInvalidFileException(String message, Throwable th, File file) {
 		super(message, th);
-		localFile = file; // allows null
+		extras.setFile(file); // allows null
 	}
 
 	public HgInvalidFileException setFile(File file) {
 		assert file != null; // doesn't allow null not to clear file accidentally
-		localFile = file;
+		extras.setFile(file);
 		return this;
 	}
 
@@ -57,23 +55,6 @@ public class HgInvalidFileException extends HgException {
 	 * @return file object that causes troubles, or <code>null</code> if specific file is unknown
 	 */
 	public File getFile() {
-		return localFile;
-	}
-
-	@Override
-	protected void appendDetails(StringBuilder sb) {
-		super.appendDetails(sb);
-		if (localFile != null) {
-			sb.append(';');
-			sb.append(' ');
-			sb.append(" file:");
-			sb.append(localFile.getPath());
-			sb.append(',');
-			if (localFile.exists()) {
-				sb.append("EXISTS");
-			} else {
-				sb.append("DOESN'T EXIST");
-			}
-		}
+		return extras.getFile();
 	}
 }

@@ -513,22 +513,22 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		}
 		
 		void populate(HgChangeset cs) {
-			cachedChangesets.put(cs.getRevision(), cs);
+			cachedChangesets.put(cs.getRevisionIndex(), cs);
 		}
 		
-		private HgChangeset[] get(int... changelogRevisionNumber) throws HgInvalidControlFileException {
-			HgChangeset[] rv = new HgChangeset[changelogRevisionNumber.length];
-			IntVector misses = new IntVector(changelogRevisionNumber.length, -1);
-			for (int i = 0; i < changelogRevisionNumber.length; i++) {
-				if (changelogRevisionNumber[i] == -1) {
+		private HgChangeset[] get(int... changelogRevisionIndex) throws HgException {
+			HgChangeset[] rv = new HgChangeset[changelogRevisionIndex.length];
+			IntVector misses = new IntVector(changelogRevisionIndex.length, -1);
+			for (int i = 0; i < changelogRevisionIndex.length; i++) {
+				if (changelogRevisionIndex[i] == -1) {
 					rv[i] = null;
 					continue;
 				}
-				HgChangeset cached = cachedChangesets.get(changelogRevisionNumber[i]);
+				HgChangeset cached = cachedChangesets.get(changelogRevisionIndex[i]);
 				if (cached != null) {
 					rv[i] = cached;
 				} else {
-					misses.add(changelogRevisionNumber[i]);
+					misses.add(changelogRevisionIndex[i]);
 				}
 			}
 			if (misses.size() > 0) {
@@ -537,20 +537,23 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 				repo.getChangelog().range(this, changesets2read);
 				for (int changeset2read : changesets2read) {
 					HgChangeset cs = cachedChangesets.get(changeset2read);
-						if (cs == null) {
-							throw new HgBadStateException();
+					if (cs == null) {
+						throw new HgException(String.format("Can't get changeset for revision %d", changeset2read));
+					}
+					// HgChangelog.range may reorder changesets according to their order in the changelog
+					// thus need to find original index
+					boolean sanity = false;
+					for (int i = 0; i < changelogRevisionIndex.length; i++) {
+						if (changelogRevisionIndex[i] == cs.getRevisionIndex()) {
+							rv[i] = cs;
+							sanity = true;
+							break;
 						}
-						// HgChangelog.range may reorder changesets according to their order in the changelog
-						// thus need to find original index
-						boolean sanity = false;
-						for (int i = 0; i < changelogRevisionNumber.length; i++) {
-							if (changelogRevisionNumber[i] == cs.getRevision()) {
-								rv[i] = cs;
-								sanity = true;
-								break;
-							}
-						}
-						assert sanity;
+					}
+					if (!sanity) {
+						HgInternals.getContext(repo).getLog().error(getClass(), "Index of revision %d:%s doesn't match any of requested", cs.getRevisionIndex(), cs.getNodeid().shortNotation());
+					}
+					assert sanity;
 				}
 			}
 			return rv;
@@ -568,14 +571,14 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			populate(cs.clone());
 		}
 
-		public Nodeid changesetRevision() {
+		public Nodeid changesetRevision() throws HgException {
 			if (changesetRevision == null) {
 				changesetRevision = getRevision(historyNode.changeset);
 			}
 			return changesetRevision;
 		}
 
-		public Pair<Nodeid, Nodeid> parentRevisions() {
+		public Pair<Nodeid, Nodeid> parentRevisions() throws HgException {
 			if (parentRevisions == null) {
 				HistoryNode p;
 				final Nodeid p1, p2;
@@ -594,7 +597,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			return parentRevisions;
 		}
 
-		public Collection<Nodeid> childRevisions() {
+		public Collection<Nodeid> childRevisions() throws HgException {
 			if (childRevisions != null) {
 				return childRevisions;
 			}
@@ -611,19 +614,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		}
 		
 		// reading nodeid involves reading index only, guess, can afford not to optimize multiple reads
-		private Nodeid getRevision(int changelogRevisionNumber) {
-			// XXX pipe through pool
+		private Nodeid getRevision(int changelogRevisionNumber) throws HgInvalidControlFileException {
+			// TODO [post-1.0] pipe through pool
 			HgChangeset cs = cachedChangesets.get(changelogRevisionNumber);
 			if (cs != null) {
 				return cs.getNodeid();
 			} else {
-				try {
-					return repo.getChangelog().getRevision(changelogRevisionNumber);
-				} catch (HgException ex) {
-					HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
-					// FIXME propagate, perhaps?
-					return Nodeid.NULL; // FIXME this is quick-n-dirty hack to move forward with introducing exceptions 
-				}
+				return repo.getChangelog().getRevision(changelogRevisionNumber);
 			}
 		}
 	}

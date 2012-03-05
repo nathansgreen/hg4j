@@ -67,7 +67,7 @@ public class HgCallbackTargetException extends HgException {
 		sb.append("Original exception thrown: ");
 		sb.append(getCause().getClass().getName());
 		sb.append(" at ");
-		appendDetails(sb);
+		extras.appendDetails(sb);
 		return sb.toString();
 	}
 

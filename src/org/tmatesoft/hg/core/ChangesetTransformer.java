@@ -108,7 +108,8 @@ import org.tmatesoft.hg.util.ProgressSupport;
 			changeset = new HgChangeset(statusCollector, pp);
 			changeset.setParentHelper(pw);
 		}
-		
+
+		// FIXME document instance reuse policy
 		HgChangeset handle(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
 			changeset.init(revisionNumber, nodeid, cset);
 			return changeset;

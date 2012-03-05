@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,17 +18,13 @@ package org.tmatesoft.hg.core;
 
 /**
  * hg4j's own internal error or unexpected state.
+ * XXX unless there's anything additional, there's not too much value in this class
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
 public class HgBadStateException extends RuntimeException {
-
-	// FIXME quick-n-dirty fix, don't allow exceptions without a cause
-	public HgBadStateException() {
-		super("Internal error");
-	}
 
 	public HgBadStateException(String message) {
 		super(message);

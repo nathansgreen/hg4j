@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -88,7 +88,7 @@ public class HgSubrepoLocation {
 
 	public HgRepository getRepo() throws HgInvalidFileException {
 		if (kind != Kind.Hg) {
-			throw new HgBadStateException();
+			throw new HgBadStateException(String.format("Unsupported subrepository %s", kind));
 		}
 		return new HgLookup().detect(new File(owner.getWorkingDir(), source));
 	}

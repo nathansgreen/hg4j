@@ -16,8 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -30,6 +29,7 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.ManifestRevision;
@@ -184,30 +184,51 @@ public class HgStatusCollector {
 		scope = scopeMatcher == null ? new Path.Matcher.Any() : scopeMatcher;
 	}
 	
-	// hg status --change <rev>
-	public void change(int rev, HgStatusInspector inspector) throws /*FIXME HInvalidRevisionException,*/ HgInvalidControlFileException {
+	/**
+	 * 'hg status --change REV' command counterpart.
+	 * 
+	 * @throws HgInvalidRevisionException if argument specifies non-existent revision index
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public void change(int revisionIndex, HgStatusInspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		int[] parents = new int[2];
-		repo.getChangelog().parents(rev, parents, null, null);
-		walk(parents[0], rev, inspector);
+		repo.getChangelog().parents(revisionIndex, parents, null, null);
+		walk(parents[0], revisionIndex, inspector);
 	}
 	
-	// rev1 and rev2 are changelog revision numbers, argument order matters.
-	// Either rev1 or rev2 may be -1 to indicate comparison to empty repository (XXX this is due to use of 
-	// parents in #change(), I believe. Perhaps, need a constant for this? Otherwise this hidden knowledge gets
-	// exposed to e.g. Record
-	public void walk(int rev1, int rev2, HgStatusInspector inspector) throws /*FIXME HInvalidRevisionException,*/ HgInvalidControlFileException {
+	/**
+	 * Parameters <b>rev1</b> and <b>rev2</b> are changelog revision indexes, shall not be the same. Argument order matters.
+	 * FIXME Either rev1 or rev2 may be -1 to indicate comparison to empty repository (this is due to use of
+	 * parents in #change(), I believe. Perhaps, need a constant for this? Otherwise this hidden knowledge gets
+	 * exposed to e.g. Record
+	 * XXX cancellation?
+	 * 
+	 * @param rev1 <em>from</em> changeset index, non-negative or {@link HgRepository#TIP}
+	 * @param rev2 <em>to</em> changeset index, non-negative or {@link HgRepository#TIP}
+	 * @param inspector callback for status information
+	 * @throws HgInvalidRevisionException if any argument specifies non-existent revision index
+	 * @throws IllegalArgumentException inspector other incorrect argument values
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public void walk(int rev1, int rev2, HgStatusInspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (rev1 == rev2) {
 			throw new IllegalArgumentException();
 		}
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		final int lastManifestRevision = repo.getChangelog().getLastRevision();
+		final int lastChangelogRevision = repo.getChangelog().getLastRevision();
 		if (rev1 == TIP) {
-			rev1 = lastManifestRevision;
+			rev1 = lastChangelogRevision;
 		}
 		if (rev2 == TIP) {
-			rev2 = lastManifestRevision; 
+			rev2 = lastChangelogRevision; 
+		}
+		if (rev1 != -1 && (HgInternals.wrongRevisionIndex(rev1) || rev1 == WORKING_COPY || rev1 == BAD_REVISION || rev1 > lastChangelogRevision)) {
+			throw new HgInvalidRevisionException(rev1);
+		}
+		if (rev2 != -1 && (HgInternals.wrongRevisionIndex(rev2) || rev2 == WORKING_COPY || rev2 == BAD_REVISION || rev2 > lastChangelogRevision)) {
+			throw new HgInvalidRevisionException(rev2);
 		}
 		if (inspector instanceof Record) {
 			((Record) inspector).init(rev1, rev2, this);
@@ -233,12 +254,12 @@ public class HgStatusCollector {
 			// which going to be read anyway
 			if (need1) {
 				minRev = rev1;
-				maxRev = rev1 < lastManifestRevision-5 ? rev1+5 : lastManifestRevision;
+				maxRev = rev1 < lastChangelogRevision-5 ? rev1+5 : lastChangelogRevision;
 				initCacheRange(minRev, maxRev);
 			}
 			if (need2) {
 				minRev = rev2;
-				maxRev = rev2 < lastManifestRevision-5 ? rev2+5 : lastManifestRevision;
+				maxRev = rev2 < lastChangelogRevision-5 ? rev2+5 : lastChangelogRevision;
 				initCacheRange(minRev, maxRev);
 			}
 		}
@@ -283,7 +304,16 @@ public class HgStatusCollector {
 		}
 	}
 	
-	public Record status(int rev1, int rev2) throws /*FIXME HInvalidRevisionException,*/ HgInvalidControlFileException {
+	/**
+	 * Collects status between two revisions, changes from <b>rev1</b> up to <b>rev2</b>.
+	 * 
+	 * @param rev1 <em>from</em> changeset index 
+	 * @param rev2 <em>to</em> changeset index
+	 * @return information object that describes change between the revisions
+	 * @throws HgInvalidRevisionException if any argument specifies non-existent revision index
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public Record status(int rev1, int rev2) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		Record rv = new Record();
 		walk(rev1, rev2, rv);
 		return rv;

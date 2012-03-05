@@ -396,7 +396,7 @@ abstract class Revlog {
 		
 		private void assertSortedIndex(int x) {
 			if (x < 0) {
-				throw new HgBadStateException();
+				throw new HgBadStateException(String.format("Bad index", x));
 			}
 		}
 		
