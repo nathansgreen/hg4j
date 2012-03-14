@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -137,7 +137,7 @@ public class HgInternals {
 	// Convenient check of revision index for validity (not all negative values are wrong as long as we use negative constants)
 	public static boolean wrongRevisionIndex(int rev) { // FIXME guess, usages shall throw HgInvalidRevision. \
 		// TODO Another method to check,throw and expand TIP at once
-		return rev < 0 && rev != TIP && rev != WORKING_COPY && rev != BAD_REVISION; 
+		return rev < 0 && rev != TIP && rev != WORKING_COPY && rev != BAD_REVISION && rev != NO_REVISION; 
 	}
 	
 	// throws HgInvalidRevisionException or IllegalArgumentException if [start..end] range is not a subrange of [0..lastRevision]

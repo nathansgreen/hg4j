@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
+import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.IOException;
@@ -228,13 +229,14 @@ abstract class Revlog {
 	}
 
 	/**
-	 * XXX perhaps, return value Nodeid[2] and boolean needNodeids is better (and higher level) API for this query?
+	 * Fills supplied arguments with information about revision parents.
 	 * 
 	 * @param revision - revision to query parents, or {@link HgRepository#TIP}
-	 * @param parentRevisions - int[2] to get local revision numbers of parents (e.g. {6, -1})
+	 * @param parentRevisions - int[2] to get local revision numbers of parents (e.g. {6, -1}), {@link HgRepository#NO_REVISION} indicates parent not set
 	 * @param parent1 - byte[20] or null, if parent's nodeid is not needed
 	 * @param parent2 - byte[20] or null, if second parent's nodeid is not needed
 	 * @throws HgInvalidRevisionException
+	 * @throws HgInvalidControlFileException FIXME
 	 * @throws IllegalArgumentException
 	 */
 	public void parents(int revision, int[] parentRevisions, byte[] parent1, byte[] parent2) throws HgInvalidRevisionException, HgInvalidControlFileException {
@@ -265,10 +267,11 @@ abstract class Revlog {
 		};
 		ParentCollector pc = new ParentCollector();
 		content.iterate(revision, revision, false, pc);
-		parentRevisions[0] = pc.p1;
-		parentRevisions[1] = pc.p2;
+		// although next code looks odd (NO_REVISION *is* -1), it's safer to be explicit
+		parentRevisions[0] = pc.p1 == -1 ? NO_REVISION : pc.p1;
+		parentRevisions[1] = pc.p2 == -1 ? NO_REVISION : pc.p2;
 		if (parent1 != null) {
-			if (parentRevisions[0] == -1) {
+			if (parentRevisions[0] == NO_REVISION) {
 				Arrays.fill(parent1, 0, 20, (byte) 0);
 			} else {
 				content.iterate(parentRevisions[0], parentRevisions[0], false, pc);
@@ -276,7 +279,7 @@ abstract class Revlog {
 			}
 		}
 		if (parent2 != null) {
-			if (parentRevisions[1] == -1) {
+			if (parentRevisions[1] == NO_REVISION) {
 				Arrays.fill(parent2, 0, 20, (byte) 0);
 			} else {
 				content.iterate(parentRevisions[1], parentRevisions[1], false, pc);

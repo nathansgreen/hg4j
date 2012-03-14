@@ -137,7 +137,7 @@ public class HgWorkingCopyStatusCollector {
 	private void initDirstateParentManifest() throws HgInvalidControlFileException {
 		Nodeid dirstateParent = getDirstateImpl().parents().first();
 		if (dirstateParent.isNull()) {
-			dirstateParentManifest = baseRevisionCollector != null ? baseRevisionCollector.raw(-1) : HgStatusCollector.createEmptyManifestRevision();
+			dirstateParentManifest = baseRevisionCollector != null ? baseRevisionCollector.raw(NO_REVISION) : HgStatusCollector.createEmptyManifestRevision();
 		} else {
 			int changeloRevIndex = repo.getChangelog().getRevisionIndex(dirstateParent);
 			dirstateParentManifest = getManifest(changeloRevIndex);

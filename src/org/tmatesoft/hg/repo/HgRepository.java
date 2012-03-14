@@ -27,6 +27,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -53,11 +54,35 @@ import org.tmatesoft.hg.util.ProgressSupport;
  */
 public final class HgRepository {
 
-	// if new constants added, consider fixing HgInternals#wrongRevisionIndex
-	public static final int TIP = -3;
+	// IMPORTANT: if new constants added, consider fixing HgInternals#wrongRevisionIndex and HgInvalidRevisionException#getMessage
+
+	/**
+	 * Revision index constant to indicate most recent revision
+	 */
+	public static final int TIP = -3; // XXX TIP_REVISION?
+
+	/**
+	 * Revision index constant to indicate invalid revision index value. 
+	 * Primary use is default/uninitialized values where user input is expected and as return value where 
+	 * an exception (e.g. {@link HgInvalidRevisionException}) is not desired
+	 */
 	public static final int BAD_REVISION = Integer.MIN_VALUE; // XXX INVALID_REVISION?
-	public static final int WORKING_COPY = -2;
+
+	/**
+	 * Revision index constant to indicate working copy
+	 */
+	public static final int WORKING_COPY = -2; // XXX WORKING_COPY_REVISION?
 	
+	/**
+	 * Constant ({@value #NO_REVISION}) to indicate revision absence (e.g. missing parent in from {@link HgChangelog#parents(int, int[], byte[], byte[])} call) 
+	 * or a fictitious revision of an empty repository, to use as an argument (contrary to {@link #BAD_REVISION})
+	 * e.g in a status operation to visit changes from the very beginning of a repository. 
+	 */
+	public static final int NO_REVISION = -1;
+	
+	/**
+	 * Name of the primary branch, "default".
+	 */
 	public static final String DEFAULT_BRANCH_NAME = "default";
 
 	// temp aux marker method

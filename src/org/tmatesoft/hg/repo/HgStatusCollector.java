@@ -77,7 +77,7 @@ public class HgStatusCollector {
 	private ManifestRevision get(int rev) throws HgInvalidControlFileException {
 		ManifestRevision i = cache.get(rev);
 		if (i == null) {
-			if (rev == -1) {
+			if (rev == NO_REVISION) {
 				return emptyFakeState;
 			}
 			ensureCacheSize();
@@ -89,7 +89,7 @@ public class HgStatusCollector {
 	}
 
 	private boolean cached(int revision) {
-		return cache.containsKey(revision) || revision == -1;
+		return cache.containsKey(revision) || revision == NO_REVISION;
 	}
 	
 	private void ensureCacheSize() {
@@ -117,7 +117,7 @@ public class HgStatusCollector {
 
 			public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
 				assert delegate == null;
-				if (cache.containsKey(changelogRevision)) { // don't need to check emptyFakeState hit as revision never -1 here
+				if (cache.containsKey(changelogRevision)) { // don't need to check emptyFakeState hit as revision never NO_REVISION here
 					cacheHit = true;
 				} else {
 					cache.put(changelogRevision, delegate = new ManifestRevision(cacheNodes, cacheFilenames));
@@ -153,11 +153,17 @@ public class HgStatusCollector {
 	
 	/*package-local*/ static ManifestRevision createEmptyManifestRevision() {
 		ManifestRevision fakeEmptyRev = new ManifestRevision(null, null);
-		fakeEmptyRev.begin(-1, null, -1);
-		fakeEmptyRev.end(-1);
+		fakeEmptyRev.begin(NO_REVISION, null, NO_REVISION);
+		fakeEmptyRev.end(NO_REVISION);
 		return fakeEmptyRev;
 	}
 	
+	/**
+	 * Access specific manifest revision
+	 * @param rev 
+	 * @return
+	 * @throws HgInvalidControlFileException
+	 */
 	/*package-local*/ ManifestRevision raw(int rev) throws HgInvalidControlFileException {
 		return get(rev);
 	}
@@ -191,17 +197,23 @@ public class HgStatusCollector {
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public void change(int revisionIndex, HgStatusInspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
-		int[] parents = new int[2];
-		repo.getChangelog().parents(revisionIndex, parents, null, null);
-		walk(parents[0], revisionIndex, inspector);
+		int p;
+		if (revisionIndex == 0) {
+			p = NO_REVISION;
+		} else {
+			int[] parents = new int[2];
+			repo.getChangelog().parents(revisionIndex, parents, null, null);
+			// #parents call above is responsible for NO_REVISION
+			p = parents[0]; // hg --change alsways uses first parent, despite the fact there might be valid (-1, 18) pair of parents
+		}
+		walk(p, revisionIndex, inspector);
 	}
 	
 	/**
 	 * Parameters <b>rev1</b> and <b>rev2</b> are changelog revision indexes, shall not be the same. Argument order matters.
-	 * FIXME Either rev1 or rev2 may be -1 to indicate comparison to empty repository (this is due to use of
-	 * parents in #change(), I believe. Perhaps, need a constant for this? Otherwise this hidden knowledge gets
-	 * exposed to e.g. Record
-	 * XXX cancellation?
+	 * Either rev1 or rev2 may be {@link HgRepository#NO_REVISION} to indicate comparison to empty repository
+	 * 
+	 * FIXME cancellation (at least exception)?
 	 * 
 	 * @param rev1 <em>from</em> changeset index, non-negative or {@link HgRepository#TIP}
 	 * @param rev2 <em>to</em> changeset index, non-negative or {@link HgRepository#TIP}
@@ -224,10 +236,10 @@ public class HgStatusCollector {
 		if (rev2 == TIP) {
 			rev2 = lastChangelogRevision; 
 		}
-		if (rev1 != -1 && (HgInternals.wrongRevisionIndex(rev1) || rev1 == WORKING_COPY || rev1 == BAD_REVISION || rev1 > lastChangelogRevision)) {
+		if (rev1 != NO_REVISION && (HgInternals.wrongRevisionIndex(rev1) || rev1 == WORKING_COPY || rev1 == BAD_REVISION || rev1 > lastChangelogRevision)) {
 			throw new HgInvalidRevisionException(rev1);
 		}
-		if (rev2 != -1 && (HgInternals.wrongRevisionIndex(rev2) || rev2 == WORKING_COPY || rev2 == BAD_REVISION || rev2 > lastChangelogRevision)) {
+		if (rev2 != NO_REVISION && (HgInternals.wrongRevisionIndex(rev2) || rev2 == WORKING_COPY || rev2 == BAD_REVISION || rev2 > lastChangelogRevision)) {
 			throw new HgInvalidRevisionException(rev2);
 		}
 		if (inspector instanceof Record) {

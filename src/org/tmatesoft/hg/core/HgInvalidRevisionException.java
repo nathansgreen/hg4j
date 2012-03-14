@@ -32,7 +32,7 @@ public class HgInvalidRevisionException extends IllegalArgumentException {
 	private Nodeid rev;
 	private Integer revIdx = BAD_REVISION;
 	// next two make sense only when revIdx is present
-	private int rangeLeftBoundary = -1, rangeRightBoundary = -1;
+	private int rangeLeftBoundary = BAD_REVISION, rangeRightBoundary = BAD_REVISION;
 
 	/**
 	 * 
@@ -110,9 +110,10 @@ public class HgInvalidRevisionException extends IllegalArgumentException {
 			case BAD_REVISION : sr = "UNKNOWN"; break;
 			case TIP : sr = "TIP"; break;
 			case WORKING_COPY: sr = "WORKING-COPY"; break;
+			case NO_REVISION : sr = "NO REVISION"; break;
 			default : sr = revIdx.toString();
 			}
-			if (rangeLeftBoundary != -1 || rangeRightBoundary != -1) {
+			if (rangeLeftBoundary != BAD_REVISION || rangeRightBoundary != BAD_REVISION) {
 				sb.append(String.format("%s is not from [%d..%d]", sr, rangeLeftBoundary, rangeRightBoundary));
 			} else {
 				sb.append(sr);
