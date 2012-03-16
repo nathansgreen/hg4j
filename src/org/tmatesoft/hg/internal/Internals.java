@@ -83,18 +83,7 @@ public final class Internals {
 	
 	public PathRewrite buildNormalizePathRewrite() {
 		if (runningOnWindows()) {
-			return new PathRewrite() {
-					
-					public CharSequence rewrite(CharSequence p) {
-						// TODO handle . and .. (although unlikely to face them from GUI client)
-						String path = p.toString();
-						path = path.replace('\\', '/').replace("//", "/");
-						if (path.startsWith("/")) {
-							path = path.substring(1);
-						}
-						return path;
-					}
-				};
+			return new WinToNixPathRewrite();
 		} else {
 			return new PathRewrite.Empty(); // or strip leading slash, perhaps? 
 		}

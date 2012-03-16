@@ -319,7 +319,7 @@ public final class HgRepository {
 	public HgIgnore getIgnore() /*throws HgInvalidControlFileException */{
 		// TODO read config for additional locations
 		if (ignore == null) {
-			ignore = new HgIgnore();
+			ignore = new HgIgnore(getToRepoPathHelper());
 			File ignoreFile = new File(getWorkingDir(), ".hgignore");
 			try {
 				final List<String> errors = ignore.read(ignoreFile);

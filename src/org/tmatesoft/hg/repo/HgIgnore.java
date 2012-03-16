@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.PathRewrite;
 
 /**
  * Handling of ignored paths according to .hgignore configuration
@@ -37,12 +38,14 @@ import org.tmatesoft.hg.util.Path;
 public class HgIgnore implements Path.Matcher {
 
 	private List<Pattern> entries;
+	private final PathRewrite globPathHelper;
 
-	HgIgnore() {
+	HgIgnore(PathRewrite globPathRewrite) {
 		entries = Collections.emptyList();
+		globPathHelper = globPathRewrite;
 	}
 
-	/* package-local */List<String> read(File hgignoreFile) throws IOException {
+	/* package-local */ List<String> read(File hgignoreFile) throws IOException {
 		if (!hgignoreFile.exists()) {
 			return null;
 		}
@@ -54,7 +57,7 @@ public class HgIgnore implements Path.Matcher {
 		}
 	}
 
-	/* package-local */List<String> read(BufferedReader content) throws IOException {
+	/* package-local */ List<String> read(BufferedReader content) throws IOException {
 		final String REGEXP = "regexp", GLOB = "glob";
 		final String REGEXP_PREFIX = REGEXP + ":", GLOB_PREFIX = GLOB + ":";
 		ArrayList<String> errors = new ArrayList<String>();
@@ -101,10 +104,11 @@ public class HgIgnore implements Path.Matcher {
 					continue;
 				}
 				if (GLOB.equals(lineSyntax)) {
-					// hgignore(5)
-					// (http://www.selenic.com/mercurial/hgignore.5.html) says slashes '\' are escape characters,
-					// hence no special  treatment of Windows path
-					// however, own attempts make me think '\' on Windows are not treated as escapes
+					// hgignore(5) says slashes '\' are escape characters,
+					// however, for glob patterns on Windows first get backslashes converted to slashes
+					if (globPathHelper != null) {
+						line = globPathHelper.rewrite(line).toString();
+					}
 					line = glob2regex(line);
 				} else {
 					assert REGEXP.equals(lineSyntax);
@@ -176,7 +180,13 @@ public class HgIgnore implements Path.Matcher {
 			}
 			sb.append(ch);
 		}
-		sb.append("(?:/|$)");
+		// Python impl doesn't keep empty segments in directory names (ntpath.normpath and posixpath.normpath),
+		// effectively removing trailing separators, thus patterns like "bin/" get translated into "bin$"
+		// Our glob rewriter doesn't strip last empty segment, and "bin/$" would be incorrect pattern, 
+		// (e.g. isIgnored("bin/file") performs two matches, against "bin/file" and "bin") hence the check.
+		if (sb.charAt(sb.length() - 1) != '/') {
+			sb.append('$');
+		}
 		return sb.toString();
 	}
 
