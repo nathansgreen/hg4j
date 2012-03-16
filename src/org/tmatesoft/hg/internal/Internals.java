@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.StringTokenizer;
@@ -319,5 +320,23 @@ public final class Internals {
 
 	public boolean shallCacheRevlogs() {
 		return shallCacheRevlogsInRepo;
+	}
+	
+	public static <T> CharSequence join(Iterable<T> col, CharSequence separator) {
+		if (col == null) {
+			return String.valueOf(col);
+		}
+		Iterator<T> it = col.iterator();
+		if (!it.hasNext()) {
+			return "[]";
+		}
+		String v = String.valueOf(it.next());
+		StringBuilder sb = new StringBuilder(v);
+		while (it.hasNext()) {
+			sb.append(separator);
+			v = String.valueOf(it.next());
+			sb.append(v);
+		}
+		return sb;
 	}
 }

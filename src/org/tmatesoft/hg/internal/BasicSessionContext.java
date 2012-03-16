@@ -32,7 +32,7 @@ import org.tmatesoft.hg.util.PathRewrite;
 public class BasicSessionContext implements SessionContext {
 
 	private PathPool pathPool;
-	private final LogFacility logFacility;
+	private LogFacility logFacility;
 	private final Map<String, Object> properties;
 	
 	public BasicSessionContext(PathPool pathFactory, LogFacility log) {
@@ -42,7 +42,7 @@ public class BasicSessionContext implements SessionContext {
 	@SuppressWarnings("unchecked")
 	public BasicSessionContext(Map<String,?> propertyOverrides, PathPool pathFactory, LogFacility log) {
 		pathPool = pathFactory;
-		logFacility = log != null ? log : new StreamLogFacility(true, true, true, System.out);
+		logFacility = log;
 		properties = propertyOverrides == null ? Collections.<String,Object>emptyMap() : (Map<String, Object>) propertyOverrides;
 	}
 
@@ -55,10 +55,24 @@ public class BasicSessionContext implements SessionContext {
 
 	public LogFacility getLog() {
 		// e.g. for exceptions that we can't handle but log (e.g. FileNotFoundException when we've checked beforehand file.canRead()
+		if (logFacility == null) {
+			boolean needDebug = _getBooleanProperty("hg.consolelog.debug", false);
+			boolean needInfo = needDebug || _getBooleanProperty("hg.consolelog.info", false);
+			logFacility = new StreamLogFacility(needDebug, needInfo, true, System.out);
+		}
 		return logFacility;
 	}
+	
+	private boolean _getBooleanProperty(String name, boolean defaultValue) {
+		// can't use <T> and unchecked cast because got no confidence passed properties are strictly of the kind of my default values,
+		// i.e. if boolean from outside comes as "true", while I pass default as Boolean or vice versa.  
+		Object p = getProperty(name, defaultValue);
+		return p instanceof Boolean ? ((Boolean) p).booleanValue() : Boolean.parseBoolean(String.valueOf(p));
+	}
 
+	// TODO specific helpers for boolean and int values
 	public Object getProperty(String name, Object defaultValue) {
+		// NOTE, this method is invoked from getLog(), hence do not call getLog from here unless changed appropriately
 		Object value = properties.get(name);
 		if (value != null) {
 			return value;

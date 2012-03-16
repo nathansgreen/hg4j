@@ -34,6 +34,7 @@ import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
@@ -323,7 +324,7 @@ public final class HgRepository {
 			try {
 				final List<String> errors = ignore.read(ignoreFile);
 				if (errors != null) {
-					getContext().getLog().warn(getClass(), "Syntax errors parsing .hgignore:\n%s", errors);
+					getContext().getLog().warn(getClass(), "Syntax errors parsing .hgignore:\n%s", Internals.join(errors, ",\n"));
 				}
 			} catch (IOException ex) {
 				final String m = "Error reading .hgignore file";
