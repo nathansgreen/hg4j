@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
  * contact TMate Software at support@hg4j.com
  */
 package org.tmatesoft.hg.test;
+
+import static org.tmatesoft.hg.util.Path.create;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -150,6 +152,30 @@ public class TestIgnore {
 		}
 		for (Path p : toPass) {
 			errorCollector.assertTrue(p.toString(), !hgIgnore.isIgnored(p));
+		}
+	}
+
+	@Test
+	public void testSyntaxPrefixAtLine() throws Exception {
+		String s = "glob:*.c\nregexp:.*\\.d";
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		Path[] toPass = new Path[] {
+				create("a/c"),
+				create("a/d"),
+				create("a/d.a"),
+				create("a/d.e"),
+		};
+		Path[] toIgnore = new Path[] {
+				create("a.c"),
+				create("a.d"),
+				create("src/a.c"),
+				create("src/a.d"),
+		};
+		for (Path p : toIgnore) {
+			errorCollector.assertTrue("Shall ignore " + p, hgIgnore.isIgnored(p));
+		}
+		for (Path p : toPass) {
+			errorCollector.assertTrue("Shall pass " + p, !hgIgnore.isIgnored(p));
 		}
 	}
 }
