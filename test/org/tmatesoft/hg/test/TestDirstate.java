@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,7 +66,11 @@ public class TestDirstate {
 		repo = Configuration.get().find("log-branches");
 		Assert.assertEquals("test", repo.getWorkingCopyBranchName());
 		repo = Configuration.get().own();
-		Assert.assertEquals("default", repo.getWorkingCopyBranchName());
+		OutputParser.Stub output = new OutputParser.Stub();
+		ExecHelper eh = new ExecHelper(output, repo.getWorkingDir());
+		eh.run("hg", "branch");
+		String branchName = output.result().toString().trim();
+		Assert.assertEquals(branchName, repo.getWorkingCopyBranchName());
 	}
 
 	@Test

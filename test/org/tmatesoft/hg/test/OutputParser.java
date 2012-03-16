@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,8 @@ public interface OutputParser {
 
 	public class Stub implements OutputParser {
 		private boolean shallDump;
+		private CharSequence result;
+
 		public Stub() {
 			this(false);
 		}
@@ -34,10 +36,14 @@ public interface OutputParser {
 			shallDump = dump;
 		}
 		public void parse(CharSequence seq) {
+			result = seq;
 			if (shallDump) {
 				System.out.println(seq);
 			} 
 			// else no-op
+		}
+		public CharSequence result() {
+			return result;
 		}
 	}
 }
