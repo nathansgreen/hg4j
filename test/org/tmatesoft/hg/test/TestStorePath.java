@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,13 @@
  */
 package org.tmatesoft.hg.test;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import junit.framework.Assert;
 
 import org.hamcrest.CoreMatchers;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.internal.BasicSessionContext;
@@ -36,18 +40,30 @@ public class TestStorePath {
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 	
 	private PathRewrite storePathHelper;
+	private final Map<String, Object> propertyOverrides = new HashMap<String, Object>();
+
+	private Internals internals;
 
 	public static void main(String[] args) throws Throwable {
 		final TestStorePath test = new TestStorePath();
 		test.testWindowsFilenames();
 		test.testHashLongPath();
+		test.testSuffixReplacement();
 		test.errorCollector.verify();
 	}
 	
 	public TestStorePath() {
-		final Internals i = new Internals(new BasicSessionContext(null, null));
-		i.setStorageConfig(1, 0x7);
-		storePathHelper = i.buildDataFilesHelper();
+		propertyOverrides.put("hg.consolelog.debug", true);
+		internals = new Internals(new BasicSessionContext(propertyOverrides, null, null));
+		internals.setStorageConfig(1, 0x7);
+		storePathHelper = internals.buildDataFilesHelper();
+	}
+	
+	@Before
+	public void setup() {
+		// just in case there are leftovers from #testNationalChars() and another test builds a helper
+		propertyOverrides.clear();
+		propertyOverrides.put("hg.consolelog.debug", true);
 	}
 
 	@Test
@@ -87,5 +103,28 @@ public class TestStorePath {
 		errorCollector.checkThat(storePathHelper.rewrite(n1), CoreMatchers.<CharSequence>equalTo(r1));
 		errorCollector.checkThat(storePathHelper.rewrite(n2), CoreMatchers.<CharSequence>equalTo(r2));
 		errorCollector.checkThat(storePathHelper.rewrite(n3), CoreMatchers.<CharSequence>equalTo(r3));
+	}
+
+	@Test
+	public void testSuffixReplacement() {
+		String s1 = "aaa/bbb.hg/ccc.i/ddd.hg/xx.i";
+		String s2 = "bbb.d/aa.hg/bbb.hg/yy.d";
+		String r1 = s1.replace(".hg/", ".hg.hg/").replace(".i/", ".i.hg/").replace(".d/", ".d.hg/");
+		String r2 = s2.replace(".hg/", ".hg.hg/").replace(".i/", ".i.hg/").replace(".d/", ".d.hg/");
+		errorCollector.checkThat(storePathHelper.rewrite(s1), CoreMatchers.<CharSequence>equalTo("store/data/" + r1 + ".i"));
+		errorCollector.checkThat(storePathHelper.rewrite(s2), CoreMatchers.<CharSequence>equalTo("store/data/" + r2 + ".i"));
+	}
+	
+	@Test
+	public void testNationalChars() {
+		String s = "Привет.txt";
+		//
+		propertyOverrides.put(Internals.CFG_PROPERT_FS_FILENAME_ENCODING, "cp1251");
+		PathRewrite sph = internals.buildDataFilesHelper();
+		errorCollector.checkThat(sph.rewrite(s), CoreMatchers.<CharSequence>equalTo("store/data/~cf~f0~e8~e2~e5~f2.txt.i"));
+		//
+		propertyOverrides.put(Internals.CFG_PROPERT_FS_FILENAME_ENCODING, "UTF8");
+		sph = internals.buildDataFilesHelper();
+		errorCollector.checkThat(sph.rewrite(s), CoreMatchers.<CharSequence>equalTo("store/data/~d0~9f~d1~80~d0~b8~d0~b2~d0~b5~d1~82.txt.i"));
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,14 +16,21 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
 import java.util.Arrays;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.tmatesoft.hg.util.PathRewrite;
 
 /**
  * @see http://mercurial.selenic.com/wiki/CaseFoldingPlan
  * @see http://mercurial.selenic.com/wiki/fncacheRepoFormat
+ * @see http://mercurial.selenic.com/wiki/EncodingStrategy
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -33,11 +40,25 @@ class StoragePathHelper implements PathRewrite {
 	private final boolean store;
 	private final boolean fncache;
 	private final boolean dotencode;
-
+	private final Pattern suffix2replace;
+	private final CharsetEncoder csEncoder;
+	private final char[] hexEncodedByte = new char[] {'~', '0', '0'};
+	private final ByteBuffer byteEncodingBuf;
+	private final CharBuffer charEncodingBuf;
+	
 	public StoragePathHelper(boolean isStore, boolean isFncache, boolean isDotencode) {
+		this(isStore, isFncache, isDotencode, Charset.defaultCharset());
+	}
+
+	public StoragePathHelper(boolean isStore, boolean isFncache, boolean isDotencode, Charset fsEncoding) {
+		assert fsEncoding != null;
 		store = isStore;
 		fncache = isFncache;
 		dotencode = isDotencode;
+		suffix2replace = Pattern.compile("\\.([id]|hg)/");
+		csEncoder = fsEncoding.newEncoder(); // FIXME catch exception and rethrow as our's RT
+		byteEncodingBuf = ByteBuffer.allocate(Math.round(csEncoder.maxBytesPerChar()) + 1/*in fact, need ceil, hence +1*/);
+		charEncodingBuf = CharBuffer.allocate(1);
 	}
 
 	// FIXME document what path argument is, whether it includes .i or .d, and whether it's 'normalized' (slashes) or not.
@@ -48,13 +69,24 @@ class StoragePathHelper implements PathRewrite {
 		final String STR_DATA = "data/";
 		final String STR_DH = "dh/";
 		final String reservedChars = "\\:*?\"<>|";
-		char[] hexByte = new char[2];
 		
-		String path = p.toString();
-		path = path.replace(".hg/", ".hg.hg/").replace(".i/", ".i.hg/").replace(".d/", ".d.hg/");
+		Matcher suffixMatcher = suffix2replace.matcher(p);
+		CharSequence path;
+		// Matcher.replaceAll, but without extra toString
+		boolean found = suffixMatcher.find();
+		if (found) {
+			StringBuffer sb = new StringBuffer(p.length()  + 20);
+			do {
+				suffixMatcher.appendReplacement(sb, ".$1.hg/");
+			} while (found = suffixMatcher.find());
+			suffixMatcher.appendTail(sb);
+			path = sb;
+		} else {
+			path = p;
+		}
+		
 		StringBuilder sb = new StringBuilder(path.length() << 1);
 		if (store || fncache) {
-			// encodefilename
 			for (int i = 0; i < path.length(); i++) {
 				final char ch = path.charAt(i);
 				if (ch >= 'a' && ch <= 'z') {
@@ -63,16 +95,24 @@ class StoragePathHelper implements PathRewrite {
 					sb.append('_');
 					sb.append(Character.toLowerCase(ch)); // Perhaps, (char) (((int) ch) + 32)? Even better, |= 0x20? 
 				} else if (reservedChars.indexOf(ch) != -1) {
-					sb.append('~');
-					sb.append(toHexByte(ch, hexByte));
+					sb.append(toHexByte(ch));
 				} else if ((ch >= '~' /*126*/ && ch <= 255) || ch < ' ' /*32*/) {
-					sb.append('~');
-					sb.append(toHexByte(ch, hexByte));
+					sb.append(toHexByte(ch));
 				} else if (ch == '_') {
 					sb.append('_');
 					sb.append('_');
 				} else {
-					sb.append(ch);
+					// either ASCII char that doesn't require special handling, or an Unicode character to get encoded
+					// according to filesystem/native encoding, see http://mercurial.selenic.com/wiki/EncodingStrategy
+					// despite of what the page says, use of native encoding seems worst solution to me (repositories
+					// can't be easily shared between OS'es with different encodings then, e.g. Win1251 and Linux UTF8).
+					// If the ease of sharing was not the point, what's the reason to mangle with names at all then (
+					// lowercase and exclude reserved device names).
+					if (ch < '~' /*126*/ || !csEncoder.canEncode(ch)) {
+						sb.append(ch);
+					} else {
+						appendEncoded(sb, ch);
+					}
 				}
 			}
 			// auxencode
@@ -82,6 +122,9 @@ class StoragePathHelper implements PathRewrite {
 		}
 		final int MAX_PATH_LEN = 120;
 		if (fncache && (sb.length() + STR_DATA.length() + ".i".length() > MAX_PATH_LEN)) {
+			// TODO [post-1.0] Mercurial uses system encoding for paths, hence we need to pass bytes to DigestHelper
+			// to ensure our sha1 value (default encoding of unicode string if one looks into DH impl) match that 
+			// produced by Mercurial (based on native string). 
 			String digest = new DigestHelper().sha1(STR_DATA, path, ".i").asHexString();
 			final int DIR_PREFIX_LEN = 8;
 			 // not sure why (-4) is here. 120 - 40 = up to 80 for path with ext. dh/ + ext(.i) = 3+2
@@ -94,13 +137,15 @@ class StoragePathHelper implements PathRewrite {
 				} else if (ch >= 'A' && ch <= 'Z') {
 					sb.append((char) (ch | 0x20)); // lowercase 
 				} else if (reservedChars.indexOf(ch) != -1) {
-					sb.append('~');
-					sb.append(toHexByte(ch, hexByte));
+					sb.append(toHexByte(ch));
 				} else if ((ch >= '~' /*126*/ && ch <= 255) || ch < ' ' /*32*/) {
-					sb.append('~');
-					sb.append(toHexByte(ch, hexByte));
+					sb.append(toHexByte(ch));
 				} else {
-					sb.append(ch);
+					if (ch < '~' /*126*/ || !csEncoder.canEncode(ch)) {
+						sb.append(ch);
+					} else {
+						appendEncoded(sb, ch);
+					}
 				}
 			}
 			encodeWindowsDeviceNames(sb);
@@ -163,7 +208,6 @@ class StoragePathHelper implements PathRewrite {
 	}
 	
 	private void encodeWindowsDeviceNames(StringBuilder sb) {
-		char[] hexByte = new char[2];
 		int x = 0; // last segment start
 		final TreeSet<String> windowsReservedFilenames = new TreeSet<String>();
 		windowsReservedFilenames.addAll(Arrays.asList("con prn aux nul com1 com2 com3 com4 com5 com6 com7 com8 com9 lpt1 lpt2 lpt3 lpt4 lpt5 lpt6 lpt7 lpt8 lpt9".split(" "))); 
@@ -183,25 +227,49 @@ class StoragePathHelper implements PathRewrite {
 					found = windowsReservedFilenames.contains(sb.subSequence(x, x+4));
 				}
 				if (found) {
-					sb.insert(x+3, toHexByte(sb.charAt(x+2), hexByte));
-					sb.setCharAt(x+2, '~');
+					// x+2 as we change the third letter in device name
+					replace(sb, x+2, toHexByte(sb.charAt(x+2)));
 					i += 2;
 				}
 			}
 			if (dotencode && (sb.charAt(x) == '.' || sb.charAt(x) == ' ')) {
-				sb.insert(x+1, toHexByte(sb.charAt(x), hexByte));
-				sb.setCharAt(x, '~'); // setChar *after* charAt/insert to get ~2e, not ~7e for '.'
+				char dotOrSpace = sb.charAt(x); // beware, replace() below changes charAt(x), rather get a copy 
+				// not to get ~7e for '.' instead of ~2e, if later refactoring changes the logic 
+				replace(sb, x, toHexByte(dotOrSpace));
 				i += 2;
 			}
 			x = i+1;
 		} while (x < sb.length());
 	}
+	
+	// shall be synchronized in case of multithreaded use
+	private void appendEncoded(StringBuilder sb, char ch) {
+		charEncodingBuf.clear();
+		byteEncodingBuf.clear();
+		charEncodingBuf.put(ch).flip();
+		csEncoder.encode(charEncodingBuf, byteEncodingBuf, false);
+		byteEncodingBuf.flip();
+		while (byteEncodingBuf.hasRemaining()) {
+			sb.append(toHexByte(byteEncodingBuf.get()));
+		}
+	}
 
-	private static char[] toHexByte(int ch, char[] buf) {
-		assert buf.length > 1;
+	/**
+	 * replace char at sb[index] with a sequence
+	 */
+	private static void replace(StringBuilder sb, int index, char[] with) {
+		// there's StringBuilder.replace(int, int+1, String), but with char[] - I don't want to make a string out of hexEncodedByte
+		sb.setCharAt(index, with[0]);
+		sb.insert(index+1, with, 1, with.length - 1);
+	}
+
+	/**
+	 * put hex representation of byte ch into buf from specified offset 
+	 */
+	private char[] toHexByte(int ch) {
 		final String hexDigits = "0123456789abcdef";
-		buf[0] = hexDigits.charAt((ch & 0x00F0) >>> 4);
-		buf[1] = hexDigits.charAt(ch & 0x0F);
-		return buf;
+		hexEncodedByte[1] = hexDigits.charAt((ch & 0x00F0) >>> 4);
+		hexEncodedByte[2] = hexDigits.charAt(ch & 0x0F);
+		return hexEncodedByte;
 	}
 }
