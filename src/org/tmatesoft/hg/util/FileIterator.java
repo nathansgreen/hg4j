@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -63,5 +63,20 @@ public interface FileIterator {
 	 * @return <code>true</code> if this {@link FileIterator} is responsible for (interested in) specified repository-local path 
 	 */
 	@Experimental(reason="Perhaps, shall not be part of FileIterator, but rather separate Path.Matcher. Approaches in regular StatusCollector (doesn't use FI, but supports scope) and WC collector to look similar, and for HgStatusCommand to use single approach to set the scope")
-	boolean inScope(Path file);
+	boolean inScope(Path file); // PathMatcher scope()
+
+	/**
+	 * Tells whether caller shall be aware of distinction between executable and non-executable files coming from this iterator.
+	 * Note, these days Mercurial (as of 2.1) doesn't recognize Windows .exe files as executable (nor it treats any Windows filesystem as exec-capable) 
+	 * @return <code>true</code> if file descriptors are capable to provide executable flag
+	 */
+	boolean supportsExecFlag();
+
+	/**
+	 * POSIX file systems allow symbolic links to files, and these links are handled in a special way with Mercurial, i.e. it tracks value of 
+	 * the link, not its actual target.
+	 * Note, these days Mercurial (as of 2.1) doesn't support Windows Vista/7 symlinks.
+	 * @return <code>true</code> if file descriptors are capable to tell symlink files from regular ones. 
+	 */
+	boolean supportsLinkFlag();
 }

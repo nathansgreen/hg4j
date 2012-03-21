@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,10 @@ import java.io.File;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 
+import org.tmatesoft.hg.internal.Internals;
+
 /**
+ * Implementation of {@link FileIterator} using regular {@link java.io.File}
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -32,6 +35,7 @@ public class FileWalker implements FileIterator {
 	private final LinkedList<File> dirQueue;
 	private final LinkedList<File> fileQueue;
 	private final Path.Matcher scope;
+	private final boolean execCap, linkCap;
 	private RegularFileInfo nextFile;
 	private Path nextPath;
 
@@ -53,6 +57,8 @@ public class FileWalker implements FileIterator {
 		dirQueue = new LinkedList<File>();
 		fileQueue = new LinkedList<File>();
 		scope = scopeMatcher;
+		execCap = Internals.checkSupportsExecutables(startDir);
+		linkCap = Internals.checkSupportsSymlinks(startDir);
 		reset();
 	}
 
@@ -60,7 +66,7 @@ public class FileWalker implements FileIterator {
 		fileQueue.clear();
 		dirQueue.clear();
 		dirQueue.add(startDir);
-		nextFile = new RegularFileInfo();
+		nextFile = new RegularFileInfo(supportsExecFlag(), supportsLinkFlag());
 		nextPath = null;
 	}
 	
@@ -90,6 +96,14 @@ public class FileWalker implements FileIterator {
 		return scope == null ? true : scope.accept(file); 
 	}
 	
+	public boolean supportsExecFlag() {
+		return execCap;
+	}
+	
+	public boolean supportsLinkFlag() {
+		return linkCap;
+	}
+		
 	// returns non-null
 	private File[] listFiles(File f) {
 		// in case we need to solve os-related file issues (mac with some encodings?)

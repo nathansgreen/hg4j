@@ -54,7 +54,7 @@ public class HgManifest extends Revlog {
 	private RevisionMapper revisionMap;
 	
 	public enum Flags {
-		Exec, Link;
+		Exec, Link; // FIXME REVISIT consider REGULAR instead of null
 		
 		static Flags parse(String flags) {
 			if ("x".equalsIgnoreCase(flags)) {

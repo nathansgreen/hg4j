@@ -162,6 +162,29 @@ public final class Internals {
 	}
 	
 	/**
+	 * @param hint optional hint pointing to filesystem of interest (generally, it's possible to mount 
+	 * filesystems with different capabilities and repository's capabilities would depend on which fs it resides) 
+	 * @return <code>true</code> if executable files deserve tailored handling 
+	 */
+	public static boolean checkSupportsExecutables(File fsHint) {
+		// *.exe are not executables for Mercurial
+		return !runningOnWindows();
+	}
+
+	/**
+	 * @param hint optional hint pointing to filesystem of interest (generally, it's possible to mount 
+	 * filesystems with different capabilities and repository's capabilities would depend on which fs it resides) 
+	 * @return <code>true</code> if filesystem knows what symbolic links are 
+	 */
+	public static boolean checkSupportsSymlinks(File fsHint) {
+		// Windows supports soft symbolic links starting from Vista 
+		// However, as of Mercurial 2.1.1, no support for this functionality
+		// XXX perhaps, makes sense to override with a property a) to speed up when no links are in use b) investigate how this runs windows
+		return !runningOnWindows();
+	}
+
+	
+	/**
 	 * For Unix, returns installation root, which is the parent directory of the hg executable (or symlink) being run.
 	 * For Windows, it's Mercurial installation directory itself 
 	 * @param ctx 

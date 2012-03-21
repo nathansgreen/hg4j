@@ -18,84 +18,55 @@ package org.tmatesoft.hg.test;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.CharBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
+import java.util.List;
 import java.util.StringTokenizer;
+
+import org.tmatesoft.hg.internal.ProcessExecHelper;
 
 /**
  *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class ExecHelper {
+public class ExecHelper extends ProcessExecHelper {
 
 	private final OutputParser parser;
-	private File dir;
-	private int exitValue;
 
 	public ExecHelper(OutputParser outParser, File workingDir) {
 		parser = outParser;
-		dir = workingDir;
+		super.cwd(workingDir);
 	}
-
-	public void run(String... cmd) throws IOException, InterruptedException {
-		ProcessBuilder pb = null;
+	
+	@Override
+	protected List<String> prepareCommand(List<String> cmd) {
+		String commandName = cmd.get(0);
 		if (System.getProperty("os.name").startsWith("Windows")) {
 			StringTokenizer st = new StringTokenizer(System.getenv("PATH"), ";");
 			while (st.hasMoreTokens()) {
 				File pe = new File(st.nextToken());
-				if (new File(pe, cmd[0] + ".exe").exists()) {
-					break;
+				if (new File(pe, commandName + ".exe").exists()) {
+					return cmd;
 				}
 				// PATHEXT controls precedence of .exe, .bat and .cmd files, usually .exe wins
-				if (new File(pe, cmd[0] + ".bat").exists() || new File(pe, cmd[0] + ".cmd").exists()) {
+				if (new File(pe, commandName + ".bat").exists() || new File(pe, commandName + ".cmd").exists()) {
 					ArrayList<String> command = new ArrayList<String>();
 					command.add("cmd.exe");
 					command.add("/C");
-					command.addAll(Arrays.asList(cmd));
-					pb = new ProcessBuilder(command);
-					break;
+					command.addAll(cmd);
+					return command;
 				}
 			}
 		}
-		if (pb == null) {
-			pb = new ProcessBuilder(cmd);
-		}
-		Process p = pb.directory(dir).redirectErrorStream(true).start();
-		InputStreamReader stdOut = new InputStreamReader(p.getInputStream());
-		LinkedList<CharBuffer> l = new LinkedList<CharBuffer>();
-		int r = -1;
-		CharBuffer b = null;
-		do {
-			if (b == null || b.remaining() < b.capacity() / 3) {
-				b = CharBuffer.allocate(512);
-				l.add(b);
-			}
-			r = stdOut.read(b);
-		} while (r != -1);
-		int total = 0;
-		for (CharBuffer cb : l) {
-			total += cb.position();
-			cb.flip();
-		}
-		CharBuffer res = CharBuffer.allocate(total);
-		for (CharBuffer cb : l) {
-			res.put(cb);
-		}
-		res.flip();
-		p.waitFor();
-		exitValue = p.exitValue();
-		parser.parse(res);
+		return super.prepareCommand(cmd);
 	}
 	
-	public int getExitValue() {
-		return exitValue;
+	public void run(String... cmd) throws IOException, InterruptedException {
+		CharSequence res = super.exec(cmd);
+		parser.parse(res);
 	}
 
-	public void cwd(File wd) {
-		dir = wd;
+	public int getExitValue() {
+		return super.exitValue();
 	}
 }

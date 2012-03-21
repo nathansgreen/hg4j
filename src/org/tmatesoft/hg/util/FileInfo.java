@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,4 +47,16 @@ public interface FileInfo {
 	 * @return file reader object, never <code>null</code>
 	 */
 	ReadableByteChannel newInputChannel();
+
+	/**
+	 * This method is invoked only if source FileIterator tells <code>true</code> for {@link FileIterator#supportsExecFlag()}
+	 * @return <code>true</code> if this object describes an executable file
+	 */
+	boolean isExecutable();
+
+	/**
+	 * This method is be invoked only if source FileIterator tells <code>true</code> for {@link FileIterator#supportsLinkFlag()}.
+	 * @return <code>true</code> if this file object represents a symbolic link
+	 */
+	boolean isSymlink();
 }

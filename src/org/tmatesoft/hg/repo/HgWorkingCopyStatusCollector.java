@@ -37,6 +37,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.PathScope;
 import org.tmatesoft.hg.internal.Preview;
@@ -287,27 +288,37 @@ public class HgWorkingCopyStatusCollector {
 			// either clean or modified
 			final boolean timestampEqual = f.lastModified() == r.modificationTime(), sizeEqual = r.size() == f.length();
 			if (timestampEqual && sizeEqual) {
-				inspector.clean(fname);
+				// if flags change (chmod -x), timestamp does not change
+				if (checkFlagsEqual(f, r.mode())) {
+					inspector.clean(fname);
+				} else {
+					inspector.modified(fname); // flags are not the same
+				}
 			} else if (!sizeEqual && r.size() >= 0) {
 				inspector.modified(fname);
 			} else {
+				// size is the same or unknown, and, perhaps, different timestamp
+				// check actual content to avoid false modified files
 				try {
-					// size is the same or unknown, and, perhaps, different timestamp
-					// check actual content to avoid false modified files
-					HgDataFile df = repo.getFileNode(fname);
-					if (!df.exists()) {
-						String msg = String.format("File %s known as normal in dirstate (%d, %d), doesn't exist at %s", fname, r.modificationTime(), r.size(), repo.getStoragePath(df));
-						throw new HgInvalidFileException(msg, null).setFileName(fname);
-					}
-					Nodeid rev = getDirstateParentManifest().nodeid(fname);
-					// rev might be null here if fname comes to dirstate as a result of a merge operation
-					// where one of the parents (first parent) had no fname file, but second parent had.
-					// E.g. fork revision 3, revision 4 gets .hgtags, few modifications and merge(3,12)
-					// see Issue 14 for details
-					if (rev == null || !areTheSame(f, df, rev)) {
-						inspector.modified(df.getPath());
+					if (!checkFlagsEqual(f, r.mode())) {
+						// flags modified, no need to do expensive content check
+						inspector.modified(fname);
 					} else {
-						inspector.clean(df.getPath());
+						HgDataFile df = repo.getFileNode(fname);
+						if (!df.exists()) {
+							String msg = String.format("File %s known as normal in dirstate (%d, %d), doesn't exist at %s", fname, r.modificationTime(), r.size(), repo.getStoragePath(df));
+							throw new HgInvalidFileException(msg, null).setFileName(fname);
+						}
+						Nodeid rev = getDirstateParentManifest().nodeid(fname);
+						// rev might be null here if fname comes to dirstate as a result of a merge operation
+						// where one of the parents (first parent) had no fname file, but second parent had.
+						// E.g. fork revision 3, revision 4 gets .hgtags, few modifications and merge(3,12)
+						// see Issue 14 for details
+						if (rev == null || !areTheSame(f, df, rev)) {
+							inspector.modified(df.getPath());
+						} else {
+							inspector.clean(df.getPath());
+						}
 					}
 				} catch (HgException ex) {
 					repo.getContext().getLog().warn(getClass(), ex, null);
@@ -374,7 +385,7 @@ public class HgWorkingCopyStatusCollector {
 				} else if (!sizeEqual && r.size() >= 0) {
 					inspector.modified(fname);
 					handled = true;
-				} else if (!todoCheckFlagsEqual(f, flags)) {
+				} else if (!checkFlagsEqual(f, flags)) {
 					// seems like flags have changed, no reason to check content further
 					inspector.modified(fname);
 					handled = true;
@@ -516,9 +527,39 @@ public class HgWorkingCopyStatusCollector {
 		}
 	}
 
-	private static boolean todoCheckFlagsEqual(FileInfo f, HgManifest.Flags originalManifestFlags) {
-		// FIXME implement
-		return true;
+	/**
+	 * @return <code>true</code> if flags are the same
+	 */
+	private boolean checkFlagsEqual(FileInfo f, HgManifest.Flags originalManifestFlags) {
+		boolean same = true;
+		if (repoWalker.supportsLinkFlag()) {
+			if (originalManifestFlags == HgManifest.Flags.Link) {
+				return f.isSymlink();
+			}
+			// original flag is not link, hence flags are the same if file is not link, too.
+			same = !f.isSymlink();
+		} // otherwise treat flags the same
+		if (repoWalker.supportsExecFlag()) {
+			if (originalManifestFlags == HgManifest.Flags.Exec) {
+				return f.isExecutable();
+			}
+			// original flag has no executable attribute, hence file shall not be executable, too
+			same = same || !f.isExecutable();
+		}
+		return same;
+	}
+	
+	private boolean checkFlagsEqual(FileInfo f, int dirstateFileMode) {
+		// source/include/linux/stat.h
+		final int S_IFLNK = 0120000, S_IXUSR = 00100;
+		// TODO post-1.0 HgManifest.Flags.parse(int)
+		if ((dirstateFileMode & S_IFLNK) == S_IFLNK) {
+			return checkFlagsEqual(f, HgManifest.Flags.Link);
+		}
+		if ((dirstateFileMode & S_IXUSR) == S_IXUSR) {
+			return checkFlagsEqual(f, HgManifest.Flags.Exec);
+		}
+		return checkFlagsEqual(f, null); // no flags
 	}
 
 	/**
@@ -580,16 +621,19 @@ public class HgWorkingCopyStatusCollector {
 		private final Path[] paths;
 		private int index;
 		private RegularFileInfo nextFile;
+		private final boolean execCap, linkCap;
 
 		public FileListIterator(File startDir, Path... files) {
 			dir = startDir;
 			paths = files;
 			reset();
+			execCap = Internals.checkSupportsExecutables(startDir);
+			linkCap = Internals.checkSupportsSymlinks(startDir);
 		}
 
 		public void reset() {
 			index = -1;
-			nextFile = new RegularFileInfo();
+			nextFile = new RegularFileInfo(execCap, linkCap);
 		}
 
 		public boolean hasNext() {
@@ -618,6 +662,16 @@ public class HgWorkingCopyStatusCollector {
 					return true;
 				}
 			}
+			return false;
+		}
+		
+		public boolean supportsExecFlag() {
+			// TODO Auto-generated method stub
+			return false;
+		}
+		
+		public boolean supportsLinkFlag() {
+			// TODO Auto-generated method stub
 			return false;
 		}
 	}
@@ -669,6 +723,14 @@ public class HgWorkingCopyStatusCollector {
 
 		public boolean inScope(Path file) {
 			return filter.accept(file);
+		}
+		
+		public boolean supportsExecFlag() {
+			return walker.supportsExecFlag();
+		}
+		
+		public boolean supportsLinkFlag() {
+			return walker.supportsLinkFlag();
 		}
 	}
 }
