@@ -73,7 +73,7 @@ public class HgInternals {
 			};
 		}
 		HgDirstate ds = new HgDirstate(repo, new File(repo.getRepositoryRoot(), "dirstate"), new PathPool(new PathRewrite.Empty()), canonicalPath);
-		ds.read();
+		ds.read(repo.getImplHelper().buildFileNameEncodingHelper());
 		return ds;
 	}
 	

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,11 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.UnsupportedEncodingException;
-
-import org.tmatesoft.hg.core.HgBadStateException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CharsetEncoder;
 
 /**
  * Keep all encoding-related issues in the single place
@@ -27,13 +29,33 @@ import org.tmatesoft.hg.core.HgBadStateException;
  */
 public class EncodingHelper {
 	// XXX perhaps, shall not be full of statics, but rather an instance coming from e.g. HgRepository?
+	/*
+	 * To understand what Mercurial thinks of UTF-8 and Unix byte approach to names, see
+	 * http://mercurial.808500.n3.nabble.com/Unicode-support-request-td3430704.html
+	 */
+	
+	private final CharsetEncoder encoder;
+	private final CharsetDecoder decoder;
+	
+	EncodingHelper(Charset fsEncoding) {
+		decoder = fsEncoding.newDecoder();
+		encoder = fsEncoding.newEncoder();
+	}
 
-	public static String fromManifest(byte[] data, int start, int length) {
+	public String fromManifest(byte[] data, int start, int length) {
 		try {
-			return new String(data, start, length, "ISO-8859-1");
-		} catch (UnsupportedEncodingException ex) {
-			// can't happen
-			throw new HgBadStateException(ex);
+			return decoder.decode(ByteBuffer.wrap(data, start, length)).toString();
+		} catch (CharacterCodingException ex) {
+			// resort to system-default
+			return new String(data, start, length);
 		}
+	}
+
+	public String fromDirstate(byte[] data, int start, int length) throws CharacterCodingException {
+		return decoder.decode(ByteBuffer.wrap(data, start, length)).toString();
+	}
+
+	public Charset charset() {
+		return encoder.charset();
 	}
 }

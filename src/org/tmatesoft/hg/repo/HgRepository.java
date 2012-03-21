@@ -145,7 +145,7 @@ public final class HgRepository {
 	public HgManifest getManifest() {
 		if (manifest == null) {
 			RevlogStream content = resolve(Path.create(repoPathHelper.rewrite("00manifest.i")), true);
-			manifest = new HgManifest(this, content);
+			manifest = new HgManifest(this, content, impl.buildFileNameEncodingHelper());
 		}
 		return manifest;
 	}
@@ -308,7 +308,7 @@ public final class HgRepository {
 			};
 		}
 		HgDirstate ds = new HgDirstate(this, new File(repoDir, "dirstate"), pathPool, canonicalPath);
-		ds.read();
+		ds.read(impl.buildFileNameEncodingHelper());
 		return ds;
 	}
 
@@ -384,6 +384,10 @@ public final class HgRepository {
 	
 	/*package-local*/ SessionContext getContext() {
 		return sessionContext;
+	}
+	
+	/*package-local*/ Internals getImplHelper() {
+		return impl;
 	}
 
 	private List<Filter> instantiateFilters(Path p, Filter.Options opts) {

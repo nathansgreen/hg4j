@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.charset.CharacterCodingException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -32,6 +33,7 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
@@ -74,7 +76,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		canonicalPathRewrite = canonicalPath;
 	}
 
-	/*package-local*/ void read() throws HgInvalidControlFileException {
+	/*package-local*/ void read(EncodingHelper encodingHelper) throws HgInvalidControlFileException {
 		normal = added = removed = merged = Collections.<Path, Record>emptyMap();
 		parents = new Pair<Nodeid,Nodeid>(Nodeid.NULL, Nodeid.NULL);
 		if (canonicalPathRewrite != null) {
@@ -108,13 +110,13 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				da.readBytes(name, 0, nameLen);
 				for (int i = 0; i < nameLen; i++) {
 					if (name[i] == 0) {
-						fn1 = new String(name, 0, i, "UTF-8"); // XXX unclear from documentation what encoding is used there
-						fn2 = new String(name, i+1, nameLen - i - 1, "UTF-8"); // need to check with different system codepages
+						fn1 = encodingHelper.fromDirstate(name, 0, i);
+						fn2 = encodingHelper.fromDirstate(name, i+1, nameLen - i - 1);
 						break;
 					}
 				}
 				if (fn1 == null) {
-					fn1 = new String(name);
+					fn1 = encodingHelper.fromDirstate(name, 0, nameLen);
 				}
 				Record r = new Record(fmode, size, time, pathPool.path(fn1), fn2 == null ? null : pathPool.path(fn2));
 				if (canonicalPathRewrite != null) {
@@ -145,6 +147,8 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 					repo.getContext().getLog().warn(getClass(), "Dirstate record for file %s (size: %d, tstamp:%d) has unknown state '%c'", r.name1, r.size(), r.time, state);
 				}
 			}
+		} catch (CharacterCodingException ex) {
+			throw new HgInvalidControlFileException(String.format("Failed reading file names from dirstate using encoding %s", encodingHelper.charset().name()), ex, dirstateFile);
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException("Dirstate read failed", ex, dirstateFile); 
 		} finally {

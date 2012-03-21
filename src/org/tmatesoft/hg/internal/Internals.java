@@ -71,7 +71,7 @@ public final class Internals {
 	 * and if your project happen to use anything but filesystem default (say, UTF8 on cp1251 system),
 	 * native storage paths won't match
 	 */
-	public static final String CFG_PROPERT_FS_FILENAME_ENCODING = "hg.fs.filename.encoding";
+	public static final String CFG_PROPERTY_FS_FILENAME_ENCODING = "hg.fs.filename.encoding";
 	
 	private int requiresFlags = 0;
 	private List<Filter.Factory> filterFactories;
@@ -109,20 +109,9 @@ public final class Internals {
 
 	// XXX perhaps, should keep both fields right here, not in the HgRepository
 	public PathRewrite buildDataFilesHelper() {
-		Object altEncoding = sessionContext.getProperty(CFG_PROPERT_FS_FILENAME_ENCODING, null);
-		Charset cs;
-		if (altEncoding == null) {
-			cs = Charset.defaultCharset();
-		} else {
-			try {
-				cs = Charset.forName(altEncoding.toString());
-			} catch (IllegalArgumentException ex) {
-				// both IllegalCharsetNameException and UnsupportedCharsetException are subclasses of IAE, too
-				// not severe enough to throw an exception, imo. Just record the fact it's bad ad we ignore it 
-				sessionContext.getLog().error(getClass(), ex, String.format("Bad configuration value for filename encoding %s", altEncoding));
-				cs = Charset.defaultCharset();
-			}
-		}
+		// Note, tests in TestStorePath depend on the encoding not being cached
+		Charset cs = getFileEncoding();
+		// StoragePathHelper needs fine-grained control over char encoding, hence doesn't use EncodingHelper
 		return new StoragePathHelper((requiresFlags & STORE) != 0, (requiresFlags & FNCACHE) != 0, (requiresFlags & DOTENCODE) != 0, cs);
 	}
 
@@ -177,6 +166,28 @@ public final class Internals {
 	
 	public boolean isCaseSensitiveFileSystem() {
 		return isCaseSensitiveFileSystem;
+	}
+	
+	public EncodingHelper buildFileNameEncodingHelper() {
+		return new EncodingHelper(getFileEncoding());
+	}
+	
+	private Charset getFileEncoding() {
+		Object altEncoding = sessionContext.getProperty(CFG_PROPERTY_FS_FILENAME_ENCODING, null);
+		Charset cs;
+		if (altEncoding == null) {
+			cs = Charset.defaultCharset();
+		} else {
+			try {
+				cs = Charset.forName(altEncoding.toString());
+			} catch (IllegalArgumentException ex) {
+				// both IllegalCharsetNameException and UnsupportedCharsetException are subclasses of IAE, too
+				// not severe enough to throw an exception, imo. Just record the fact it's bad ad we ignore it 
+				sessionContext.getLog().error(Internals.class, ex, String.format("Bad configuration value for filename encoding %s", altEncoding));
+				cs = Charset.defaultCharset();
+			}
+		}
+		return cs;
 	}
 
 	public static boolean runningOnWindows() {

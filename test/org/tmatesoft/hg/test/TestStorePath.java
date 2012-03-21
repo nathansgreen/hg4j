@@ -119,11 +119,11 @@ public class TestStorePath {
 	public void testNationalChars() {
 		String s = "Привет.txt";
 		//
-		propertyOverrides.put(Internals.CFG_PROPERT_FS_FILENAME_ENCODING, "cp1251");
+		propertyOverrides.put(Internals.CFG_PROPERTY_FS_FILENAME_ENCODING, "cp1251");
 		PathRewrite sph = internals.buildDataFilesHelper();
 		errorCollector.checkThat(sph.rewrite(s), CoreMatchers.<CharSequence>equalTo("store/data/~cf~f0~e8~e2~e5~f2.txt.i"));
 		//
-		propertyOverrides.put(Internals.CFG_PROPERT_FS_FILENAME_ENCODING, "UTF8");
+		propertyOverrides.put(Internals.CFG_PROPERTY_FS_FILENAME_ENCODING, "UTF8");
 		sph = internals.buildDataFilesHelper();
 		errorCollector.checkThat(sph.rewrite(s), CoreMatchers.<CharSequence>equalTo("store/data/~d0~9f~d1~80~d0~b8~d0~b2~d0~b5~d1~82.txt.i"));
 	}
