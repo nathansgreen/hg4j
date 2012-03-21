@@ -66,7 +66,7 @@ public class HgRemoteRepository {
 	private final URL url;
 	private final SSLContext sslContext;
 	private final String authInfo;
-	private final boolean debug = Boolean.parseBoolean(System.getProperty("hg4j.remote.debug"));
+	private final boolean debug;
 	private HgLookup lookupHelper;
 	private final SessionContext sessionContext;
 
@@ -76,6 +76,8 @@ public class HgRemoteRepository {
 		}
 		this.url = url;
 		sessionContext = ctx;
+		Object debugProp = ctx.getProperty("hg4j.remote.debug", false);
+		debug = debugProp instanceof Boolean ? ((Boolean) debugProp).booleanValue() : Boolean.parseBoolean(String.valueOf(debugProp));
 		if ("https".equals(url.getProtocol())) {
 			try {
 				sslContext = SSLContext.getInstance("SSL");

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.tmatesoft.hg.util.Path.create;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -23,6 +25,7 @@ import java.io.StringReader;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.internal.WinToNixPathRewrite;
 import org.tmatesoft.hg.repo.HgIgnore;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.util.Path;
@@ -49,7 +52,7 @@ public class TestIgnore {
 	@Test
 	public void testGlobWithAlternatives() throws Exception {
 		String content = "syntax:glob\ndoc/*.[0-9].{x,ht}ml";
-		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(content));
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(content), null);
 		final Path p1 = Path.create("doc/asd.2.xml");
 		final Path p2 = Path.create("doc/zxc.6.html");
 		errorCollector.assertTrue(p1.toString(), hgIgnore.isIgnored(p1));
@@ -59,7 +62,7 @@ public class TestIgnore {
 	@Test
 	public void testComplexFileParse() throws Exception {
 		BufferedReader br = new BufferedReader(new FileReader(new File(Configuration.get().getTestDataDir(), "mercurial.hgignore")));
-		HgIgnore hgIgnore = HgInternals.newHgIgnore(br);
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(br, null);
 		br.close();
 		Path[] toCheck = new Path[] {
 				Path.create("file.so"),
@@ -68,15 +71,13 @@ public class TestIgnore {
 				Path.create(".#abc"),
 				Path.create("locale/en/LC_MESSAGES/hg.mo"),
 		};
-		for (Path p : toCheck) {
-			errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
-		}
+		doAssert(hgIgnore, toCheck, null);
 	}
 
 	@Test
 	public void testSegmentsGlobMatch() throws Exception {
 		String s = "syntax:glob\nbin\n.*\nTEST-*.xml";
-		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s), null);
 		Path[] toCheck = new Path[] {
 				Path.create("bin/org/sample/First.class"),
 				Path.create(".ignored-file"),
@@ -85,11 +86,10 @@ public class TestIgnore {
 				Path.create("TEST-a.xml"),
 				Path.create("dir/TEST-b.xml"),
 		};
-		for (Path p : toCheck) {
-			errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
-		}
+		doAssert(hgIgnore, toCheck, null);
+		//
 		s = "syntax:glob\n.git";
-		hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		hgIgnore = HgInternals.newHgIgnore(new StringReader(s), null);
 		Path p = Path.create(".git/aa");
 		errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
 		p = Path.create("dir/.git/bb");
@@ -102,7 +102,7 @@ public class TestIgnore {
 	public void testSegmentsRegexMatch() throws Exception {
 		// regex patterns that don't start with explicit ^ are allowed to match anywhere in the string
 		String s = "syntax:regexp\n/\\.git\n^abc\n";
-		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s), null);
 		Path p = Path.create(".git/aa");
 		errorCollector.assertTrue(p.toString(), !hgIgnore.isIgnored(p));
 		p = Path.create("dir/.git/bb");
@@ -121,7 +121,7 @@ public class TestIgnore {
 	@Test
 	public void testWildcardsDoNotMatchDirectorySeparator() throws Exception {
 		String s = "syntax:glob\na?b\nc*d";
-		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s));
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s), null);
 		// shall not be ignored
 		Path[] toPass = new Path[] {
 				Path.create("a/b"),
@@ -145,11 +145,63 @@ public class TestIgnore {
 				Path.create("cd/x"),
 				Path.create("cxyd/x"),
 		};
-		for (Path p : toIgnore) {
-			errorCollector.assertTrue(p.toString(), hgIgnore.isIgnored(p));
+		doAssert(hgIgnore, toIgnore, toPass);
+	}
+
+	@Test
+	public void testSyntaxPrefixAtLine() throws Exception {
+		String s = "glob:*.c\nregexp:.*\\.d";
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s), null);
+		Path[] toPass = new Path[] {
+				create("a/c"),
+				create("a/d"),
+				create("a/d.a"),
+				create("a/d.e"),
+		};
+		Path[] toIgnore = new Path[] {
+				create("a.c"),
+				create("a.d"),
+				create("src/a.c"),
+				create("src/a.d"),
+		};
+		doAssert(hgIgnore, toIgnore, toPass);
+	}
+
+	@Test
+	public void testGlobWithWindowsPathSeparators() throws Exception {
+		String s = "syntax:glob\n" + "bin\\*\n" + "*\\dir*\\*.a\n" + "*\\_ReSharper*\\\n";
+		// explicit PathRewrite for the test to run on *nix as well
+		HgIgnore hgIgnore = HgInternals.newHgIgnore(new StringReader(s), new WinToNixPathRewrite());
+		Path[] toPass = new Path[] {
+				create("bind/x"),
+				create("dir/x.a"),
+				create("dir-b/x.a"),
+				create("a/dir-b/x.b"),
+				create("_ReSharper-1/file"),
+		};
+		Path[] toIgnore = new Path[] {
+//				create("bin/x"),
+//				create("a/bin/x"),
+//				create("a/dir/c.a"),
+//				create("b/dir-c/d.a"),
+				create("src/_ReSharper-1/file/x"),
+		};
+		doAssert(hgIgnore, toIgnore, toPass);
+	}
+	
+	private void doAssert(HgIgnore hgIgnore, Path[] toIgnore, Path[] toPass) {
+		if (toIgnore == null && toPass == null) {
+			throw new IllegalArgumentException();
 		}
-		for (Path p : toPass) {
-			errorCollector.assertTrue(p.toString(), !hgIgnore.isIgnored(p));
+		if (toIgnore != null) {
+			for (Path p : toIgnore) {
+				errorCollector.assertTrue("Shall ignore " + p, hgIgnore.isIgnored(p));
+			}
+		}
+		if (toPass != null) {
+			for (Path p : toPass) {
+				errorCollector.assertTrue("Shall pass " + p, !hgIgnore.isIgnored(p));
+			}
 		}
 	}
 }

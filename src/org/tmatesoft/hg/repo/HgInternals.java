@@ -29,7 +29,9 @@ import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
+import org.tmatesoft.hg.internal.WinToNixPathRewrite;
 import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
@@ -71,7 +73,7 @@ public class HgInternals {
 			};
 		}
 		HgDirstate ds = new HgDirstate(repo, new File(repo.getRepositoryRoot(), "dirstate"), new PathPool(new PathRewrite.Empty()), canonicalPath);
-		ds.read();
+		ds.read(repo.getImplHelper().buildFileNameEncodingHelper());
 		return ds;
 	}
 	
@@ -87,8 +89,22 @@ public class HgInternals {
 		return hgRepo.getRepositoryRoot();
 	}
 	
-	public static HgIgnore newHgIgnore(Reader source) throws IOException {
-		HgIgnore hgIgnore = new HgIgnore();
+	/**
+	 * @param source where to read definitions from
+	 * @param globPathRewrite <code>null</code> to use default, or pass an instance to override defaults
+	 * @return
+	 * @throws IOException
+	 */
+	public static HgIgnore newHgIgnore(Reader source, PathRewrite globPathRewrite) throws IOException {
+		if (globPathRewrite == null) {
+			// shall match that of HgRepository#getIgnore() (Internals#buildNormalizePathRewrite())
+			if (Internals.runningOnWindows()) {
+				globPathRewrite = new WinToNixPathRewrite();
+			} else {
+				globPathRewrite = new PathRewrite.Empty();
+			}
+		}
+		HgIgnore hgIgnore = new HgIgnore(globPathRewrite);
 		BufferedReader br = source instanceof BufferedReader ? (BufferedReader) source : new BufferedReader(source);
 		hgIgnore.read(br);
 		br.close();

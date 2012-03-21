@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.PathRewrite;
 
 /**
  * Handling of ignored paths according to .hgignore configuration
@@ -37,12 +38,14 @@ import org.tmatesoft.hg.util.Path;
 public class HgIgnore implements Path.Matcher {
 
 	private List<Pattern> entries;
+	private final PathRewrite globPathHelper;
 
-	HgIgnore() {
+	HgIgnore(PathRewrite globPathRewrite) {
 		entries = Collections.emptyList();
+		globPathHelper = globPathRewrite;
 	}
 
-	/* package-local */List<String> read(File hgignoreFile) throws IOException {
+	/* package-local */ List<String> read(File hgignoreFile) throws IOException {
 		if (!hgignoreFile.exists()) {
 			return null;
 		}
@@ -54,16 +57,18 @@ public class HgIgnore implements Path.Matcher {
 		}
 	}
 
-	/* package-local */List<String> read(BufferedReader content) throws IOException {
+	/* package-local */ List<String> read(BufferedReader content) throws IOException {
+		final String REGEXP = "regexp", GLOB = "glob";
+		final String REGEXP_PREFIX = REGEXP + ":", GLOB_PREFIX = GLOB + ":";
 		ArrayList<String> errors = new ArrayList<String>();
 		ArrayList<Pattern> result = new ArrayList<Pattern>(entries); // start with existing
-		String syntax = "regexp"; // or "glob"
+		String syntax = REGEXP;
 		String line;
 		while ((line = content.readLine()) != null) {
 			line = line.trim();
 			if (line.startsWith("syntax:")) {
 				syntax = line.substring("syntax:".length()).trim();
-				if (!"regexp".equals(syntax) && !"glob".equals(syntax)) {
+				if (!REGEXP.equals(syntax) && !GLOB.equals(syntax)) {
 					errors.add(line);
 					continue;
 					//throw new IllegalStateException(line);
@@ -81,17 +86,32 @@ public class HgIgnore implements Path.Matcher {
 						line = line.substring(0, x).trim();
 					}
 				}
+				// due to the nature of Mercurial implementation, lines prefixed with syntax kind
+				// are processed correctly (despite the fact hgignore(5) suggest "syntax:<kind>" as the 
+				// only way to specify it). lineSyntax below leaves a chance for the line to switch 
+				// syntax in use without affecting default kind.
+				String lineSyntax;
+				if (line.startsWith(GLOB_PREFIX)) {
+					line = line.substring(GLOB_PREFIX.length()).trim();
+					lineSyntax = GLOB;
+				} else if (line.startsWith(REGEXP_PREFIX)) {
+					line = line.substring(REGEXP_PREFIX.length()).trim();
+					lineSyntax = REGEXP;
+				} else {
+					lineSyntax = syntax;
+				}
 				if (line.length() == 0) {
 					continue;
 				}
-				if ("glob".equals(syntax)) {
-					// hgignore(5)
-					// (http://www.selenic.com/mercurial/hgignore.5.html) says slashes '\' are escape characters,
-					// hence no special  treatment of Windows path
-					// however, own attempts make me think '\' on Windows are not treated as escapes
+				if (GLOB.equals(lineSyntax)) {
+					// hgignore(5) says slashes '\' are escape characters,
+					// however, for glob patterns on Windows first get backslashes converted to slashes
+					if (globPathHelper != null) {
+						line = globPathHelper.rewrite(line).toString();
+					}
 					line = glob2regex(line);
 				} else {
-					assert "regexp".equals(syntax);
+					assert REGEXP.equals(lineSyntax);
 					// regular expression patterns need not match start of the line unless demanded explicitly 
 					line = line.charAt(0) == '^' ? line : ".*" + line;
 				}
@@ -160,7 +180,13 @@ public class HgIgnore implements Path.Matcher {
 			}
 			sb.append(ch);
 		}
-		sb.append("(?:/|$)");
+		// Python impl doesn't keep empty segments in directory names (ntpath.normpath and posixpath.normpath),
+		// effectively removing trailing separators, thus patterns like "bin/" get translated into "bin$"
+		// Our glob rewriter doesn't strip last empty segment, and "bin/$" would be incorrect pattern, 
+		// (e.g. isIgnored("bin/file") performs two matches, against "bin/file" and "bin") hence the check.
+		if (sb.charAt(sb.length() - 1) != '/') {
+			sb.append('$');
+		}
 		return sb.toString();
 	}
 

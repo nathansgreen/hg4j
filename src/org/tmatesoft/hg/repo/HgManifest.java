@@ -52,6 +52,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  */
 public class HgManifest extends Revlog {
 	private RevisionMapper revisionMap;
+	private EncodingHelper encodingHelper;
 	
 	public enum Flags {
 		Exec, Link; // FIXME REVISIT consider REGULAR instead of null
@@ -96,8 +97,9 @@ public class HgManifest extends Revlog {
 		}
 	}
 
-	/*package-local*/ HgManifest(HgRepository hgRepo, RevlogStream content) {
+	/*package-local*/ HgManifest(HgRepository hgRepo, RevlogStream content, EncodingHelper eh) {
 		super(hgRepo, content);
+		encodingHelper = eh;
 	}
 
 	/**
@@ -174,7 +176,7 @@ public class HgManifest extends Revlog {
 			manifestLast = manifestFirst;
 			manifestFirst = x;
 		}
-		content.iterate(manifestFirst, manifestLast, true, new ManifestParser(inspector));
+		content.iterate(manifestFirst, manifestLast, true, new ManifestParser(inspector, encodingHelper));
 	}
 	
 	/**
@@ -194,7 +196,7 @@ public class HgManifest extends Revlog {
 			throw new IllegalArgumentException();
 		}
 		int[] manifestRevs = toManifestRevisionIndexes(revisionIndexes, inspector);
-		content.iterate(manifestRevs, true, new ManifestParser(inspector));
+		content.iterate(manifestRevs, true, new ManifestParser(inspector, encodingHelper));
 	}
 	
 	// 
@@ -345,11 +347,13 @@ public class HgManifest extends Revlog {
 		private int start; 
 		private final int hash, length;
 		private Path result;
+		private final EncodingHelper encHelper;
 
-		public PathProxy(byte[] data, int start, int length) {
+		public PathProxy(byte[] data, int start, int length, EncodingHelper eh) {
 			this.data = data;
 			this.start = start;
 			this.length = length;
+			this.encHelper = eh;
 
 			// copy from String.hashCode(). In fact, not necessarily match result of String(data).hashCode
 			// just need some nice algorithm here
@@ -387,7 +391,7 @@ public class HgManifest extends Revlog {
 		
 		public Path freeze() {
 			if (result == null) {
-				result = Path.create(EncodingHelper.fromManifest(data, start, length));
+				result = Path.create(encHelper.fromManifest(data, start, length));
 				// release reference to bigger data array, make a copy of relevant part only
 				// use original bytes, not those from String above to avoid cache misses due to different encodings 
 				byte[] d = new byte[length];
@@ -407,11 +411,13 @@ public class HgManifest extends Revlog {
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
 		private final ProgressSupport progressHelper;
 		private IterateControlMediator iterateControl;
+		private final EncodingHelper encHelper;
 		
-		public ManifestParser(Inspector delegate) {
+		public ManifestParser(Inspector delegate, EncodingHelper eh) {
 			assert delegate != null;
 			inspector = delegate;
 			inspector2 = delegate instanceof Inspector2 ? (Inspector2) delegate : null;
+			encHelper = eh;
 			nodeidPool = new Pool2<Nodeid>();
 			fnamePool = new Pool2<PathProxy>();
 			thisRevPool = new Pool2<Nodeid>();
@@ -435,7 +441,7 @@ public class HgManifest extends Revlog {
 						int x = i;
 						for( ; data[i] != '\n' && i < actualLen; i++) {
 							if (fname == null && data[i] == 0) {
-								PathProxy px = fnamePool.unify(new PathProxy(data, x, i - x));
+								PathProxy px = fnamePool.unify(new PathProxy(data, x, i - x, encHelper));
 								// if (cached = fnamePool.unify(px))== px then cacheMiss, else cacheHit
 								// cpython 0..10k: hits: 15 989 152, misses: 3020
 								fname = px.freeze();

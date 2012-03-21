@@ -35,6 +35,7 @@ import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
@@ -169,7 +170,7 @@ public final class HgRepository {
 	public HgManifest getManifest() {
 		if (manifest == null) {
 			RevlogStream content = resolve(Path.create(repoPathHelper.rewrite("00manifest.i")), true);
-			manifest = new HgManifest(this, content);
+			manifest = new HgManifest(this, content, impl.buildFileNameEncodingHelper());
 		}
 		return manifest;
 	}
@@ -332,7 +333,7 @@ public final class HgRepository {
 			};
 		}
 		HgDirstate ds = new HgDirstate(this, new File(repoDir, "dirstate"), pathPool, canonicalPath);
-		ds.read();
+		ds.read(impl.buildFileNameEncodingHelper());
 		return ds;
 	}
 
@@ -343,12 +344,12 @@ public final class HgRepository {
 	public HgIgnore getIgnore() /*throws HgInvalidControlFileException */{
 		// TODO read config for additional locations
 		if (ignore == null) {
-			ignore = new HgIgnore();
+			ignore = new HgIgnore(getToRepoPathHelper());
 			File ignoreFile = new File(getWorkingDir(), ".hgignore");
 			try {
 				final List<String> errors = ignore.read(ignoreFile);
 				if (errors != null) {
-					getContext().getLog().warn(getClass(), "Syntax errors parsing .hgignore:\n%s", errors);
+					getContext().getLog().warn(getClass(), "Syntax errors parsing .hgignore:\n%s", Internals.join(errors, ",\n"));
 				}
 			} catch (IOException ex) {
 				final String m = "Error reading .hgignore file";
@@ -408,6 +409,10 @@ public final class HgRepository {
 	
 	/*package-local*/ SessionContext getContext() {
 		return sessionContext;
+	}
+	
+	/*package-local*/ Internals getImplHelper() {
+		return impl;
 	}
 
 	private List<Filter> instantiateFilters(Path p, Filter.Options opts) {

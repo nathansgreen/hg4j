@@ -21,9 +21,11 @@ import static org.tmatesoft.hg.internal.RequiresFile.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.StringTokenizer;
@@ -55,13 +57,30 @@ public final class Internals {
 	 */
 	public static final String CFG_PROPERTY_REVLOG_STREAM_CACHE = "hg4j.repo.disable_revlog_cache";
 	
+	/**
+	 * Name of charset to use when translating Unicode filenames to Mercurial storage paths, string, 
+	 * to resolve with {@link Charset#forName(String)}.
+	 * E.g. <code>"cp1251"</code> or <code>"Latin-1"</code>.
+	 * 
+	 * <p>Mercurial uses system encoding when mangling storage paths. Default value
+	 * based on 'file.encoding' Java system property is usually fine here, however
+	 * in certain scenarios it may be desirable to force a different one, and this 
+	 * property is exactly for this purpose.
+	 * 
+	 * <p>E.g. Eclipse defaults to project encoding (Launch config, Common page) when launching an application, 
+	 * and if your project happen to use anything but filesystem default (say, UTF8 on cp1251 system),
+	 * native storage paths won't match
+	 */
+	public static final String CFG_PROPERTY_FS_FILENAME_ENCODING = "hg.fs.filename.encoding";
+	
 	private int requiresFlags = 0;
 	private List<Filter.Factory> filterFactories;
+	private final SessionContext sessionContext;
 	private final boolean isCaseSensitiveFileSystem;
 	private final boolean shallCacheRevlogsInRepo;
-	
 
 	public Internals(SessionContext ctx) {
+		this.sessionContext = ctx;
 		isCaseSensitiveFileSystem = !runningOnWindows();
 		Object p = ctx.getProperty(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
 		shallCacheRevlogsInRepo = p instanceof Boolean ? ((Boolean) p).booleanValue() : Boolean.parseBoolean(String.valueOf(p));
@@ -82,18 +101,7 @@ public final class Internals {
 	
 	public PathRewrite buildNormalizePathRewrite() {
 		if (runningOnWindows()) {
-			return new PathRewrite() {
-					
-					public CharSequence rewrite(CharSequence p) {
-						// TODO handle . and .. (although unlikely to face them from GUI client)
-						String path = p.toString();
-						path = path.replace('\\', '/').replace("//", "/");
-						if (path.startsWith("/")) {
-							path = path.substring(1);
-						}
-						return path;
-					}
-				};
+			return new WinToNixPathRewrite();
 		} else {
 			return new PathRewrite.Empty(); // or strip leading slash, perhaps? 
 		}
@@ -101,7 +109,10 @@ public final class Internals {
 
 	// XXX perhaps, should keep both fields right here, not in the HgRepository
 	public PathRewrite buildDataFilesHelper() {
-		return new StoragePathHelper((requiresFlags & STORE) != 0, (requiresFlags & FNCACHE) != 0, (requiresFlags & DOTENCODE) != 0);
+		// Note, tests in TestStorePath depend on the encoding not being cached
+		Charset cs = getFileEncoding();
+		// StoragePathHelper needs fine-grained control over char encoding, hence doesn't use EncodingHelper
+		return new StoragePathHelper((requiresFlags & STORE) != 0, (requiresFlags & FNCACHE) != 0, (requiresFlags & DOTENCODE) != 0, cs);
 	}
 
 	public PathRewrite buildRepositoryFilesHelper() {
@@ -155,6 +166,28 @@ public final class Internals {
 	
 	public boolean isCaseSensitiveFileSystem() {
 		return isCaseSensitiveFileSystem;
+	}
+	
+	public EncodingHelper buildFileNameEncodingHelper() {
+		return new EncodingHelper(getFileEncoding());
+	}
+	
+	private Charset getFileEncoding() {
+		Object altEncoding = sessionContext.getProperty(CFG_PROPERTY_FS_FILENAME_ENCODING, null);
+		Charset cs;
+		if (altEncoding == null) {
+			cs = Charset.defaultCharset();
+		} else {
+			try {
+				cs = Charset.forName(altEncoding.toString());
+			} catch (IllegalArgumentException ex) {
+				// both IllegalCharsetNameException and UnsupportedCharsetException are subclasses of IAE, too
+				// not severe enough to throw an exception, imo. Just record the fact it's bad ad we ignore it 
+				sessionContext.getLog().error(Internals.class, ex, String.format("Bad configuration value for filename encoding %s", altEncoding));
+				cs = Charset.defaultCharset();
+			}
+		}
+		return cs;
 	}
 
 	public static boolean runningOnWindows() {
@@ -342,5 +375,23 @@ public final class Internals {
 
 	public boolean shallCacheRevlogs() {
 		return shallCacheRevlogsInRepo;
+	}
+	
+	public static <T> CharSequence join(Iterable<T> col, CharSequence separator) {
+		if (col == null) {
+			return String.valueOf(col);
+		}
+		Iterator<T> it = col.iterator();
+		if (!it.hasNext()) {
+			return "[]";
+		}
+		String v = String.valueOf(it.next());
+		StringBuilder sb = new StringBuilder(v);
+		while (it.hasNext()) {
+			sb.append(separator);
+			v = String.valueOf(it.next());
+			sb.append(v);
+		}
+		return sb;
 	}
 }
