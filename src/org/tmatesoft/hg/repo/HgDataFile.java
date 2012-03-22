@@ -88,7 +88,7 @@ public class HgDataFile extends Revlog {
 	}
 
 	/**
-	 * Handy shorthand for {@link #length(int) length(getRevisionIndex(nodeid))}
+	 * Handy shorthand for {@link #getLength(int) length(getRevisionIndex(nodeid))}
 	 *
 	 * @param nodeid revision of the file
 	 * 
@@ -96,9 +96,9 @@ public class HgDataFile extends Revlog {
 	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog (<em>runtime exception</em>)  
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public int length(Nodeid nodeid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public int getLength(Nodeid nodeid) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		try {
-			return length(getRevisionIndex(nodeid));
+			return getLength(getRevisionIndex(nodeid));
 		} catch (HgInvalidControlFileException ex) {
 			throw ex.isRevisionSet() ? ex : ex.setRevision(nodeid);
 		} catch (HgInvalidRevisionException ex) {
@@ -107,12 +107,20 @@ public class HgDataFile extends Revlog {
 	}
 	
 	/**
+	 * @deprecated Use {@link #getLength(Nodeid)} instead
+	 */
+	@Deprecated
+	public int length(Nodeid nodeid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		return getLength(nodeid);
+	}
+	
+	/**
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
 	 * @return size of the file content at the revision identified by local revision number.
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public int length(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public int getLength(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		if (wrongRevisionIndex(fileRevisionIndex) || fileRevisionIndex == BAD_REVISION) {
 			throw new HgInvalidRevisionException(fileRevisionIndex);
 		}
@@ -137,6 +145,14 @@ public class HgDataFile extends Revlog {
 			return dataLen - metadata.dataOffset(fileRevisionIndex);
 		}
 		return dataLen;
+	}
+	
+	/**
+	 * @deprecated Use {@link #getLength(int)} instead
+	 */
+	@Deprecated
+	public int length(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		return getLength(fileRevisionIndex);
 	}
 
 	/**
@@ -549,6 +565,8 @@ public class HgDataFile extends Revlog {
 */
 	
 	/**
+	 * 
+ 	 * @param fileRevisionIndex - revision local index, non-negative, or {@link HgRepository#TIP}. 
 	 * FIXME EXCEPTIONS 
 	 * @throws HgInvalidControlFileException
 	 * @throws HgInvalidRevisionException
@@ -557,7 +575,7 @@ public class HgDataFile extends Revlog {
 		int changesetRevIndex = getChangesetRevisionIndex(fileRevisionIndex);
 		return getRepo().getManifest().extractFlags(changesetRevIndex, getPath());
 	}
-
+	
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder(getClass().getSimpleName());

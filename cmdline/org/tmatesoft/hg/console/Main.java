@@ -602,7 +602,7 @@ public class Main {
 			// expected: 359, 2123, 3079
 			byte[] b = s.getBytes();
 			final Nodeid nid = Nodeid.fromAscii(b, 0, b.length);
-			System.out.println(s + " : " + n.length(nid));
+			System.out.println(s + " : " + n.getLength(nid));
 		}
 	}
 

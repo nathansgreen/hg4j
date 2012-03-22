@@ -196,25 +196,25 @@ abstract class Revlog {
 	/**
 	 * Access to revision data as is (decompressed, but otherwise unprocessed, i.e. not parsed for e.g. changeset or manifest entries).
 	 *  
-	 * @param fileRevisionIndex index of this revlog change (not a changelog revision index), non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense.
+	 * @param revisionIndex index of this revlog change (not a changelog revision index), non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense.
 	 * @param sink data destination
 	 * 
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 * @throws CancelledException if content retrieval operation was cancelled
 	 */
-	protected void rawContent(int fileRevisionIndex, ByteChannel sink) throws HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
+	protected void rawContent(int revisionIndex, ByteChannel sink) throws HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
 		if (sink == null) {
 			throw new IllegalArgumentException();
 		}
 		try {
 			ContentPipe insp = new ContentPipe(sink, 0, repo.getContext().getLog());
 			insp.checkCancelled();
-			content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
+			content.iterate(revisionIndex, revisionIndex, true, insp);
 			insp.checkFailed();
 		} catch (IOException ex) {
-			HgInvalidControlFileException e = new HgInvalidControlFileException(String.format("Access to revision %d content failed", fileRevisionIndex), ex, null);
-			e.setRevisionIndex(fileRevisionIndex);
+			HgInvalidControlFileException e = new HgInvalidControlFileException(String.format("Access to revision %d content failed", revisionIndex), ex, null);
+			e.setRevisionIndex(revisionIndex);
 			// FIXME e.setFileName(content.getIndexFile() or this.getHumanFriendlyPath()) - shall decide whether 
 			// protected abstract getPath() with impl in HgDataFile, HgManifest and HgChangelog or path is data of either Revlog or RevlogStream
 			// Do the same (add file name) below
@@ -223,7 +223,7 @@ abstract class Revlog {
 			throw ex;
 		} catch (HgException ex) {
 			HgInvalidControlFileException e = new HgInvalidControlFileException(ex.getClass().getSimpleName(), ex, null);
-			e.setRevisionIndex(fileRevisionIndex);
+			e.setRevisionIndex(revisionIndex);
 			throw e;
 		}
 	}
