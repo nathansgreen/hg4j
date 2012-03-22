@@ -28,11 +28,11 @@ import java.io.IOException;
  */
 public class FilterDataAccess extends DataAccess {
 	private final DataAccess dataAccess;
-	private final int offset;
+	private final long offset;
 	private final int length;
 	private int count;
 
-	public FilterDataAccess(DataAccess dataAccess, int offset, int length) {
+	public FilterDataAccess(DataAccess dataAccess, long offset, int length) {
 		this.dataAccess = dataAccess;
 		this.offset = offset;
 		this.length = length;
@@ -64,8 +64,8 @@ public class FilterDataAccess extends DataAccess {
 		if (localOffset < 0 || localOffset > length) {
 			throw new IllegalArgumentException();
 		}
-		dataAccess.seek(offset + localOffset);
-		count = (int) (length - localOffset);
+		dataAccess.longSeek(offset + localOffset);
+		count = length - localOffset;
 	}
 
 	@Override
@@ -91,7 +91,7 @@ public class FilterDataAccess extends DataAccess {
 			throw new IOException(String.format("Underflow. Bytes left: %d. FilterDA[offset: %d, length: %d]", count, offset, length));
 		}
 		if (count == length) {
-			dataAccess.seek(offset);
+			dataAccess.longSeek(offset);
 		}
 		count--;
 		return dataAccess.readByte();
@@ -106,7 +106,7 @@ public class FilterDataAccess extends DataAccess {
 			throw new IOException(String.format("Underflow. Bytes left: %d, asked to read %d. FilterDA[offset: %d, length: %d]", count, len, offset, length));
 		}
 		if (count == length) {
-			dataAccess.seek(offset);
+			dataAccess.longSeek(offset);
 		}
 		dataAccess.readBytes(b, off, len);
 		count -= len;

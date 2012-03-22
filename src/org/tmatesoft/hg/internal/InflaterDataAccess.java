@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,15 +40,15 @@ public class InflaterDataAccess extends FilterDataAccess {
 	private int decompressedPos = 0;
 	private int decompressedLength;
 
-	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength) {
+	public InflaterDataAccess(DataAccess dataAccess, long offset, int compressedLength) {
 		this(dataAccess, offset, compressedLength, -1, new Inflater(), new byte[512]);
 	}
 
-	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength, int actualLength) {
+	public InflaterDataAccess(DataAccess dataAccess, long offset, int compressedLength, int actualLength) {
 		this(dataAccess, offset, compressedLength, actualLength, new Inflater(), new byte[512]);
 	}
 
-	public InflaterDataAccess(DataAccess dataAccess, int offset, int compressedLength, int actualLength, Inflater inflater, byte[] buf) {
+	public InflaterDataAccess(DataAccess dataAccess, long offset, int compressedLength, int actualLength, Inflater inflater, byte[] buf) {
 		super(dataAccess, offset, compressedLength);
 		if (inflater == null || buf == null) {
 			throw new IllegalArgumentException();
@@ -119,10 +119,10 @@ public class InflaterDataAccess extends FilterDataAccess {
 			throw new IllegalArgumentException();
 		}
 		if (localOffset >= decompressedPos) {
-			skip((int) (localOffset - decompressedPos));
+			skip(localOffset - decompressedPos);
 		} else {
 			reset();
-			skip((int) localOffset);
+			skip(localOffset);
 		}
 	}
 	

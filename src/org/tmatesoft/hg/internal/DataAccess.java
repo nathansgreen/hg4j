@@ -33,9 +33,22 @@ public class DataAccess {
 		return true;
 	}
 	// TODO throws IOException (few subclasses have non-trivial length() operation)
+	// long length and offset are needed only in RevlogStream, makes no sense elsewhere
+	// because chunks Mercurial operates with fit into int (4 bytes actualLength field)
+	// For those that may face large pieces of data (actual data streams) there are #longLength 
+	// and #longSeek() to implement
 	public int length() {
 		return 0;
 	}
+	
+	public long longLength() {
+		return length();
+	}
+	
+	public void longSeek(long offset) throws IOException {
+		seek(Internals.ltoi(offset));
+	}
+	
 	/**
 	 * get this instance into initial state
 	 * @throws IOException

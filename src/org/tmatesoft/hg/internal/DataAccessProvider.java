@@ -23,7 +23,6 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.SessionContext;
 
 /**
@@ -69,10 +68,7 @@ public class DataAccessProvider {
 		}
 		try {
 			FileChannel fc = new FileInputStream(f).getChannel();
-			int flen = (int) fc.size();
-			if (fc.size() - flen != 0) {
-				throw new HgBadStateException("Files greater than 2Gb are not yet supported");
-			}
+			long flen = fc.size();
 			if (flen > mapioMagicBoundary) {
 				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
 				return new MemoryMapFileAccess(fc, flen, getConfigOption(context, CFG_PROPERTY_MAPIO_BUFFER_SIZE, 100*1024 /*same as default boundary*/));
@@ -91,18 +87,17 @@ public class DataAccessProvider {
 		return new DataAccess(); // non-null, empty.
 	}
 
-	// DOESN'T WORK YET 
 	private static class MemoryMapFileAccess extends DataAccess {
 		private FileChannel fileChannel;
-		private final int size;
+		private final long size;
 		private long position = 0; // always points to buffer's absolute position in the file
 		private final int memBufferSize;
 		private MappedByteBuffer buffer;
 
-		public MemoryMapFileAccess(FileChannel fc, int channelSize, int bufferSize) {
+		public MemoryMapFileAccess(FileChannel fc, long channelSize, int bufferSize) {
 			fileChannel = fc;
 			size = channelSize;
-			memBufferSize = bufferSize > channelSize ? channelSize : bufferSize; // no reason to waste memory more than there's data 
+			memBufferSize = bufferSize > channelSize ? (int) channelSize : bufferSize; // no reason to waste memory more than there's data 
 		}
 
 		@Override
@@ -111,26 +106,37 @@ public class DataAccessProvider {
 		}
 		
 		@Override
+		public DataAccess reset() throws IOException {
+			longSeek(0);
+			return this;
+		}
+
+		@Override
 		public int length() {
+			return Internals.ltoi(longLength());
+		}
+		
+		@Override
+		public long longLength() {
 			return size;
 		}
 		
 		@Override
-		public DataAccess reset() throws IOException {
-			seek(0);
-			return this;
-		}
-		
-		@Override
-		public void seek(int offset) {
+		public void longSeek(long offset) {
 			assert offset >= 0;
 			// offset may not necessarily be further than current position in the file (e.g. rewind) 
 			if (buffer != null && /*offset is within buffer*/ offset >= position && (offset - position) < buffer.limit()) {
-				buffer.position((int) (offset - position));
+				// cast is ok according to check above
+				buffer.position(Internals.ltoi(offset - position));
 			} else {
 				position = offset;
 				buffer = null;
 			}
+		}
+
+		@Override
+		public void seek(int offset) {
+			longSeek(offset);
 		}
 
 		@Override
@@ -206,14 +212,14 @@ public class DataAccessProvider {
 	// (almost) regular file access - FileChannel and buffers.
 	private static class FileAccess extends DataAccess {
 		private FileChannel fileChannel;
-		private final int size;
+		private final long size;
 		private ByteBuffer buffer;
-		private int bufferStartInFile = 0; // offset of this.buffer in the file.
+		private long bufferStartInFile = 0; // offset of this.buffer in the file.
 
-		public FileAccess(FileChannel fc, int channelSize, int bufferSizeHint, boolean useDirect) {
+		public FileAccess(FileChannel fc, long channelSize, int bufferSizeHint, boolean useDirect) {
 			fileChannel = fc;
 			size = channelSize;
-			final int capacity = size < bufferSizeHint ? size : bufferSizeHint;
+			final int capacity = size < bufferSizeHint ? (int) size : bufferSizeHint;
 			buffer = useDirect ? ByteBuffer.allocateDirect(capacity) : ByteBuffer.allocate(capacity);
 			buffer.flip(); // or .limit(0) to indicate it's empty
 		}
@@ -224,23 +230,29 @@ public class DataAccessProvider {
 		}
 		
 		@Override
-		public int length() {
-			return size;
-		}
-		
-		@Override
 		public DataAccess reset() throws IOException {
-			seek(0);
+			longSeek(0);
 			return this;
 		}
+
+		@Override
+		public int length() {
+			return Internals.ltoi(longLength());
+		}
 		
 		@Override
-		public void seek(int offset) throws IOException {
+		public long longLength() {
+			return size;
+		}
+
+		@Override
+		public void longSeek(long offset) throws IOException {
 			if (offset > size) {
 				throw new IllegalArgumentException(String.format("Can't seek to %d for the file of size %d (buffer start:%d)", offset, size, bufferStartInFile));
 			}
 			if (offset < bufferStartInFile + buffer.limit() && offset >= bufferStartInFile) {
-				buffer.position((int) (offset - bufferStartInFile));
+				// cast to int is safe, we've checked we fit into buffer
+				buffer.position(Internals.ltoi(offset - bufferStartInFile));
 			} else {
 				// out of current buffer, invalidate it (force re-read) 
 				// XXX or ever re-read it right away?
@@ -252,6 +264,11 @@ public class DataAccessProvider {
 		}
 
 		@Override
+		public void seek(int offset) throws IOException {
+			longSeek(offset);
+		}
+
+		@Override
 		public void skip(int bytes) throws IOException {
 			final int newPos = buffer.position() + bytes;
 			if (newPos >= 0 && newPos < buffer.limit()) {
@@ -259,7 +276,7 @@ public class DataAccessProvider {
 				buffer.position(newPos);
 			} else {
 				//
-				seek(bufferStartInFile + newPos);
+				longSeek(bufferStartInFile + newPos);
 			}
 		}
 

@@ -69,7 +69,7 @@ public class ByteArrayDataAccess extends DataAccess {
 	}
 	@Override
 	public void seek(int offset) {
-		pos = (int) offset;
+		pos = offset;
 	}
 	@Override
 	public void skip(int bytes) throws IOException {

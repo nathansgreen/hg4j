@@ -394,4 +394,15 @@ public final class Internals {
 		}
 		return sb;
 	}
+	
+	/**
+	 * keep an eye on all long to int downcasts to get a chance notice the lost of data
+	 * Use if there's even subtle chance there might be loss
+	 * (ok not to use if there's no way for l to be greater than int) 
+	 */
+	public static int ltoi(long l) {
+		int i = (int) l;
+		assert ((long) i) == l : "Loss of data!";
+		return i;
+	}
 }

@@ -66,7 +66,7 @@ public class RevlogStream {
 	}
 
 	/*package*/ DataAccess getIndexStream() {
-		// XXX may supply a hint that I'll need really few bytes of data (perhaps, at some offset) 
+		// TODO post 1.0 may supply a hint that I'll need really few bytes of data (perhaps, at some offset) 
 		// to avoid mmap files when only few bytes are to be read (i.e. #dataLength())
 		return dataAccess.create(indexFile);
 	}
@@ -326,7 +326,7 @@ public class RevlogStream {
 			final int INLINEDATA = 1 << 16;
 			inline = (versionField & INLINEDATA) != 0;
 			IntVector resBases, resOffsets = null;
-			int entryCountGuess = da.length() / REVLOGV1_RECORD_SIZE;
+			int entryCountGuess = Internals.ltoi(da.longLength() / REVLOGV1_RECORD_SIZE);
 			if (inline) {
 				entryCountGuess >>>= 2; // pure guess, assume useful data takes 3/4 of total space
 				resOffsets = new IntVector(entryCountGuess, 5000);
@@ -347,7 +347,7 @@ public class RevlogStream {
 //				byte[] nodeid = new byte[32];
 				resBases.add(baseRevision);
 				if (inline) {
-					int o = (int) offset;
+					int o = Internals.ltoi(offset);
 					if (o != offset) {
 						// just in case, can't happen, ever, unless HG (or some other bad tool) produces index file 
 						// with inlined data of size greater than 2 Gb.
@@ -465,7 +465,7 @@ public class RevlogStream {
 				long l = daIndex.readLong(); // 0
 				long offset = i == 0 ? 0 : (l >>> 16);
 				@SuppressWarnings("unused")
-				int flags = (int) (l & 0X0FFFF);
+				int flags = (int) (l & 0x0FFFF);
 				int compressedLen = daIndex.readInt(); // +8
 				int actualLen = daIndex.readInt(); // +12
 				int baseRevision = daIndex.readInt(); // +16
@@ -477,15 +477,15 @@ public class RevlogStream {
 				daIndex.skip(12);
 				DataAccess userDataAccess = null;
 				if (needData) {
-					int streamOffset;
+					long streamOffset;
 					DataAccess streamDataAccess;
 					if (inline) {
 						streamDataAccess = daIndex;
 						streamOffset = getIndexOffsetInt(i) + REVLOGV1_RECORD_SIZE; // don't need to do seek as it's actual position in the index stream
 					} else {
-						streamOffset = (int) offset;
+						streamOffset = offset;
 						streamDataAccess = daData;
-						daData.seek(streamOffset);
+						daData.longSeek(streamOffset);
 					}
 					final boolean patchToPrevious = baseRevision != i; // the only way I found to tell if it's a patch
 					if (streamDataAccess.isEmpty() || compressedLen == 0) {

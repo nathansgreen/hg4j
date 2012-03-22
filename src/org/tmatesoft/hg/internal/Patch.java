@@ -120,7 +120,7 @@ public final class Patch {
 		}
 		baseRevisionContent.seek(prevEnd);
 		// copy everything in the source past last record's end
-		baseRevisionContent.readBytes(rv, destIndex, (int) (baseRevisionContent.length() - prevEnd));
+		baseRevisionContent.readBytes(rv, destIndex, (baseRevisionContent.length() - prevEnd));
 		return rv;
 	}
 	

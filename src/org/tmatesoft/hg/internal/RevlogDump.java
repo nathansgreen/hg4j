@@ -76,7 +76,7 @@ public class RevlogDump {
 		while (dis.available() > 0) {
 			long l = di.readLong();
 			long offset = entryIndex == 0 ? 0 : (l >>> 16);
-			int flags = (int) (l & 0X0FFFF);
+			int flags = (int) (l & 0x0FFFF);
 			int compressedLen = di.readInt();
 			int actualLen = di.readInt();
 			int baseRevision = di.readInt();

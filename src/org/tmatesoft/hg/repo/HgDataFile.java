@@ -41,6 +41,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.FilterDataAccess;
 import org.tmatesoft.hg.internal.IntMap;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -129,7 +130,8 @@ public class HgDataFile extends Revlog {
 		} else if (fileRevisionIndex == WORKING_COPY) {
 			File f = getRepo().getFile(this);
 			if (f.exists()) {
-				return (int) /*FIXME long!*/ f.length();
+				// single revision can't be greater than 2^32, shall be safe to cast to int
+				return Internals.ltoi(f.length());
 			}
 			Nodeid fileRev = getWorkingCopyRevision();
 			if (fileRev == null) {
