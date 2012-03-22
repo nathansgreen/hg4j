@@ -624,7 +624,7 @@ public class HgManifest extends Revlog {
 						changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
 					}
 				} catch (HgInvalidControlFileException ex) {
-					// FIXME need to propagate the error up to client  
+					// FIXME EXCEPTIONS need to propagate the error up to client  
 					repo.getContext().getLog().error(getClass(), ex, null);
 				}
 			}

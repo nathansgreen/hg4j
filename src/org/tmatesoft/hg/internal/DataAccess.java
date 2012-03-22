@@ -29,19 +29,19 @@ import java.nio.ByteBuffer;
  * @author TMate Software Ltd.
  */
 public class DataAccess {
-	public boolean isEmpty() {
+	public boolean isEmpty() throws IOException {
 		return true;
 	}
-	// TODO throws IOException (few subclasses have non-trivial length() operation)
+	// IOException due to few subclasses that have non-trivial length() operation
 	// long length and offset are needed only in RevlogStream, makes no sense elsewhere
 	// because chunks Mercurial operates with fit into int (4 bytes actualLength field)
 	// For those that may face large pieces of data (actual data streams) there are #longLength 
 	// and #longSeek() to implement
-	public int length() {
+	public int length() throws IOException {
 		return 0;
 	}
 	
-	public long longLength() {
+	public long longLength() throws IOException {
 		return length();
 	}
 	

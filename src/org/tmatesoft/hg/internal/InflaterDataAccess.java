@@ -67,50 +67,45 @@ public class InflaterDataAccess extends FilterDataAccess {
 	}
 	
 	@Override
-	protected int available() {
+	protected int available() throws IOException {
 		return length() - decompressedPos;
 	}
 	
 	@Override
-	public boolean isEmpty() {
+	public boolean isEmpty() throws IOException {
 		// can't use super.available() <= 0 because even when 0 < super.count < 6(?)
 		// decompressedPos might be already == length() 
 		return available() <= 0;
 	}
 	
 	@Override
-	public int length() {
+	public int length() throws IOException {
 		if (decompressedLength != -1) {
 			return decompressedLength;
 		}
 		decompressedLength = 0; // guard to avoid endless loop in case length() would get invoked from below. 
 		int c = 0;
-		try {
-			int oldPos = decompressedPos;
-			byte[] dummy = new byte[buffer.length];
-			int toRead;
-			while ((toRead = super.available()) > 0) {
-				if (toRead > buffer.length) {
-					toRead = buffer.length;
-				}
-				super.readBytes(buffer, 0, toRead);
-				inflater.setInput(buffer, 0, toRead);
-				try {
-					while (!inflater.needsInput()) {
-						c += inflater.inflate(dummy, 0, dummy.length);
-					}
-				} catch (DataFormatException ex) {
-					throw new HgBadStateException(ex);
-				}
+		int oldPos = decompressedPos;
+		byte[] dummy = new byte[buffer.length];
+		int toRead;
+		while ((toRead = super.available()) > 0) {
+			if (toRead > buffer.length) {
+				toRead = buffer.length;
 			}
-			decompressedLength = c + oldPos;
-			reset();
-			seek(oldPos);
-			return decompressedLength;
-		} catch (IOException ex) {
-			decompressedLength = -1; // better luck next time?
-			throw new HgBadStateException(ex); // XXX perhaps, checked exception
+			super.readBytes(buffer, 0, toRead);
+			inflater.setInput(buffer, 0, toRead);
+			try {
+				while (!inflater.needsInput()) {
+					c += inflater.inflate(dummy, 0, dummy.length);
+				}
+			} catch (DataFormatException ex) {
+				throw new HgBadStateException(ex);
+			}
 		}
+		decompressedLength = c + oldPos;
+		reset();
+		seek(oldPos);
+		return decompressedLength;
 	}
 	
 	@Override

@@ -90,7 +90,7 @@ public final class Internals {
 		try {
 			new RequiresFile().parse(this, requiresFile);
 		} catch (IOException ex) {
-			// FIXME not quite sure error reading requires file shall be silently logged only.
+			// FIXME EXCEPTIONS not quite sure error reading requires file shall be silently logged only.
 			HgInternals.getContext(hgRepo).getLog().error(getClass(), ex, null);
 		}
 	}

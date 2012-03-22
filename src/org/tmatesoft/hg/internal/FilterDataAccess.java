@@ -39,7 +39,7 @@ public class FilterDataAccess extends DataAccess {
 		count = length;
 	}
 
-	protected int available() {
+	protected int available() throws IOException {
 		return count;
 	}
 
@@ -50,12 +50,12 @@ public class FilterDataAccess extends DataAccess {
 	}
 	
 	@Override
-	public boolean isEmpty() {
+	public boolean isEmpty() throws IOException {
 		return count <= 0;
 	}
 	
 	@Override
-	public int length() {
+	public int length() throws IOException {
 		return length;
 	}
 

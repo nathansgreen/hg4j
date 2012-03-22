@@ -192,7 +192,7 @@ public final class HgRepository {
 						getContext().getLog().debug(getClass(), ex, null);
 					} catch (HgException ex) {
 						getContext().getLog().error(getClass(), ex, null);
-						// FIXME need to react
+						// FIXME EXCEPTIONS need to react
 					} catch (IOException ex) {
 						// UnsupportedEncodingException can't happen (UTF8)
 						// only from readGlobal. Need to reconsider exceptions thrown from there:

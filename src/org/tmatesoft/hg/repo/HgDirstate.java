@@ -87,15 +87,16 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 			return;
 		}
 		DataAccess da = repo.getDataAccess().create(dirstateFile);
-		if (da.isEmpty()) {
-			return;
-		}
-		// not sure linked is really needed here, just for ease of debug
-		normal = new LinkedHashMap<Path, Record>();
-		added = new LinkedHashMap<Path, Record>();
-		removed = new LinkedHashMap<Path, Record>();
-		merged = new LinkedHashMap<Path, Record>();
 		try {
+			if (da.isEmpty()) {
+				return;
+			}
+			// not sure linked is really needed here, just for ease of debug
+			normal = new LinkedHashMap<Path, Record>();
+			added = new LinkedHashMap<Path, Record>();
+			removed = new LinkedHashMap<Path, Record>();
+			merged = new LinkedHashMap<Path, Record>();
+			
 			parents = internalReadParents(da);
 			// hg init; hg up produces an empty repository where dirstate has parents (40 bytes) only
 			while (!da.isEmpty()) {
@@ -179,10 +180,10 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 			return new Pair<Nodeid,Nodeid>(NULL, NULL);
 		}
 		DataAccess da = repo.getDataAccess().create(dirstateFile);
-		if (da.isEmpty()) {
-			return new Pair<Nodeid,Nodeid>(NULL, NULL);
-		}
 		try {
+			if (da.isEmpty()) {
+				return new Pair<Nodeid,Nodeid>(NULL, NULL);
+			}
 			return internalReadParents(da);
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException("Error reading working copy parents from dirstate", ex, dirstateFile);
