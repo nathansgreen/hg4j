@@ -36,6 +36,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Pool2;
@@ -54,8 +55,22 @@ public class HgManifest extends Revlog {
 	private RevisionMapper revisionMap;
 	private EncodingHelper encodingHelper;
 	
+	/**
+	 * File flags recorded in manifest
+	 */
 	public enum Flags {
-		Exec, Link; // FIXME REVISIT consider REGULAR instead of null
+		/**
+		 * Executable bit set
+		 */
+		Exec,
+		/**
+		 * Symbolic link
+		 */
+		Link,
+		/**
+		 * Regular file
+		 */
+		RegularFile; 
 		
 		static Flags parse(String flags) {
 			if ("x".equalsIgnoreCase(flags)) {
@@ -65,14 +80,14 @@ public class HgManifest extends Revlog {
 				return Link;
 			}
 			if (flags == null) {
-				return null;
+				return RegularFile;
 			}
 			throw new IllegalStateException(flags);
 		}
 
 		static Flags parse(byte[] data, int start, int length) {
 			if (length == 0) {
-				return null;
+				return RegularFile;
 			}
 			if (length == 1) {
 				if (data[start] == 'x') {
@@ -92,6 +107,9 @@ public class HgManifest extends Revlog {
 			}
 			if (this == Link) {
 				return "l";
+			}
+			if (this == RegularFile) {
+				return "";
 			}
 			throw new IllegalStateException(toString());
 		}
@@ -242,38 +260,29 @@ public class HgManifest extends Revlog {
 	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... changelogRevisionIndexes) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		// TODO need tests
 		int[] manifestRevisionIndexes = toManifestRevisionIndexes(changelogRevisionIndexes, null);
-		final HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>(changelogRevisionIndexes.length);
-		content.iterate(manifestRevisionIndexes, true, new RevlogStream.Inspector() {
-			
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgException {
-				ByteArrayOutputStream bos = new ByteArrayOutputStream();
-				try {
-					byte b;
-					while (!data.isEmpty() && (b = data.readByte()) != '\n') {
-						if (b != 0) {
-							bos.write(b);
-						} else {
-							String fname = new String(bos.toByteArray());
-							bos.reset();
-							if (file.toString().equals(fname)) {
-								byte[] nid = new byte[40];  
-								data.readBytes(nid, 0, 40);
-								rv.put(linkRevision, Nodeid.fromAscii(nid, 0, 40));
-								break;
-							} else {
-								data.skip(40);
-							}
-							// else skip to the end of line
-							while (!data.isEmpty() && (b = data.readByte()) != '\n')
-								;
-						}
-					}
-				} catch (IOException ex) {
-					throw new HgException(ex);
-				}
-			}
-		});
+		IntMap<Nodeid> resMap = new IntMap<Nodeid>(changelogRevisionIndexes.length);
+		content.iterate(manifestRevisionIndexes, true, new FileLookupInspector(encodingHelper, file, resMap, null));
+		// IntMap to HashMap, 
+		HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>();
+		resMap.fill(rv);
 		return rv;
+	}
+
+	/**
+	 * {@link HgDataFile#getFlags(int)} is public API
+	 * 
+	 * @param changesetRevIndex changeset revision index
+	 * @param file path to look up
+	 * @return one of predefined enum values, or null if file was not known in the specified revision
+	 * FIXME EXCEPTIONS
+	 * @throws HgInvalidControlFileException
+	 * @throws HgInvalidRevisionException 
+	 */
+	/*package-local*/ Flags extractFlags(int changesetRevIndex, Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
+		int manifestRevIdx = fromChangelog(changesetRevIndex);
+		IntMap<Flags> resMap = new IntMap<Flags>(2);
+		content.iterate(manifestRevIdx, manifestRevIdx, true, new FileLookupInspector(encodingHelper, file, null, resMap));
+		return resMap.get(changesetRevIndex);
 	}
 
 
@@ -329,6 +338,12 @@ public class HgManifest extends Revlog {
 	
 	@Experimental(reason="Explore Path alternative for filenames and enum for flags")
 	public interface Inspector2 extends Inspector {
+		/**
+		 * @param nid file revision
+		 * @param fname file name
+		 * @param flags one of {@link HgManifest.Flags} constants, not <code>null</code>
+		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
+		 */
 		boolean next(Nodeid nid, Path fname, Flags flags);
 	}
 
@@ -467,11 +482,11 @@ public class HgManifest extends Revlog {
 								// for cpython 0..10k, there are 4361062 flag checks, and there's only 1 unique flag
 								flags = Flags.parse(data, x + nodeidLen, i-x-nodeidLen);
 							} else {
-								flags = null;
+								flags = Flags.RegularFile;
 							}
 							boolean good2go;
 							if (inspector2 == null) {
-								String flagString = flags == null ? null : flags.nativeString();
+								String flagString = flags == Flags.RegularFile ? null : flags.nativeString();
 								good2go = inspector.next(nid, fname.toString(), flagString);
 							} else {
 								good2go = inspector2.next(nid, fname, flags);
@@ -603,6 +618,69 @@ public class HgManifest extends Revlog {
 					// FIXME need to propagate the error up to client  
 					repo.getContext().getLog().error(getClass(), ex, null);
 				}
+			}
+		}
+	}
+	
+	/**
+	 * Look up specified file in possibly multiple manifest revisions, collect file revision and flags.
+	 */
+	private static class FileLookupInspector implements RevlogStream.Inspector {
+		
+		private final byte[] filenameAsBytes;
+		private final IntMap<Nodeid> csetIndex2FileRev;
+		private final IntMap<Flags> csetIndex2Flags;
+
+		public FileLookupInspector(EncodingHelper eh, Path fileToLookUp, IntMap<Nodeid> csetIndex2FileRevMap, IntMap<Flags> csetIndex2FlagsMap) {
+			assert fileToLookUp != null;
+			// need at least one map for the inspector to make any sense
+			assert csetIndex2FileRevMap != null || csetIndex2FlagsMap != null;
+			csetIndex2FileRev = csetIndex2FileRevMap;
+			csetIndex2Flags = csetIndex2FlagsMap;
+			filenameAsBytes = eh.toManifest(fileToLookUp.toString());
+		}
+		
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgException {
+			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			try {
+				byte b;
+				while (!data.isEmpty() && (b = data.readByte()) != '\n') {
+					if (b != 0) {
+						bos.write(b);
+					} else {
+						byte[] byteArray = bos.toByteArray();
+						bos.reset();
+						if (Arrays.equals(filenameAsBytes, byteArray)) {
+							if (csetIndex2FileRev != null) {
+								byte[] nid = new byte[40];  
+								data.readBytes(nid, 0, 40);
+								csetIndex2FileRev.put(linkRevision, Nodeid.fromAscii(nid, 0, 40));
+							} else {
+								data.skip(40);
+							}
+							if (csetIndex2Flags != null) {
+								while (!data.isEmpty() && (b = data.readByte()) != '\n') {
+									bos.write(b);
+								}
+								Flags flags;
+								if (bos.size() == 0) {
+									flags = Flags.RegularFile;
+								} else {
+									flags = Flags.parse(bos.toByteArray(), 0, bos.size());
+								}
+								csetIndex2Flags.put(linkRevision, flags);
+							}
+							break;
+						} else {
+							data.skip(40);
+						}
+						// else skip to the end of line
+						while (!data.isEmpty() && (b = data.readByte()) != '\n')
+							;
+					}
+				}
+			} catch (IOException ex) {
+				throw new HgException(ex); // FIXME EXCEPTIONS
 			}
 		}
 	}

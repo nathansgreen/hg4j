@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,11 @@ import static org.tmatesoft.hg.console.Options.asSet;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.core.HgFileRevision;
+import org.tmatesoft.hg.core.HgInvalidControlFileException;
+import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
@@ -49,14 +52,30 @@ public class Manifest {
 			public void dir(Path p) {
 			}
 			public void file(HgFileRevision fileRevision) {
-				if (debug) {
-					System.out.print(fileRevision.getRevision());;
+				try {
+					if (debug) {
+						System.out.print(fileRevision.getRevision());;
+					}
+					if (debug || verbose) {
+						HgManifest.Flags flags = fileRevision.getFileFlags();
+						Object s;
+						if (flags == HgManifest.Flags.RegularFile) {
+							s = Integer.toOctalString(0644);
+						} else if (flags == HgManifest.Flags.Exec) {
+							s = Integer.toOctalString(0755);
+						} else if (flags == HgManifest.Flags.Link) {
+							s = "lnk";
+						} else {
+							s = String.valueOf(flags);
+						}
+						System.out.printf(" %s   ", s);
+					}
+					System.out.println(fileRevision.getPath());
+				} catch (HgInvalidControlFileException e) {
+					e.printStackTrace();
+				} catch (HgInvalidRevisionException e) {
+					e.printStackTrace();
 				}
-				if (debug || verbose) {
-					System.out.print(" 644"); // FIXME real flags!
-					System.out.print("   ");
-				}
-				System.out.println(fileRevision.getPath());
 			}
 			
 			public void end(Nodeid manifestRevision) {

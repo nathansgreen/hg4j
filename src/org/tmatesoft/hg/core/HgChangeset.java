@@ -272,7 +272,7 @@ public class HgChangeset implements Cloneable {
 			if (nid == null) {
 				throw new HgException(String.format("For the file %s recorded as modified couldn't find revision after change", s));
 			}
-			modified.add(new HgFileRevision(repo, nid, s, null));
+			modified.add(new HgFileRevision(repo, nid, null, s, null));
 		}
 		final Map<Path, Path> copied = r.getCopied();
 		for (Path s : r.getAdded()) {
@@ -280,7 +280,7 @@ public class HgChangeset implements Cloneable {
 			if (nid == null) {
 				throw new HgException(String.format("For the file %s recorded as added couldn't find revision after change", s));
 			}
-			added.add(new HgFileRevision(repo, nid, s, copied.get(s)));
+			added.add(new HgFileRevision(repo, nid, null, s, copied.get(s)));
 		}
 		for (Path s : r.getRemoved()) {
 			// with Path from getRemoved, may just copy

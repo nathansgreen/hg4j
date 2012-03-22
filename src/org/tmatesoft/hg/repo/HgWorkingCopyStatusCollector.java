@@ -559,7 +559,7 @@ public class HgWorkingCopyStatusCollector {
 		if ((dirstateFileMode & S_IXUSR) == S_IXUSR) {
 			return checkFlagsEqual(f, HgManifest.Flags.Exec);
 		}
-		return checkFlagsEqual(f, null); // no flags
+		return checkFlagsEqual(f, HgManifest.Flags.RegularFile); // no flags
 	}
 
 	/**

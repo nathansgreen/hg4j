@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -93,6 +93,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.checkFileFlags();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -111,10 +112,21 @@ public class Main {
 //		m.testStatusInternals();
 //		m.catCompleteHistory();
 //		m.dumpCompleteManifestLow();
-		m.dumpCompleteManifestHigh();
+//		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
 	}
 
+	private void checkFileFlags() throws Exception {
+		// ~/hg/test-flags repo
+		// TODO transform to a test once I keep test-flags in test-repos.jar
+		HgDataFile link = hgRepo.getFileNode("file-link");
+		HgDataFile exec = hgRepo.getFileNode("file-exec");
+		HgDataFile file = hgRepo.getFileNode("regular-file");
+		System.out.println("Link: " + link.getFlags(TIP));
+		System.out.println("Exec: " + exec.getFlags(TIP));
+		System.out.println("File: " + file.getFlags(TIP));
+	}
+	
 	private void buildFileLog() throws Exception {
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		cmd.file("file1", false);

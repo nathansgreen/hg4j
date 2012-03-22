@@ -57,7 +57,8 @@ public final class ManifestRevision implements HgManifest.Inspector2 {
 	}
 
 	public HgManifest.Flags flags(Path fname) {
-		return flagsMap.get(fname);
+		HgManifest.Flags f = flagsMap.get(fname);
+		return f == null ? HgManifest.Flags.RegularFile : f;
 	}
 
 	/**
@@ -85,8 +86,9 @@ public final class ManifestRevision implements HgManifest.Inspector2 {
 			nid = idsPool.unify(nid);
 		}
 		idsMap.put(fname, nid);
-		if (flags != null) {
-			// TreeMap$Entry takes 32 bytes. No reason to keep null for such price
+		if (flags != HgManifest.Flags.RegularFile) {
+			// TreeMap$Entry takes 32 bytes. No reason to keep regular file attribute (in fact, no flags state) 
+			// for such price
 			// Alternatively, Map<Path, Pair<Nodeid, Flags>> might come as a solution
 			// however, with low rate of elements with flags this would consume more memory
 			// than two distinct maps (sizeof(Pair) == 16).  

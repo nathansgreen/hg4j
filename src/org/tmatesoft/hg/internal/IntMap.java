@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,12 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+
+import org.tmatesoft.hg.core.Nodeid;
 
 
 /**
@@ -140,8 +145,73 @@ public class IntMap<V> {
 			size -= count;
 		} 
 	}
+
+	// document iterator is non-modifying (neither remove() nor setValue() works)
+	// perhaps, may also implement Iterable<Map.Entry> to use nice for()
+	public Iterator<Map.Entry<Integer, V>> entryIterator() {
+		class E implements Map.Entry<Integer, V> {
+			private Integer key;
+			private V value;
+
+			public Integer getKey() {
+				return key;
+			}
+
+			public V getValue() {
+				return value;
+			}
+
+			public V setValue(V value) {
+				throw new UnsupportedOperationException();
+			}
+			
+			void init(Integer k, V v) {
+				key = k;
+				value = v;
+			}
+		}
+		
+		return new Iterator<Map.Entry<Integer, V>>() {
+			private int i = 0;
+			private final E entry = new E();
+			private final int _size;
+			private final int[] _keys;
+			private final Object[] _values;
+			
+			{
+				_size = IntMap.this.size;
+				_keys = IntMap.this.keys;
+				_values = IntMap.this.values;
+			}
+
+			public boolean hasNext() {
+				return i < _size;
+			}
+
+			public Entry<Integer, V> next() {
+				if (i >= _size) {
+					throw new NoSuchElementException();
+				}
+				@SuppressWarnings("unchecked")
+				V val = (V) _values[i];
+				entry.init(_keys[i], val);
+				i++;
+				return entry;
+			}
+
+			public void remove() {
+				throw new UnsupportedOperationException();
+			}
+		};
+	}
 	
-	
+	public Map<Integer, ? super V> fill(Map<Integer, ? super V> map) {
+		for (Iterator<Map.Entry<Integer, V>> it = entryIterator(); it.hasNext(); ) {
+			Map.Entry<Integer, V> next = it.next();
+			map.put(next.getKey(), next.getValue());
+		}
+		return map;
+	}
 
 	// copy of Arrays.binarySearch, with upper search limit as argument
 	private static int binarySearch(int[] a, int high, int key) {

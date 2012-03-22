@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -127,12 +127,12 @@ public class HgMergeState {
 				Path p1fname = pathPool.path(r[3]);
 				Nodeid nidP1 = m1.nodeid(p1fname);
 				Nodeid nidCA = nodeidPool.unify(Nodeid.fromAscii(r[5]));
-				HgFileRevision p1 = new HgFileRevision(repo, nidP1, p1fname);
+				HgFileRevision p1 = new HgFileRevision(repo, nidP1, m1.flags(p1fname), p1fname);
 				HgFileRevision ca;
 				if (nidCA == nidP1 && r[3].equals(r[4])) {
 					ca = p1;
 				} else {
-					ca = new HgFileRevision(repo, nidCA, pathPool.path(r[4]));
+					ca = new HgFileRevision(repo, nidCA, null, pathPool.path(r[4]));
 				}
 				HgFileRevision p2;
 				if (!wcp2.isNull() || !r[6].equals(r[4])) {
@@ -142,7 +142,7 @@ public class HgMergeState {
 						assert false : "There's not enough information (or I don't know where to look) in merge/state to find out what's the second parent";
 						nidP2 = NULL;
 					}
-					p2 = new HgFileRevision(repo, nidP2, p2fname);
+					p2 = new HgFileRevision(repo, nidP2, m2.flags(p2fname), p2fname);
 				} else {
 					// no second parent known. no idea what to do here, assume linear merge, use common ancestor as parent
 					p2 = ca;

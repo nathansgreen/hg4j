@@ -17,6 +17,8 @@
 package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
@@ -36,20 +38,30 @@ public final class HgFileRevision {
 	private Path origin;
 	private Boolean isCopy = null; // null means not yet known
 	private Pair<Nodeid, Nodeid> parents;
+	private Flags flags; // null unless set/extracted
 
-	public HgFileRevision(HgRepository hgRepo, Nodeid rev, Path p) {
+	/**
+	 * FIXME has to be public?
+	 * 
+	 * @param hgRepo repository
+	 * @param rev file revision
+	 * @param manifestEntryFlags file flags at this revision (optional, may be null) 
+	 * @param p path of the file at the given revision
+	 */
+	public HgFileRevision(HgRepository hgRepo, Nodeid rev, HgManifest.Flags manifestEntryFlags, Path p) {
 		if (hgRepo == null || rev == null || p == null) {
 			// since it's package local, it is our code to blame for non validated arguments
 			throw new IllegalArgumentException();
 		}
 		repo = hgRepo;
 		revision = rev;
+		flags = manifestEntryFlags;
 		path = p;
 	}
 
 	// this cons shall be used when we know whether p was a copy. Perhaps, shall pass Map<Path,Path> instead to stress orig argument is not optional  
-	HgFileRevision(HgRepository hgRepo, Nodeid rev, Path p, Path orig) {
-		this(hgRepo, rev, p);
+	HgFileRevision(HgRepository hgRepo, Nodeid rev, HgManifest.Flags flags, Path p, Path orig) {
+		this(hgRepo, rev, flags, p);
 		isCopy = Boolean.valueOf(orig == null);
 		origin = orig; 
 	}
@@ -60,6 +72,20 @@ public final class HgFileRevision {
 
 	public Nodeid getRevision() {
 		return revision;
+	}
+	
+	/**
+	 * Executable or symbolic link, or <code>null</code> if regular file
+	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
+	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 */
+	public HgManifest.Flags getFileFlags() throws HgInvalidControlFileException, HgInvalidRevisionException {
+		if (flags == null) {
+			HgDataFile df = repo.getFileNode(path);
+			int revIdx = df.getRevisionIndex(revision);
+			flags = df.getFlags(revIdx);
+		}
+		return flags;
 	}
 
 	public boolean wasCopied() throws HgException {

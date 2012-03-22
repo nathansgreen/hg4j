@@ -528,13 +528,36 @@ public class HgDataFile extends Revlog {
 		throw new UnsupportedOperationException(); // XXX REVISIT, think over if Exception is good (clients would check isCopy() anyway, perhaps null is sufficient?)
 	}
 	
+	/**
+	 * 
+	 * @return revision this file was copied from
+	 * @throws HgInvalidControlFileException if access to revlog or file metadata failed
+	 * @throws UnsupportedOperationException if this file doesn't represent a copy ({@link #isCopy()} was false)
+	 */
 	public Nodeid getCopySourceRevision() throws HgInvalidControlFileException {
 		if (isCopy()) {
 			return Nodeid.fromAscii(metadata.find(0, "copyrev")); // XXX reuse/cache Nodeid
 		}
 		throw new UnsupportedOperationException();
 	}
+/* FIXME	
+	public Nodeid getRevisionAtChangeset(int changesetRevision) {
+	}
 	
+	public HgManifest.Flags getFlagsAtChangeset(int changesetRevisionIndex) {
+	}
+*/
+	
+	/**
+	 * FIXME EXCEPTIONS 
+	 * @throws HgInvalidControlFileException
+	 * @throws HgInvalidRevisionException
+	 */
+	public HgManifest.Flags getFlags(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		int changesetRevIndex = getChangesetRevisionIndex(fileRevisionIndex);
+		return getRepo().getManifest().extractFlags(changesetRevIndex, getPath());
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder(getClass().getSimpleName());

@@ -18,6 +18,11 @@ package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+
 import org.junit.Test;
 import org.tmatesoft.hg.internal.IntMap;
 
@@ -58,5 +63,26 @@ public class TestIntMap {
 			}
 		}
 		assertEquals(m.size(), actualCount);
+	}
+	
+	@Test
+	public void testIterators() {
+		IntMap<Boolean> m = new IntMap<Boolean>(20);
+		for (int i = 0; i <= 30; i+= 5) {
+			m.put(i, Boolean.TRUE);
+		}
+		HashMap<Integer, Boolean> hm = new HashMap<Integer, Boolean>();
+		for (Iterator<Map.Entry<Integer, Boolean>> it = m.entryIterator(); it.hasNext(); ) {
+			Entry<Integer, Boolean> next = it.next();
+			hm.put(next.getKey(), next.getValue());
+		}
+		assertEquals(m.size(), hm.size());
+		for (int i = 0; i <= 30; i++) {
+			assertEquals(m.get(i), hm.get(i));
+		}
+		//
+		HashMap<Integer, Boolean> hm2 = new HashMap<Integer, Boolean>();
+		m.fill(hm2);
+		assertEquals(hm, hm2);
 	}
 }

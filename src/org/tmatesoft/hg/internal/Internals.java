@@ -169,7 +169,7 @@ public final class Internals {
 	}
 	
 	public EncodingHelper buildFileNameEncodingHelper() {
-		return new EncodingHelper(getFileEncoding());
+		return new EncodingHelper(getFileEncoding(), sessionContext);
 	}
 	
 	private Charset getFileEncoding() {

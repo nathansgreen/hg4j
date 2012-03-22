@@ -18,6 +18,7 @@ package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.Status;
@@ -121,6 +122,7 @@ public class HgFileInformer {
 			return checkResult;
 		}
 		Nodeid toExtract = null;
+		HgManifest.Flags extractRevFlags = null;
 		String phaseMsg = "Extract manifest revision failed";
 		try {
 			if (cachedManifest == null) {
@@ -130,6 +132,7 @@ public class HgFileInformer {
 				// cachedManifest shall be meaningful - changelog.getRevisionIndex() above ensures we've got version that exists.
 			}
 			toExtract = cachedManifest.nodeid(file);
+			extractRevFlags = cachedManifest.flags(file);
 			phaseMsg = "Follow copy/rename failed";
 			if (toExtract == null && followRenames) {
 				while (toExtract == null && dataFile.isCopy()) {
@@ -137,6 +140,7 @@ public class HgFileInformer {
 					file = dataFile.getCopySourceName();
 					dataFile = repo.getFileNode(file);
 					toExtract = cachedManifest.nodeid(file);
+					extractRevFlags = cachedManifest.flags(file);
 				}
 			}
 		} catch (HgException ex) {
@@ -144,7 +148,7 @@ public class HgFileInformer {
 			return checkResult;
 		}
 		if (toExtract != null) {
-			fileRevision = new HgFileRevision(repo, toExtract, dataFile.getPath());
+			fileRevision = new HgFileRevision(repo, toExtract, extractRevFlags, dataFile.getPath());
 			checkResult = new Status(Status.Kind.OK, String.format("File %s, revision %s found at changeset %s", dataFile.getPath(), toExtract.shortNotation(), cset.shortNotation()));
 			return checkResult;
 		} 

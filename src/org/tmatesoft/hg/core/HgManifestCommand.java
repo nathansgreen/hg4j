@@ -187,7 +187,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 			if (matcher != null && !matcher.accept(fname)) {
 				return true;
 			}
-			HgFileRevision fr = new HgFileRevision(repo, nid, fname);
+			HgFileRevision fr = new HgFileRevision(repo, nid, flags, fname);
 			if (needDirs) {
 				manifestContent.add(fr);
 			} else {

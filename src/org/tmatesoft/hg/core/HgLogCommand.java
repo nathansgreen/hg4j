@@ -235,8 +235,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					// even if we do not follow history, report file rename
 					do {
 						if (handler instanceof FileHistoryHandler) {
-							HgFileRevision src = new HgFileRevision(repo, fileNode.getCopySourceRevision(), fileNode.getCopySourceName());
-							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), fileNode.getPath(), src.getPath());
+							HgFileRevision src = new HgFileRevision(repo, fileNode.getCopySourceRevision(), null, fileNode.getCopySourceName());
+							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), null, fileNode.getPath(), src.getPath());
 							try {
 								((FileHistoryHandler) handler).copy(src, dst);
 							} catch (HgCallbackTargetException.Wrap ex) {
