@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,7 +71,7 @@ public class KeywordFilter implements Filter {
 				l = s.length();
 			}
 		}
-		// FIXME later may implement #filter() not to read full kw value (just "$kw:"). However, limit of maxLen + 2 would keep valid.
+		// TODO post-1.0 later may implement #filter() not to read full kw value (just "$kw:"). However, limit of maxLen + 2 would keep valid.
 		// for buffers less then minBufferLen, there are chances #filter() implementation would never end
 		// (i.e. for input "$LongestKey"$
 		minBufferLen = l + 2 + (isExpanding ? 0 : 120 /*any reasonable constant for max possible kw value length*/);
@@ -113,7 +113,7 @@ public class KeywordFilter implements Filter {
 					// end of buffer reached
 					if (rv == null) {
 						if (keywordStart == x) {
-							// FIXME in fact, x might be equal to keywordStart and to src.position() here ('$' is first character in the buffer, 
+							// TODO post-1.0 in fact, x might be equal to keywordStart and to src.position() here ('$' is first character in the buffer, 
 							// and there are no other '$' not eols till the end of the buffer). This would lead to deadlock (filter won't consume any
 							// bytes). To prevent this, either shall copy bytes [keywordStart..buffer.limit()) to local buffer and use it on the next invocation,
 							// or add lookup of the keywords right after first '$' is found (do not wait for closing '$'). For now, large enough src buffer would be sufficient
@@ -259,7 +259,8 @@ public class KeywordFilter implements Filter {
 
 	private String revision() {
 		try {
-			// FIXME add cset's nodeid into Changeset class
+			// TODO post-1.0 Either add cset's nodeid into Changeset class or use own inspector 
+			// when accessing changelog, see below, #getChangeset
 			int csetRev = repo.getFileNode(path).getChangesetRevisionIndex(HgRepository.TIP);
 			return repo.getChangelog().getRevision(csetRev).shortNotation();
 		} catch (HgException ex) {
@@ -290,7 +291,10 @@ public class KeywordFilter implements Filter {
 	
 	private RawChangeset getChangeset() throws HgInvalidControlFileException {
 		if (latestFileCset == null) {
-			// XXX consider use of ChangelogHelper
+			// TODO post-1.0 Use of TIP is likely incorrect in cases when working copy is not based
+			// on latest revision. Perhaps, a constant like HgRepository.DIRSTATE_PARENT may come handy
+			// Besides, it's reasonable to pass own inspector instead of implicit use of RawCsetCollector
+			// to get changeset nodeid/index right away. Also check ChangelogHelper if may be of any use
 			int csetRev = repo.getFileNode(path).getChangesetRevisionIndex(HgRepository.TIP);
 			latestFileCset = repo.getChangelog().range(csetRev, csetRev).get(0);
 		}

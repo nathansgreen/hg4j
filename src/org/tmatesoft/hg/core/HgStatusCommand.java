@@ -254,7 +254,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		}
 		public void copied(Path fnameOrigin, Path fnameAdded) {
 			if (needCopies) {
-				// FIXME in fact, merged files may report 'copied from' as well, correct status kind thus may differ from Added
+				// TODO post-1.0 in fact, merged files may report 'copied from' as well, correct status kind thus may differ from Added
 				handler.handleStatus(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
 			}
 		}

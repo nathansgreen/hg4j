@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -150,7 +150,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 								throw new IllegalStateException(String.format("Revision %s needs a parent %s, which is missing in the supplied repo %s", ge.node().shortNotation(), base.shortNotation(), hgRepo.toString()));
 							}
 							ByteArrayChannel bac = new ByteArrayChannel();
-							changelog.rawContent(base, bac); // FIXME get DataAccess directly, to avoid
+							changelog.rawContent(base, bac); // TODO post-1.0 get DataAccess directly, to avoid
 							// extra byte[] (inside ByteArrayChannel) duplication just for the sake of subsequent ByteArrayDataChannel wrap.
 							prevRevContent = new ByteArrayDataAccess(bac.toArray());
 						}

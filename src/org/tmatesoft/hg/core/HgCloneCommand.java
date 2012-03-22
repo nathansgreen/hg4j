@@ -208,7 +208,7 @@ public class HgCloneCommand {
 				base = -1;
 				offset = 0;
 				revisionSequence.clear();
-				fncacheFiles.add("data/" + name + ".i"); // FIXME this is pure guess, 
+				fncacheFiles.add("data/" + name + ".i"); // TODO post-1.0 this is pure guess, 
 				// need to investigate more how filenames are kept in fncache
 				File file = new File(hgDir, filename = storagePathHelper.rewrite(name).toString());
 				file.getParentFile().mkdirs();

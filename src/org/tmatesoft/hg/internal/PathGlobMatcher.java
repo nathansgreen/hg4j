@@ -52,7 +52,7 @@ public class PathGlobMatcher implements Path.Matcher {
 	// HgIgnore.glob2regex is similar, but IsIgnore solves slightly different task 
 	// (need to match partial paths, e.g. for glob 'bin' shall match not only 'bin' folder, but also any path below it,
 	// which is not generally the case
-	private static String glob2regexp(String glob) { // FIXME TESTS NEEDED!!!
+	private static String glob2regexp(String glob) { // TODO TESTS NEEDED!!!
 		int end = glob.length() - 1;
 		if (glob.length() > 2 && glob.charAt(end) == '*' && glob.charAt(end - 1) == '.') {
 			end-=2;

@@ -222,7 +222,7 @@ public class TestAuxUtilities {
 	}
 
 	@Test
-	public void testRevlogInspectors() throws Exception { // FIXME move to better place
+	public void testRevlogInspectors() throws Exception { // TODO move to better place
 		HgRepository repository = Configuration.get().find("branches-1"); // any repo
 		repository.getChangelog().walk(0, TIP, new HgChangelog.RevisionInspector() {
 

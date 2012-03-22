@@ -48,16 +48,13 @@ public class EncodingHelper {
 		encoder = fsEncoding.newEncoder();
 	}
 
+	/**
+	 * Translate file names from manifest to amazing Unicode string 
+	 */
 	public String fromManifest(byte[] data, int start, int length) {
-		try {
-			return decoder.decode(ByteBuffer.wrap(data, start, length)).toString();
-		} catch (CharacterCodingException ex) {
-			sessionContext.getLog().error(getClass(), ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
-			// resort to system-default
-			return new String(data, start, length);
-		}
+		return decodeWithSystemDefaultFallback(data, start, length);
 	}
-
+	
 	/**
 	 * @return byte representation of the string directly comparable to bytes in manifest
 	 */
@@ -80,11 +77,24 @@ public class EncodingHelper {
 		}
 	}
 
-	public String fromDirstate(byte[] data, int start, int length) throws CharacterCodingException { // FIXME perhaps, log is enough, and charset() may be private?
-		return decoder.decode(ByteBuffer.wrap(data, start, length)).toString();
+	/**
+	 * Translate file names from dirstate to amazing Unicode string 
+	 */
+	public String fromDirstate(byte[] data, int start, int length) {
+		return decodeWithSystemDefaultFallback(data, start, length);
 	}
 
-	public Charset charset() {
+	private String decodeWithSystemDefaultFallback(byte[] data, int start, int length) {
+		try {
+			return decoder.decode(ByteBuffer.wrap(data, start, length)).toString();
+		} catch (CharacterCodingException ex) {
+			sessionContext.getLog().error(getClass(), ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
+			// resort to system-default
+			return new String(data, start, length);
+		}
+	}
+
+	private Charset charset() {
 		return encoder.charset();
 	}
 

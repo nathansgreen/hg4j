@@ -23,7 +23,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.charset.CharacterCodingException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -147,8 +146,6 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 					repo.getContext().getLog().warn(getClass(), "Dirstate record for file %s (size: %d, tstamp:%d) has unknown state '%c'", r.name1, r.size(), r.time, state);
 				}
 			}
-		} catch (CharacterCodingException ex) {
-			throw new HgInvalidControlFileException(String.format("Failed reading file names from dirstate using encoding %s", encodingHelper.charset().name()), ex, dirstateFile);
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException("Dirstate read failed", ex, dirstateFile); 
 		} finally {

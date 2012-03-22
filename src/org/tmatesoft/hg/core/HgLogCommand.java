@@ -114,7 +114,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	// multiple?
 	public HgLogCommand date(Calendar date) {
 		this.date = date;
-		// FIXME implement
+		// TODO post-1.0 implement
 		// isSet(field) - false => don't use in detection of 'same date'
 		throw HgRepository.notImplemented();
 	}
@@ -369,7 +369,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			}
 		}
 		if (date != null) {
-			// FIXME implement date support for log
+			// TODO post-1.0 implement date support for log
 		}
 		count++;
 		csetTransform.next(revisionNumber, nodeid, cset);

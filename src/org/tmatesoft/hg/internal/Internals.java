@@ -299,7 +299,7 @@ public final class Internals {
 		if (f.canRead() && f.isDirectory()) {
 			return listConfigFiles(f);
 		}
-		// FIXME query registry, e.g. with
+		// TODO post-1.0 query registry, e.g. with
 		// Runtime.exec("reg query HKLM\Software\Mercurial")
 		//
 		f = new File("C:\\Mercurial\\Mercurial.ini");

@@ -87,7 +87,8 @@ public class DataAccess {
 		throw new IOException(String.format("No data, can't read %d bytes", length));
 	}
 	// reads bytes into ByteBuffer, up to its limit or total data length, whichever smaller
-	// FIXME perhaps, in DataAccess paradigm (when we read known number of bytes, we shall pass specific byte count to read) 
+	// TODO post-1.0 perhaps, in DataAccess paradigm (when we read known number of bytes, we shall pass specific byte count to read)
+	// for 1.0, it's ok as it's our internal class
 	public void readBytes(ByteBuffer buf) throws IOException {
 //		int toRead = Math.min(buf.remaining(), (int) length());
 //		if (buf.hasArray()) {
@@ -97,7 +98,7 @@ public class DataAccess {
 //			readBytes(bb, 0, bb.length);
 //			buf.put(bb);
 //		}
-		// FIXME optimize to read as much as possible at once
+		// TODO post-1.0 optimize to read as much as possible at once
 		while (!isEmpty() && buf.hasRemaining()) {
 			buf.put(readByte());
 		}

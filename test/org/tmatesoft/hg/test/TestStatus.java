@@ -646,7 +646,7 @@ public class TestStatus {
 		reportNotEqual(what + "#IGNORED", r.get(Ignored), statusParser.getIgnored());
 		reportNotEqual(what + "#MISSING", r.get(Missing), statusParser.getMissing());
 		reportNotEqual(what + "#UNKNOWN", r.get(Unknown), statusParser.getUnknown());
-		// FIXME test copies
+		// TODO test copies
 	}
 
 	private void report(String what, HgStatusCollector.Record r, StatusOutputParser statusParser) {

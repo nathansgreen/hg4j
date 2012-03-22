@@ -91,8 +91,9 @@ public class HgStatus {
 			if (localFile.canRead()) {
 				return new Date(localFile.lastModified());
 			}
-			// FIXME check dirstate and/or local file for tstamp
-			return new Date(); // what's correct 
+			// TODO post-1.0 find out what to do in this case, perhaps, throw an exception?
+			// perhaps check dirstate and/or local file for tstamp
+			return new Date(); // what's correct? 
 		} else {
 			return cset.date();
 		}

@@ -180,7 +180,7 @@ public final class HgRepository {
 			tags = new HgTags(this);
 			HgDataFile hgTags = getFileNode(".hgtags");
 			if (hgTags.exists()) {
-				for (int i = 0; i <= hgTags.getLastRevision(); i++) { // FIXME in fact, would be handy to have walk(start,end) 
+				for (int i = 0; i <= hgTags.getLastRevision(); i++) { // TODO post-1.0 in fact, would be handy to have walk(start,end) 
 					// method for data files as well, though it looks odd.
 					try {
 						ByteArrayChannel sink = new ByteArrayChannel();
@@ -315,8 +315,8 @@ public final class HgRepository {
 		return repoDir;
 	}
 	
-	// FIXME remove once NPE in HgWorkingCopyStatusCollector.areTheSame is solved
 	/*package-local, debug*/String getStoragePath(HgDataFile df) {
+		// may come handy for debug
 		return dataPathHelper.rewrite(df.getPath().toString()).toString();
 	}
 

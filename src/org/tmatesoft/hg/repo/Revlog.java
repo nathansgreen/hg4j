@@ -215,8 +215,8 @@ abstract class Revlog {
 		} catch (IOException ex) {
 			HgInvalidControlFileException e = new HgInvalidControlFileException(String.format("Access to revision %d content failed", revisionIndex), ex, null);
 			e.setRevisionIndex(revisionIndex);
-			// FIXME e.setFileName(content.getIndexFile() or this.getHumanFriendlyPath()) - shall decide whether 
-			// protected abstract getPath() with impl in HgDataFile, HgManifest and HgChangelog or path is data of either Revlog or RevlogStream
+			// TODO post 1.0 e.setFileName(content.getIndexFile() or this.getHumanFriendlyPath()) - shall decide whether 
+			// protected abstract getHFPath() with impl in HgDataFile, HgManifest and HgChangelog or path is data of either Revlog or RevlogStream
 			// Do the same (add file name) below
 			throw e;
 		} catch (HgInvalidControlFileException ex) {
@@ -236,7 +236,7 @@ abstract class Revlog {
 	 * @param parent1 - byte[20] or null, if parent's nodeid is not needed
 	 * @param parent2 - byte[20] or null, if second parent's nodeid is not needed
 	 * @throws HgInvalidRevisionException
-	 * @throws HgInvalidControlFileException FIXME
+	 * @throws HgInvalidControlFileException FIXME EXCEPTIONS
 	 * @throws IllegalArgumentException
 	 */
 	public void parents(int revision, int[] parentRevisions, byte[] parent1, byte[] parent2) throws HgInvalidRevisionException, HgInvalidControlFileException {

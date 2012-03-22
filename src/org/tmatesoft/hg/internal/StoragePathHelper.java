@@ -61,9 +61,10 @@ class StoragePathHelper implements PathRewrite {
 		charEncodingBuf = CharBuffer.allocate(1);
 	}
 
-	// FIXME document what path argument is, whether it includes .i or .d, and whether it's 'normalized' (slashes) or not.
-	// since .hg/store keeps both .i files and files without extension (e.g. fncache), guees, for data == false 
-	// we shall assume path has extension
+	/**
+	 * path argument is repository-relative name of the user's file.
+	 * It has to be normalized (slashes) and shall not include extension .i or .d.
+	 */
 	public CharSequence rewrite(CharSequence p) {
 		final String STR_STORE = "store/";
 		final String STR_DATA = "data/";

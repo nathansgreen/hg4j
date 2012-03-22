@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -325,7 +325,7 @@ public class HgChangelog extends Revlog {
 			String _comment;
 			try {
 				_comment = new String(data, breakIndex4 + 2, bufferEndIndex - breakIndex4 - 2, "UTF-8");
-				// FIXME respect ui.fallbackencoding and try to decode if set
+				// TODO post-1.0 respect ui.fallbackencoding and try to decode if set; use EncodingHelper
 			} catch (UnsupportedEncodingException ex) {
 				_comment = "";
 				// Could hardly happen

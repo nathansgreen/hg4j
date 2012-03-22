@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Bridges {@link HgChangelog.RawChangeset} with high-level {@link HgChangeset} API
- * FIXME move to .internal once access to package-local HgChangeset cons is resolved
+ * TODO post-1.0 Move to .internal once access to package-local HgChangeset cons is resolved. For 1.0, enough it's package-local 
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -109,7 +109,10 @@ import org.tmatesoft.hg.util.ProgressSupport;
 			changeset.setParentHelper(pw);
 		}
 
-		// FIXME document instance reuse policy
+		/**
+		 * Callers shall not assume they get new HgChangeset instance each time, implementation may reuse instances.  
+		 * @return hi-level changeset description
+		 */
 		HgChangeset handle(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
 			changeset.init(revisionNumber, nodeid, cset);
 			return changeset;
