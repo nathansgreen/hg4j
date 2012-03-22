@@ -448,6 +448,15 @@ public class HgDataFile extends Revlog {
 		history(0, getLastRevision(), inspector);
 	}
 
+	/**
+	 * 
+	 * @param start local revision index
+	 * @param end local revision index
+	 * @param inspector
+	 * FIXME EXCEPTIONS
+	 * @throws HgInvalidRevisionException
+	 * @throws HgInvalidControlFileException
+	 */
 	public void history(int start, int end, HgChangelog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
@@ -556,24 +565,18 @@ public class HgDataFile extends Revlog {
 		}
 		throw new UnsupportedOperationException();
 	}
-/* FIXME	
-	public Nodeid getRevisionAtChangeset(int changesetRevision) {
-	}
-	
-	public HgManifest.Flags getFlagsAtChangeset(int changesetRevisionIndex) {
-	}
-*/
-	
+
 	/**
-	 * 
+	 * Get file flags recorded in the manifest
  	 * @param fileRevisionIndex - revision local index, non-negative, or {@link HgRepository#TIP}. 
-	 * FIXME EXCEPTIONS 
+	 * @see HgManifest#getFileFlags(int, Path) 
+	 * FIXME EXCEPTIONS
 	 * @throws HgInvalidControlFileException
 	 * @throws HgInvalidRevisionException
 	 */
 	public HgManifest.Flags getFlags(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		int changesetRevIndex = getChangesetRevisionIndex(fileRevisionIndex);
-		return getRepo().getManifest().extractFlags(changesetRevIndex, getPath());
+		return getRepo().getManifest().getFileFlags(changesetRevIndex, getPath());
 	}
 	
 	@Override

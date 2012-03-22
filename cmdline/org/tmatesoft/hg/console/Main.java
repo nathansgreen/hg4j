@@ -32,10 +32,9 @@ import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgChangeset;
+import org.tmatesoft.hg.core.HgChangesetFileSneaker;
 import org.tmatesoft.hg.core.HgChangesetTreeHandler;
-import org.tmatesoft.hg.core.HgDataStreamException;
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgFileInformer;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgManifestCommand;
@@ -136,7 +135,7 @@ public class Main {
 					StringBuilder sb = new StringBuilder();
 					HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
 					for (HgChangeset cc : entry.children()) {
-						sb.append(cc.getRevision());
+						sb.append(cc.getRevisionIndex());
 						sb.append(':');
 						sb.append(cc.getNodeid().shortNotation());
 						sb.append(", ");
@@ -145,14 +144,14 @@ public class Main {
 					final boolean isJoin = !parents.first().isNull() && !parents.second().isNull();
 					final boolean isFork = entry.children().size() > 1;
 					final HgChangeset cset = entry.changeset();
-					System.out.printf("%d:%s - %s\n", cset.getRevision(), cset.getNodeid().shortNotation(), cset.getComment());
+					System.out.printf("%d:%s - %s\n", cset.getRevisionIndex(), cset.getNodeid().shortNotation(), cset.getComment());
 					if (!isJoin && !isFork && !entry.children().isEmpty()) {
 						System.out.printf("\t=> %s\n", sb);
 					}
 					if (isJoin) {
 						HgChangeset p1 = entry.parents().first();
 						HgChangeset p2 = entry.parents().second();
-						System.out.printf("\tjoin <= (%d:%s, %d:%s)", p1.getRevision(), p1.getNodeid().shortNotation(), p2.getRevision(), p2.getNodeid().shortNotation());
+						System.out.printf("\tjoin <= (%d:%s, %d:%s)", p1.getRevisionIndex(), p1.getNodeid().shortNotation(), p2.getRevisionIndex(), p2.getNodeid().shortNotation());
 						if (isFork) {
 							System.out.print(", ");
 						}
@@ -353,7 +352,7 @@ public class Main {
 		final ByteArrayChannel sink = new ByteArrayChannel();
 		cmd.execute(sink);
 		System.out.println(sink.toArray().length);
-		HgFileInformer i = new HgFileInformer(hgRepo);
+		HgChangesetFileSneaker i = new HgChangesetFileSneaker(hgRepo);
 		boolean result = i.changeset(cset).checkExists(file);
 		Assert.assertFalse(result);
 		Assert.assertFalse(i.exists());

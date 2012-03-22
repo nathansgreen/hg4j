@@ -21,8 +21,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 
-import org.tmatesoft.hg.core.Nodeid;
-
 
 /**
  * Map implementation that uses plain int keys and performs with log n effectiveness.

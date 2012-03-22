@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgChangesetFileSneaker;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgInvalidRevisionException;
@@ -243,21 +244,28 @@ public class HgManifest extends Revlog {
 	
 	/**
 	 * Extracts file revision as it was known at the time of given changeset.
+	 * For more thorough details about file at specific changeset, use {@link HgChangesetFileSneaker}.
 	 * 
+	 * @see HgChangesetFileSneaker
 	 * @param changelogRevisionIndex local changeset index 
 	 * @param file path to file in question
 	 * @return file revision or <code>null</code> if manifest at specified revision doesn't list such file
 	 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	@Experimental(reason="Perhaps, HgDataFile shall own this method, or get a delegate?")
 	public Nodeid getFileRevision(int changelogRevisionIndex, final Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
+		// there's no need for HgDataFile to own this method, or get a delegate
+		// as most of HgDataFile API is using file revision indexes, and there's easy step from file revision index to
+		// both file revision and changeset revision index. But there's no easy way to go from changesetRevisionIndex to
+		// file revision (the task this method solves), exept for HgFileInformer
+		// I feel methods dealing with changeset indexes shall be more exposed in HgChangelog and HgManifest API.
 		return getFileRevisions(file, changelogRevisionIndex).get(changelogRevisionIndex);
 	}
-	
-	// XXX package-local, IntMap, and HgDataFile getFileRevisionAt(int... localChangelogRevisions)
-	@Experimental(reason="@see #getFileRevision")
+
+	// XXX package-local or better API
+	@Experimental(reason="Map as return value isn't that good")
 	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... changelogRevisionIndexes) throws HgInvalidRevisionException, HgInvalidControlFileException {
+		// FIXME in fact, walk(Inspectr, path, int[]) might be better alternative than get()
 		// TODO need tests
 		int[] manifestRevisionIndexes = toManifestRevisionIndexes(changelogRevisionIndexes, null);
 		IntMap<Nodeid> resMap = new IntMap<Nodeid>(changelogRevisionIndexes.length);
@@ -269,16 +277,17 @@ public class HgManifest extends Revlog {
 	}
 
 	/**
-	 * {@link HgDataFile#getFlags(int)} is public API
-	 * 
+	 * Extract file {@link Flags flags} as they were recorded in appropriate manifest version. 
+	 *  
+	 * @see HgDataFile#getFlags(int)
 	 * @param changesetRevIndex changeset revision index
 	 * @param file path to look up
-	 * @return one of predefined enum values, or null if file was not known in the specified revision
+	 * @return one of predefined enum values, or <code>null</code> if file was not known in the specified revision
 	 * FIXME EXCEPTIONS
 	 * @throws HgInvalidControlFileException
 	 * @throws HgInvalidRevisionException 
 	 */
-	/*package-local*/ Flags extractFlags(int changesetRevIndex, Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public Flags getFileFlags(int changesetRevIndex, Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		int manifestRevIdx = fromChangelog(changesetRevIndex);
 		IntMap<Flags> resMap = new IntMap<Flags>(2);
 		content.iterate(manifestRevIdx, manifestRevIdx, true, new FileLookupInspector(encodingHelper, file, null, resMap));
