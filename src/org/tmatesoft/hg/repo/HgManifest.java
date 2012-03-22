@@ -338,7 +338,7 @@ public class HgManifest extends Revlog {
 	public interface Inspector {
 		boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision);
 		/**
-		 * @deprecated switch to {@link Inspector2#next(Nodeid, Path, Flags)}
+		 * @deprecated switch to {@link HgManifest.Inspector2#next(Nodeid, Path, HgManifest.Flags)}
 		 */
 		@Deprecated
 		boolean next(Nodeid nid, String fname, String flags);

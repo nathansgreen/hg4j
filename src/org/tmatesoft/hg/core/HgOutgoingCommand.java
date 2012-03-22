@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	/**
 	 * Select specific branch to pull. 
 	 * Multiple branch specification possible (changeset from any of these would be included in result).
-	 * Note, {@link #executeLite(Object)} does not respect this setting.
+	 * Note, {@link #executeLite()} does not respect this setting.
 	 * 
 	 * @param branch - branch name, case-sensitive, non-null.
 	 * @return <code>this</code> for convenience

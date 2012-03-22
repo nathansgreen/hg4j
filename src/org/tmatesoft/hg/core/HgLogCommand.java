@@ -184,7 +184,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	}
 
 	/**
-	 * Similar to {@link #execute(org.tmatesoft.hg.repo.RawChangeset.Inspector)}, collects and return result as a list.
+	 * Similar to {@link #execute(HgChangesetHandler)}, collects and return result as a list.
 	 */
 	public List<HgChangeset> execute() throws HgException {
 		CollectHandler collector = new CollectHandler();

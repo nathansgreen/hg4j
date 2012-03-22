@@ -195,7 +195,7 @@ public final class Internals {
 	}
 	
 	/**
-	 * @param hint optional hint pointing to filesystem of interest (generally, it's possible to mount 
+	 * @param fsHint optional hint pointing to filesystem of interest (generally, it's possible to mount 
 	 * filesystems with different capabilities and repository's capabilities would depend on which fs it resides) 
 	 * @return <code>true</code> if executable files deserve tailored handling 
 	 */
@@ -205,7 +205,7 @@ public final class Internals {
 	}
 
 	/**
-	 * @param hint optional hint pointing to filesystem of interest (generally, it's possible to mount 
+	 * @param fsHint optional hint pointing to filesystem of interest (generally, it's possible to mount 
 	 * filesystems with different capabilities and repository's capabilities would depend on which fs it resides) 
 	 * @return <code>true</code> if filesystem knows what symbolic links are 
 	 */

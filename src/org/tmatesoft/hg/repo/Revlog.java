@@ -131,7 +131,7 @@ abstract class Revlog {
 	 * If unsure, use {@link #isKnown(Nodeid)} to find out whether nodeid belongs to this revlog.
 	 * 
 	 * For occasional queries, this method works with decent performance, despite its O(n/2) approach.
-	 * Alternatively, if you need to perform multiple queries (e.g. at least 15-20), {@link RevisionMap} may come handy.
+	 * Alternatively, if you need to perform multiple queries (e.g. at least 15-20), {@link Revlog.RevisionMap} may come handy.
 	 * 
 	 * @param nid revision to look up 
 	 * @return revision local index in this revlog
@@ -162,7 +162,7 @@ abstract class Revlog {
 	 * Note, {@link Nodeid#NULL} nodeid is not reported as known in any revlog.
 	 * 
 	 * @param nodeid
-	 * @return
+	 * @return <code>true</code> if revision is part of this revlog
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public final boolean isKnown(Nodeid nodeid) throws HgInvalidControlFileException {

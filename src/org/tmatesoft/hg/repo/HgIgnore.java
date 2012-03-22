@@ -213,7 +213,7 @@ public class HgIgnore implements Path.Matcher {
 	}
 
 	/**
-	 * A handy wrap of {@link #isIgnored(Path)} into {@link Path.Matcher}. Yields same result as {@link #isIgnored(Path)}.
+	 * A handy wrap of {@link #isIgnored(Path)} into {@link org.tmatesoft.hg.util.Path.Matcher}. Yields same result as {@link #isIgnored(Path)}.
 	 * @return <code>true</code> if file is deemed ignored.
 	 */
 	public boolean accept(Path path) {

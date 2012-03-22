@@ -116,8 +116,8 @@ public class HgChangelog extends Revlog {
 	/**
 	 * Unlike regular {@link Inspector}, this one supplies changeset revision along with its parents and children according
 	 * to parent information of the revlog this inspector visits.
-	 * @see HgDataFile#history(TreeInspector)
-	 * @deprecated use {@link HgChangesetTreeHandler} and HgLogCommand#execute(HgChangesetTreeHandler)}
+	 * @see HgDataFile#history(HgChangelog.TreeInspector)
+	 * @deprecated use {@link org.tmatesoft.hg.core.HgChangesetTreeHandler} and HgLogCommand#execute(org.tmatesoft.hg.core.HgChangesetTreeHandler)}
 	 */
 	@Deprecated
 	public interface TreeInspector {

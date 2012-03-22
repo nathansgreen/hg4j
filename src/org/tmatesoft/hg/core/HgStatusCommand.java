@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -145,7 +145,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	/**
 	 * Limit status operation to certain sub-tree.
 	 * 
-	 * @param pathMatcher - matcher to use,  pass <code>null/<code> to reset
+	 * @param scopeMatcher - matcher to use,  pass <code>null/<code> to reset
 	 * @return <code>this</code> for convenience
 	 */
 	public HgStatusCommand match(Path.Matcher scopeMatcher) {
@@ -160,7 +160,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	/**
 	 * Perform status operation according to parameters set.
 	 *  
-	 * @param handler callback to get status information
+	 * @param statusHandler callback to get status information
 	 * @throws IOException if there are (further unspecified) errors while walking working copy
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)

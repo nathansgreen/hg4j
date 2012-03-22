@@ -66,7 +66,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	/**
 	 * Select specific branch to push.
 	 * Multiple branch specification possible (changeset from any of these would be included in result).
-	 * Note, {@link #executeLite(Object)} does not respect this setting.
+	 * Note, {@link #executeLite()} does not respect this setting.
 	 * 
 	 * @param branch - branch name, case-sensitive, non-null.
 	 * @return <code>this</code> for convenience
