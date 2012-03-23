@@ -17,6 +17,9 @@
 package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
+import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 
 import java.io.File;
 
@@ -33,10 +36,12 @@ import org.tmatesoft.hg.util.Path;
  */
 public class ExceptionInfo<T> {
 	protected final T owner;
-	protected int revNumber = BAD_REVISION;
+	protected Integer revNumber = null;
 	protected Nodeid revision;
 	protected Path filename;
 	protected File localFile;
+	// next two make sense only when revNumber was set
+	private int rangeLeftBoundary = BAD_REVISION, rangeRightBoundary = BAD_REVISION;
 
 	/**
 	 * @param owner instance to return from setters 
@@ -49,7 +54,7 @@ public class ExceptionInfo<T> {
 	 * @return not {@link HgRepository#BAD_REVISION} only when revision index was supplied at the construction time
 	 */
 	public int getRevisionIndex() {
-		return revNumber;
+		return revNumber == null ? HgRepository.BAD_REVISION : revNumber;
 	}
 
 	public T setRevisionIndex(int rev) {
@@ -58,7 +63,7 @@ public class ExceptionInfo<T> {
 	}
 	
 	public boolean isRevisionIndexSet() {
-		return revNumber != BAD_REVISION;
+		return revNumber != null;
 	}
 
 	/**
@@ -100,6 +105,13 @@ public class ExceptionInfo<T> {
 	public File getFile() {
 		return localFile;
 	}
+	
+	public T setRevisionIndexBoundary(int revisionIndex, int rangeLeft, int rangeRight) {
+		setRevisionIndex(revisionIndex);
+		rangeLeftBoundary = rangeLeft;
+		rangeRightBoundary = rangeRight;
+		return owner;
+	}
 
 	public StringBuilder appendDetails(StringBuilder sb) {
 		if (filename != null) {
@@ -110,14 +122,34 @@ public class ExceptionInfo<T> {
 			sb.append(' ');
 		}
 		sb.append("rev:");
-		if (revNumber != BAD_REVISION) {
-			sb.append(revNumber);
-			if (revision != null) {
-				sb.append(':');
+		boolean needNodeid = true;
+		if (isRevisionIndexSet()) {
+			if (rangeLeftBoundary != BAD_REVISION || rangeRightBoundary != BAD_REVISION) {
+				String sr;
+				switch (getRevisionIndex()) {
+				case BAD_REVISION:
+					sr = "UNKNOWN"; break;
+				case TIP:
+					sr = "TIP"; break;
+				case WORKING_COPY:
+					sr = "WORKING-COPY"; break;
+				case NO_REVISION:
+					sr = "NO REVISION"; break;
+				default:
+					sr = String.valueOf(getRevisionIndex());
+				}
+				sb.append(String.format("%s is not from [%d..%d]", sr, rangeLeftBoundary, rangeRightBoundary));
+			} else {
+				sb.append(getRevisionIndex());
+				if (isRevisionIndexSet()) {
+					sb.append(':');
+					sb.append(getRevision().shortNotation());
+					needNodeid = false;
+				}
 			}
 		}
-		if (revision != null) {
-			sb.append(revision.shortNotation());
+		if (isRevisionSet() && needNodeid) {
+			sb.append(getRevision().shortNotation());
 		}
 		if (localFile != null) {
 			sb.append(';');

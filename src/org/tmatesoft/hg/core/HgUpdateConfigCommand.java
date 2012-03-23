@@ -27,6 +27,7 @@ import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**

@@ -23,12 +23,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.zip.Inflater;
 
-import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidRevisionException;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
 
 
@@ -206,7 +205,7 @@ public class RevlogStream {
 
 	// should be possible to use TIP, ALL, or -1, -2, -n notation of Hg
 	// ? boolean needsNodeid
-	public void iterate(int start, int end, boolean needData, Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException /*REVISIT - too general exception*/ {
+	public void iterate(int start, int end, boolean needData, Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		initOutline();
 		final int indexSize = revisionCount();
 		if (indexSize == 0) {
@@ -229,8 +228,6 @@ public class RevlogStream {
 			throw new HgInvalidControlFileException(String.format("Failed reading [%d..%d]", start, end), ex, indexFile);
 		} catch (HgInvalidControlFileException ex) {
 			throw ex;
-		} catch (HgException ex) {
-			throw new HgInvalidControlFileException(String.format("Failed reading [%d..%d]", start, end), ex, indexFile);
 		} finally {
 			r.finish();
 		}
@@ -277,10 +274,8 @@ public class RevlogStream {
 			final int c = sortedRevisions.length;
 			throw new HgInvalidControlFileException(String.format("Failed reading %d revisions in [%d; %d]",c, sortedRevisions[0], sortedRevisions[c-1]), ex, indexFile);
 		} catch (HgInvalidControlFileException ex) {
+			// TODO post-1.0 fill HgRuntimeException with appropriate file (either index or data, depending on error source)
 			throw ex;
-		} catch (HgException ex) {
-			final int c = sortedRevisions.length;
-			throw new HgInvalidControlFileException(String.format("Failed reading %d revisions in [%d; %d]",c, sortedRevisions[0], sortedRevisions[c-1]), ex, indexFile);
 		} finally {
 			r.finish();
 		}
@@ -351,7 +346,7 @@ public class RevlogStream {
 					if (o != offset) {
 						// just in case, can't happen, ever, unless HG (or some other bad tool) produces index file 
 						// with inlined data of size greater than 2 Gb.
-						throw new HgBadStateException("Data too big, offset didn't fit to sizeof(int)");
+						throw new HgInvalidStateException("Data too big, offset didn't fit to sizeof(int)");
 					}
 					resOffsets.add(o + REVLOGV1_RECORD_SIZE * resOffsets.size());
 					da.skip(3*4 + 32 + compressedLen); // Check: 44 (skip) + 20 (read) = 64 (total RevlogNG record size)
@@ -372,9 +367,7 @@ public class RevlogStream {
 				}
 			}
 		} catch (IOException ex) {
-			ex.printStackTrace(); // FIXME, log error is not enough
-			// too bad, no outline then, but don't fail with NPE
-			baseRevisions = new int[0];
+			throw new HgInvalidControlFileException("Failed to analyze revlog index", ex, indexFile);
 		} finally {
 			da.done();
 		}
@@ -428,7 +421,7 @@ public class RevlogStream {
 //			System.out.printf("applyTime:%d ms, inspectorTime: %d ms\n", applyTime, inspectorTime); // TIMING
 		}
 
-		public boolean range(int start, int end) throws IOException, HgException {
+		public boolean range(int start, int end) throws IOException {
 			byte[] nodeidBuf = new byte[20];
 			int i;
 			// it (i.e. replace with i >= start)
@@ -565,6 +558,6 @@ public class RevlogStream {
 		// XXX boolean retVal to indicate whether to continue?
 		// TODO specify nodeid and data length, and reuse policy (i.e. if revlog stream doesn't reuse nodeid[] for each call)
 		// implementers shall not invoke DataAccess.done(), it's accomplished by #iterate at appropraite moment
-		void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data) throws HgException;
+		void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data);
 	}
 }

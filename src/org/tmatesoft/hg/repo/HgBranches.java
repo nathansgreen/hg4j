@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,9 +34,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 
-import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -240,10 +237,10 @@ public class HgBranches {
 	 * Writes down information about repository branches in a format Mercurial native client can understand.
 	 * Cache file gets overwritten only if it is out of date (i.e. misses some branch information)
 	 * @throws IOException if write to cache file failed
-	 * @throws HgException subclass of {@link HgException} in case of repository access issue
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	@Experimental(reason="Usage of cache isn't supposed to be public knowledge")
-	public void writeCache() throws IOException, HgException {
+	public void writeCache() throws IOException, HgRuntimeException {
 		if (isCacheActual) {
 			return;
 		}

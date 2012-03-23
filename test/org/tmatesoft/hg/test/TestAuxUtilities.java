@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@ import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCatCommand;
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -235,13 +234,9 @@ public class TestAuxUtilities {
 			int i = 0;
 
 			public void next(int localRevision, Nodeid revision, int linkedRevision) {
-				try {
-					Assert.assertEquals(i++, localRevision);
-					Assert.assertEquals(fileNode.getChangesetRevisionIndex(localRevision), linkedRevision);
-					Assert.assertEquals(fileNode.getRevision(localRevision), revision);
-				} catch (HgException ex) {
-					Assert.fail(ex.toString());
-				}
+				Assert.assertEquals(i++, localRevision);
+				Assert.assertEquals(fileNode.getChangesetRevisionIndex(localRevision), linkedRevision);
+				Assert.assertEquals(fileNode.getRevision(localRevision), revision);
 			}
 		});
 		fileNode.walk(0, TIP, new HgDataFile.ParentInspector() {

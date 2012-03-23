@@ -25,8 +25,6 @@ import java.io.Reader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;

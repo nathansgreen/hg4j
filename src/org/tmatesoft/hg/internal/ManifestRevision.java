@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@ package org.tmatesoft.hg.internal;
 import java.util.Collection;
 import java.util.TreeMap;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.util.Path;
@@ -75,7 +74,7 @@ public final class ManifestRevision implements HgManifest.Inspector2 {
 	//
 
 	public boolean next(Nodeid nid, String fname, String flags) {
-		throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+		throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 	}
 
 	public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {

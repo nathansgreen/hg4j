@@ -22,9 +22,6 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 import java.util.zip.ZipException;
 
-import org.tmatesoft.hg.core.HgBadStateException;
-
-
 /**
  * DataAccess counterpart for InflaterInputStream.
  * XXX is it really needed to be subclass of FilterDataAccess? 
@@ -99,7 +96,7 @@ public class InflaterDataAccess extends FilterDataAccess {
 					c += inflater.inflate(dummy, 0, dummy.length);
 				}
 			} catch (DataFormatException ex) {
-				throw new HgBadStateException(ex);
+				throw new IOException(ex);
 			}
 		}
 		decompressedLength = c + oldPos;

@@ -47,8 +47,6 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
-import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
@@ -234,12 +232,12 @@ public class HgRemoteRepository {
 						assert currRange == null;
 						assert currRangeList == null;
 						if (!rangeItr.hasNext()) {
-							throw new HgBadStateException("Internal error");
+							throw new HgInvalidStateException("Internal error"); // TODO revisit-1.1
 						}
 						rv.put(rangeItr.next(), Collections.<Nodeid>emptyList());
 					} else {
 						if (currRange == null || currRangeList == null) {
-							throw new HgBadStateException("Internal error");
+							throw new HgInvalidStateException("Internal error"); // TODO revisit-1.1
 						}
 						// indicate next range value is needed
 						currRange = null;
@@ -250,7 +248,7 @@ public class HgRemoteRepository {
 					possiblyEmptyNextLine = false;
 					if (currRange == null) {
 						if (!rangeItr.hasNext()) {
-							throw new HgBadStateException("Internal error");
+							throw new HgInvalidStateException("Internal error"); // TODO revisit-1.1
 						}
 						currRange = rangeItr.next();
 						currRangeList = new LinkedList<Nodeid>();

@@ -17,8 +17,7 @@
 package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,12 +26,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
-import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.EncodingHelper;
@@ -137,8 +133,10 @@ public class HgManifest extends Revlog {
 	 * incrementally, nor it mandates presence of manifest version for a changeset. Thus, there might be changesets that record {@link Nodeid#NULL}
 	 * as corresponding manifest revision. This situation is deemed exceptional now and what would <code>inspector</code> get depends on whether 
 	 * <code>start</code> or <code>end</code> arguments point to such changeset, or such changeset happen to be somewhere inside the range 
-	 * <code>[start..end]</code>. Implementation does it best to report empty manifests (<code>Inspector.begin(BAD_REVISION, NULL, csetRevIndex);</code>
-	 * followed immediately by <code>Inspector.end(BAD_REVISION)</code> when <code>start</code> and/or <code>end</code> point to changeset with no associated 
+	 * <code>[start..end]</code>. Implementation does it best to report empty manifests 
+	 * (<code>Inspector.begin(HgRepository.NO_REVISION, NULL, csetRevIndex);</code>
+	 * followed immediately by <code>Inspector.end(HgRepository.NO_REVISION)</code> 
+	 * when <code>start</code> and/or <code>end</code> point to changeset with no associated 
 	 * manifest revision. However, if changeset-manifest revision pairs look like:
 	 * <pre>
 	 *   3  8
@@ -148,14 +146,14 @@ public class HgManifest extends Revlog {
 	 * call <code>walk(3,5, insp)</code> would yield only (3,8) and (5,9) to the inspector, without additional empty 
 	 * <code>Inspector.begin(); Inspector.end()</code> call pair.   
 	 * 
+	 * @see HgRepository#NO_REVISION
 	 * @param start changelog (not manifest!) revision to begin with
 	 * @param end changelog (not manifest!) revision to stop, inclusive.
 	 * @param inspector manifest revision visitor, can't be <code>null</code>
-	 * @throws HgInvalidRevisionException if start or end specify non-existent revision index
-	 * @throws IllegalArgumentException if start or end is not a revision index
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws IllegalArgumentException if inspector callback is <code>null</code>
 	 */
-	public void walk(int start, int end, final Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public void walk(int start, int end, final Inspector inspector) throws HgRuntimeException, IllegalArgumentException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -164,8 +162,8 @@ public class HgManifest extends Revlog {
 		do {
 			manifestFirst = fromChangelog(csetFirst+i);
 			if (manifestFirst == BAD_REVISION) {
-				inspector.begin(BAD_REVISION, NULL, csetFirst+i);
-				inspector.end(BAD_REVISION);
+				inspector.begin(NO_REVISION, NULL, csetFirst+i);
+				inspector.end(NO_REVISION);
 			}
 			i++;
 		} while (manifestFirst == BAD_REVISION && csetFirst+i <= csetLast);
@@ -179,15 +177,15 @@ public class HgManifest extends Revlog {
 		do {
 			manifestLast = fromChangelog(csetLast-i);
 			if (manifestLast == BAD_REVISION) {
-				inspector.begin(BAD_REVISION, NULL, csetLast-i);
-				inspector.end(BAD_REVISION);
+				inspector.begin(NO_REVISION, NULL, csetLast-i);
+				inspector.end(NO_REVISION);
 			}
 			i++;
 		} while (manifestLast == BAD_REVISION && csetLast-i >= csetFirst);
 		if (manifestLast == BAD_REVISION) {
-			// hmm, manifestFirst != -1 here, hence there's i from [csetFirst..csetLast] for which manifest entry exists, 
-			// and thus it's impossible to run into manifestLast == -1. Nevertheless, never hurts to check.
-			throw new HgBadStateException(String.format("Manifest %d-%d(!) for cset range [%d..%d] ", manifestFirst, manifestLast, csetFirst, csetLast));
+			// hmm, manifestFirst != BAD_REVISION here, hence there's i from [csetFirst..csetLast] for which manifest entry exists, 
+			// and thus it's impossible to run into manifestLast == BAD_REVISION. Nevertheless, never hurts to check.
+			throw new HgInvalidStateException(String.format("Manifest %d-%d(!) for cset range [%d..%d] ", manifestFirst, manifestLast, csetFirst, csetLast));
 		}
 		if (manifestLast < manifestFirst) {
 			// there are tool-constructed repositories that got order of changeset revisions completely different from that of manifest
@@ -207,10 +205,10 @@ public class HgManifest extends Revlog {
 	 * 
 	 * @param inspector manifest revision visitor, can't be <code>null</code>
 	 * @param revisionIndexes local indexes of changesets to visit, non-<code>null</code>
-	 * @throws HgInvalidRevisionException if argument specifies non-existent revision index
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws InvalidArgumentException if supplied arguments are <code>null</code>s
 	 */
-	public void walk(final Inspector inspector, int... revisionIndexes) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public void walk(final Inspector inspector, int... revisionIndexes) throws HgRuntimeException, IllegalArgumentException {
 		if (inspector == null || revisionIndexes == null) {
 			throw new IllegalArgumentException();
 		}
@@ -310,8 +308,8 @@ public class HgManifest extends Revlog {
 			final int manifestRevisionIndex = fromChangelog(changelogRevisionIndexes[i]);
 			if (manifestRevisionIndex == BAD_REVISION) {
 				if (inspector != null) {
-					inspector.begin(BAD_REVISION, NULL, changelogRevisionIndexes[i]);
-					inspector.end(BAD_REVISION);
+					inspector.begin(NO_REVISION, NULL, changelogRevisionIndexes[i]);
+					inspector.end(NO_REVISION);
 				}
 				// othrwise, ignore changeset without manifest
 			} else {
@@ -335,6 +333,7 @@ public class HgManifest extends Revlog {
 		}
 	}
 
+	@Callback
 	public interface Inspector {
 		boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision);
 		/**
@@ -346,6 +345,7 @@ public class HgManifest extends Revlog {
 	}
 	
 	@Experimental(reason="Explore Path alternative for filenames and enum for flags")
+	@Callback
 	public interface Inspector2 extends Inspector {
 		/**
 		 * @param nid file revision
@@ -448,7 +448,7 @@ public class HgManifest extends Revlog {
 			progressHelper = ProgressSupport.Factory.get(delegate);
 		}
 		
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) throws HgException {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 			try {
 				if (!inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision)) {
 					iterateControl.stop();
@@ -525,7 +525,7 @@ public class HgManifest extends Revlog {
 				iterateControl.checkCancelled();
 				progressHelper.worked(1);
 			} catch (IOException ex) {
-				throw new HgException(ex);
+				throw new HgInvalidControlFileException("Failed reading manifest", ex, null).setRevisionIndex(revisionNumber);
 			}
 		}
 
@@ -613,19 +613,14 @@ public class HgManifest extends Revlog {
 				}
 			}
 			for (int u : undefinedChangelogRevision) {
-				try {
-					Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
-					// TODO calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
-					// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
-					if (manifest.isNull()) {
-						repo.getContext().getLog().warn(getClass(), "Changeset %d has no associated manifest entry", u);
-						// keep -1 in the changelog2manifest map.
-					} else {
-						changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
-					}
-				} catch (HgInvalidControlFileException ex) {
-					// FIXME EXCEPTIONS need to propagate the error up to client  
-					repo.getContext().getLog().error(getClass(), ex, null);
+				Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
+				// TODO calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
+				// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
+				if (manifest.isNull()) {
+					repo.getContext().getLog().warn(getClass(), "Changeset %d has no associated manifest entry", u);
+					// keep -1 in the changelog2manifest map.
+				} else {
+					changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
 				}
 			}
 		}
@@ -649,7 +644,7 @@ public class HgManifest extends Revlog {
 			filenameAsBytes = eh.toManifest(fileToLookUp.toString());
 		}
 		
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgException {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 			ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			try {
 				byte b;
@@ -689,7 +684,7 @@ public class HgManifest extends Revlog {
 					}
 				}
 			} catch (IOException ex) {
-				throw new HgException(ex); // FIXME EXCEPTIONS
+				throw new HgInvalidControlFileException("Failed reading manifest", ex, null);
 			}
 		}
 	}

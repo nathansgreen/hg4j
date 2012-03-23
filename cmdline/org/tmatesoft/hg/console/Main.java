@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgChangeset;
@@ -57,6 +56,7 @@ import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgMergeState;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
@@ -131,42 +131,38 @@ public class Main {
 		cmd.file("file1", false);
 		cmd.execute(new HgChangesetTreeHandler() {
 			public void next(HgChangesetTreeHandler.TreeElement entry) {
-				try {
-					StringBuilder sb = new StringBuilder();
-					HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
-					for (HgChangeset cc : entry.children()) {
-						sb.append(cc.getRevisionIndex());
-						sb.append(':');
-						sb.append(cc.getNodeid().shortNotation());
-						sb.append(", ");
-					}
-					final Pair<Nodeid, Nodeid> parents = entry.parentRevisions();
-					final boolean isJoin = !parents.first().isNull() && !parents.second().isNull();
-					final boolean isFork = entry.children().size() > 1;
-					final HgChangeset cset = entry.changeset();
-					System.out.printf("%d:%s - %s\n", cset.getRevisionIndex(), cset.getNodeid().shortNotation(), cset.getComment());
-					if (!isJoin && !isFork && !entry.children().isEmpty()) {
-						System.out.printf("\t=> %s\n", sb);
-					}
-					if (isJoin) {
-						HgChangeset p1 = entry.parents().first();
-						HgChangeset p2 = entry.parents().second();
-						System.out.printf("\tjoin <= (%d:%s, %d:%s)", p1.getRevisionIndex(), p1.getNodeid().shortNotation(), p2.getRevisionIndex(), p2.getNodeid().shortNotation());
-						if (isFork) {
-							System.out.print(", ");
-						}
-					}
+				StringBuilder sb = new StringBuilder();
+				HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
+				for (HgChangeset cc : entry.children()) {
+					sb.append(cc.getRevisionIndex());
+					sb.append(':');
+					sb.append(cc.getNodeid().shortNotation());
+					sb.append(", ");
+				}
+				final Pair<Nodeid, Nodeid> parents = entry.parentRevisions();
+				final boolean isJoin = !parents.first().isNull() && !parents.second().isNull();
+				final boolean isFork = entry.children().size() > 1;
+				final HgChangeset cset = entry.changeset();
+				System.out.printf("%d:%s - %s\n", cset.getRevisionIndex(), cset.getNodeid().shortNotation(), cset.getComment());
+				if (!isJoin && !isFork && !entry.children().isEmpty()) {
+					System.out.printf("\t=> %s\n", sb);
+				}
+				if (isJoin) {
+					HgChangeset p1 = entry.parents().first();
+					HgChangeset p2 = entry.parents().second();
+					System.out.printf("\tjoin <= (%d:%s, %d:%s)", p1.getRevisionIndex(), p1.getNodeid().shortNotation(), p2.getRevisionIndex(), p2.getNodeid().shortNotation());
 					if (isFork) {
-						if (!isJoin) {
-							System.out.print('\t');
-						}
-						System.out.printf("fork => [%s]", sb);
+						System.out.print(", ");
 					}
-					if (isJoin || isFork) {
-						System.out.println();
+				}
+				if (isFork) {
+					if (!isJoin) {
+						System.out.print('\t');
 					}
-				} catch (HgException ex) {
-					ex.printStackTrace();
+					System.out.printf("fork => [%s]", sb);
+				}
+				if (isJoin || isFork) {
+					System.out.println();
 				}
 			}
 		});
@@ -197,7 +193,7 @@ public class Main {
 						System.out.print("]");
 					}
 					fileLocalRevisions++;
-				} catch (HgException ex) {
+				} catch (HgRuntimeException ex) {
 					ex.printStackTrace();
 				}
 			}
@@ -386,7 +382,7 @@ public class Main {
 		return String.format("%s %s (%d bytes)", r.getPath(), r.getRevision(), sink.toArray().length);
 	}
 	
-	private void testFileStatus() throws HgException, IOException {
+	private void testFileStatus() throws Exception {
 //		final Path path = Path.create("src/org/tmatesoft/hg/util/");
 //		final Path path = Path.create("src/org/tmatesoft/hg/internal/Experimental.java");
 //		final Path path = Path.create("missing-dir/");
@@ -506,7 +502,7 @@ public class Main {
 		}
 
 		public boolean next(Nodeid nid, String fname, String flags) {
-			throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+			throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 		}
 		public boolean next(Nodeid nid, Path fname, Flags flags) {
 			System.out.println(nid + "\t" + fname + "\t\t" + flags);
@@ -529,15 +525,11 @@ public class Main {
 				System.out.println(p);
 			}
 			public void file(HgFileRevision fileRevision) {
-				try {
-					System.out.print(fileRevision.getRevision());;
-					System.out.print("   ");
-					System.out.printf("%s %s", fileRevision.getParents().first().shortNotation(), fileRevision.getParents().second().shortNotation());
-					System.out.print("   ");
-					System.out.println(fileRevision.getPath());
-				} catch (HgException ex) {
-					throw new HgCallbackTargetException.Wrap(ex);
-				}
+				System.out.print(fileRevision.getRevision());;
+				System.out.print("   ");
+				System.out.printf("%s %s", fileRevision.getParents().first().shortNotation(), fileRevision.getParents().second().shortNotation());
+				System.out.print("   ");
+				System.out.println(fileRevision.getPath());
 			}
 			
 			public void end(Nodeid manifestRevision) {

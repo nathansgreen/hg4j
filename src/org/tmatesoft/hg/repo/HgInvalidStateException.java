@@ -14,24 +14,21 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.internal;
+package org.tmatesoft.hg.repo;
 
-import org.tmatesoft.hg.util.PathRewrite;
 
 /**
- * Translate windows path separators to Unix/POSIX-style
+ * Thrown to indicate unexpected or otherwise inappropriate state of the library, assumptions/preconditions not met, etc.
+ * Unlike {@link HgInvalidFileException} and {@link HgInvalidControlFileException}, to describe error state not related to IO operations.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class WinToNixPathRewrite implements PathRewrite {
-	public CharSequence rewrite(CharSequence p) {
-		// TODO handle . and .. (although unlikely to face them from GUI client)
-		String path = p.toString();
-		path = path.replace('\\', '/').replace("//", "/");
-		if (path.startsWith("/")) {
-			path = path.substring(1);
-		}
-		return path;
+@SuppressWarnings("serial")
+public class HgInvalidStateException extends HgRuntimeException {
+
+	public HgInvalidStateException(String message) {
+		super(message, null);
+		// no cons with Throwable as it deemed exceptional to use HgInvalidStateException to wrap another exception
 	}
 }

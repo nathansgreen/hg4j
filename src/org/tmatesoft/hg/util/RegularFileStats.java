@@ -46,7 +46,7 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
  * TODO post-1.0 Add extraction of link modification time, see RegularFileInfo#lastModified()
  * 
  * @author Artem Tikhomirov
- * @author Tmate Software Ltd.
+ * @author TMate Software Ltd.
  */
 /*package-local*/ class RegularFileStats {
 	private boolean isExec, isSymlink;

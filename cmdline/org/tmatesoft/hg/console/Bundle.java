@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ import java.io.File;
 import java.util.Collections;
 import java.util.LinkedList;
 
-import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgBundle;
@@ -62,16 +61,12 @@ public class Bundle {
 			private final HgChangelog changelog = hgRepo.getChangelog();
 			
 			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-				try {
-					if (changelog.isKnown(nodeid)) {
-						System.out.print("+");
-					} else {
-						System.out.print("-");
-					}
-					System.out.printf("%d:%s\n%s\n", revisionNumber, nodeid.shortNotation(), cset.toString());
-				} catch (HgException ex) {
-					throw new HgCallbackTargetException.Wrap(ex);
+				if (changelog.isKnown(nodeid)) {
+					System.out.print("+");
+				} else {
+					System.out.print("-");
 				}
+				System.out.printf("%d:%s\n%s\n", revisionNumber, nodeid.shortNotation(), cset.toString());
 			}
 		});
 	}

@@ -30,7 +30,7 @@ import java.util.List;
  * @see http://developers.sun.com/solaris/articles/subprocess/subprocess.html
  * 
  * @author Artem Tikhomirov
- * @author Tmate Software Ltd.
+ * @author TMate Software Ltd.
  */
 public class ProcessExecHelper {
 	private File dir;

@@ -35,7 +35,11 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidRevisionException;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
@@ -185,14 +189,22 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 	/**
 	 * Similar to {@link #execute(HgChangesetHandler)}, collects and return result as a list.
+	 * @throws HgException FIXME EXCEPTIONS
 	 */
 	public List<HgChangeset> execute() throws HgException {
 		CollectHandler collector = new CollectHandler();
 		try {
 			execute(collector);
+		} catch (HgCallbackTargetException ex) {
+			// see below for CanceledException
+			HgInvalidStateException t = new HgInvalidStateException("Internal error");
+			t.initCause(ex);
+			throw t;
 		} catch (CancelledException ex) {
 			// can't happen as long as our CollectHandler doesn't throw any exception
-			throw new HgBadStateException(ex);
+			HgInvalidStateException t = new HgInvalidStateException("Internal error");
+			t.initCause(ex);
+			throw t;
 		}
 		return collector.getChanges();
 	}
@@ -201,7 +213,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * Iterate over range of changesets configured in the command.
 	 * 
 	 * @param handler callback to process changesets.
-	 * @throws HgCallbackTargetException to re-throw exception from the handler
+	 * @throws HgCallbackTargetException wrapper for any exception user callback code may produce
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 * @throws HgException in case of some other library issue 
 	 * @throws CancelledException if execution of the command was cancelled
@@ -237,11 +249,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 						if (handler instanceof FileHistoryHandler) {
 							HgFileRevision src = new HgFileRevision(repo, fileNode.getCopySourceRevision(), null, fileNode.getCopySourceName());
 							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), null, fileNode.getPath(), src.getPath());
-							try {
-								((FileHistoryHandler) handler).copy(src, dst);
-							} catch (HgCallbackTargetException.Wrap ex) {
-								throw new HgCallbackTargetException(ex).setRevision(fileNode.getCopySourceRevision()).setFileName(fileNode.getCopySourceName());
-							}
+							((FileHistoryHandler) handler).copy(src, dst);
 						}
 						if (limit > 0 && count >= limit) {
 							// if limit reach, follow is useless.
@@ -331,17 +339,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		} else {
 			ph2 = new ProgressSupport.Sub(progressHelper, 3);
 		}
-		try {
-			ph2.start(completeHistory.length);
-			// XXX shall sort completeHistory according to changeset numbers?
-			for (int i = 0; i < completeHistory.length; i++ ) {
-				final HistoryNode n = completeHistory[i];
-				handler.next(ei.init(n));
-				ph2.worked(1);
-				cancelHelper.checkCancelled();
-			}
-		} catch (HgCallbackTargetException.Wrap ex) {
-			throw new HgCallbackTargetException(ex);
+		ph2.start(completeHistory.length);
+		// XXX shall sort completeHistory according to changeset numbers?
+		for (int i = 0; i < completeHistory.length; i++ ) {
+			final HistoryNode n = completeHistory[i];
+			handler.next(ei.init(n));
+			ph2.worked(1);
+			cancelHelper.checkCancelled();
 		}
 		progressHelper.done();
 	}
@@ -399,9 +403,9 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	public interface FileHistoryHandler extends HgChangesetHandler { // FIXME move to stanalone class file, perhaps?
 		// XXX perhaps, should distinguish copy from rename? And what about merged revisions and following them?
 		/**
-		 * @throws HgCallbackTargetException.Wrap wrapper object for any exception user code may produce. Wrapped exception would get re-thrown with {@link HgCallbackTargetException} 
+		 * @throws HgCallbackTargetException wrapper object for any exception user code may produce 
 		 */
-		void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException.Wrap;
+		void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException;
 	}
 	
 	public static class CollectHandler implements HgChangesetHandler {
@@ -471,11 +475,11 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			return historyNode.fileRevision;
 		}
 
-		public HgChangeset changeset() throws HgException {
+		public HgChangeset changeset() {
 			return get(historyNode.changeset)[0];
 		}
 
-		public Pair<HgChangeset, HgChangeset> parents() throws HgException {
+		public Pair<HgChangeset, HgChangeset> parents() {
 			if (parents != null) {
 				return parents;
 			}
@@ -495,7 +499,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			return parents = new Pair<HgChangeset, HgChangeset>(r[0], r[1]);
 		}
 
-		public Collection<HgChangeset> children() throws HgException {
+		public Collection<HgChangeset> children() {
 			if (children != null) {
 				return children;
 			}
@@ -516,7 +520,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			cachedChangesets.put(cs.getRevisionIndex(), cs);
 		}
 		
-		private HgChangeset[] get(int... changelogRevisionIndex) throws HgException {
+		private HgChangeset[] get(int... changelogRevisionIndex) {
 			HgChangeset[] rv = new HgChangeset[changelogRevisionIndex.length];
 			IntVector misses = new IntVector(changelogRevisionIndex.length, -1);
 			for (int i = 0; i < changelogRevisionIndex.length; i++) {
@@ -538,7 +542,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 				for (int changeset2read : changesets2read) {
 					HgChangeset cs = cachedChangesets.get(changeset2read);
 					if (cs == null) {
-						throw new HgException(String.format("Can't get changeset for revision %d", changeset2read));
+						HgInvalidStateException t = new HgInvalidStateException(String.format("Can't get changeset for revision %d", changeset2read));
+						throw t.setRevisionIndex(changeset2read);
 					}
 					// HgChangelog.range may reorder changesets according to their order in the changelog
 					// thus need to find original index
@@ -560,7 +565,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		}
 
 		// init only when needed
-		void initTransform() throws HgInvalidControlFileException {
+		void initTransform() throws HgRuntimeException {
 			if (transform == null) {
 				transform = new ChangesetTransformer.Transformation(new HgStatusCollector(repo)/*XXX try to reuse from context?*/, getParentHelper(false));
 			}
@@ -571,14 +576,14 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			populate(cs.clone());
 		}
 
-		public Nodeid changesetRevision() throws HgException {
+		public Nodeid changesetRevision() {
 			if (changesetRevision == null) {
 				changesetRevision = getRevision(historyNode.changeset);
 			}
 			return changesetRevision;
 		}
 
-		public Pair<Nodeid, Nodeid> parentRevisions() throws HgException {
+		public Pair<Nodeid, Nodeid> parentRevisions() {
 			if (parentRevisions == null) {
 				HistoryNode p;
 				final Nodeid p1, p2;
@@ -597,7 +602,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			return parentRevisions;
 		}
 
-		public Collection<Nodeid> childRevisions() throws HgException {
+		public Collection<Nodeid> childRevisions() {
 			if (childRevisions != null) {
 				return childRevisions;
 			}
@@ -614,8 +619,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		}
 		
 		// reading nodeid involves reading index only, guess, can afford not to optimize multiple reads
-		private Nodeid getRevision(int changelogRevisionNumber) throws HgInvalidControlFileException {
-			// TODO [post-1.0] pipe through pool
+		private Nodeid getRevision(int changelogRevisionNumber) {
+			// TODO post-1.0 pipe through pool
 			HgChangeset cs = cachedChangesets.get(changelogRevisionNumber);
 			if (cs != null) {
 				return cs.getNodeid();

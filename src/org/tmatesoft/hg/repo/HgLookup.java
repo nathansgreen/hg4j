@@ -22,7 +22,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
-import org.tmatesoft.hg.core.HgInvalidFileException;
+import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
@@ -46,40 +46,41 @@ public class HgLookup {
 		sessionContext = ctx;
 	}
 
-	public HgRepository detectFromWorkingDir() throws HgInvalidFileException {
+	public HgRepository detectFromWorkingDir() throws HgRepositoryNotFoundException {
 		return detect(System.getProperty("user.dir"));
 	}
 
-	public HgRepository detect(String location) throws HgInvalidFileException {
+	public HgRepository detect(String location) throws HgRepositoryNotFoundException {
 		return detect(new File(location));
 	}
 
 	// look up in specified location and above
-	public HgRepository detect(File location) throws HgInvalidFileException {
-		File dir = location.getAbsoluteFile();
-		File repository;
-		do {
-			repository = new File(dir, ".hg");
-			if (repository.exists() && repository.isDirectory()) {
-				break;
-			}
-			repository = null;
-			dir = dir.getParentFile();
-			
-		} while(dir != null);
-		if (repository == null) {
-			// return invalid repository
-			return new HgRepository(location.getPath());
-		}
+	public HgRepository detect(File location) throws HgRepositoryNotFoundException {
 		try {
+			File dir = location.getAbsoluteFile();
+			File repository;
+			do {
+				repository = new File(dir, ".hg");
+				if (repository.exists() && repository.isDirectory()) {
+					break;
+				}
+				repository = null;
+				dir = dir.getParentFile();
+				
+			} while(dir != null);
+			if (repository == null) {
+				throw new HgRepositoryNotFoundException(String.format("Can't locate .hg/ directory of Mercurial repository in %s nor in parent dirs", location)).setLocation(location.getPath());
+			}
 			String repoPath = repository.getParentFile().getCanonicalPath();
 			return new HgRepository(getContext(), repoPath, repository);
 		} catch (IOException ex) {
-			throw new HgInvalidFileException(location.toString(), ex, location);
+			HgRepositoryNotFoundException t = new HgRepositoryNotFoundException("Failed to access repository");
+			t.setLocation(location.getPath()).initCause(ex);
+			throw t;
 		}
 	}
 	
-	public HgBundle loadBundle(File location) throws HgInvalidFileException {
+	public HgBundle loadBundle(File location) throws HgRuntimeException/*FIXME need checked exception for can't find*/ {
 		if (location == null || !location.canRead()) {
 			throw new HgInvalidFileException(String.format("Can't read file %s", location == null ? null : location.getPath()), null, location);
 		}

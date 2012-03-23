@@ -16,22 +16,23 @@
  */
 package org.tmatesoft.hg.internal;
 
-import org.tmatesoft.hg.util.PathRewrite;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+import org.tmatesoft.hg.core.HgCallbackTargetException;
 
 /**
- * Translate windows path separators to Unix/POSIX-style
+ * Marker to ease location of callback interfaces in the API.
+ * 
+ * All classes/interfaces supposed to be subclassed/implemented by users, with methods throwing {@link HgCallbackTargetException} shall bear the mark.
+ * Besides, classes that are low-level callbacks (from {@link org.tmatesoft.hg.repo}) shall bear it, too.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class WinToNixPathRewrite implements PathRewrite {
-	public CharSequence rewrite(CharSequence p) {
-		// TODO handle . and .. (although unlikely to face them from GUI client)
-		String path = p.toString();
-		path = path.replace('\\', '/').replace("//", "/");
-		if (path.startsWith("/")) {
-			path = path.substring(1);
-		}
-		return path;
-	}
+@Retention(RetentionPolicy.SOURCE)
+@Target({ ElementType.TYPE })
+public @interface Callback {
 }

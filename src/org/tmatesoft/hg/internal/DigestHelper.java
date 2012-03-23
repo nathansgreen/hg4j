@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 
 
 /**
@@ -50,7 +50,9 @@ public class DigestHelper {
 				sha1 = MessageDigest.getInstance("SHA-1");
 			} catch (NoSuchAlgorithmException ex) {
 				// could hardly happen, JDK from Sun always has sha1.
-				throw new HgBadStateException(ex);
+				HgInvalidStateException t = new HgInvalidStateException("Need SHA-1 algorithm for nodeid calculation");
+				t.initCause(ex);
+				throw t;
 			}
 		}
 		return sha1;

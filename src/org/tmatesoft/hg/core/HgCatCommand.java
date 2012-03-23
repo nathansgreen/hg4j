@@ -24,6 +24,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidFileException;
+import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
@@ -161,6 +164,7 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 			int csetRev = repo.getChangelog().getRevisionIndex(cset);
 			Nodeid toExtract = null;
 			do {
+				// TODO post-1.0 perhaps, HgChangesetFileSneaker may come handy?
 				toExtract = repo.getManifest().getFileRevision(csetRev, file);
 				if (toExtract == null) {
 					if (dataFile.isCopy()) {
@@ -172,7 +176,8 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 				}
 			} while (toExtract == null);
 			if (toExtract == null) {
-				throw new HgBadStateException(String.format("File %s nor its origins were not known at repository %s revision", file, cset.shortNotation()));
+				// TODO explicit FileNotFoundException?
+				throw new HgBadArgumentException(String.format("File %s nor its origins were not known at repository %s revision", file, cset.shortNotation()), null);
 			}
 			revToExtract = dataFile.getRevisionIndex(toExtract);
 		} else if (revision != null) {

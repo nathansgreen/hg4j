@@ -28,8 +28,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.Path;
@@ -67,7 +67,7 @@ public class NewlineFilter implements Filter, Preview, Adaptable {
 
 	public ByteBuffer filter(ByteBuffer src) {
 		if (!processInconsistent && !previewDone) {
-			throw new HgBadStateException("This filter requires preview operation prior to actual filtering when eol.only-consistent is true");
+			throw new HgInvalidStateException("This filter requires preview operation prior to actual filtering when eol.only-consistent is true");
 		}
 		if (!processInconsistent && foundLoneLF && foundCRLF) {
 			// do not process inconsistent newlines
@@ -270,7 +270,9 @@ public class NewlineFilter implements Filter, Preview, Adaptable {
 		for (int i = max(pos-10, 0), x = min(pos + 10, b.limit()); i < x; i++) {
 			sb.append(String.format("%02x ", b.get(i)));
 		}
-		throw new HgBadStateException(String.format("Inconsistent newline characters in the stream %s (char 0x%x, local index:%d)", sb.toString(), b.get(pos), pos));
+		// TODO post-1.0 need HgBadDataException (not InvalidState but smth closer to data stream error)
+		// but don't want to add class for the single use now
+		throw new HgInvalidStateException(String.format("Inconsistent newline characters in the stream %s (char 0x%x, local index:%d)", sb.toString(), b.get(pos), pos));
 	}
 
 	private static int indexOf(byte ch, ByteBuffer b, int from) {

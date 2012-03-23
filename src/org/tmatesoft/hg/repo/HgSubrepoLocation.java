@@ -18,8 +18,7 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 
-import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgInvalidFileException;
+import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.util.Path;
 
@@ -86,9 +85,15 @@ public class HgSubrepoLocation {
 		return owner;
 	}
 
-	public HgRepository getRepo() throws HgInvalidFileException {
+	/**
+	 * 
+	 * @return object to access sub-repository
+	 * @throws HgRepositoryNotFoundException if failed to find repository
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public HgRepository getRepo() throws HgRepositoryNotFoundException {
 		if (kind != Kind.Hg) {
-			throw new HgBadStateException(String.format("Unsupported subrepository %s", kind));
+			throw new HgInvalidStateException(String.format("Unsupported subrepository %s", kind));
 		}
 		return new HgLookup().detect(new File(owner.getWorkingDir(), source));
 	}

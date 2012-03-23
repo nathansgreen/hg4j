@@ -19,6 +19,7 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.core.Nodeid.NULL;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,11 +30,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
 import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
@@ -65,7 +66,7 @@ public class RepositoryComparator {
 		// sanity check
 		for (Nodeid n : common) {
 			if (!localRepo.knownNode(n)) {
-				throw new HgBadStateException("Unknown node reported as common:" + n);
+				throw new HgInvalidStateException("Unknown node reported as common:" + n);
 			}
 		}
 		progressSupport.done();
@@ -74,7 +75,7 @@ public class RepositoryComparator {
 	
 	public List<Nodeid> getCommon() {
 		if (common == null) {
-			throw new HgBadStateException("Call #compare(Object) first");
+			throw new HgInvalidStateException("Call #compare(Object) first");
 		}
 		return common;
 	}
@@ -120,7 +121,7 @@ public class RepositoryComparator {
 			return;
 		}
 		if (earliestRevision < 0 || earliestRevision >= changelog.getLastRevision()) {
-			throw new HgBadStateException(String.format("Invalid index of common known revision: %d in total of %d", earliestRevision, 1+changelog.getLastRevision()));
+			throw new HgInvalidStateException(String.format("Invalid index of common known revision: %d in total of %d", earliestRevision, 1+changelog.getLastRevision()));
 		}
 		changelog.range(earliestRevision+1, changelog.getLastRevision(), inspector);
 	}
@@ -317,7 +318,7 @@ public class RepositoryComparator {
 				}
 			} while(--watchdog > 0);
 			if (watchdog == 0) {
-				throw new HgBadStateException(String.format("Can't narrow down branch [%s, %s]", rb.head.shortNotation(), rb.root.shortNotation()));
+				throw new HgInvalidStateException(String.format("Can't narrow down branch [%s, %s]", rb.head.shortNotation(), rb.root.shortNotation()));
 			}
 		}
 		if (debug) {
@@ -486,15 +487,16 @@ public class RepositoryComparator {
 			toQuery.clear();
 		}
 		if (rootIndex == -1) {
-			throw new HgBadStateException("Shall not happen, provided between output is correct"); // FIXME EXCEPTIONS
+			throw new HgInvalidStateException("Shall not happen, provided between output is correct"); // FIXME EXCEPTIONS
 		}
 		result[rootIndex] = branchRoot;
 		boolean resultOk = true;
 		LinkedList<Nodeid> fromRootToHead = new LinkedList<Nodeid>();
+		IntVector missing = new IntVector(); 
 		for (int i = 0; i <= rootIndex; i++) {
 			Nodeid n = result[i];
 			if (n == null) {
-				System.out.printf("ERROR: element %d wasn't found\n",i);
+				missing.add(i);
 				resultOk = false;
 			}
 			fromRootToHead.addFirst(n); // reverse order
@@ -503,7 +505,9 @@ public class RepositoryComparator {
 			System.out.println("Total queries:" + totalQueries);
 		}
 		if (!resultOk) {
-			throw new HgBadStateException("See console for details"); // FIXME EXCEPTIONS
+			assert missing.size() > 0;
+			// TODO post-1.0 perhaps, there's better alternative than HgInvalidStateException, e.g. HgDataFormatException?
+			throw new HgInvalidStateException(String.format("Missing elements with indexes: %s", Arrays.toString(missing.toArray())));
 		}
 		return fromRootToHead;
 	}

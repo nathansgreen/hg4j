@@ -21,12 +21,11 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.TreeMap;
 
-import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
@@ -263,7 +262,7 @@ public class KeywordFilter implements Filter {
 			// when accessing changelog, see below, #getChangeset
 			int csetRev = repo.getFileNode(path).getChangesetRevisionIndex(HgRepository.TIP);
 			return repo.getChangelog().getRevision(csetRev).shortNotation();
-		} catch (HgException ex) {
+		} catch (HgRuntimeException ex) {
 			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
 			return Nodeid.NULL.shortNotation(); // XXX perhaps, might return anything better? Not sure how hg approaches this. 
 		}
@@ -272,7 +271,7 @@ public class KeywordFilter implements Filter {
 	private String username() {
 		try {
 			return getChangeset().user();
-		} catch (HgException ex) {
+		} catch (HgRuntimeException ex) {
 			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
 			return "";
 		}
@@ -282,14 +281,14 @@ public class KeywordFilter implements Filter {
 		Date d;
 		try {
 			d = getChangeset().date();
-		} catch (HgException ex) {
+		} catch (HgRuntimeException ex) {
 			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
 			d = new Date(0l);
 		}
 		return String.format("%tY/%<tm/%<td %<tH:%<tM:%<tS", d);
 	}
 	
-	private RawChangeset getChangeset() throws HgInvalidControlFileException {
+	private RawChangeset getChangeset() throws HgRuntimeException {
 		if (latestFileCset == null) {
 			// TODO post-1.0 Use of TIP is likely incorrect in cases when working copy is not based
 			// on latest revision. Perhaps, a constant like HgRepository.DIRSTATE_PARENT may come handy
@@ -315,7 +314,7 @@ public class KeywordFilter implements Filter {
 				}
 			}
 			matcher = new PathGlobMatcher(patterns.toArray(new String[patterns.size()]));
-			// TODO read and respect keyword patterns from [keywordmaps]
+			// TODO post-1.0 read and respect keyword patterns from [keywordmaps]
 		}
 
 		public Filter create(Path path, Options opts) {

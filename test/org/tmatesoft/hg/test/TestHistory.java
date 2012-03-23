@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -113,7 +113,7 @@ public class TestHistory {
 		final LinkedList<HgChangeset> sorted = new LinkedList<HgChangeset>(h.getChanges());
 		Collections.sort(sorted, new Comparator<HgChangeset>() {
 			public int compare(HgChangeset cs1, HgChangeset cs2) {
-				return cs1.getRevision() < cs2.getRevision() ? 1 : -1;
+				return cs1.getRevisionIndex() < cs2.getRevisionIndex() ? 1 : -1;
 			}
 		});
 		report(what, sorted, false);
@@ -137,14 +137,14 @@ public class TestHistory {
 				break;
 			}
 			Record cr = consoleResultItr.next();
-			int x = cs.getRevision() == cr.changesetIndex ? 0x1 : 0;
+			int x = cs.getRevisionIndex() == cr.changesetIndex ? 0x1 : 0;
 			x |= cs.getDate().toString().equals(cr.date) ? 0x2 : 0;
 			x |= cs.getNodeid().toString().equals(cr.changesetNodeid) ? 0x4 : 0;
 			x |= cs.getUser().equals(cr.user) ? 0x8 : 0;
 			// need to do trim() on comment because command-line template does, and there are
 			// repositories that have couple of newlines in the end of the comment (e.g. hello sample repo from the book) 
 			x |= cs.getComment().trim().equals(cr.description) ? 0x10 : 0;
-			errorCollector.checkThat(String.format(what + ". Mismatch (0x%x) in %d hg4j rev comparing to %d cmdline's.", x, cs.getRevision(), cr.changesetIndex), x, equalTo(0x1f));
+			errorCollector.checkThat(String.format(what + ". Mismatch (0x%x) in %d hg4j rev comparing to %d cmdline's.", x, cs.getRevisionIndex(), cr.changesetIndex), x, equalTo(0x1f));
 			consoleResultItr.remove();
 		}
 		errorCollector.checkThat(what + ". Unprocessed results in console left (insufficient from hg4j)", consoleResultItr.hasNext(), equalTo(false));

@@ -29,10 +29,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -172,7 +169,7 @@ abstract class Revlog {
 		}
 		if (rn < 0 || rn >= content.revisionCount()) {
 			// Sanity check
-			throw new HgBadStateException(String.format("Revision index %d found for nodeid %s is not from the range [0..%d]", rn, nodeid.shortNotation(), content.revisionCount()-1));
+			throw new HgInvalidStateException(String.format("Revision index %d found for nodeid %s is not from the range [0..%d]", rn, nodeid.shortNotation(), content.revisionCount()-1));
 		}
 		return true;
 	}
@@ -399,7 +396,7 @@ abstract class Revlog {
 		
 		private void assertSortedIndex(int x) {
 			if (x < 0) {
-				throw new HgBadStateException(String.format("Bad index", x));
+				throw new HgInvalidStateException(String.format("Bad index", x));
 			}
 		}
 		
@@ -617,6 +614,7 @@ abstract class Revlog {
 			failure = ex;
 		}
 
+		// FIXME is HgException of any use here now?  
 		// TODO consider if IOException in addition to HgException is of any real utility
 		public void checkFailed() throws HgException, IOException, CancelledException {
 			if (failure == null) {
@@ -631,7 +629,7 @@ abstract class Revlog {
 			if (failure instanceof HgException) {
 				throw (HgException) failure;
 			}
-			throw new HgBadStateException(failure);
+			throw new HgInvalidStateException(failure.toString());
 		}
 
 		public void checkCancelled() throws CancelledException {
@@ -697,7 +695,7 @@ abstract class Revlog {
 						logFacility.warn(getClass(), "Bad data sink when reading revision %d. Reported %d bytes consumed, byt actually read %d", revisionNumber, consumed, buf.position());
 					}
 					if (buf.position() == 0) {
-						throw new HgBadStateException("Bad sink implementation (consumes no bytes) results in endless loop");
+						throw new HgInvalidStateException("Bad sink implementation (consumes no bytes) results in endless loop");
 					}
 					buf.compact(); // ensure (a) there's space for new (b) data starts at 0
 					progressSupport.worked(consumed);

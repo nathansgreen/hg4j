@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,9 +37,13 @@ import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidFileException;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -49,7 +53,7 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgCloneCommand {
+public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 	private File destination;
 	private HgRemoteRepository srcRepo;
@@ -72,7 +76,17 @@ public class HgCloneCommand {
 		return this;
 	}
 
-	public HgRepository execute() throws HgBadArgumentException, HgRemoteConnectionException, HgInvalidFileException, CancelledException {
+	/**
+	 * 
+	 * @return
+	 * @throws HgBadArgumentException
+	 * @throws HgRemoteConnectionException
+	 * @throws HgRepositoryNotFoundException
+	 * @throws HgException
+	 * @throws CancelledException
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public HgRepository execute() throws HgException, CancelledException {
 		if (destination == null) {
 			throw new IllegalArgumentException("Destination not set", null);
 		}
@@ -159,7 +173,7 @@ public class HgCloneCommand {
 				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00changelog.i"));
 				collectChangelogIndexes = true;
 			} catch (IOException ex) {
-				throw new HgBadStateException(ex);
+				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
 			}
 		}
 
@@ -174,7 +188,7 @@ public class HgCloneCommand {
 				indexFile = null;
 				filename = null;
 			} catch (IOException ex) {
-				throw new HgBadStateException(ex);
+				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
 			}
 		}
 
@@ -185,7 +199,7 @@ public class HgCloneCommand {
 				revisionSequence.clear();
 				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00manifest.i"));
 			} catch (IOException ex) {
-				throw new HgBadStateException(ex);
+				throw new HgInvalidControlFileException("Failed to write manifest", ex, new File(filename));
 			}
 		}
 
@@ -199,7 +213,7 @@ public class HgCloneCommand {
 				indexFile = null;
 				filename = null;
 			} catch (IOException ex) {
-				throw new HgBadStateException(ex);
+				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
 			}
 		}
 		
@@ -214,7 +228,8 @@ public class HgCloneCommand {
 				file.getParentFile().mkdirs();
 				indexFile = new FileOutputStream(file);
 			} catch (IOException ex) {
-				throw new HgBadStateException(ex);
+				String m = String.format("Failed to write file %s", filename);
+				throw new HgInvalidControlFileException(m, ex, new File(filename));
 			}
 		}
 
@@ -228,7 +243,8 @@ public class HgCloneCommand {
 				indexFile = null;
 				filename = null;
 			} catch (IOException ex) {
-				throw new HgBadStateException(ex);
+				String m = String.format("Failed to write file %s", filename);
+				throw new HgInvalidControlFileException(m, ex, new File(filename));
 			}
 		}
 
@@ -242,7 +258,8 @@ public class HgCloneCommand {
 					}
 				}
 			}
-			throw new HgBadStateException(String.format("Can't find index of %s for file %s", p.shortNotation(), filename));
+			String m = String.format("Can't find index of %s for file %s", p.shortNotation(), filename);
+			throw new HgInvalidControlFileException(m, null, null).setRevision(p);
 		}
 
 		public boolean element(GroupElement ge) {
@@ -259,7 +276,8 @@ public class HgCloneCommand {
 				byte[] calculated = dh.sha1(p1, p2, content).asBinary();
 				final Nodeid node = ge.node();
 				if (!node.equalsTo(calculated)) {
-					throw new HgBadStateException(String.format("Checksum failed: expected %s, calculated %s. File %s", node, calculated, filename));
+					// TODO post-1.0 custom exception ChecksumCalculationFailed?
+					throw new HgInvalidStateException(String.format("Checksum failed: expected %s, calculated %s. File %s", node, calculated, filename));
 				}
 				final int link;
 				if (collectChangelogIndexes) {
@@ -268,7 +286,7 @@ public class HgCloneCommand {
 				} else {
 					Integer csRev = changelogIndexes.get(ge.cset());
 					if (csRev == null) {
-						throw new HgBadStateException(String.format("Changelog doesn't contain revision %s of %s", ge.cset().shortNotation(), filename));
+						throw new HgInvalidStateException(String.format("Changelog doesn't contain revision %s of %s", ge.cset().shortNotation(), filename));
 					}
 					link = csRev.intValue();
 				}
@@ -325,7 +343,8 @@ public class HgCloneCommand {
 				prevRevContent.done();
 				prevRevContent = new ByteArrayDataAccess(content);
 			} catch (IOException ex) {
-				throw new HgBadStateException(ex);
+				String m = String.format("Failed to write revision %s of file %s", ge.node().shortNotation(), filename);
+				throw new HgInvalidControlFileException(m, ex, new File(filename));
 			}
 			return true;
 		}

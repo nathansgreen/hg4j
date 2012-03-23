@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.core;
 
+import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.Status;
 
@@ -24,19 +25,21 @@ import org.tmatesoft.hg.util.Status;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
+@Callback
 public interface HgStatusHandler {
 
-	/* XXX #next() as in HgChangesetHandler?
-	 * perhaps, handle() is better name? If yes, rename method in HgChangesetHandler, too, to make them similar.
+	/** #next() as in HgChangesetHandler?
+	 * FIXME perhaps, handle() is better name? If yes, rename method in HgChangesetHandler, too, to make them similar.
 	 * void next(HgStatus s);
-	 * XXX describe RTE and HgCallbackTargetException
+	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
 	 */
-	void handleStatus(HgStatus s);
+	void handleStatus(HgStatus s) throws HgCallbackTargetException;
 
 	/**
 	 * Report non-critical error processing single file during status operation
 	 * @param file name of the file that caused the trouble
 	 * @param s error description object
+	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
 	 */
-	void handleError(Path file, Status s);
+	void handleError(Path file, Status s) throws HgCallbackTargetException;
 }

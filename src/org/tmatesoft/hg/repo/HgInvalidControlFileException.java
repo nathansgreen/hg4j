@@ -14,20 +14,19 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.core;
+package org.tmatesoft.hg.repo;
 
 import java.io.File;
 
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * WORK IN PROGRESS
- * 
  * Subclass of {@link HgInvalidFileException} to indicate failure to deal with one of <b>Mercurial</b> control files 
  * (most likely those under .hg/, but also those residing in the repository, with special meaning to the Mercurial, like .hgtags or .hgignore)
  * 
- * XXX Perhaps, HgInvalidRevlogException?
+ * XXX Perhaps, HgInvalidRevlogException? and parent HgInvalidRepositoryFileException?
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */

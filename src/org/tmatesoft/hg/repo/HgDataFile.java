@@ -32,9 +32,6 @@ import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -714,7 +711,7 @@ public class HgDataFile extends Revlog {
 			setCancelSupport(CancelSupport.Factory.get(chain));
 		}
 
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgException {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 			try {
 				final int daLength = data.length();
 				if (daLength < 4 || data.readByte() != 1 || data.readByte() != 10) {
@@ -736,6 +733,7 @@ public class HgDataFile extends Revlog {
 			} catch (IOException ex) {
 				recordFailure(ex);
 			} catch (HgInvalidControlFileException ex) {
+				// TODO RevlogStream, where this RevlogStream.Inspector goes, shall set File (as it's the only one having access to it)
 				recordFailure(ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(revisionNumber));
 			}
 		}

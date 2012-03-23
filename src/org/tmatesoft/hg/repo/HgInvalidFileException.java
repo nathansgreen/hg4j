@@ -14,7 +14,7 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.core;
+package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,7 +34,10 @@ import java.io.IOException;
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
-public class HgInvalidFileException extends HgException {
+public class HgInvalidFileException extends HgRuntimeException {
+	// IMPLEMENTATION NOTE: Once needed, there might be intermediate e.g. HgDataStreamException 
+	// (between HgInvalidFileException and HgRuntimeException) to root data access exceptions
+	// that do not originate from local files but e.g. a connection
 
 	public HgInvalidFileException(String message, Throwable th) {
 		super(message, th);
@@ -42,12 +45,12 @@ public class HgInvalidFileException extends HgException {
 
 	public HgInvalidFileException(String message, Throwable th, File file) {
 		super(message, th);
-		extras.setFile(file); // allows null
+		details.setFile(file); // allows null
 	}
 
 	public HgInvalidFileException setFile(File file) {
 		assert file != null; // doesn't allow null not to clear file accidentally
-		extras.setFile(file);
+		details.setFile(file);
 		return this;
 	}
 
@@ -55,6 +58,6 @@ public class HgInvalidFileException extends HgException {
 	 * @return file object that causes troubles, or <code>null</code> if specific file is unknown
 	 */
 	public File getFile() {
-		return extras.getFile();
+		return details.getFile();
 	}
 }

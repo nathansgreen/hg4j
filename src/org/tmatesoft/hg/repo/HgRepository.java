@@ -26,8 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -75,9 +73,14 @@ public final class HgRepository {
 	public static final int WORKING_COPY = -2; // XXX WORKING_COPY_REVISION?
 	
 	/**
-	 * Constant ({@value #NO_REVISION}) to indicate revision absence (e.g. missing parent in from {@link HgChangelog#parents(int, int[], byte[], byte[])} call) 
-	 * or a fictitious revision of an empty repository, to use as an argument (contrary to {@link #BAD_REVISION})
-	 * e.g in a status operation to visit changes from the very beginning of a repository. 
+	 * Constant ({@value #NO_REVISION}) to indicate revision absence or a fictitious revision of an empty repository.
+	 * 
+	 * <p>Revision absence is vital e.g. for missing parent from {@link HgChangelog#parents(int, int[], byte[], byte[])} call and
+	 * to report cases when changeset records no corresponding manifest 
+	 * revision {@link HgManifest#walk(int, int, org.tmatesoft.hg.repo.HgManifest.Inspector)}.
+	 * 
+	 * <p> Use as imaginary revision/empty repository is handy as an argument (contrary to {@link #BAD_REVISION})
+	 * e.g in a status operation to visit changes from the very beginning of a repository.
 	 */
 	public static final int NO_REVISION = -1;
 	

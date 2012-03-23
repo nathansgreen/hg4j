@@ -31,8 +31,6 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.Experimental;
@@ -43,6 +41,7 @@ import org.tmatesoft.hg.internal.PathScope;
 import org.tmatesoft.hg.internal.Preview;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.FileInfo;
 import org.tmatesoft.hg.util.FileIterator;
@@ -151,9 +150,17 @@ public class HgWorkingCopyStatusCollector {
 		return dirstateParentManifest;
 	}
 	
-	// may be invoked few times, TIP or WORKING_COPY indicate comparison shall be run against working copy parent
-	// NOTE, use of TIP constant requires certain care. TIP here doesn't mean latest cset, but actual working copy parent.
-	public void walk(int baseRevision, HgStatusInspector inspector) throws HgInvalidControlFileException, IOException {
+	/**
+	 * may be invoked few times, TIP or WORKING_COPY indicate comparison shall be run against working copy parent
+	 * XXX NOTE, use of TIP constant requires certain care. TIP here doesn't mean latest cset, but actual working copy parent.
+	 * 
+	 * @param baseRevision
+	 * @param inspector
+	 * @throws IOException to propagate IO errors from {@link FileIterator}
+	 * @throws CancelledException if operation execution was cancelled
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public void walk(int baseRevision, HgStatusInspector inspector) throws IOException, CancelledException, HgRuntimeException {
 		if (HgInternals.wrongRevisionIndex(baseRevision) || baseRevision == BAD_REVISION) {
 			throw new IllegalArgumentException(String.valueOf(baseRevision));
 		}
@@ -184,12 +191,14 @@ public class HgWorkingCopyStatusCollector {
 			}
 			((HgStatusCollector.Record) inspector).init(rev1, rev2, sc);
 		}
+		final CancelSupport cs = CancelSupport.Factory.get(inspector);
 		final HgIgnore hgIgnore = repo.getIgnore();
 		repoWalker.reset();
 		TreeSet<Path> processed = new TreeSet<Path>(); // names of files we handled as they known to Dirstate (not FileIterator)
 		final HgDirstate ds = getDirstateImpl();
 		TreeSet<Path> knownEntries = ds.all(); // here just to get dirstate initialized
 		while (repoWalker.hasNext()) {
+			cs.checkCancelled();
 			repoWalker.next();
 			final Path fname = getPathPool().path(repoWalker.name());
 			FileInfo f = repoWalker.file();
@@ -250,6 +259,7 @@ public class HgWorkingCopyStatusCollector {
 			for (Path fromBase : baseRevFiles) {
 				if (repoWalker.inScope(fromBase)) {
 					inspector.removed(fromBase);
+					cs.checkCancelled();
 				}
 			}
 		}
@@ -259,6 +269,7 @@ public class HgWorkingCopyStatusCollector {
 				// do not report as missing/removed those FileIterator doesn't care about.
 				continue;
 			}
+			cs.checkCancelled();
 			// missing known file from a working dir  
 			if (ds.checkRemoved(m) == null) {
 				// not removed from the repository = 'deleted'  
@@ -273,9 +284,24 @@ public class HgWorkingCopyStatusCollector {
 		}
 	}
 
-	public HgStatusCollector.Record status(int baseRevision) throws HgInvalidControlFileException, IOException {
+	/**
+	 * 
+	 * @param baseRevision
+	 * @return information object that describes change between the revisions
+	 * @throws IOException to propagate IO errors from {@link FileIterator}
+	 * @throws CancelledException if operation execution was cancelled
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public HgStatusCollector.Record status(int baseRevision) throws IOException, HgRuntimeException {
 		HgStatusCollector.Record rv = new HgStatusCollector.Record();
-		walk(baseRevision, rv);
+		try {
+			walk(baseRevision, rv);
+		} catch (CancelledException ex) {
+			// can't happen as long our Record class doesn't implement CancelSupport
+			HgInvalidStateException t = new HgInvalidStateException("Internal error");
+			t.initCause(ex);
+			throw t;
+		}
 		return rv;
 	}
 
@@ -430,7 +456,7 @@ public class HgWorkingCopyStatusCollector {
 		// The question is whether original Hg treats this case (same content, different parents and hence nodeids) as 'modified' or 'clean'
 	}
 
-	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) throws HgException {
+	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) throws HgException, HgInvalidFileException {
 		// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
 		ByteArrayChannel bac = new ByteArrayChannel();
 		try {
@@ -444,7 +470,7 @@ public class HgWorkingCopyStatusCollector {
 		return areTheSame(f, bac.toArray(), dataFile.getPath());
 	}
 	
-	private boolean areTheSame(FileInfo f, final byte[] data, Path p) throws HgException {
+	private boolean areTheSame(FileInfo f, final byte[] data, Path p) throws HgInvalidFileException {
 		ReadableByteChannel is = null;
 		class Check implements ByteChannel {
 			final boolean debug = repo.getContext().getLog().isDebug(); 
@@ -666,13 +692,11 @@ public class HgWorkingCopyStatusCollector {
 		}
 		
 		public boolean supportsExecFlag() {
-			// TODO Auto-generated method stub
-			return false;
+			return execCap;
 		}
 		
 		public boolean supportsLinkFlag() {
-			// TODO Auto-generated method stub
-			return false;
+			return linkCap;
 		}
 	}
 	

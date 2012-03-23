@@ -32,10 +32,8 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
-import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
@@ -107,10 +105,17 @@ public class HgChangelog extends Revlog {
 		return range(x, x).get(0);
 	}
 
+	@Callback
 	public interface Inspector {
-		// TODO describe whether cset is new instance each time
-		// describe what revisionNumber is when Inspector is used with HgBundle (BAD_REVISION or bundle's local order?) 
-		void next(int revisionNumber, Nodeid nodeid, RawChangeset cset);
+		/**
+		 * Access next changeset
+		 * TODO describe what revisionNumber is when Inspector is used with HgBundle (BAD_REVISION or bundle's local order?)
+		 * 
+		 * @param revisionIndex index of revision being inspected, local to the inspected object 
+		 * @param nodeid revision being inspected
+		 * @param cset changeset raw data
+		 */
+		void next(int revisionIndex, Nodeid nodeid, RawChangeset cset);
 	}
 
 	/**
@@ -386,15 +391,19 @@ public class HgChangelog extends Revlog {
 			progressHelper = ProgressSupport.Factory.get(delegate);
 		}
 
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) throws HgException {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
 			try {
 				byte[] data = da.byteArray();
 				cset.init(data, 0, data.length, usersPool);
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 				progressHelper.worked(1);
+			} catch (HgBadArgumentException ex) {
+				// see below about better exception
+				throw new HgInvalidControlFileException("Failed reading changelog", ex, null).setRevisionIndex(revisionNumber);  
 			} catch (IOException ex) {
-				throw new HgException(ex); // XXX need better exception, perhaps smth like HgChangelogException (extends HgInvalidControlFileException) 
+				// XXX need better exception, perhaps smth like HgChangelogException (extends HgInvalidControlFileException)
+				throw new HgInvalidControlFileException("Failed reading changelog", ex, null).setRevisionIndex(revisionNumber);  
 			}
 			if (iterateControl != null) {
 				iterateControl.checkCancelled();

@@ -14,24 +14,30 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.internal;
-
-import org.tmatesoft.hg.util.PathRewrite;
+package org.tmatesoft.hg.core;
 
 /**
- * Translate windows path separators to Unix/POSIX-style
+ * Indicates failure to find repository at specified location
+ * XXX may provide information about alternatives tried
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class WinToNixPathRewrite implements PathRewrite {
-	public CharSequence rewrite(CharSequence p) {
-		// TODO handle . and .. (although unlikely to face them from GUI client)
-		String path = p.toString();
-		path = path.replace('\\', '/').replace("//", "/");
-		if (path.startsWith("/")) {
-			path = path.substring(1);
-		}
-		return path;
+@SuppressWarnings("serial")
+public class HgRepositoryNotFoundException extends HgException {
+
+	private String location;
+
+	public HgRepositoryNotFoundException(String message) {
+		super(message);
+	}
+	
+	public HgRepositoryNotFoundException setLocation(String location) {
+		this.location = location;
+		return this;
+	}
+	
+	public String getLocation() {
+		return this.location;
 	}
 }

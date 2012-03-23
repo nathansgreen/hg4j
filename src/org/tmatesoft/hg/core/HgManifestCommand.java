@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
@@ -121,7 +122,8 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	/**
 	 * Callback to walk file/directory tree of a revision
 	 */
-	public interface Handler {
+	@Callback
+	public interface Handler { // FIXME TLC
 		void begin(Nodeid manifestRevision);
 		void dir(Path p); // optionally invoked (if walker was configured to spit out directories) prior to any files from this dir and subdirs
 		void file(HgFileRevision fileRevision); // XXX allow to check p is invalid (df.exists())
@@ -180,7 +182,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 			return true;
 		}
 		public boolean next(Nodeid nid, String fname, String flags) {
-			throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+			throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 		}
 		
 		public boolean next(Nodeid nid, Path fname, Flags flags) {

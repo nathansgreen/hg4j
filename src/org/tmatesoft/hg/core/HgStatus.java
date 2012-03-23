@@ -20,6 +20,7 @@ import java.io.File;
 import java.util.Date;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Path;
 

@@ -27,9 +27,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgFileRevision;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
@@ -39,7 +37,8 @@ import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 
 /**
- *
+ * Access to repository's merge state
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -92,7 +91,11 @@ public class HgMergeState {
 		repo = hgRepo;
 	}
 
-	public void refresh() throws HgInvalidControlFileException {
+	/**
+	 * Update our knowledge about repository's merge state
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public void refresh() throws HgRuntimeException {
 		entries = null;
 		// it's possible there are two parents but no merge/state, we shall report this case as 'merging', with proper
 		// first and second parent values
@@ -153,7 +156,7 @@ public class HgMergeState {
 				} else if ("r".equals(r[1])) {
 					k = Kind.Resolved;
 				} else {
-					throw new HgBadStateException(r[1]);
+					throw new HgInvalidStateException(String.format("Unknown merge kind %s", r[1]));
 				}
 				Entry e = new Entry(k, pathPool.path(r[0]), p1, p2, ca);
 				result.add(e);
@@ -184,7 +187,7 @@ public class HgMergeState {
 	 */
 	public boolean isStale() {
 		if (wcp1 == null) {
-			throw new HgBadStateException("Call #refresh() first");
+			refresh();
 		}
 		return !stateParent.isNull() /*there's merge state*/ && !wcp1.equals(stateParent) /*and it doesn't match*/; 
 	}
@@ -192,11 +195,12 @@ public class HgMergeState {
 	/**
 	 * It's possible for a repository to be in a 'merging' state (@see {@link #isMerging()} without any
 	 * conflict to resolve (no merge state information file).
+	 * 
 	 * @return first parent of the working copy, never <code>null</code>
 	 */
 	public Nodeid getFirstParent() {
 		if (wcp1 == null) {
-			throw new HgBadStateException("Call #refresh() first");
+			refresh();
 		}
 		return wcp1;
 	}
@@ -206,7 +210,7 @@ public class HgMergeState {
 	 */
 	public Nodeid getSecondParent() {
 		if (wcp2 == null) {
-			throw new HgBadStateException("Call #refresh() first");
+			refresh();
 		}
 		return wcp2;
 	}
@@ -216,7 +220,7 @@ public class HgMergeState {
 	 */
 	public Nodeid getStateParent() {
 		if (stateParent == null) {
-			throw new HgBadStateException("Call #refresh() first");
+			refresh();
 		}
 		return stateParent;
 	}

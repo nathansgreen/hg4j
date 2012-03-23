@@ -18,8 +18,11 @@ package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.Status;
 
@@ -145,7 +148,7 @@ public class HgChangesetFileSneaker {// TODO mark final once HgFileInformer gone
 					extractRevFlags = cachedManifest.flags(file);
 				}
 			}
-		} catch (HgException ex) {
+		} catch (HgRuntimeException ex) {
 			checkResult = new Status(Status.Kind.ERROR, phaseMsg, ex);
 			return checkResult;
 		}
@@ -212,7 +215,7 @@ public class HgChangesetFileSneaker {// TODO mark final once HgFileInformer gone
 
 	private void assertCheckRan() {
 		if (checkResult == null) {
-			throw new HgBadStateException("Shall invoke #check(Path) first");
+			throw new HgInvalidStateException("Shall invoke #check(Path) first");
 		}
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -93,14 +93,14 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 		StringBuilder sb = new StringBuilder();
 		Formatter f = new Formatter(sb);
 		final Nodeid csetNodeid = cset.getNodeid();
-		f.format("changeset:   %d:%s\n", cset.getRevision(), complete ? csetNodeid : csetNodeid.shortNotation());
-		if (cset.getRevision() == tip || repo.getTags().isTagged(csetNodeid)) {
+		f.format("changeset:   %d:%s\n", cset.getRevisionIndex(), complete ? csetNodeid : csetNodeid.shortNotation());
+		if (cset.getRevisionIndex() == tip || repo.getTags().isTagged(csetNodeid)) {
 			sb.append("tag:         ");
 			for (String t : repo.getTags().tags(csetNodeid)) {
 				sb.append(t);
 				sb.append(' ');
 			}
-			if (cset.getRevision() == tip) {
+			if (cset.getRevisionIndex() == tip) {
 				sb.append("tip");
 			}
 			sb.append('\n');

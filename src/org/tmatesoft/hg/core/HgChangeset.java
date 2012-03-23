@@ -23,8 +23,12 @@ import java.util.Map;
 
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 
 
@@ -170,10 +174,9 @@ public class HgChangeset implements Cloneable {
 	 * Figures out files and specific revisions thereof that were modified in this commit
 	 *  
 	 * @return revisions of files modified in this commit
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
- 	 * @throws HgException in case of some other library issue 
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public List<HgFileRevision> getModifiedFiles() throws HgException {
+	public List<HgFileRevision> getModifiedFiles() throws HgRuntimeException {
 		if (modifiedFiles == null) {
 			initFileChanges();
 		}
@@ -184,10 +187,9 @@ public class HgChangeset implements Cloneable {
 	 * Figures out files added in this commit
 	 * 
 	 * @return revisions of files added in this commit
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgException in case of some other library issue 
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public List<HgFileRevision> getAddedFiles() throws HgException {
+	public List<HgFileRevision> getAddedFiles() throws HgRuntimeException {
 		if (addedFiles == null) {
 			initFileChanges();
 		}
@@ -198,10 +200,9 @@ public class HgChangeset implements Cloneable {
 	 * Figures out files that were deleted as part of this commit
 	 * 
 	 * @return revisions of files deleted in this commit
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgException in case of some other library issue 
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public List<Path> getRemovedFiles() throws HgException {
+	public List<Path> getRemovedFiles() throws HgRuntimeException {
 		if (deletedFiles == null) {
 			initFileChanges();
 		}
@@ -215,9 +216,9 @@ public class HgChangeset implements Cloneable {
 	
 	/**
 	 * @return never <code>null</code>
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public Nodeid getFirstParentRevision() throws HgInvalidControlFileException {
+	public Nodeid getFirstParentRevision() throws HgRuntimeException {
 		if (parentHelper != null) {
 			return parentHelper.safeFirstParent(nodeid);
 		}
@@ -232,9 +233,9 @@ public class HgChangeset implements Cloneable {
 	
 	/**
 	 * @return never <code>null</code>
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public Nodeid getSecondParentRevision() throws HgInvalidControlFileException {
+	public Nodeid getSecondParentRevision() throws HgRuntimeException {
 		if (parentHelper != null) {
 			return parentHelper.safeSecondParent(nodeid);
 		}
@@ -260,17 +261,22 @@ public class HgChangeset implements Cloneable {
 		}
 	}
 
-	private /*synchronized*/ void initFileChanges() throws HgException {
+	private /*synchronized*/ void initFileChanges() throws HgRuntimeException {
 		ArrayList<Path> deleted = new ArrayList<Path>();
 		ArrayList<HgFileRevision> modified = new ArrayList<HgFileRevision>();
 		ArrayList<HgFileRevision> added = new ArrayList<HgFileRevision>();
 		HgStatusCollector.Record r = new HgStatusCollector.Record();
-		statusHelper.change(revNumber, r);
+		try {
+			statusHelper.change(revNumber, r);
+		} catch (CancelledException ex) {
+			// Record can't cancel
+			throw new HgInvalidStateException("Internal error");
+		}
 		final HgRepository repo = statusHelper.getRepo();
 		for (Path s : r.getModified()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
-				throw new HgException(String.format("For the file %s recorded as modified couldn't find revision after change", s));
+				throw new HgInvalidStateException(String.format("For the file %s recorded as modified in changeset %d couldn't find revision after change", s, revNumber));
 			}
 			modified.add(new HgFileRevision(repo, nid, null, s, null));
 		}
@@ -278,7 +284,7 @@ public class HgChangeset implements Cloneable {
 		for (Path s : r.getAdded()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {
-				throw new HgException(String.format("For the file %s recorded as added couldn't find revision after change", s));
+				throw new HgInvalidStateException(String.format("For the file %s recorded as added in changeset %d couldn't find revision after change", s, revNumber));
 			}
 			added.add(new HgFileRevision(repo, nid, null, s, copied.get(s)));
 		}

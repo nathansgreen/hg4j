@@ -22,13 +22,14 @@ import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
-import java.util.concurrent.CancellationException;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.Status;
 
@@ -161,11 +162,13 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	 * Perform status operation according to parameters set.
 	 *  
 	 * @param statusHandler callback to get status information
-	 * @throws IOException if there are (further unspecified) errors while walking working copy
+	 * @throws HgCallbackTargetException wrapper for any exception user callback code may produce
+	 * @throws CancelledException if execution of the command was cancelled
+	 * @throws IOException FIXME EXCEPTIONS WTF it's doing here if there are (further unspecified) errors while walking working copy
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
 	 */
-	public void execute(HgStatusHandler statusHandler) throws CancellationException, HgException, IOException {
+	public void execute(HgStatusHandler statusHandler) throws HgCallbackTargetException, CancelledException, HgException, IOException {
 		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -177,7 +180,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		try {
 			// XXX if I need a rough estimation (for ProgressMonitor) of number of work units,
 			// I may use number of files in either rev1 or rev2 manifest edition
-			mediator.start(statusHandler, new ChangelogHelper(repo, startRevision));
+			mediator.start(statusHandler, getCancelSupport(statusHandler, true), new ChangelogHelper(repo, startRevision));
 			if (endRevision == WORKING_COPY) {
 				HgWorkingCopyStatusCollector wcsc = scope != null ? HgWorkingCopyStatusCollector.create(repo, scope) : new HgWorkingCopyStatusCollector(repo);
 				wcsc.setBaseRevisionCollector(sc);
@@ -190,11 +193,10 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 					sc.walk(startRevision, endRevision, mediator);
 				}
 			}
-		} catch (HgCallbackTargetException.Wrap ex) { 
-			// seems too general to catch RuntimeException, i.e.
-			// unless catch is for very narrow piece of code, it's better not to catch any RTE (which may happen elsewhere, not only in handler)
-			// XXX Perhaps, need more detailed explanation in handlers that are expected to throw Wrap/RTE (i.e. HgChangesetHandler)
-			throw new HgCallbackTargetException(ex).setRevisionIndex(endRevision);
+		} catch (CancelledException ex) {
+			// this is our exception, thrown from Mediator.
+			// next check shall throw original cause of the stop - either HgCallbackTargetException or original CancelledException
+			mediator.checkFailure();
 		} finally {
 			mediator.done();
 		}
@@ -208,7 +210,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		void handleStatus(HgStatus s);
 	}
 
-	private class Mediator implements HgStatusInspector {
+	private class Mediator implements HgStatusInspector, CancelSupport {
 		boolean needModified;
 		boolean needAdded;
 		boolean needRemoved;
@@ -219,68 +221,117 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		boolean needCopies;
 		HgStatusHandler handler;
 		private ChangelogHelper logHelper;
+		private CancelSupport handlerCancelSupport;
+		private HgCallbackTargetException failure;
+		private CancelledException cancellation;
 
 		Mediator() {
 		}
 		
-		public void start(HgStatusHandler h, ChangelogHelper changelogHelper) {
+		public void start(HgStatusHandler h, CancelSupport hcs, ChangelogHelper changelogHelper) {
 			handler = h;
+			handlerCancelSupport = hcs;
 			logHelper = changelogHelper;
 		}
 
 		public void done() {
 			handler = null;
+			handlerCancelSupport = null;
 			logHelper = null;
+			failure = null;
+			cancellation = null;
 		}
 		
 		public boolean busy() {
 			return handler != null;
 		}
 
+		// XXX copy from ChangesetTransformer. Perhaps, can share the code?
+		public void checkFailure() throws HgCallbackTargetException, CancelledException {
+			// do not forget to clear exceptions for reuse of this instance 
+			if (failure != null) {
+				HgCallbackTargetException toThrow = failure;
+				failure = null; 
+				throw toThrow;
+			}
+			if (cancellation != null) {
+				CancelledException toThrow = cancellation;
+				cancellation = null;
+				throw toThrow;
+			}
+		}
+
+		// XXX copy from ChangesetTransformer. code sharing note above applies
+		public void checkCancelled() throws CancelledException {
+			if (failure != null || cancellation != null) {
+				// stop status iteration. Our exception is for the purposes of cancellation only,
+				// the one we have stored (this.cancellation) is for user
+				throw new CancelledException(); 
+			}
+		}
+
+		private void dispatch(HgStatus s) {
+			try {
+				handler.handleStatus(s);
+				handlerCancelSupport.checkCancelled();
+			} catch (HgCallbackTargetException ex) {
+				failure = ex;
+			} catch (CancelledException ex) {
+				cancellation = ex;
+			}
+		}
+
 		public void modified(Path fname) {
 			if (needModified) {
-				handler.handleStatus(new HgStatus(Modified, fname, logHelper));
+				dispatch(new HgStatus(Modified, fname, logHelper));
 			}
 		}
 		public void added(Path fname) {
 			if (needAdded) {
-				handler.handleStatus(new HgStatus(Added, fname, logHelper));
+				dispatch(new HgStatus(Added, fname, logHelper));
 			}
 		}
 		public void removed(Path fname) {
 			if (needRemoved) {
-				handler.handleStatus(new HgStatus(Removed, fname, logHelper));
+				dispatch(new HgStatus(Removed, fname, logHelper));
 			}
 		}
 		public void copied(Path fnameOrigin, Path fnameAdded) {
 			if (needCopies) {
 				// TODO post-1.0 in fact, merged files may report 'copied from' as well, correct status kind thus may differ from Added
-				handler.handleStatus(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
+				dispatch(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
 			}
 		}
 		public void missing(Path fname) {
 			if (needMissing) {
-				handler.handleStatus(new HgStatus(Missing, fname, logHelper));
+				dispatch(new HgStatus(Missing, fname, logHelper));
 			}
 		}
 		public void unknown(Path fname) {
 			if (needUnknown) {
-				handler.handleStatus(new HgStatus(Unknown, fname, logHelper));
+				dispatch(new HgStatus(Unknown, fname, logHelper));
 			}
 		}
 		public void clean(Path fname) {
 			if (needClean) {
-				handler.handleStatus(new HgStatus(Clean, fname, logHelper));
+				dispatch(new HgStatus(Clean, fname, logHelper));
 			}
 		}
 		public void ignored(Path fname) {
 			if (needIgnored) {
-				handler.handleStatus(new HgStatus(Ignored, fname, logHelper));
+				dispatch(new HgStatus(Ignored, fname, logHelper));
 			}
 		}
 		
-		public void invalid(Path fname, Exception ex) {
-			handler.handleError(fname, new Status(Status.Kind.ERROR, "Failed to get file status", ex));
+		public void invalid(Path fname, Exception err) {
+			try {
+				handler.handleError(fname, new Status(Status.Kind.ERROR, "Failed to get file status", err));
+				handlerCancelSupport.checkCancelled();
+			} catch (HgCallbackTargetException ex) {
+				failure = ex;
+			} catch (CancelledException ex) {
+				cancellation = ex;
+			}
 		}
 	}
 }

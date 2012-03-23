@@ -18,6 +18,7 @@ package org.tmatesoft.hg.core;
 
 import java.util.Collection;
 
+import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 
@@ -29,64 +30,57 @@ import org.tmatesoft.hg.util.Pair;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
+@Callback
 public interface HgChangesetTreeHandler {
 	/**
 	 * @param entry access to various pieces of information about current tree node. Instances might be 
 	 * reused across calls and shall not be kept by client's code
-	 * @throws HgException allows implementers propagate errors from {@link TreeElement} or other parts of the library.
-	 * @throws HgCallbackTargetException.Wrap wrapper object for any exception user code may produce. Wrapped exception would get re-thrown with {@link HgCallbackTargetException} 
+	 * @throws HgCallbackTargetException wrapper for any exception user code may produce 
 	 * @throws CancelledException if execution of the operation was cancelled
 	 */
-	public void next(HgChangesetTreeHandler.TreeElement entry) throws HgException, HgCallbackTargetException.Wrap, CancelledException;
+	public void next(HgChangesetTreeHandler.TreeElement entry) throws HgCallbackTargetException, CancelledException;
 
 	interface TreeElement {
 		/**
 		 * Revision of the revlog being iterated. For example, when walking file history, return value represents file revisions.
 		 * 
 		 * @return revision of the revlog being iterated.
-		 * @throws HgException to indicate failure dealing with Mercurial data
 		 */
-		public Nodeid fileRevision() throws HgException;
+		public Nodeid fileRevision();
 
 		/**
 		 * @return changeset associated with the current revision
-		 * @throws HgException to indicate failure dealing with Mercurial data
 		 */
-		public HgChangeset changeset() throws HgException;
+		public HgChangeset changeset();
 
 		/**
 		 * Lightweight alternative to {@link #changeset()}, identifies changeset in which current file node has been modified 
 		 * @return changeset {@link Nodeid revision} 
-		 * @throws HgException to indicate failure dealing with Mercurial data
 		 */
-		public Nodeid changesetRevision() throws HgException;
+		public Nodeid changesetRevision();
 
 		/**
 		 * Node, these are not necessarily in direct relation to parents of changeset from {@link #changeset()} 
 		 * @return changesets that correspond to parents of the current file node, either pair element may be <code>null</code>.
-		 * @throws HgException to indicate failure dealing with Mercurial data
 		 */
-		public Pair<HgChangeset, HgChangeset> parents() throws HgException;
+		public Pair<HgChangeset, HgChangeset> parents();
 		
 		/**
 		 * Lightweight alternative to {@link #parents()}, give {@link Nodeid nodeids} only
 		 * @return two values, neither is <code>null</code>, use {@link Nodeid#isNull()} to identify parent not set
-		 * @throws HgException to indicate failure dealing with Mercurial data
 		 */
-		public Pair<Nodeid, Nodeid> parentRevisions() throws HgException;
+		public Pair<Nodeid, Nodeid> parentRevisions();
 
 		/**
 		 * Changes that originate from the given change and bear it as their parent. 
 		 * @return collection (possibly empty) of immediate children of the change
-		 * @throws HgException to indicate failure dealing with Mercurial data
 		 */
-		public Collection<HgChangeset> children() throws HgException;
+		public Collection<HgChangeset> children();
 
 		/**
 		 * Lightweight alternative to {@link #children()}.
 		 * @return never <code>null</code>
-		 * @throws HgException to indicate failure dealing with Mercurial data
 		 */
-		public Collection<Nodeid> childRevisions() throws HgException;
+		public Collection<Nodeid> childRevisions();
 	}
 }

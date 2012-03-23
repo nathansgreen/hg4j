@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
-import org.tmatesoft.hg.core.HgBadStateException;
+import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetHandler;
 import org.tmatesoft.hg.core.HgException;
@@ -122,11 +122,7 @@ public class MapTagsToFileRevisions {
 		fileNode.walk(0, TIP, new HgDataFile.RevisionInspector() {
 
 			public void next(int fileRevisionIndex, Nodeid revision, int linkedRevisionIndex) {
-				try {
-					changesetToNodeid_3.put(clog.getRevision(linkedRevisionIndex), revision);
-				} catch (HgException ex) {
-					ex.printStackTrace();
-				}
+				changesetToNodeid_3.put(clog.getRevision(linkedRevisionIndex), revision);
 			}
 		});
 		final long end_3 = System.nanoTime();
@@ -242,8 +238,8 @@ public class MapTagsToFileRevisions {
 		//
 		// build cache
 		//
-		final TagInfo[] allTags = new TagInfo[tags.getTags().size()];
-		tags.getTags().values().toArray(allTags);
+		final TagInfo[] allTags = new TagInfo[tags.getAllTags().size()];
+		tags.getAllTags().values().toArray(allTags);
 		// effective translation of changeset revisions to their local indexes
 		final HgChangelog.RevisionMap clogrmap = repository.getChangelog().new RevisionMap().init();
 		// map to look up tag by changeset local number
@@ -295,7 +291,7 @@ public class MapTagsToFileRevisions {
 			}
 			
 			public boolean next(Nodeid nid, String fname, String flags) {
-				throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+				throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 			}
 
 			public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {
@@ -379,7 +375,7 @@ public class MapTagsToFileRevisions {
 			return true;
 		}
 		public boolean next(Nodeid nid, String fname, String flags) {
-			throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+			throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 		}
 		public boolean next(Nodeid nid, Path fname, Flags flags) {
 			return true;
@@ -389,11 +385,11 @@ public class MapTagsToFileRevisions {
 		}
 	}
 	
-	public static void main2(String[] args) throws HgException, CancelledException {
+	public static void main2(String[] args) throws HgCallbackTargetException, HgException, CancelledException {
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
 		final Path targetPath = Path.create("README");
 		final HgTags tags = repository.getTags();
-		final Map<String, HgTags.TagInfo> tagToInfo = tags.getTags();
+		final Map<String, HgTags.TagInfo> tagToInfo = tags.getAllTags();
 		final HgManifest manifest = repository.getManifest();
 		final Map<Nodeid, List<String>> changeSetRevisionToTags = new HashMap<Nodeid, List<String>>();
 		final HgDataFile fileNode = repository.getFileNode(targetPath);
@@ -420,7 +416,7 @@ public class MapTagsToFileRevisions {
 		logCommand.execute(new HgChangesetHandler() {
 			public void next(HgChangeset changeset) {
 				if (changeset.getAffectedFiles().contains(targetPath)) {
-					System.out.println(changeset.getRevision() + " " + changeSetRevisionToTags.get(changeset.getNodeid()));
+					System.out.println(changeset.getRevisionIndex() + " " + changeSetRevisionToTags.get(changeset.getNodeid()));
 				}
 			}
 		});

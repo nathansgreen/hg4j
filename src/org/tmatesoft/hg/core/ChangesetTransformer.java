@@ -22,6 +22,7 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.PathPool;
@@ -35,7 +36,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-/*package-local*/ class ChangesetTransformer implements HgChangelog.Inspector {
+/*package-local*/ class ChangesetTransformer implements HgChangelog.Inspector, Adaptable, CancelSupport {
 	private final HgChangesetHandler handler;
 	private final ProgressSupport progressHelper;
 	private final CancelSupport cancelHelper;
@@ -56,14 +57,14 @@ import org.tmatesoft.hg.util.ProgressSupport;
 		HgStatusCollector statusCollector = new HgStatusCollector(hgRepo);
 		t = new Transformation(statusCollector, pw);
 		handler = delegate;
+		// we let HgChangelog#range deal with progress (pipe through getAdapter)
+		// but use own cancellation (which involves CallbackTargetException as well, and preserves original cancellation 
+		// exception in case clients care)
 		cancelHelper = cs;
 		progressHelper = ps;
 	}
 	
 	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-		if (failure != null || cancellation != null) {
-			return; // FIXME need a better way to stop iterating revlog 
-		}
 		if (branches != null && !branches.contains(cset.branch())) {
 			return;
 		}
@@ -71,10 +72,9 @@ import org.tmatesoft.hg.util.ProgressSupport;
 		HgChangeset changeset = t.handle(revisionNumber, nodeid, cset);
 		try {
 			handler.next(changeset);
-			progressHelper.worked(1);
 			cancelHelper.checkCancelled();
-		} catch (RuntimeException ex) {
-			failure = new HgCallbackTargetException(ex).setRevision(nodeid).setRevisionIndex(revisionNumber);
+		} catch (HgCallbackTargetException ex) {
+			failure = ex.setRevision(nodeid).setRevisionIndex(revisionNumber);
 		} catch (CancelledException ex) {
 			cancellation = ex;
 		}
@@ -117,5 +117,20 @@ import org.tmatesoft.hg.util.ProgressSupport;
 			changeset.init(revisionNumber, nodeid, cset);
 			return changeset;
 		}
+	}
+
+	public void checkCancelled() throws CancelledException {
+		if (failure != null || cancellation != null) {
+			// stop HgChangelog.Iterator. Our exception is for the purposes of cancellation only,
+			// the one we have stored (this.cancellation) is for user
+			throw new CancelledException(); 
+		}
+	}
+
+	public <T> T getAdapter(Class<T> adapterClass) {
+		if (adapterClass == ProgressSupport.class) {
+			return adapterClass.cast(progressHelper);
+		}
+		return null;
 	}
 }

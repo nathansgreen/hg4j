@@ -26,21 +26,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.core.HgBadStateException;
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgInvalidControlFileException;
-import org.tmatesoft.hg.core.HgInvalidRevisionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 
 
 /**
- * RevisionWalker?
+ * Collect status information for changes between two repository revisions.
  *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -130,7 +129,7 @@ public class HgStatusCollector {
 			}
 
 			public boolean next(Nodeid nid, String fname, String flags) {
-				throw new HgBadStateException(HgManifest.Inspector2.class.getName());
+				throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 			}
 
 			public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {
@@ -193,10 +192,10 @@ public class HgStatusCollector {
 	/**
 	 * 'hg status --change REV' command counterpart.
 	 * 
-	 * @throws HgInvalidRevisionException if argument specifies non-existent revision index
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws CancelledException if operation execution was cancelled
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public void change(int revisionIndex, HgStatusInspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public void change(int revisionIndex, HgStatusInspector inspector) throws CancelledException, HgRuntimeException {
 		int p;
 		if (revisionIndex == 0) {
 			p = NO_REVISION;
@@ -213,16 +212,14 @@ public class HgStatusCollector {
 	 * Parameters <b>rev1</b> and <b>rev2</b> are changelog revision indexes, shall not be the same. Argument order matters.
 	 * Either rev1 or rev2 may be {@link HgRepository#NO_REVISION} to indicate comparison to empty repository
 	 * 
-	 * FIXME cancellation (at least exception)?
-	 * 
 	 * @param rev1 <em>from</em> changeset index, non-negative or {@link HgRepository#TIP}
 	 * @param rev2 <em>to</em> changeset index, non-negative or {@link HgRepository#TIP}
 	 * @param inspector callback for status information
-	 * @throws HgInvalidRevisionException if any argument specifies non-existent revision index
+	 * @throws CancelledException if operation execution was cancelled
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 * @throws IllegalArgumentException inspector other incorrect argument values
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public void walk(int rev1, int rev2, HgStatusInspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public void walk(int rev1, int rev2, HgStatusInspector inspector) throws CancelledException, HgRuntimeException, IllegalArgumentException {
 		if (rev1 == rev2) {
 			throw new IllegalArgumentException();
 		}
@@ -278,6 +275,8 @@ public class HgStatusCollector {
 		r1 = get(rev1);
 		r2 = get(rev2);
 
+		final CancelSupport cs = CancelSupport.Factory.get(inspector);
+
 		TreeSet<Path> r1Files = new TreeSet<Path>(r1.files());
 		for (Path r2fname : r2.files()) {
 			if (!scope.accept(r2fname)) {
@@ -293,6 +292,7 @@ public class HgStatusCollector {
 				} else {
 					inspector.modified(r2fname);
 				}
+				cs.checkCancelled();
 			} else {
 				try {
 					Path copyTarget = r2fname;
@@ -307,11 +307,13 @@ public class HgStatusCollector {
 					// for a single file not to be irresolvable obstacle for a status operation
 					inspector.invalid(r2fname, ex);
 				}
+				cs.checkCancelled();
 			}
 		}
 		for (Path r1fname : r1Files) {
 			if (scope.accept(r1fname)) {
 				inspector.removed(r1fname);
+				cs.checkCancelled();
 			}
 		}
 	}
@@ -322,12 +324,18 @@ public class HgStatusCollector {
 	 * @param rev1 <em>from</em> changeset index 
 	 * @param rev2 <em>to</em> changeset index
 	 * @return information object that describes change between the revisions
-	 * @throws HgInvalidRevisionException if any argument specifies non-existent revision index
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public Record status(int rev1, int rev2) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		Record rv = new Record();
-		walk(rev1, rev2, rv);
+		try {
+			walk(rev1, rev2, rv);
+		} catch (CancelledException ex) {
+			// can't happen as long our Record class doesn't implement CancelSupport
+			HgInvalidStateException t = new HgInvalidStateException("Internal error");
+			t.initCause(ex);
+			throw t;
+		}
 		return rv;
 	}
 	
@@ -368,6 +376,7 @@ public class HgStatusCollector {
 	 * from {@link #getAdded()}.  
 	 */
 	public static class Record implements HgStatusInspector {
+		// NOTE, shall not implement CancelSupport, or methods that use it and don't expect this exception shall be changed
 		private List<Path> modified, added, removed, clean, missing, unknown, ignored;
 		private Map<Path, Path> copied;
 		private Map<Path, Exception> failures;

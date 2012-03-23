@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,10 +47,11 @@ public interface CancelSupport {
 			if (cs != null) {
 				return cs;
 			}
-			return new CancelSupport() {
+			class NoCancel implements CancelSupport {
 				public void checkCancelled() {
 				}
 			};
+			return new NoCancel();
 		}
 		
 		public static CancelSupport get(Object target, CancelSupport defaultValue) {

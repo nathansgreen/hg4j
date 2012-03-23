@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,10 +66,11 @@ public class HgRepoFacade {
 
 	/**
 	 * Tries to find repository starting from the current working directory.
+	 * 
 	 * @return <code>true</code> if found valid repository
-	 * @throws HgInvalidFileException in case of errors during repository initialization
+	 * @throws HgRepositoryNotFoundException if no repository found in working directory
 	 */
-	public boolean init() throws HgInvalidFileException {
+	public boolean init() throws HgRepositoryNotFoundException {
 		repo = new HgLookup(context).detectFromWorkingDir();
 		return repo != null && !repo.isInvalid();
 	}
@@ -79,10 +80,10 @@ public class HgRepoFacade {
 	 * 
 	 * @param repoLocation path to any folder within structure of a Mercurial repository.
 	 * @return <code>true</code> if found valid repository 
-	 * @throws HgInvalidFileException if there are errors accessing specified location
+	 * @throws HgRepositoryNotFoundException if there's no repository at specified location
 	 * @throws IllegalArgumentException if argument is <code>null</code>
 	 */
-	public boolean initFrom(File repoLocation) throws HgInvalidFileException {
+	public boolean initFrom(File repoLocation) throws HgRepositoryNotFoundException {
 		if (repoLocation == null) {
 			throw new IllegalArgumentException();
 		}

@@ -19,9 +19,7 @@ package org.tmatesoft.hg.repo;
 import java.io.File;
 import java.io.IOException;
 
-import org.tmatesoft.hg.core.HgBadStateException;
-import org.tmatesoft.hg.core.HgCallbackTargetException;
-import org.tmatesoft.hg.core.HgInvalidFileException;
+import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -36,6 +34,8 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.CancelledException;
 
 /**
+ * WORK IN PROGRESS
+ * 
  * @see http://mercurial.selenic.com/wiki/BundleFormat
  * 
  * @author Artem Tikhomirov
@@ -66,7 +66,7 @@ public class HgBundle {
 					throw HgRepository.notImplemented();
 				}
 				if (signature[4] != 'U' || signature[5] != 'N') {
-					throw new HgBadStateException("Bad bundle signature:" + new String(signature));
+					throw new HgInvalidStateException(String.format("Bad bundle signature: %s",  String.valueOf(signature)));
 				}
 				// "...UN", fall-through
 			} else {
@@ -96,7 +96,7 @@ public class HgBundle {
 	 * @param hgRepo repository that shall possess base revision for this bundle
 	 * @param inspector callback to get each changeset found 
 	 */
-	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgCallbackTargetException, HgInvalidFileException {
+	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgRuntimeException {
 		Inspector bundleInsp = new Inspector() {
 			DigestHelper dh = new DigestHelper();
 			boolean emptyChangelog = true;
@@ -159,7 +159,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 					byte[] csetContent = ge.apply(prevRevContent);
 					dh = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
 					if (!ge.node().equalsTo(dh.asBinary())) {
-						throw new IllegalStateException("Integrity check failed on " + bundleFile + ", node:" + ge.node());
+						throw new HgInvalidStateException(String.format("Integrity check failed on %s, node: %s", bundleFile, ge.node().shortNotation()));
 					}
 					ByteArrayDataAccess csetDataAccess = new ByteArrayDataAccess(csetContent);
 					RawChangeset cs = RawChangeset.parse(csetDataAccess);
@@ -168,8 +168,10 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 					prevRevContent = csetDataAccess.reset();
 				} catch (CancelledException ex) {
 					return false;
-				} catch (Exception ex) {
-					throw new HgBadStateException(ex); // FIXME EXCEPTIONS
+				} catch (IOException ex) {
+					throw new HgInvalidFileException("Invalid bundle file", ex, bundleFile); // TODO post-1.0 revisit exception handling
+				} catch (HgBadArgumentException ex) {
+					throw new HgInvalidControlFileException("Invalid bundle file", ex, bundleFile);
 				}
 				return true;
 			}
@@ -180,11 +182,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			public void fileEnd(String name) {}
 
 		};
-		try {
-			inspectChangelog(bundleInsp);
-		} catch (RuntimeException ex) {
-			throw new HgCallbackTargetException(ex);
-		}
+		inspectChangelog(bundleInsp);
 	}
 
 	// callback to minimize amount of Strings and Nodeids instantiated
@@ -209,7 +207,12 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		boolean element(GroupElement element);
 	}
 
-	public void inspectChangelog(Inspector inspector) throws HgInvalidFileException {
+	/**
+	 * @param inspector callback to visit changelog entries
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws IllegalArgumentException if inspector argument is null
+	 */
+	public void inspectChangelog(Inspector inspector) throws HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -226,7 +229,12 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
-	public void inspectManifest(Inspector inspector) throws HgInvalidFileException {
+	/**
+	 * @param inspector callback to visit manifest entries
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws IllegalArgumentException if inspector argument is null
+	 */
+	public void inspectManifest(Inspector inspector) throws HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -247,7 +255,12 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
-	public void inspectFiles(Inspector inspector) throws HgInvalidFileException {
+	/**
+	 * @param inspector callback to visit file entries
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws IllegalArgumentException if inspector argument is null
+	 */
+	public void inspectFiles(Inspector inspector) throws HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -272,7 +285,12 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
-	public void inspectAll(Inspector inspector) throws HgInvalidFileException {
+	/**
+	 * @param inspector visit complete bundle (changelog, manifest and file entries)
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws IllegalArgumentException if inspector argument is null
+	 */
+	public void inspectAll(Inspector inspector) throws HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}

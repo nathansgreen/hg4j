@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,10 @@ import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelledException;
@@ -150,7 +153,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
 					if (parentHelper.knownNode(nodeid)) {
 						if (!common.contains(nodeid)) {
-							throw new HgBadStateException("Bundle shall not report known nodes other than roots we've supplied");
+							throw new HgInvalidStateException("Bundle shall not report known nodes other than roots we've supplied");
 						}
 						return;
 					}

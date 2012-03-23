@@ -22,6 +22,7 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelSupport;
