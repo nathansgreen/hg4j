@@ -338,7 +338,27 @@ public class MapTagsToFileRevisions {
 		HgDataFile fileNode = repository.getFileNode(targetPath);
 		final long start2 = System.nanoTime();
 		final int lastRev = fileNode.getLastRevision();
-		final Map<Integer, Nodeid> fileRevisionAtTagRevision = repository.getManifest().getFileRevisions(targetPath, tagLocalRevs);
+		final Map<Integer, Nodeid> fileRevisionAtTagRevision = new HashMap<Integer, Nodeid>();
+		HgManifest.Inspector collectFileRevAtCset = new HgManifest.Inspector() {
+			
+			private int csetRevIndex;
+
+			public boolean next(Nodeid nid, Path fname, Flags flags) {
+				fileRevisionAtTagRevision.put(csetRevIndex, nid);
+				return true;
+			}
+			
+			public boolean end(int manifestRevision) {
+				return true;
+			}
+			
+			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
+				csetRevIndex = changelogRevision;
+				return true;
+			}
+		};
+		repository.getManifest().walkFileRevisions(targetPath, collectFileRevAtCset,tagLocalRevs);
+
 		final long start2a = System.nanoTime();
 		fileNode.walk(0, lastRev, new HgDataFile.RevisionInspector() {
 

@@ -58,7 +58,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgDataFile extends Revlog {
+public final class HgDataFile extends Revlog {
 
 	// absolute from repo root?
 	// slashes, unix-style?
@@ -77,12 +77,15 @@ public class HgDataFile extends Revlog {
 	}
 
 	// exists is not the best name possible. now it means no file with such name was ever known to the repo.
-	// it might be confused with files existed before but lately removed. 
+	// it might be confused with files existed before but lately removed. TODO HgFileNode.exists makes more sense.
+	// or HgDataFile.known()
 	public boolean exists() {
 		return content != null; // XXX need better impl
 	}
 
-	// human-readable (i.e. "COPYING", not "store/data/_c_o_p_y_i_n_g.i")
+	/**
+	 * Human-readable file name, i.e. "COPYING", not "store/data/_c_o_p_y_i_n_g.i"
+	 */
 	public Path getPath() {
 		return path; // hgRepo.backresolve(this) -> name? In this case, what about hashed long names?
 	}

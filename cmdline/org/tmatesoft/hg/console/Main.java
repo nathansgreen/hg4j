@@ -94,7 +94,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.checkSubProgress();
+		m.checkWalkFileRevisions();
+//		m.checkSubProgress();
 //		m.checkFileFlags();
 //		m.buildFileLog();
 //		m.testConsoleLog();
@@ -116,6 +117,12 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	// hg4j repo
+	public void checkWalkFileRevisions() throws Exception {
+		//  hg --debug manifest --rev 150 | grep cmdline/org/tmatesoft/hg/console/Main.java
+		hgRepo.getManifest().walkFileRevisions(Path.create("cmdline/org/tmatesoft/hg/console/Main.java"), new ManifestDump(), 100, 150, 200, 210, 300);
 	}
 	
 	// no repo

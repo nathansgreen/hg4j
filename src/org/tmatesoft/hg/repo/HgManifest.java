@@ -23,8 +23,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
 import org.tmatesoft.hg.core.Nodeid;
@@ -32,7 +30,6 @@ import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.EncodingHelper;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
@@ -50,7 +47,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgManifest extends Revlog {
+public final class HgManifest extends Revlog {
 	private RevisionMapper revisionMap;
 	private EncodingHelper encodingHelper;
 	
@@ -243,8 +240,10 @@ public class HgManifest extends Revlog {
 	
 	/**
 	 * Extracts file revision as it was known at the time of given changeset.
-	 * For more thorough details about file at specific changeset, use {@link HgChangesetFileSneaker}.
+	 * <p>For more thorough details about file at specific changeset, use {@link HgChangesetFileSneaker}.
+	 * <p>To visit few changesets for the same file, use {@link #walkFileRevisions(Path, Inspector, int...)}
 	 * 
+	 * @see #walkFileRevisions(Path, Inspector, int...)
 	 * @see HgChangesetFileSneaker
 	 * @param changelogRevisionIndex local changeset index 
 	 * @param file path to file in question
@@ -257,21 +256,40 @@ public class HgManifest extends Revlog {
 		// both file revision and changeset revision index. But there's no easy way to go from changesetRevisionIndex to
 		// file revision (the task this method solves), exept for HgFileInformer
 		// I feel methods dealing with changeset indexes shall be more exposed in HgChangelog and HgManifest API.
-		return getFileRevisions(file, changelogRevisionIndex).get(changelogRevisionIndex);
-	}
-
-	// XXX package-local or better API
-	@Experimental(reason="Map as return value isn't that good")
-	public Map<Integer, Nodeid> getFileRevisions(final Path file, int... changelogRevisionIndexes) throws HgInvalidRevisionException, HgInvalidControlFileException {
-		// FIXME in fact, walk(Inspectr, path, int[]) might be better alternative than get()
 		// TODO need tests
-		int[] manifestRevisionIndexes = toManifestRevisionIndexes(changelogRevisionIndexes, null);
-		IntMap<Nodeid> resMap = new IntMap<Nodeid>(changelogRevisionIndexes.length);
-		content.iterate(manifestRevisionIndexes, true, new FileLookupInspector(encodingHelper, file, resMap, null));
-		// IntMap to HashMap, 
-		HashMap<Integer,Nodeid> rv = new HashMap<Integer, Nodeid>();
-		resMap.fill(rv);
-		return rv;
+		int manifestRevIndex = fromChangelog(changelogRevisionIndex);
+		if (manifestRevIndex == BAD_REVISION) {
+			return null;
+		}
+		IntMap<Nodeid> resMap = new IntMap<Nodeid>(3);
+		FileLookupInspector parser = new FileLookupInspector(encodingHelper, file, resMap, null);
+		parser.walk(manifestRevIndex, content);
+		return resMap.get(changelogRevisionIndex);
+	}
+	
+	/**
+	 * Visit file revisions as they were recorded at the time of given changesets. Same file revision may be reported as many times as 
+	 * there are changesets that refer to that revision. Both {@link Inspector#begin(int, Nodeid, int)} and {@link Inspector#end(int)}
+	 * with appropriate values are invoked around {@link Inspector#next(Nodeid, Path, Flags)} call for the supplied file
+	 * 
+	 * <p>NOTE, this method doesn't respect return values from callback (i.e. to stop iteration), as it's lookup of a single file
+	 * and canceling it seems superfluous. However, this may change in future and it's recommended to return <code>true</code> from
+	 * all {@link Inspector} methods. 
+	 * 
+	 * @see #getFileRevision(int, Path)
+	 * @param file path of interest
+	 * @param inspector callback to receive details about selected file
+	 * @param changelogRevisionIndexes changeset indexes to visit
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public void walkFileRevisions(Path file, Inspector inspector, int... changelogRevisionIndexes) throws HgRuntimeException {
+		if (file == null || inspector == null || changelogRevisionIndexes == null) {
+			throw new IllegalArgumentException();
+		}
+		// TODO [post-1.0] need tests. There's Main#checkWalkFileRevisions that may be a starting point
+		int[] manifestRevIndexes = toManifestRevisionIndexes(changelogRevisionIndexes, null);
+		FileLookupInspector parser = new FileLookupInspector(encodingHelper, file, inspector);
+		parser.walk(manifestRevIndexes, content);
 	}
 
 	/**
@@ -286,7 +304,8 @@ public class HgManifest extends Revlog {
 	public Flags getFileFlags(int changesetRevIndex, Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		int manifestRevIdx = fromChangelog(changesetRevIndex);
 		IntMap<Flags> resMap = new IntMap<Flags>(2);
-		content.iterate(manifestRevIdx, manifestRevIdx, true, new FileLookupInspector(encodingHelper, file, null, resMap));
+		FileLookupInspector parser = new FileLookupInspector(encodingHelper, file, null, resMap);
+		parser.walk(manifestRevIdx, content);
 		return resMap.get(changesetRevIndex);
 	}
 
@@ -611,17 +630,39 @@ public class HgManifest extends Revlog {
 	 */
 	private static class FileLookupInspector implements RevlogStream.Inspector {
 		
+		private final Path filename;
 		private final byte[] filenameAsBytes;
 		private final IntMap<Nodeid> csetIndex2FileRev;
 		private final IntMap<Flags> csetIndex2Flags;
+		private final Inspector delegate;
 
 		public FileLookupInspector(EncodingHelper eh, Path fileToLookUp, IntMap<Nodeid> csetIndex2FileRevMap, IntMap<Flags> csetIndex2FlagsMap) {
 			assert fileToLookUp != null;
 			// need at least one map for the inspector to make any sense
 			assert csetIndex2FileRevMap != null || csetIndex2FlagsMap != null;
+			filename = fileToLookUp;
+			filenameAsBytes = eh.toManifest(fileToLookUp.toString());
+			delegate = null;
 			csetIndex2FileRev = csetIndex2FileRevMap;
 			csetIndex2Flags = csetIndex2FlagsMap;
+		}
+		
+		public FileLookupInspector(EncodingHelper eh, Path fileToLookUp, Inspector delegateInspector) {
+			assert fileToLookUp != null;
+			assert delegateInspector != null;
+			filename = fileToLookUp;
 			filenameAsBytes = eh.toManifest(fileToLookUp.toString());
+			delegate = delegateInspector;
+			csetIndex2FileRev = null;
+			csetIndex2Flags = null;
+		}
+		
+		void walk(int manifestRevIndex, RevlogStream content) {
+			content.iterate(manifestRevIndex, manifestRevIndex, true, this); 
+		}
+
+		void walk(int[] manifestRevIndexes, RevlogStream content) {
+			content.iterate(manifestRevIndexes, true, this);
 		}
 		
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
@@ -635,24 +676,40 @@ public class HgManifest extends Revlog {
 						byte[] byteArray = bos.toByteArray();
 						bos.reset();
 						if (Arrays.equals(filenameAsBytes, byteArray)) {
-							if (csetIndex2FileRev != null) {
+							Nodeid fileRev = null;
+							Flags flags = null;
+							if (csetIndex2FileRev != null || delegate != null) {
 								byte[] nid = new byte[40];  
 								data.readBytes(nid, 0, 40);
-								csetIndex2FileRev.put(linkRevision, Nodeid.fromAscii(nid, 0, 40));
+								fileRev = Nodeid.fromAscii(nid, 0, 40);
 							} else {
 								data.skip(40);
 							}
-							if (csetIndex2Flags != null) {
+							if (csetIndex2Flags != null || delegate != null) {
 								while (!data.isEmpty() && (b = data.readByte()) != '\n') {
 									bos.write(b);
 								}
-								Flags flags;
 								if (bos.size() == 0) {
 									flags = Flags.RegularFile;
 								} else {
 									flags = Flags.parse(bos.toByteArray(), 0, bos.size());
 								}
-								csetIndex2Flags.put(linkRevision, flags);
+								
+							}
+							if (delegate != null) {
+								assert flags != null;
+								assert fileRev != null;
+								delegate.begin(revisionNumber, Nodeid.fromBinary(nodeid, 0), linkRevision);
+								delegate.next(fileRev, filename, flags);
+								delegate.end(revisionNumber);
+								
+							} else {
+								if (csetIndex2FileRev != null) {
+									csetIndex2FileRev.put(linkRevision, fileRev);
+								}
+								if (csetIndex2Flags != null) {
+									csetIndex2Flags.put(linkRevision, flags);
+								}
 							}
 							break;
 						} else {

@@ -47,7 +47,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgChangelog extends Revlog {
+public final class HgChangelog extends Revlog {
 
 	/* package-local */HgChangelog(HgRepository hgRepo, RevlogStream content) {
 		super(hgRepo, content);
