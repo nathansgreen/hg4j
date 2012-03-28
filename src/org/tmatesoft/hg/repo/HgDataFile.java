@@ -28,11 +28,8 @@ import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
@@ -105,14 +102,6 @@ public class HgDataFile extends Revlog {
 	}
 	
 	/**
-	 * @deprecated Use {@link #getLength(Nodeid)} instead
-	 */
-	@Deprecated
-	public int length(Nodeid nodeid) throws HgInvalidControlFileException, HgInvalidRevisionException {
-		return getLength(nodeid);
-	}
-	
-	/**
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
 	 * @return size of the file content at the revision identified by local revision number.
 	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
@@ -146,14 +135,6 @@ public class HgDataFile extends Revlog {
 		return dataLen;
 	}
 	
-	/**
-	 * @deprecated Use {@link #getLength(int)} instead
-	 */
-	@Deprecated
-	public int length(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
-		return getLength(fileRevisionIndex);
-	}
-
 	/**
 	 * Reads content of the file from working directory. If file present in the working directory, its actual content without
 	 * any filters is supplied through the sink. If file does not exist in the working dir, this method provides content of a file 
@@ -326,123 +307,7 @@ public class HgDataFile extends Revlog {
 		}
 	}
 	
-	private static class HistoryNode {
-		int changeset;
-		Nodeid cset;
-		HistoryNode parent1, parent2;
-		List<HistoryNode> children;
-
-		HistoryNode(int cs, HistoryNode p1, HistoryNode p2) {
-			changeset = cs;
-			parent1 = p1;
-			parent2 = p2;
-			if (p1 != null) {
-				p1.addChild(this);
-			}
-			if (p2 != null) {
-				p2.addChild(this);
-			}
-		}
-		
-		Nodeid changesetRevision() {
-			assert cset != null : "we initialize all csets prior to use";
-			return cset;
-		}
-
-		void addChild(HistoryNode child) {
-			if (children == null) {
-				children = new ArrayList<HistoryNode>(2);
-			}
-			children.add(child);
-		}
-	}
-	
-	/**
-	 * @deprecated use {@link HgLogCommand#execute(org.tmatesoft.hg.core.HgChangesetTreeHandler)} instead
-	 */
-	@Deprecated
-	public void history(HgChangelog.TreeInspector inspector) throws HgInvalidControlFileException{
-		final CancelSupport cancelSupport = CancelSupport.Factory.get(inspector);
-		try {
-			final boolean[] needsSorting = { false };
-			final HistoryNode[] completeHistory = new HistoryNode[getRevisionCount()];
-			final int[] commitRevisions = new int[completeHistory.length];
-			RevlogStream.Inspector insp = new RevlogStream.Inspector() {
-				public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
-					if (revisionNumber > 0) {
-						if (commitRevisions[revisionNumber-1] > linkRevision) {
-							needsSorting[0] = true;
-						}
-					}
-					commitRevisions[revisionNumber] = linkRevision;
-					HistoryNode p1 = null, p2 = null;
-					if (parent1Revision != -1) {
-						p1 = completeHistory[parent1Revision];
-					}
-					if (parent2Revision != -1) {
-						p2 = completeHistory[parent2Revision];
-					}
-					completeHistory[revisionNumber] = new HistoryNode(linkRevision, p1, p2);
-				}
-			};
-			content.iterate(0, getLastRevision(), false, insp);
-			cancelSupport.checkCancelled();
-			if (needsSorting[0]) {
-				Arrays.sort(commitRevisions);
-			}
-			// read changeset revisions at once (to avoid numerous changelog.getRevision reads)
-			// but just nodeids, not RawChangeset (changelog.iterate(data=false)
-			ArrayList<Nodeid> changesetRevisions = new ArrayList<Nodeid>(commitRevisions.length);
-			getRepo().getChangelog().getRevisionsInternal(changesetRevisions, commitRevisions);
-			cancelSupport.checkCancelled();
-			// assign them to corresponding HistoryNodes
-			for (int i = 0; i < completeHistory.length; i++ ) {
-				final HistoryNode n = completeHistory[i];
-				if (needsSorting[0]) {
-					int x = Arrays.binarySearch(commitRevisions, n.changeset);
-					assert x >= 0;
-					n.cset = changesetRevisions.get(x);
-				} else {
-					// commit revisions were not sorted, may use original index directly
-					n.cset = changesetRevisions.get(i);
-				}
-			}
-			cancelSupport.checkCancelled();
-			// XXX shall sort completeHistory according to changeset numbers?
-			for (int i = 0; i < completeHistory.length; i++ ) {
-				final HistoryNode n = completeHistory[i];
-				HistoryNode p;
-				Nodeid p1, p2;
-				if ((p = n.parent1) != null) {
-					p1 = p.changesetRevision();
-				} else {
-					p1 = Nodeid.NULL;
-				}
-				if ((p= n.parent2) != null) {
-					p2 = p.changesetRevision();
-				} else {
-					p2 = Nodeid.NULL;
-				}
-				final Pair<Nodeid, Nodeid> parentChangesets = new Pair<Nodeid, Nodeid>(p1, p2);
-				final List<Nodeid> childChangesets;
-				if (n.children == null) {
-					childChangesets = Collections.emptyList();
-				} else {
-					Nodeid[] revisions = new Nodeid[n.children.size()];
-					int j = 0;
-					for (HistoryNode hn : n.children) {
-						revisions[j++] = hn.changesetRevision();
-					}
-					childChangesets = Arrays.asList(revisions);
-				}
-				inspector.next(n.changesetRevision(), parentChangesets, childChangesets);
-				cancelSupport.checkCancelled();
-			}
-		} catch (CancelledException ex) {
-			return;
-		}
-	}
-	
+	// FIXME is that still needed?
 	public void history(HgChangelog.Inspector inspector) throws HgInvalidControlFileException {
 		history(0, getLastRevision(), inspector);
 	}
@@ -501,13 +366,6 @@ public class HgDataFile extends Revlog {
 	 */
 	public int getChangesetRevisionIndex(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		return content.linkRevision(revision);
-	}
-	/**
-	 * @deprecated use {@link #getChangesetRevisionIndex(int)} instead
-	 */
-	@Deprecated
-	public int getChangesetLocalRevision(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
-		return getChangesetRevisionIndex(revision);
 	}
 
 	/**

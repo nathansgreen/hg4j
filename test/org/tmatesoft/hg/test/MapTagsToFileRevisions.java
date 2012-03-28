@@ -265,7 +265,7 @@ public class MapTagsToFileRevisions {
 		// file2rev2tag value is array of revisions, always of allTags.length. Revision index in the array
 		// is index of corresponding TagInfo in allTags;
 		final Map<Path, Nodeid[]> file2rev2tag = new HashMap<Path, Nodeid[]>();
-		repository.getManifest().walk(new HgManifest.Inspector2() {
+		repository.getManifest().walk(new HgManifest.Inspector() {
 			private int[] tagIndexAtRev = new int[4]; // it's unlikely there would be a lot of tags associated with a given cset
 
 			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
@@ -288,10 +288,6 @@ public class MapTagsToFileRevisions {
 					System.out.println("Can't happen, provided we iterate over revisions with tags only");
 				}
 				return true;
-			}
-			
-			public boolean next(Nodeid nid, String fname, String flags) {
-				throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 			}
 
 			public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {
@@ -370,12 +366,9 @@ public class MapTagsToFileRevisions {
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
 
-	static class DoNothingManifestInspector implements HgManifest.Inspector2 {
+	static class DoNothingManifestInspector implements HgManifest.Inspector {
 		public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
 			return true;
-		}
-		public boolean next(Nodeid nid, String fname, String flags) {
-			throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 		}
 		public boolean next(Nodeid nid, Path fname, Flags flags) {
 			return true;

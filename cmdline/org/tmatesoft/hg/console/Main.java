@@ -495,15 +495,12 @@ public class Main {
 		hgRepo.getManifest().walk(0, TIP, new ManifestDump());
 	}
 
-	public static final class ManifestDump implements HgManifest.Inspector2 {
+	public static final class ManifestDump implements HgManifest.Inspector {
 		public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
 			System.out.printf("%d : %s\n", manifestRevision, nid);
 			return true;
 		}
 
-		public boolean next(Nodeid nid, String fname, String flags) {
-			throw new IllegalStateException(HgManifest.Inspector2.class.getName());
-		}
 		public boolean next(Nodeid nid, Path fname, Flags flags) {
 			System.out.println(nid + "\t" + fname + "\t\t" + flags);
 			return true;

@@ -110,7 +110,7 @@ public class HgStatusCollector {
 		for (int x = minRev, i = 0; x <= maxRev; i++, x++) {
 			revisionsToCollect[i] = x;
 		}
-		repo.getManifest().walk(new HgManifest.Inspector2() {
+		repo.getManifest().walk(new HgManifest.Inspector() {
 			private ManifestRevision delegate;
 			private boolean cacheHit; // range may include revisions we already know about, do not re-create them
 
@@ -126,10 +126,6 @@ public class HgStatusCollector {
 					cacheHit = false;
 				}
 				return true;
-			}
-
-			public boolean next(Nodeid nid, String fname, String flags) {
-				throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 			}
 
 			public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {

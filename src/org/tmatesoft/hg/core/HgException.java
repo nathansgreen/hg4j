@@ -50,28 +50,12 @@ public class HgException extends Exception {
 		return extras.getRevisionIndex();
 	}
 
-	/**
-	 * @deprecated use {@link #getRevisionIndex()}
-	 */
-	@Deprecated
-	public int getRevisionNumber() {
-		return getRevisionIndex();
-	}
-	
 	public HgException setRevisionIndex(int rev) {
 		return extras.setRevisionIndex(rev);
 	}
 	
 	public boolean isRevisionIndexSet() {
 		return extras.isRevisionIndexSet();
-	}
-
-	/**
-	 * @deprecated use {@link #setRevisionIndex(int)}
-	 */
-	@Deprecated
-	public final HgException setRevisionNumber(int rev) {
-		return setRevisionIndex(rev);
 	}
 
 	/**

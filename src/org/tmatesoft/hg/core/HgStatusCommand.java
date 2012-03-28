@@ -202,14 +202,6 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		}
 	}
 
-	/**
-	 * @deprecated replaced with {@link HgStatusHandler}
-	 */
-	@Deprecated
-	public interface Handler extends HgStatusHandler{
-		void handleStatus(HgStatus s);
-	}
-
 	private class Mediator implements HgStatusInspector, CancelSupport {
 		boolean needModified;
 		boolean needAdded;

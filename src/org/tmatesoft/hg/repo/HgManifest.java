@@ -337,25 +337,15 @@ public class HgManifest extends Revlog {
 	public interface Inspector {
 		boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision);
 		/**
-		 * @deprecated switch to {@link HgManifest.Inspector2#next(Nodeid, Path, HgManifest.Flags)}
-		 */
-		@Deprecated
-		boolean next(Nodeid nid, String fname, String flags);
-		boolean end(int manifestRevision);
-	}
-	
-	@Experimental(reason="Explore Path alternative for filenames and enum for flags")
-	@Callback
-	public interface Inspector2 extends Inspector {
-		/**
 		 * @param nid file revision
 		 * @param fname file name
 		 * @param flags one of {@link HgManifest.Flags} constants, not <code>null</code>
 		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
 		 */
 		boolean next(Nodeid nid, Path fname, Flags flags);
+		boolean end(int manifestRevision);
 	}
-
+	
 	/**
 	 * When Pool uses Strings directly,
 	 * ManifestParser creates new String instance with new char[] value, and does byte->char conversion.
@@ -429,7 +419,6 @@ public class HgManifest extends Revlog {
 
 	private static class ManifestParser implements RevlogStream.Inspector, Lifecycle {
 		private final Inspector inspector;
-		private final Inspector2 inspector2;
 		private Pool2<Nodeid> nodeidPool, thisRevPool;
 		private final Pool2<PathProxy> fnamePool;
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
@@ -440,7 +429,6 @@ public class HgManifest extends Revlog {
 		public ManifestParser(Inspector delegate, EncodingHelper eh) {
 			assert delegate != null;
 			inspector = delegate;
-			inspector2 = delegate instanceof Inspector2 ? (Inspector2) delegate : null;
 			encHelper = eh;
 			nodeidPool = new Pool2<Nodeid>();
 			fnamePool = new Pool2<PathProxy>();
@@ -493,13 +481,7 @@ public class HgManifest extends Revlog {
 							} else {
 								flags = Flags.RegularFile;
 							}
-							boolean good2go;
-							if (inspector2 == null) {
-								String flagString = flags == Flags.RegularFile ? null : flags.nativeString();
-								good2go = inspector.next(nid, fname.toString(), flagString);
-							} else {
-								good2go = inspector2.next(nid, fname, flags);
-							}
+							boolean good2go = inspector.next(nid, fname, flags);
 							if (!good2go) {
 								iterateControl.stop();
 								return;

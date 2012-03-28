@@ -131,7 +131,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	}
 
 	// I'd rather let HgManifestCommand implement HgManifest.Inspector directly, but this pollutes API alot
-	private class Mediator implements HgManifest.Inspector2 {
+	private class Mediator implements HgManifest.Inspector {
 		// file names are likely to repeat in each revision, hence caching of Paths.
 		// However, once HgManifest.Inspector switches to Path objects, perhaps global Path pool
 		// might be more effective?
@@ -180,9 +180,6 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 			visitor.end(manifestNodeid);
 			manifestNodeid = null;
 			return true;
-		}
-		public boolean next(Nodeid nid, String fname, String flags) {
-			throw new IllegalStateException(HgManifest.Inspector2.class.getName());
 		}
 		
 		public boolean next(Nodeid nid, Path fname, Flags flags) {

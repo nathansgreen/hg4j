@@ -183,14 +183,6 @@ public class HgTags {
 		}
 		return rv;
 	}
-	
-	/**
-	 * @deprecated use {@link #getAllTags()} instead
-	 */
-	@Deprecated
-	public Map<String, TagInfo> getTags() {
-		return getAllTags();
-	}
 
 	/**
 	 * All tag entries from the repository, for both active and removed tags

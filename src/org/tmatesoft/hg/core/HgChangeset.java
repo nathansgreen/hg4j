@@ -93,14 +93,6 @@ public class HgChangeset implements Cloneable {
 	}
 
 	/**
-	 * @deprecated use {@link #getRevisionIndex()}
-	 */
-	@Deprecated
-	public int getRevision() {
-		return revNumber;
-	}
-
-	/**
 	 * Unique identity of this changeset revision
 	 * @return revision identifier, never <code>null</code>
 	 */

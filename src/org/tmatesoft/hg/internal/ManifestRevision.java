@@ -30,7 +30,7 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class ManifestRevision implements HgManifest.Inspector2 {
+public final class ManifestRevision implements HgManifest.Inspector {
 	private final TreeMap<Path, Nodeid> idsMap;
 	private final TreeMap<Path, HgManifest.Flags> flagsMap;
 	private final Pool<Nodeid> idsPool;
@@ -72,10 +72,6 @@ public final class ManifestRevision implements HgManifest.Inspector2 {
 	}
 	
 	//
-
-	public boolean next(Nodeid nid, String fname, String flags) {
-		throw new IllegalStateException(HgManifest.Inspector2.class.getName());
-	}
 
 	public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {
 		if (namesPool != null) {

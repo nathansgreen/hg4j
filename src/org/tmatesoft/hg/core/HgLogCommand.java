@@ -263,6 +263,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					} while (followHistory && fileNode.isCopy());
 				}
 			}
+//		} catch (HgRuntimeException ex) {
+//			FIXME wrap with checked HgRuntime subclass
 		} finally {
 			csetTransform = null;
 			progressHelper.done();

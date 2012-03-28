@@ -147,15 +147,6 @@ abstract class Revlog {
 	}
 	
 	/**
-	 * @deprecated use {@link #getRevisionIndex(Nodeid)} instead
-	 */
-	@Deprecated
-	public final int getLocalRevision(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
-		return getRevisionIndex(nid);
-	}
-
-
-	/**
 	 * Note, {@link Nodeid#NULL} nodeid is not reported as known in any revlog.
 	 * 
 	 * @param nodeid
@@ -590,13 +581,6 @@ abstract class Revlog {
 				return BAD_REVISION;
 			}
 			return sorted2natural[x]-1;
-		}
-		/**
-		 * @deprecated use {@link #revisionIndex(Nodeid)} instead
-		 */
-		@Deprecated
-		public int localRevision(Nodeid revision) {
-			return revisionIndex(revision);
 		}
 	}
 

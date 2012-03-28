@@ -151,7 +151,7 @@ public class TestAuxUtilities {
 	@Test
 	public void testManifestCancelSupport() throws Exception {
 		HgRepository repository = Configuration.get().find("branches-1"); // any repo with as many revisions as possible
-		class InspectorImplementsAdaptable implements HgManifest.Inspector2, Adaptable {
+		class InspectorImplementsAdaptable implements HgManifest.Inspector, Adaptable {
 			public final int when2stop;
 			public int lastVisitet = 0;
 			private final CancelImpl cancelImpl = new CancelImpl(); 
@@ -164,10 +164,6 @@ public class TestAuxUtilities {
 				if (++lastVisitet == when2stop) {
 					cancelImpl.stop();
 				}
-				return true;
-			}
-
-			public boolean next(Nodeid nid, String fname, String flags) {
 				return true;
 			}
 

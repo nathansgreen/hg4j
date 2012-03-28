@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,7 +54,7 @@ public class Tags {
 				return x1 < x2 ? 1 : -1;
 			}
 		});
-		for (TagInfo ti : tags.getTags().values()) {
+		for (TagInfo ti : tags.getAllTags().values()) {
 			int x = clog.getRevisionIndex(ti.revision()); // XXX in fact, performance hog. Need batch revisionIndex or another improvement
 			ti2index.put(ti, x);
 			sorted.add(ti);

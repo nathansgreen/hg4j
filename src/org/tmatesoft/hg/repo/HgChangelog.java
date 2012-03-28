@@ -21,7 +21,6 @@ import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Formatter;
@@ -40,7 +39,6 @@ import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.CancelSupport;
-import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
@@ -116,21 +114,6 @@ public class HgChangelog extends Revlog {
 		 * @param cset changeset raw data
 		 */
 		void next(int revisionIndex, Nodeid nodeid, RawChangeset cset);
-	}
-
-	/**
-	 * Unlike regular {@link Inspector}, this one supplies changeset revision along with its parents and children according
-	 * to parent information of the revlog this inspector visits.
-	 * @see HgDataFile#history(HgChangelog.TreeInspector)
-	 * @deprecated use {@link org.tmatesoft.hg.core.HgChangesetTreeHandler} and HgLogCommand#execute(org.tmatesoft.hg.core.HgChangesetTreeHandler)}
-	 */
-	@Deprecated
-	public interface TreeInspector {
-		// the reason TreeInsector is in HgChangelog, not in Revlog, because despite the fact it can
-		// be applied to any revlog, it's not meant to provide revisions of any revlog it's beeing applied to, 
-		// but changeset revisions always.
-		// TODO HgChangelog.walk(TreeInspector)
-		void next(Nodeid changesetRevision, Pair<Nodeid, Nodeid> parentChangesets, Collection<Nodeid> childChangesets);
 	}
 
 	/**
