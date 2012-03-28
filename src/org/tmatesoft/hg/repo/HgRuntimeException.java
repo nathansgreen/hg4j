@@ -16,19 +16,22 @@
  */
 package org.tmatesoft.hg.repo;
 
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ExceptionInfo;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * Almost any method in Hg4J low-level API may throw subclass of this exception to indicate unexpected
- * state/condition encountered, flawed data or IO error. Since most cases can't be handled in a reasonable 
- * manner (other than catch all exceptions and tell client something went wrong), and propagating all possible
- * exceptions up through API is dubious task, low-level exceptions are made runtime, rooting at this single class.
+ * Almost any method in <b>Hg4J</b> low-level API (@link org.tmatesoft.hg.repo} may throw subclass of this exception 
+ * to indicate unexpected state/condition encountered, flawed data or IO error. 
+ * Since most cases can't be handled in a reasonable manner (other than catch all exceptions and tell client 
+ * something went wrong), and propagating all possible exceptions up through API is dubious task, low-level 
+ * exceptions are made runtime, rooting at this single class.
  * 
  * <p>Hi-level api, {@link org.tmatesoft.hg.core}, where interaction with user-supplied values is more explicit,
  * may follow different exception strategy.
  * 
+ * @see HgException
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */

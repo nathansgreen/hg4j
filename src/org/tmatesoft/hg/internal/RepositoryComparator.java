@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -487,7 +487,7 @@ public class RepositoryComparator {
 			toQuery.clear();
 		}
 		if (rootIndex == -1) {
-			throw new HgInvalidStateException("Shall not happen, provided between output is correct"); // FIXME EXCEPTIONS
+			throw new HgInvalidStateException("Shall not happen, provided between output is correct");
 		}
 		result[rootIndex] = branchRoot;
 		boolean resultOk = true;

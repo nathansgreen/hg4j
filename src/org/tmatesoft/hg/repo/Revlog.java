@@ -16,9 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
-import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -29,7 +27,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -80,11 +77,19 @@ abstract class Revlog {
 		return repo;
 	}
 
-	public final int getRevisionCount() {
+	/**
+	 * @return total number of revisions kept in this revlog
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public final int getRevisionCount() throws HgRuntimeException {
 		return content.revisionCount();
 	}
 	
-	public final int getLastRevision() {
+	/**
+	 * @return index of last known revision, a.k.a. {@link HgRepository#TIP}
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public final int getLastRevision() throws HgRuntimeException {
 		return content.revisionCount() - 1;
 	}
 
@@ -94,18 +99,22 @@ abstract class Revlog {
 	 * @param revision index of the entry in this revlog, may be {@link HgRepository#TIP}
 	 * @return revision nodeid of the entry
 	 * 
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public final Nodeid getRevision(int revision) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public final Nodeid getRevision(int revision) throws HgRuntimeException {
 		// XXX cache nodeids? Rather, if context.getCache(this).getRevisionMap(create == false) != null, use it
 		return Nodeid.fromBinary(content.nodeid(revision), 0);
 	}
 	
 	/**
-	 * FIXME need to be careful about (1) ordering of the revisions in the return list; (2) modifications (sorting) of the argument array 
+	 * Effective alternative to map few revision indexes to corresponding nodeids at once.
+	 * <p>Note, there are few aspects to be careful about when using this method<ul>
+	 * <li>ordering of the revisions in the return list is unspecified, it's likely won't match that of the method argument
+	 * <li>supplied array get modified (sorted)</ul>
+	 * @return list of mapped revisions in no particular order
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public final List<Nodeid> getRevisions(int... revisions) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public final List<Nodeid> getRevisions(int... revisions) throws HgRuntimeException {
 		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(revisions.length);
 		Arrays.sort(revisions);
 		getRevisionsInternal(rv, revisions);
@@ -132,10 +141,9 @@ abstract class Revlog {
 	 * 
 	 * @param nid revision to look up 
 	 * @return revision local index in this revlog
-	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public final int getRevisionIndex(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public final int getRevisionIndex(Nodeid nid) throws HgRuntimeException {
 		int revision = content.findRevisionIndex(nid);
 		if (revision == BAD_REVISION) {
 			// using toString() to identify revlog. HgDataFile.toString includes path, HgManifest and HgChangelog instances 
@@ -151,9 +159,9 @@ abstract class Revlog {
 	 * 
 	 * @param nodeid
 	 * @return <code>true</code> if revision is part of this revlog
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public final boolean isKnown(Nodeid nodeid) throws HgInvalidControlFileException {
+	public final boolean isKnown(Nodeid nodeid) throws HgRuntimeException {
 		final int rn = content.findRevisionIndex(nodeid);
 		if (BAD_REVISION == rn) {
 			return false;
@@ -208,11 +216,7 @@ abstract class Revlog {
 			// Do the same (add file name) below
 			throw e;
 		} catch (HgInvalidControlFileException ex) {
-			throw ex;
-		} catch (HgException ex) {
-			HgInvalidControlFileException e = new HgInvalidControlFileException(ex.getClass().getSimpleName(), ex, null);
-			e.setRevisionIndex(revisionIndex);
-			throw e;
+			throw ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(revisionIndex);
 		}
 	}
 
@@ -223,11 +227,10 @@ abstract class Revlog {
 	 * @param parentRevisions - int[2] to get local revision numbers of parents (e.g. {6, -1}), {@link HgRepository#NO_REVISION} indicates parent not set
 	 * @param parent1 - byte[20] or null, if parent's nodeid is not needed
 	 * @param parent2 - byte[20] or null, if second parent's nodeid is not needed
-	 * @throws HgInvalidRevisionException
-	 * @throws HgInvalidControlFileException FIXME EXCEPTIONS
-	 * @throws IllegalArgumentException
+	 * @throws IllegalArgumentException if passed arrays can't fit requested data
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public void parents(int revision, int[] parentRevisions, byte[] parent1, byte[] parent2) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public void parents(int revision, int[] parentRevisions, byte[] parent1, byte[] parent2) throws HgRuntimeException, IllegalArgumentException {
 		if (revision != TIP && !(revision >= 0 && revision < content.revisionCount())) {
 			throw new HgInvalidRevisionException(revision);
 		}
@@ -275,9 +278,19 @@ abstract class Revlog {
 			}
 		}
 	}
-	
+
+	/**
+	 * EXPERIMENTAL CODE, DO NOT USE
+	 * 
+	 * Alternative revlog iteration
+	 * 
+	 * @param start
+	 * @param end
+	 * @param inspector
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
 	@Experimental
-	public void walk(int start, int end, final Revlog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public void walk(int start, int end, final Revlog.Inspector inspector) throws HgRuntimeException {
 		int lastRev = getLastRevision();
 		if (start == TIP) {
 			start = lastRev;
@@ -325,7 +338,7 @@ abstract class Revlog {
 	}
 	
 	/*
-	 * XXX think over if it's better to do either:
+	 * FIXME think over if it's better to do either:
 	 * pw = getChangelog().new ParentWalker(); pw.init() and pass pw instance around as needed
 	 * or
 	 * add Revlog#getParentWalker(), static class, make cons() and #init package-local, and keep SoftReference to allow walker reuse.
@@ -598,9 +611,7 @@ abstract class Revlog {
 			failure = ex;
 		}
 
-		// FIXME is HgException of any use here now?  
-		// TODO consider if IOException in addition to HgException is of any real utility
-		public void checkFailed() throws HgException, IOException, CancelledException {
+		public void checkFailed() throws HgRuntimeException, IOException, CancelledException {
 			if (failure == null) {
 				return;
 			}
@@ -610,8 +621,8 @@ abstract class Revlog {
 			if (failure instanceof CancelledException) {
 				throw (CancelledException) failure;
 			}
-			if (failure instanceof HgException) {
-				throw (HgException) failure;
+			if (failure instanceof HgRuntimeException) {
+				throw (HgRuntimeException) failure;
 			}
 			throw new HgInvalidStateException(failure.toString());
 		}
@@ -641,7 +652,7 @@ abstract class Revlog {
 			logFacility = log;
 		}
 		
-		protected void prepare(int revisionNumber, DataAccess da) throws HgException, IOException {
+		protected void prepare(int revisionNumber, DataAccess da) throws IOException {
 			if (offset > 0) { // save few useless reset/rewind operations
 				da.seek(offset);
 			}
@@ -688,8 +699,6 @@ abstract class Revlog {
 			} catch (IOException ex) {
 				recordFailure(ex);
 			} catch (CancelledException ex) {
-				recordFailure(ex);
-			} catch (HgException ex) {
 				recordFailure(ex);
 			}
 		}

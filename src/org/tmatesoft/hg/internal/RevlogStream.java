@@ -305,7 +305,7 @@ public class RevlogStream {
 		return revisionIndex;
 	}
 
-	private void initOutline() {
+	private void initOutline() throws HgInvalidControlFileException {
 		if (baseRevisions != null && baseRevisions.length > 0) {
 			return;
 		}

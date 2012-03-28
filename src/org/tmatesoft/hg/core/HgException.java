@@ -21,7 +21,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * Root class for all hg4j exceptions.
+ * Root class for all <b>Hg4J</b> checked exceptions.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

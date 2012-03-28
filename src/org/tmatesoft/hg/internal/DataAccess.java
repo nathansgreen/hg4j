@@ -121,7 +121,7 @@ public class DataAccess {
 	}
 
 	// XXX decide whether may or may not change position in the DataAccess
-	// FIXME exception handling is not right, just for the sake of quick test
+	// TODO REVISIT exception handling may not be right, initially just for the sake of quick test
 	public byte[] byteArray() throws IOException {
 		reset();
 		byte[] rv = new byte[length()];

@@ -20,6 +20,7 @@ import java.io.File;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Internals;
 
 /**
@@ -36,11 +37,12 @@ public class FileWalker implements FileIterator {
 	private final LinkedList<File> fileQueue;
 	private final Path.Matcher scope;
 	private final boolean execCap, linkCap;
+	private final SessionContext sessionContext;
 	private RegularFileInfo nextFile;
 	private Path nextPath;
 
-	public FileWalker(File dir, Path.Source pathFactory) {
-		this(dir, pathFactory, null);
+	public FileWalker(SessionContext ctx, File dir, Path.Source pathFactory) {
+		this(ctx, dir, pathFactory, null);
 	}
 
 	/**
@@ -51,7 +53,8 @@ public class FileWalker implements FileIterator {
 	 * also whether directories shall be traversed or not (Paths it gets in {@link Path.Matcher#accept(Path)} may 
 	 * point to directories)   
 	 */
-	public FileWalker(File dir, Path.Source pathFactory, Path.Matcher scopeMatcher) {
+	public FileWalker(SessionContext ctx, File dir, Path.Source pathFactory, Path.Matcher scopeMatcher) {
+		sessionContext = ctx;
 		startDir = dir;
 		pathHelper = pathFactory;
 		dirQueue = new LinkedList<File>();
@@ -66,7 +69,7 @@ public class FileWalker implements FileIterator {
 		fileQueue.clear();
 		dirQueue.clear();
 		dirQueue.add(startDir);
-		nextFile = new RegularFileInfo(supportsExecFlag(), supportsLinkFlag());
+		nextFile = new RegularFileInfo(sessionContext, supportsExecFlag(), supportsLinkFlag());
 		nextPath = null;
 	}
 	

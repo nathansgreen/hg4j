@@ -38,6 +38,7 @@ import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
@@ -67,6 +68,7 @@ import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * Various debug dumps. 
@@ -92,7 +94,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.checkFileFlags();
+		m.checkSubProgress();
+//		m.checkFileFlags();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -113,6 +116,41 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	// no repo
+	private void checkSubProgress() {
+		ProgressSupport ps = new ProgressSupport() {
+			private int units;
+			
+			public void start(int totalUnits) {
+				units = totalUnits;
+				System.out.printf("%d:", totalUnits);
+				
+			}
+			public void worked(int wu) {
+				for (int i = 0; i < wu; i++) {
+					System.out.print(units-- == 0 ? '!' : '.');
+				}
+			}
+			public void done() {
+				System.out.println("DONE");
+			}
+		};
+		ps.start(10);
+		ProgressSupport.Sub s1 = new ProgressSupport.Sub(ps, 3);
+		ProgressSupport.Sub s2 = new ProgressSupport.Sub(ps, 7);
+		s1.start(10);
+		s1.worked(1);
+		s1.worked(2);
+		s1.worked(3);
+		s1.worked(4);
+		s1.done();
+		//
+		s2.start(5);
+		s2.worked(3);
+		s2.worked(2);
+		s2.done();
 	}
 
 	private void checkFileFlags() throws Exception {
@@ -218,7 +256,7 @@ public class Main {
 	private void testTreeTraversal() throws Exception {
 		File repoRoot = hgRepo.getWorkingDir();
 		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), hgRepo.getToRepoPathHelper()));
-		FileWalker w =  new FileWalker(repoRoot, pathSrc);
+		FileWalker w =  new FileWalker(new BasicSessionContext(null, null), repoRoot, pathSrc);
 		int count = 0;
 		final long start = System.currentTimeMillis();
 		while (w.hasNext()) {

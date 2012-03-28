@@ -139,7 +139,7 @@ public class HgInternals {
 		// Impl note: simple source is enough as files in the working dir are all unique
 		// even if they might get reused (i.e. after FileIterator#reset() and walking once again),
 		// path caching is better to be done in the code which knows that path are being reused 
-		return new FileWalker(repoRoot, pathSrc, workindDirScope);
+		return new FileWalker(repo.getContext(), repoRoot, pathSrc, workindDirScope);
 	}
 	
 	// expose otherwise package-local information primarily to use in our own o.t.hg.core package
@@ -149,8 +149,8 @@ public class HgInternals {
 
 
 	// Convenient check of revision index for validity (not all negative values are wrong as long as we use negative constants)
-	public static boolean wrongRevisionIndex(int rev) { // FIXME guess, usages shall throw HgInvalidRevision. \
-		// TODO Another method to check,throw and expand TIP at once
+	public static boolean wrongRevisionIndex(int rev) {
+		// TODO Another method to check,throw and expand TIP at once (check[Revision|Revlog]Index()
 		return rev < 0 && rev != TIP && rev != WORKING_COPY && rev != BAD_REVISION && rev != NO_REVISION; 
 	}
 	

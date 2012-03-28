@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ReadableByteChannel;
 
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.StreamLogFacility;
 
 /**
@@ -36,14 +37,14 @@ public class RegularFileInfo implements FileInfo {
 	private final RegularFileStats fileFlagsHelper; // null if both supportsLink and supportExec are false
 	private File file;
 	
-	public RegularFileInfo() {
-		this(false, false);
+	public RegularFileInfo(SessionContext ctx) {
+		this(ctx, false, false);
 	}
-	public RegularFileInfo(boolean supportExecFlag, boolean supportSymlink) {
+	public RegularFileInfo(SessionContext ctx, boolean supportExecFlag, boolean supportSymlink) {
 		supportsLink = supportSymlink;
 		supportsExec = supportExecFlag;
 		if (supportSymlink || supportExecFlag) {
-			fileFlagsHelper = new RegularFileStats();
+			fileFlagsHelper = new RegularFileStats(ctx);
 		} else  {
 			fileFlagsHelper = null;
 		}

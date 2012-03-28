@@ -30,6 +30,7 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ProcessExecHelper;
 
@@ -54,6 +55,7 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 	private final List<String> command;
 	private final ProcessExecHelper execHelper;
 	private final Matcher linkMatcher, execMatcher;
+	private final SessionContext sessionContext;
 	
 	
 	// directory name to (short link name -> link target)
@@ -62,7 +64,8 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 	private Map<String, Set<String>> dir2execs = new TreeMap<String, Set<String>>();
 
 
-	RegularFileStats() {
+	RegularFileStats(SessionContext ctx) {
+		sessionContext = ctx;
 		if (Internals.runningOnWindows()) {
 			// XXX this implementation is not yet tested against any Windows repository, 
 			// only against sample dir listings. As long as Mercurial doesn't handle Windows
@@ -88,7 +91,14 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 		execHelper = new ProcessExecHelper();
 	}
 
+	/**
+	 * Fails silently indicating false for both x and l in case interaction with file system failed
+	 * @param f file to check, doesn't need to exist
+	 */
 	public void init(File f) {
+		isExec = isSymlink = false;
+		symlinkValue = null;
+		//
 		// can't check isFile because Java would say false for a symlink with non-existing target
 		if (f.isDirectory()) {
 			// perhaps, shall just collect stats for all files and set false to exec/link flags?
@@ -122,21 +132,21 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 				}
 				dir2links.put(dirName, links);
 				dir2execs.put(dirName, execs);
+				isExec = execs.contains(fileName);
+				isSymlink = links.containsKey(fileName);
+				if (isSymlink) {
+					symlinkValue = links.get(fileName);
+				} else {
+					symlinkValue = null;
+				}
 			} catch (InterruptedException ex) {
+				sessionContext.getLog().warn(getClass(), ex, String.format("Failed to detect flags for %s", f));
 				// try again? ensure not too long? stop right away?
-				// FIXME EXCEPTIONS
-				throw new RuntimeException();
+				// IGNORE, keep isExec and isSymlink false
 			} catch (IOException ex) {
-				// FIXME EXCEPTIONS perhaps, fail silently indicating false for both x and l?
-				throw new RuntimeException();
+				sessionContext.getLog().warn(getClass(), ex, String.format("Failed to detect flags for %s", f));
+				// IGNORE, keep isExec and isSymlink false
 			}
-		}
-		isExec = execs.contains(fileName);
-		isSymlink = links.containsKey(fileName);
-		if (isSymlink) {
-			symlinkValue = links.get(fileName);
-		} else {
-			symlinkValue = null;
 		}
 	}
 

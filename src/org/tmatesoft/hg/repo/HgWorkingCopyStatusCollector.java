@@ -30,8 +30,8 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
@@ -162,7 +162,7 @@ public class HgWorkingCopyStatusCollector {
 	 */
 	public void walk(int baseRevision, HgStatusInspector inspector) throws IOException, CancelledException, HgRuntimeException {
 		if (HgInternals.wrongRevisionIndex(baseRevision) || baseRevision == BAD_REVISION) {
-			throw new IllegalArgumentException(String.valueOf(baseRevision));
+			throw new HgInvalidRevisionException(baseRevision);
 		}
 		if (getDirstateImpl() == null) {
 				getDirstate();
@@ -346,7 +346,7 @@ public class HgWorkingCopyStatusCollector {
 							inspector.clean(df.getPath());
 						}
 					}
-				} catch (HgException ex) {
+				} catch (HgRuntimeException ex) {
 					repo.getContext().getLog().warn(getClass(), ex, null);
 					inspector.invalid(fname, ex);
 				}
@@ -381,7 +381,7 @@ public class HgWorkingCopyStatusCollector {
 						inspector.copied(getPathPool().path(origin), fname);
 						return;
 					}
-				} catch (HgException ex) {
+				} catch (HgInvalidFileException ex) {
 					// report failure and continue status collection
 					inspector.invalid(fname, ex);
 				}
@@ -435,7 +435,7 @@ public class HgWorkingCopyStatusCollector {
 					} else {
 						inspector.modified(fname);
 					}
-				} catch (HgException ex) {
+				} catch (HgRuntimeException ex) {
 					repo.getContext().getLog().warn(getClass(), ex, null);
 					inspector.invalid(fname, ex);
 				}
@@ -456,7 +456,7 @@ public class HgWorkingCopyStatusCollector {
 		// The question is whether original Hg treats this case (same content, different parents and hence nodeids) as 'modified' or 'clean'
 	}
 
-	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) throws HgException, HgInvalidFileException {
+	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) throws HgInvalidFileException {
 		// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
 		ByteArrayChannel bac = new ByteArrayChannel();
 		try {
@@ -611,7 +611,7 @@ public class HgWorkingCopyStatusCollector {
 //		final Path[] dirs = f.toArray(new Path[d.size()]);
 		if (d.isEmpty()) {
 			final Path[] files = f.toArray(new Path[f.size()]);
-			FileIterator fi = new FileListIterator(hgRepo.getWorkingDir(), files);
+			FileIterator fi = new FileListIterator(hgRepo.getContext(), hgRepo.getWorkingDir(), files);
 			return new HgWorkingCopyStatusCollector(hgRepo, fi);
 		}
 		//
@@ -648,8 +648,10 @@ public class HgWorkingCopyStatusCollector {
 		private int index;
 		private RegularFileInfo nextFile;
 		private final boolean execCap, linkCap;
+		private final SessionContext sessionContext;
 
-		public FileListIterator(File startDir, Path... files) {
+		public FileListIterator(SessionContext ctx, File startDir, Path... files) {
+			sessionContext = ctx;
 			dir = startDir;
 			paths = files;
 			reset();
@@ -659,7 +661,7 @@ public class HgWorkingCopyStatusCollector {
 
 		public void reset() {
 			index = -1;
-			nextFile = new RegularFileInfo(execCap, linkCap);
+			nextFile = new RegularFileInfo(sessionContext, execCap, linkCap);
 		}
 
 		public boolean hasNext() {

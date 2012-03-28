@@ -44,7 +44,9 @@ import org.tmatesoft.hg.util.ProgressSupport;
 
 
 /**
- *
+ * Representation of Mercurial manifest file (list of file names and their revisions in a particular changeset)
+ * 
+ * @see http://mercurial.selenic.com/wiki/Manifest
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -222,15 +224,14 @@ public class HgManifest extends Revlog {
 	 * if changeset has no associated manifest (cset records NULL nodeid for manifest).
 	 * @return manifest revision index, non-negative, or {@link HgRepository#BAD_REVISION}.
 	 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index
-	 * @throws IllegalArgumentException if argument is not a revision index
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	/*package-local*/ int fromChangelog(int changesetRevisionIndex) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		if (HgInternals.wrongRevisionIndex(changesetRevisionIndex)) {
-			throw new IllegalArgumentException(String.valueOf(changesetRevisionIndex));
+			throw new HgInvalidRevisionException(changesetRevisionIndex);
 		}
 		if (changesetRevisionIndex == HgRepository.WORKING_COPY || changesetRevisionIndex == HgRepository.BAD_REVISION) {
-			throw new IllegalArgumentException("Can't use constants like WORKING_COPY or BAD_REVISION");
+			throw new HgInvalidRevisionException("Can't use constants like WORKING_COPY or BAD_REVISION", null, changesetRevisionIndex);
 		}
 		// revisionNumber == TIP is processed by RevisionMapper 
 		if (revisionMap == null) {
@@ -248,8 +249,7 @@ public class HgManifest extends Revlog {
 	 * @param changelogRevisionIndex local changeset index 
 	 * @param file path to file in question
 	 * @return file revision or <code>null</code> if manifest at specified revision doesn't list such file
-	 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public Nodeid getFileRevision(int changelogRevisionIndex, final Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		// there's no need for HgDataFile to own this method, or get a delegate
@@ -281,9 +281,7 @@ public class HgManifest extends Revlog {
 	 * @param changesetRevIndex changeset revision index
 	 * @param file path to look up
 	 * @return one of predefined enum values, or <code>null</code> if file was not known in the specified revision
-	 * FIXME EXCEPTIONS
-	 * @throws HgInvalidControlFileException
-	 * @throws HgInvalidRevisionException 
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public Flags getFileFlags(int changesetRevIndex, Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		int manifestRevIdx = fromChangelog(changesetRevIndex);

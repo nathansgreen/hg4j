@@ -56,7 +56,7 @@ class StoragePathHelper implements PathRewrite {
 		fncache = isFncache;
 		dotencode = isDotencode;
 		suffix2replace = Pattern.compile("\\.([id]|hg)/");
-		csEncoder = fsEncoding.newEncoder(); // FIXME catch exception and rethrow as our's RT
+		csEncoder = fsEncoding.newEncoder();
 		byteEncodingBuf = ByteBuffer.allocate(Math.round(csEncoder.maxBytesPerChar()) + 1/*in fact, need ceil, hence +1*/);
 		charEncodingBuf = CharBuffer.allocate(1);
 	}

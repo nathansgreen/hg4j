@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.ManifestRevision;
@@ -298,7 +297,7 @@ public class HgStatusCollector {
 					} else {
 						inspector.added(copyTarget);
 					}
-				} catch (HgException ex) {
+				} catch (HgInvalidFileException ex) {
 					// record exception to a mediator and continue, 
 					// for a single file not to be irresolvable obstacle for a status operation
 					inspector.invalid(r2fname, ex);
@@ -335,11 +334,11 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
-	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgException {
+	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgInvalidFileException {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		if (!df.exists()) {
 			String msg = String.format("Didn't find file '%s' in the repo. Perhaps, bad storage name conversion?", fname);
-			throw new HgException(msg).setFileName(fname).setRevisionIndex(originalChangelogRevision);
+			throw new HgInvalidFileException(msg, null).setFileName(fname).setRevisionIndex(originalChangelogRevision);
 		}
 		while (df.isCopy()) {
 			Path original = df.getCopySourceName();

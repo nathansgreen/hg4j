@@ -24,6 +24,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.util.LogFacility;
 
 /**
  * 
@@ -39,13 +40,17 @@ public class DataAccessProvider {
 	public static final String CFG_PROPERTY_MAPIO_LIMIT				= "hg4j.dap.mapio_limit";
 	public static final String CFG_PROPERTY_MAPIO_BUFFER_SIZE		= "hg4j.dap.mapio_buffer";
 	public static final String CFG_PROPERTY_FILE_BUFFER_SIZE		= "hg4j.dap.file_buffer";
+	
+	private static final int DEFAULT_MAPIO_LIMIT = 100 * 1024; // 100 kB
+	private static final int DEFAULT_FILE_BUFFER =   8 * 1024; // 8 kB
+	private static final int DEFAULT_MAPIO_BUFFER = DEFAULT_MAPIO_LIMIT; // same as default boundary
 
 	private final int mapioMagicBoundary;
 	private final int bufferSize;
 	private final SessionContext context;
 
 	public DataAccessProvider(SessionContext ctx) {
-		this(ctx, getConfigOption(ctx, CFG_PROPERTY_MAPIO_LIMIT, 100 * 1024), getConfigOption(ctx, CFG_PROPERTY_FILE_BUFFER_SIZE, 8 * 1024));
+		this(ctx, getConfigOption(ctx, CFG_PROPERTY_MAPIO_LIMIT, DEFAULT_MAPIO_LIMIT), getConfigOption(ctx, CFG_PROPERTY_FILE_BUFFER_SIZE, DEFAULT_FILE_BUFFER));
 	}
 	
 	private static int getConfigOption(SessionContext ctx, String optName, int defaultValue) {
@@ -71,14 +76,15 @@ public class DataAccessProvider {
 			long flen = fc.size();
 			if (flen > mapioMagicBoundary) {
 				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
-				return new MemoryMapFileAccess(fc, flen, getConfigOption(context, CFG_PROPERTY_MAPIO_BUFFER_SIZE, 100*1024 /*same as default boundary*/));
+				int mapioBufSize = getConfigOption(context, CFG_PROPERTY_MAPIO_BUFFER_SIZE, DEFAULT_MAPIO_BUFFER);
+				return new MemoryMapFileAccess(fc, flen, mapioBufSize, context.getLog());
 			} else {
 				// XXX once implementation is more or less stable,
 				// may want to try ByteBuffer.allocateDirect() to see
 				// if there's any performance gain. 
 				boolean useDirectBuffer = false; // XXX might be another config option
 				// TESTS: bufferSize of 100 was used to check buffer underflow states when readBytes reads chunks bigger than bufSize
-				return new FileAccess(fc, flen, bufferSize, useDirectBuffer);
+				return new FileAccess(fc, flen, bufferSize, useDirectBuffer, context.getLog());
 			}
 		} catch (IOException ex) {
 			// unlikely to happen, we've made sure file exists.
@@ -89,14 +95,16 @@ public class DataAccessProvider {
 
 	private static class MemoryMapFileAccess extends DataAccess {
 		private FileChannel fileChannel;
-		private final long size;
 		private long position = 0; // always points to buffer's absolute position in the file
-		private final int memBufferSize;
 		private MappedByteBuffer buffer;
+		private final long size;
+		private final int memBufferSize;
+		private final LogFacility logFacility;
 
-		public MemoryMapFileAccess(FileChannel fc, long channelSize, int bufferSize) {
+		public MemoryMapFileAccess(FileChannel fc, long channelSize, int bufferSize, LogFacility log) {
 			fileChannel = fc;
 			size = channelSize;
+			logFacility = log;
 			memBufferSize = bufferSize > channelSize ? (int) channelSize : bufferSize; // no reason to waste memory more than there's data 
 		}
 
@@ -202,7 +210,7 @@ public class DataAccessProvider {
 				try {
 					fileChannel.close();
 				} catch (IOException ex) {
-					StreamLogFacility.newDefault().debug(getClass(), ex, null);
+					logFacility.debug(getClass(), ex, null);
 				}
 				fileChannel = null;
 			}
@@ -212,13 +220,15 @@ public class DataAccessProvider {
 	// (almost) regular file access - FileChannel and buffers.
 	private static class FileAccess extends DataAccess {
 		private FileChannel fileChannel;
-		private final long size;
 		private ByteBuffer buffer;
 		private long bufferStartInFile = 0; // offset of this.buffer in the file.
+		private final long size;
+		private final LogFacility logFacility;
 
-		public FileAccess(FileChannel fc, long channelSize, int bufferSizeHint, boolean useDirect) {
+		public FileAccess(FileChannel fc, long channelSize, int bufferSizeHint, boolean useDirect, LogFacility log) {
 			fileChannel = fc;
 			size = channelSize;
+			logFacility = log;
 			final int capacity = size < bufferSizeHint ? (int) size : bufferSizeHint;
 			buffer = useDirect ? ByteBuffer.allocateDirect(capacity) : ByteBuffer.allocate(capacity);
 			buffer.flip(); // or .limit(0) to indicate it's empty
@@ -334,8 +344,7 @@ public class DataAccessProvider {
 				try {
 					fileChannel.close();
 				} catch (IOException ex) {
-					// FIXME/TODO log facility can be obtained from session context 
-					StreamLogFacility.newDefault().debug(getClass(), ex, null);
+					logFacility.debug(getClass(), ex, null);
 				}
 				fileChannel = null;
 			}

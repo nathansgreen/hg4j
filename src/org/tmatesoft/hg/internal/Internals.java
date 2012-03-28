@@ -32,6 +32,7 @@ import java.util.StringTokenizer;
 
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -80,18 +81,17 @@ public final class Internals {
 	private final boolean shallCacheRevlogsInRepo;
 
 	public Internals(SessionContext ctx) {
-		this.sessionContext = ctx;
+		sessionContext = ctx;
 		isCaseSensitiveFileSystem = !runningOnWindows();
 		Object p = ctx.getProperty(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
 		shallCacheRevlogsInRepo = p instanceof Boolean ? ((Boolean) p).booleanValue() : Boolean.parseBoolean(String.valueOf(p));
 	}
 	
-	public void parseRequires(HgRepository hgRepo, File requiresFile) {
+	public void parseRequires(HgRepository hgRepo, File requiresFile) throws HgInvalidControlFileException {
 		try {
 			new RequiresFile().parse(this, requiresFile);
 		} catch (IOException ex) {
-			// FIXME EXCEPTIONS not quite sure error reading requires file shall be silently logged only.
-			HgInternals.getContext(hgRepo).getLog().error(getClass(), ex, null);
+			throw new HgInvalidControlFileException("Parse failed", ex, requiresFile);
 		}
 	}
 

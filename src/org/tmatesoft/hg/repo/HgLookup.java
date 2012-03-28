@@ -80,9 +80,9 @@ public class HgLookup {
 		}
 	}
 	
-	public HgBundle loadBundle(File location) throws HgRuntimeException/*FIXME need checked exception for can't find*/ {
+	public HgBundle loadBundle(File location) throws HgRepositoryNotFoundException {
 		if (location == null || !location.canRead()) {
-			throw new HgInvalidFileException(String.format("Can't read file %s", location == null ? null : location.getPath()), null, location);
+			throw new HgRepositoryNotFoundException(String.format("Can't read file %s", location)).setLocation(String.valueOf(location));
 		}
 		return new HgBundle(getContext(), new DataAccessProvider(getContext()), location).link();
 	}

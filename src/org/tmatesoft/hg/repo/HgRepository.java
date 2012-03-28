@@ -25,7 +25,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -128,7 +127,10 @@ public final class HgRepository {
 		impl = null;
 	}
 	
-	HgRepository(SessionContext ctx, String repositoryPath, File repositoryRoot) {
+	/**
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	HgRepository(SessionContext ctx, String repositoryPath, File repositoryRoot) throws HgRuntimeException {
 		assert ".hg".equals(repositoryRoot.getName()) && repositoryRoot.isDirectory();
 		assert repositoryPath != null; 
 		assert repositoryRoot != null;
@@ -193,9 +195,6 @@ public final class HgRepository {
 					} catch (CancelledException ex) {
 						 // IGNORE, can't happen, we did not configure cancellation
 						getContext().getLog().debug(getClass(), ex, null);
-					} catch (HgException ex) {
-						getContext().getLog().error(getClass(), ex, null);
-						// FIXME EXCEPTIONS need to react
 					} catch (IOException ex) {
 						// UnsupportedEncodingException can't happen (UTF8)
 						// only from readGlobal. Need to reconsider exceptions thrown from there:

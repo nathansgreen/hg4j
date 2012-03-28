@@ -48,6 +48,7 @@ import javax.net.ssl.X509TrustManager;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
+import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 
@@ -326,7 +327,7 @@ public class HgRemoteRepository {
 	 * (there's no header like HG10?? with the server output, though, 
 	 * as one may expect according to http://mercurial.selenic.com/wiki/BundleFormat)
 	 */
-	public HgBundle getChanges(List<Nodeid> roots) throws HgRemoteConnectionException, HgInvalidFileException {
+	public HgBundle getChanges(List<Nodeid> roots) throws HgRemoteConnectionException, HgRuntimeException {
 		List<Nodeid> _roots = roots.isEmpty() ? Collections.singletonList(Nodeid.NULL) : roots;
 		StringBuilder sb = new StringBuilder(20 + _roots.size() * 41);
 		sb.append("roots=");
@@ -354,6 +355,8 @@ public class HgRemoteRepository {
 			// as there's little user can do about this issue (URLs are constructed by our code)
 			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("changegroup").setServerInfo(getLocation());
 		} catch (IOException ex) {
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("changegroup").setServerInfo(getLocation());
+		} catch (HgRepositoryNotFoundException ex) {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("changegroup").setServerInfo(getLocation());
 		}
 	}

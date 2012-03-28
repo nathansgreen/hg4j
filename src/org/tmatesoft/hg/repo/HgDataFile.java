@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
-import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgChangesetFileSneaker;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
@@ -48,7 +48,12 @@ import org.tmatesoft.hg.util.ProgressSupport;
 
 
 /**
- * ? name:HgFileNode?
+ * Regular user data file stored in the repository.
+ * 
+ * <p> Note, most methods accept index in the file's revision history, not that of changelog. Easy way to obtain 
+ * changeset revision index from file's is to use {@link #getChangesetRevisionIndex(int)}. To obtain file's revision 
+ * index for a given changeset, {@link HgManifest#getFileRevision(int, Path)} or {@link HgChangesetFileSneaker} may 
+ * come handy. 
  *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -88,10 +93,9 @@ public class HgDataFile extends Revlog {
 	 * @param nodeid revision of the file
 	 * 
 	 * @return size of the file content at the given revision
-	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog (<em>runtime exception</em>)  
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public int getLength(Nodeid nodeid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public int getLength(Nodeid nodeid) throws HgRuntimeException {
 		try {
 			return getLength(getRevisionIndex(nodeid));
 		} catch (HgInvalidControlFileException ex) {
@@ -104,10 +108,9 @@ public class HgDataFile extends Revlog {
 	/**
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense. 
 	 * @return size of the file content at the revision identified by local revision number.
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public int getLength(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public int getLength(int fileRevisionIndex) throws HgRuntimeException {
 		if (wrongRevisionIndex(fileRevisionIndex) || fileRevisionIndex == BAD_REVISION) {
 			throw new HgInvalidRevisionException(fileRevisionIndex);
 		}
@@ -145,11 +148,10 @@ public class HgDataFile extends Revlog {
 	 * e.g. from another branch), no content would be supplied.
 	 *     
 	 * @param sink content consumer
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgInvalidFileException if access to file in working directory failed
 	 * @throws CancelledException if execution of the operation was cancelled
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public void workingCopy(ByteChannel sink) throws HgException, CancelledException {
+	public void workingCopy(ByteChannel sink) throws CancelledException, HgRuntimeException {
 		File f = getRepo().getFile(this);
 		if (f.exists()) {
 			final CancelSupport cs = CancelSupport.Factory.get(sink);
@@ -234,12 +236,10 @@ public class HgDataFile extends Revlog {
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
 	 * @param sink content consumer
 	 * 
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgInvalidFileException if access to file in working directory failed
 	 * @throws CancelledException if execution of the operation was cancelled
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public void contentWithFilters(int fileRevisionIndex, ByteChannel sink) throws HgException, CancelledException, HgInvalidRevisionException {
+	public void contentWithFilters(int fileRevisionIndex, ByteChannel sink) throws CancelledException, HgRuntimeException {
 		if (fileRevisionIndex == WORKING_COPY) {
 			workingCopy(sink); // pass un-mangled sink
 		} else {
@@ -254,12 +254,10 @@ public class HgDataFile extends Revlog {
  	 * @param fileRevisionIndex - revision local index, non-negative. From predefined constants, {@link HgRepository#TIP} and {@link HgRepository#WORKING_COPY} make sense. 
 	 * @param sink content consumer
 	 * 
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgInvalidFileException if access to file in working directory failed
 	 * @throws CancelledException if execution of the operation was cancelled
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public void content(int fileRevisionIndex, ByteChannel sink) throws HgException, CancelledException, HgInvalidRevisionException {
+	public void content(int fileRevisionIndex, ByteChannel sink) throws CancelledException, HgRuntimeException {
 		// for data files need to check heading of the file content for possible metadata
 		// @see http://mercurial.selenic.com/wiki/FileFormats#data.2BAC8-
 		if (fileRevisionIndex == TIP) {
@@ -293,35 +291,33 @@ public class HgDataFile extends Revlog {
 		insp.checkCancelled();
 		super.content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
 		try {
-			insp.checkFailed(); // XXX is there real need to throw IOException from ContentPipe?
+			insp.checkFailed();
 		} catch (HgInvalidControlFileException ex) {
 			ex = ex.setFileName(getPath());
 			throw ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(fileRevisionIndex);
 		} catch (IOException ex) {
 			HgInvalidControlFileException e = new HgInvalidControlFileException("Revision content access failed", ex, null);
 			throw content.initWithIndexFile(e).setFileName(getPath()).setRevisionIndex(fileRevisionIndex);
-		} catch (HgException ex) {
-			// shall not happen, unless we changed ContentPipe or its subclass
-			HgInvalidControlFileException e = new HgInvalidControlFileException("Revision content access failed", ex, null);
-			throw content.initWithIndexFile(e).setFileName(getPath()).setRevisionIndex(fileRevisionIndex);
 		}
 	}
-	
-	// FIXME is that still needed?
-	public void history(HgChangelog.Inspector inspector) throws HgInvalidControlFileException {
+
+	/**
+	 * Walk complete change history of the file.
+	 * @param inspector callback to visit changesets
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public void history(HgChangelog.Inspector inspector) throws HgRuntimeException {
 		history(0, getLastRevision(), inspector);
 	}
 
 	/**
-	 * 
-	 * @param start local revision index
-	 * @param end local revision index
-	 * @param inspector
-	 * FIXME EXCEPTIONS
-	 * @throws HgInvalidRevisionException
-	 * @throws HgInvalidControlFileException
+	 * Walk subset of the file's change history.
+	 * @param start revision local index, inclusive; non-negative or {@link HgRepository#TIP}
+	 * @param end revision local index, inclusive; non-negative or {@link HgRepository#TIP}
+	 * @param inspector callback to visit changesets
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public void history(int start, int end, HgChangelog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public void history(int start, int end, HgChangelog.Inspector inspector) throws HgRuntimeException {
 		if (!exists()) {
 			throw new IllegalStateException("Can't get history of invalid repository file node"); 
 		}
@@ -361,10 +357,9 @@ public class HgDataFile extends Revlog {
 	 * For a given revision of the file (identified with revision index), find out index of the corresponding changeset.
 	 *
 	 * @return changeset revision index
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public int getChangesetRevisionIndex(int revision) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public int getChangesetRevisionIndex(int revision) throws HgRuntimeException {
 		return content.linkRevision(revision);
 	}
 
@@ -373,10 +368,9 @@ public class HgDataFile extends Revlog {
 	 * 
 	 * @param nid revision of the file
 	 * @return changeset revision
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public Nodeid getChangesetRevision(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public Nodeid getChangesetRevision(Nodeid nid) throws HgRuntimeException {
 		int changelogRevision = getChangesetRevisionIndex(getRevisionIndex(nid));
 		return getRepo().getChangelog().getRevision(changelogRevision);
 	}
@@ -384,9 +378,9 @@ public class HgDataFile extends Revlog {
 	/**
 	 * Tells whether this file originates from another repository file
 	 * @return <code>true</code> if this file is a copy of another from the repository
-	 * @throws HgInvalidControlFileException if access to revlog or file metadata failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public boolean isCopy() throws HgInvalidControlFileException {
+	public boolean isCopy() throws HgRuntimeException {
 		if (metadata == null || !metadata.checked(0)) {
 			checkAndRecordMetadata(0);
 		}
@@ -400,10 +394,9 @@ public class HgDataFile extends Revlog {
 	 * Get name of the file this one was copied from.
 	 * 
 	 * @return name of the file origin
-	 * @throws HgInvalidControlFileException if access to revlog or file metadata failed
-	 * @throws UnsupportedOperationException if this file doesn't represent a copy ({@link #isCopy()} was false)
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public Path getCopySourceName() throws HgInvalidControlFileException {
+	public Path getCopySourceName() throws HgRuntimeException {
 		if (isCopy()) {
 			return Path.create(metadata.find(0, "copy"));
 		}
@@ -413,10 +406,9 @@ public class HgDataFile extends Revlog {
 	/**
 	 * 
 	 * @return revision this file was copied from
-	 * @throws HgInvalidControlFileException if access to revlog or file metadata failed
-	 * @throws UnsupportedOperationException if this file doesn't represent a copy ({@link #isCopy()} was false)
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public Nodeid getCopySourceRevision() throws HgInvalidControlFileException {
+	public Nodeid getCopySourceRevision() throws HgRuntimeException {
 		if (isCopy()) {
 			return Nodeid.fromAscii(metadata.find(0, "copyrev")); // XXX reuse/cache Nodeid
 		}
@@ -427,11 +419,9 @@ public class HgDataFile extends Revlog {
 	 * Get file flags recorded in the manifest
  	 * @param fileRevisionIndex - revision local index, non-negative, or {@link HgRepository#TIP}. 
 	 * @see HgManifest#getFileFlags(int, Path) 
-	 * FIXME EXCEPTIONS
-	 * @throws HgInvalidControlFileException
-	 * @throws HgInvalidRevisionException
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public HgManifest.Flags getFlags(int fileRevisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public HgManifest.Flags getFlags(int fileRevisionIndex) throws HgRuntimeException {
 		int changesetRevIndex = getChangesetRevisionIndex(fileRevisionIndex);
 		return getRepo().getManifest().getFileFlags(changesetRevIndex, getPath());
 	}
@@ -462,9 +452,6 @@ public class HgDataFile extends Revlog {
 			// it's ok, we did that
 		} catch (HgInvalidControlFileException ex) {
 			throw ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(localRev);
-		} catch (HgException ex) {
-			// metadata comes from the content, hence initWithDataFile
-			throw content.initWithDataFile(new HgInvalidControlFileException(null, ex, null));
 		}
 	}
 
@@ -654,10 +641,10 @@ public class HgDataFile extends Revlog {
 		}
 
 		@Override
-		public void checkFailed() throws HgException, IOException, CancelledException {
+		public void checkFailed() throws HgRuntimeException, IOException, CancelledException {
 			super.checkFailed();
 			if (delegate instanceof ErrorHandlingInspector) {
-				// XXX need to add ErrorDestination and pass it around (much like CancelSupport get passed)
+				// TODO need to add ErrorDestination (ErrorTarget/Acceptor?) and pass it around (much like CancelSupport get passed)
 				// so that delegate would be able report its failures directly to caller without this hack
 				((ErrorHandlingInspector) delegate).checkFailed();
 			}
