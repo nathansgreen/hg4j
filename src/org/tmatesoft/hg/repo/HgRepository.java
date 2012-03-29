@@ -116,6 +116,14 @@ public final class HgRepository {
 	private HgIgnore ignore;
 	private HgRepoConfig repoConfig;
 	
+	/*
+	 * TODO [post-1.0] move to a better place, e.g. WorkingCopy container that tracks both dirstate and branches 
+	 * (and, perhaps, undo, lastcommit and other similar information), and is change listener so that we don't need to
+	 * worry about this cached value become stale
+	 */
+	private String wcBranch;
+
+	
 	HgRepository(String repositoryPath) {
 		repoDir = null;
 		workingDir = null;
@@ -273,7 +281,10 @@ public final class HgRepository {
 	 * @throws HgInvalidControlFileException if attempt to read branch name failed.
 	 */
 	public String getWorkingCopyBranchName() throws HgInvalidControlFileException {
-		return HgDirstate.readBranch(this);
+		if (wcBranch == null) {
+			wcBranch = HgDirstate.readBranch(this, new File(repoDir, "branch"));
+		}
+		return wcBranch;
 	}
 
 	/**

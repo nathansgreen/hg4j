@@ -64,7 +64,6 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	 */
 	private Map<Path, Path> canonical2dirstateName; 
 	private Pair<Nodeid, Nodeid> parents;
-	private String currentBranch;
 	
 	// canonicalPath may be null if we don't need to check for names other than in dirstate
 	/*package-local*/ HgDirstate(HgRepository hgRepo, File dirstate, PathPool pathPool, PathRewrite canonicalPath) {
@@ -192,24 +191,11 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	}
 	
 	/**
-	 * FIXME move to a better place, e.g. WorkingCopy container that tracks both dirstate and branches (and, perhaps, undo, lastcommit and other similar information)
+	 * TODO [post-1.0] it's really not a proper place for the method, need WorkingCopyContainer or similar
 	 * @return branch associated with the working directory
 	 */
-	public String branch() throws HgInvalidControlFileException {
-		// XXX is it really proper place for the method?
-		if (currentBranch == null) {
-			currentBranch = readBranch(repo);
-		}
-		return currentBranch;
-	}
-	
-	/**
-	 * XXX is it really proper place for the method?
-	 * @return branch associated with the working directory
-	 */
-	/*package-local*/ static String readBranch(HgRepository repo) throws HgInvalidControlFileException {
+	/*package-local*/ static String readBranch(HgRepository repo, File branchFile) throws HgInvalidControlFileException {
 		String branch = HgRepository.DEFAULT_BRANCH_NAME;
-		File branchFile = new File(repo.getRepositoryRoot(), "branch");
 		if (branchFile.exists()) {
 			try {
 				BufferedReader r = new BufferedReader(new FileReader(branchFile));
