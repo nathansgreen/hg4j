@@ -25,10 +25,12 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
+import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -45,7 +47,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	private final HgRepository repo;
 	private Path.Matcher matcher;
 	private int startRev = 0, endRev = TIP;
-	private Handler visitor;
+	private HgManifestHandler visitor;
 	private boolean needDirs = false;
 	
 	private final Mediator mediator = new Mediator();
@@ -97,12 +99,16 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	}
 	
 	/**
-	 * Runs the command.
+	 * With all parameters set, execute the command.
+	 * 
 	 * @param handler - callback to get the outcome
+ 	 * @throws HgCallbackTargetException propagated exception from the handler
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command is already in use (running)
 	 */
-	public void execute(Handler handler) throws HgException {
+	public void execute(HgManifestHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -111,23 +117,15 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 		}
 		try {
 			visitor = handler;
-			mediator.start();
+			mediator.start(getCancelSupport(handler, true));
 			repo.getManifest().walk(startRev, endRev, mediator);
+			mediator.checkFailure();
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		} finally {
 			mediator.done();
 			visitor = null;
 		}
-	}
-
-	/**
-	 * Callback to walk file/directory tree of a revision
-	 */
-	@Callback
-	public interface Handler { // FIXME TLC
-		void begin(Nodeid manifestRevision);
-		void dir(Path p); // optionally invoked (if walker was configured to spit out directories) prior to any files from this dir and subdirs
-		void file(HgFileRevision fileRevision); // XXX allow to check p is invalid (df.exists())
-		void end(Nodeid manifestRevision);
 	}
 
 	// I'd rather let HgManifestCommand implement HgManifest.Inspector directly, but this pollutes API alot
@@ -138,61 +136,111 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 		private PathPool pathPool;
 		private List<HgFileRevision> manifestContent;
 		private Nodeid manifestNodeid;
+		private Exception failure;
+		private CancelSupport cancelHelper;
 		
-		public void start() {
+		public void start(CancelSupport cs) {
+			assert cs != null;
 			// Manifest keeps normalized paths
 			pathPool = new PathPool(new PathRewrite.Empty());
+			cancelHelper = cs;
 		}
 		
 		public void done() {
 			manifestContent = null;
 			pathPool = null;
 		}
+		
+		private void recordFailure(HgCallbackTargetException ex) {
+			failure = ex;
+		}
+		private void recordCancel(CancelledException ex) {
+			failure = ex;
+		}
+
+		public void checkFailure() throws HgCallbackTargetException, CancelledException {
+			// TODO post-1.0 perhaps, can combine this code (record/checkFailure) for reuse in more classes (e.g. in Revlog)
+			if (failure instanceof HgCallbackTargetException) {
+				HgCallbackTargetException ex = (HgCallbackTargetException) failure;
+				failure = null;
+				throw ex;
+			}
+			if (failure instanceof CancelledException) {
+				CancelledException ex = (CancelledException) failure;
+				failure = null;
+				throw ex;
+			}
+		}
 	
 		public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
 			if (needDirs && manifestContent == null) {
 				manifestContent = new LinkedList<HgFileRevision>();
 			}
-			visitor.begin(manifestNodeid = nid);
-			return true;
+			try {
+				visitor.begin(manifestNodeid = nid);
+				cancelHelper.checkCancelled();
+				return true;
+			} catch (HgCallbackTargetException ex) {
+				recordFailure(ex);
+				return false;
+			} catch (CancelledException ex) {
+				recordCancel(ex);
+				return false;
+			}
 		}
 		public boolean end(int revision) {
-			if (needDirs) {
-				LinkedHashMap<Path, LinkedList<HgFileRevision>> breakDown = new LinkedHashMap<Path, LinkedList<HgFileRevision>>();
-				for (HgFileRevision fr : manifestContent) {
-					Path filePath = fr.getPath();
-					Path dirPath = pathPool.parent(filePath);
-					LinkedList<HgFileRevision> revs = breakDown.get(dirPath);
-					if (revs == null) {
-						revs = new LinkedList<HgFileRevision>();
-						breakDown.put(dirPath, revs);
+			try {
+				if (needDirs) {
+					LinkedHashMap<Path, LinkedList<HgFileRevision>> breakDown = new LinkedHashMap<Path, LinkedList<HgFileRevision>>();
+					for (HgFileRevision fr : manifestContent) {
+						Path filePath = fr.getPath();
+						Path dirPath = pathPool.parent(filePath);
+						LinkedList<HgFileRevision> revs = breakDown.get(dirPath);
+						if (revs == null) {
+							revs = new LinkedList<HgFileRevision>();
+							breakDown.put(dirPath, revs);
+						}
+						revs.addLast(fr);
 					}
-					revs.addLast(fr);
-				}
-				for (Path dir : breakDown.keySet()) {
-					visitor.dir(dir);
-					for (HgFileRevision fr : breakDown.get(dir)) {
-						visitor.file(fr);
+					for (Path dir : breakDown.keySet()) {
+						visitor.dir(dir);
+						cancelHelper.checkCancelled();
+						for (HgFileRevision fr : breakDown.get(dir)) {
+							visitor.file(fr);
+						}
 					}
+					manifestContent.clear();
 				}
-				manifestContent.clear();
+				visitor.end(manifestNodeid);
+				cancelHelper.checkCancelled();
+				return true;
+			} catch (HgCallbackTargetException ex) {
+				recordFailure(ex);
+				return false;
+			} catch (CancelledException ex) {
+				recordCancel(ex);
+				return false;
+			} finally {
+				manifestNodeid = null;
 			}
-			visitor.end(manifestNodeid);
-			manifestNodeid = null;
-			return true;
 		}
 		
 		public boolean next(Nodeid nid, Path fname, Flags flags) {
 			if (matcher != null && !matcher.accept(fname)) {
 				return true;
 			}
-			HgFileRevision fr = new HgFileRevision(repo, nid, flags, fname);
-			if (needDirs) {
-				manifestContent.add(fr);
-			} else {
-				visitor.file(fr);
+			try {
+				HgFileRevision fr = new HgFileRevision(repo, nid, flags, fname);
+				if (needDirs) {
+					manifestContent.add(fr);
+				} else {
+					visitor.file(fr);
+				}
+				return true;
+			} catch (HgCallbackTargetException ex) {
+				recordFailure(ex);
+				return false;
 			}
-			return true;
 		}
 	}
 }

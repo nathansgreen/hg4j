@@ -63,7 +63,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 		return this;
 	}
 
-	public void next(HgChangeset changeset) {
+	public void cset(HgChangeset changeset) {
 		try {
 			final String s = print(changeset);
 			if (reverseOrder) {

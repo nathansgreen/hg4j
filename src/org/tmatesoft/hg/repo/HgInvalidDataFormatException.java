@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,30 +14,23 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.core;
+package org.tmatesoft.hg.repo;
 
 /**
- * Thrown when client supplied an argument that turned out to be incorrect.
- * E.g. an {@link java.net.URL URL} of remote server  or {@link java.io.File File} destination for a new repository
- * might be otherwise valid, but unsuitable for the purpose of the operation.
- *  
- * Not a replacement for {@link IllegalArgumentException} or {@link NullPointerException}.
- * 
- * TODO review usage to match description
+ * Indicates broken, unknown or otherwise bad data structure.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
-public class HgBadArgumentException extends HgException {
-
-	public HgBadArgumentException(String message, Throwable cause) {
-		super(message, cause);
+public class HgInvalidDataFormatException extends HgRuntimeException {
+	// IMPLEMENTATION NOTE. Perhaps, this might be intermediate class between HgRuntimeException and HgInvalidFileException
+	
+	public HgInvalidDataFormatException(String message) {
+		super(message, null);
 	}
-
-	@Override
-	public HgBadArgumentException setRevision(Nodeid r) {
-		super.setRevision(r);
-		return this;
+	
+	public HgInvalidDataFormatException(String message, Throwable cause) {
+		super(message, cause);
 	}
 }

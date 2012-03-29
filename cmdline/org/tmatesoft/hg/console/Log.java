@@ -20,6 +20,7 @@ import static org.tmatesoft.hg.console.Options.asSet;
 
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgChangesetHandler;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -119,7 +120,7 @@ public class Log {
 		return rv;
 	}
 
-	private static final class Dump extends ChangesetDumpHandler implements HgLogCommand.FileHistoryHandler {
+	private static final class Dump extends ChangesetDumpHandler implements HgChangesetHandler.WithCopyHistory {
 
 		public Dump(HgRepository hgRepo) {
 			super(hgRepo);

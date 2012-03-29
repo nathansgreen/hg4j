@@ -19,7 +19,6 @@ package org.tmatesoft.hg.core;
 import java.util.Collection;
 
 import org.tmatesoft.hg.internal.Callback;
-import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 
 /**
@@ -36,9 +35,8 @@ public interface HgChangesetTreeHandler {
 	 * @param entry access to various pieces of information about current tree node. Instances might be 
 	 * reused across calls and shall not be kept by client's code
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce 
-	 * @throws CancelledException if execution of the operation was cancelled
 	 */
-	public void next(HgChangesetTreeHandler.TreeElement entry) throws HgCallbackTargetException, CancelledException;
+	public void treeElement(HgChangesetTreeHandler.TreeElement entry) throws HgCallbackTargetException;
 
 	interface TreeElement {
 		/**

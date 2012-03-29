@@ -19,7 +19,6 @@ package org.tmatesoft.hg.repo;
 import java.io.File;
 import java.io.IOException;
 
-import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -170,7 +169,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 					return false;
 				} catch (IOException ex) {
 					throw new HgInvalidFileException("Invalid bundle file", ex, bundleFile); // TODO post-1.0 revisit exception handling
-				} catch (HgBadArgumentException ex) {
+				} catch (HgInvalidDataFormatException ex) {
 					throw new HgInvalidControlFileException("Invalid bundle file", ex, bundleFile);
 				}
 				return true;

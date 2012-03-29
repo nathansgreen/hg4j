@@ -71,7 +71,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 
 		HgChangeset changeset = t.handle(revisionNumber, nodeid, cset);
 		try {
-			handler.next(changeset);
+			handler.cset(changeset);
 			cancelHelper.checkCancelled();
 		} catch (HgCallbackTargetException ex) {
 			failure = ex.setRevision(nodeid).setRevisionIndex(revisionNumber);

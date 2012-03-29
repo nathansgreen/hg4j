@@ -24,10 +24,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
-import org.tmatesoft.hg.repo.HgInvalidFileException;
-import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -136,11 +134,8 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	 * @param sink output channel to write data to.
 	 * 
 	 * @throws HgBadArgumentException if no target file node found 
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgInvalidFileException if access to file in working directory failed
-	 * @throws HgException in case of some other library issue 
-	 * @throws CancelledException if execution of the operation was cancelled
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog (<em>runtime exception</em>)
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws IllegalArgumentException when command arguments are incomplete or wrong
 	 */
 	public void execute(ByteChannel sink) throws HgException, CancelledException {
@@ -154,49 +149,53 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 		if (sink == null) {
 			throw new IllegalArgumentException("Need an output channel");
 		}
-		HgDataFile dataFile = repo.getFileNode(file);
-		if (!dataFile.exists()) {
-			// TODO may benefit from repo.getStoragePath to print revlog location in addition to human-friendly file path 
-			throw new HgBadArgumentException(String.format("File %s not found in the repository", file), null).setFileName(file);
-		}
-		int revToExtract;
-		if (cset != null) {
-			int csetRev = repo.getChangelog().getRevisionIndex(cset);
-			Nodeid toExtract = null;
-			do {
-				// TODO post-1.0 perhaps, HgChangesetFileSneaker may come handy?
-				toExtract = repo.getManifest().getFileRevision(csetRev, file);
-				if (toExtract == null) {
-					if (dataFile.isCopy()) {
-						file = dataFile.getCopySourceName();
-						dataFile = repo.getFileNode(file);
-					} else {
-						break;
-					}
-				}
-			} while (toExtract == null);
-			if (toExtract == null) {
-				// TODO explicit FileNotFoundException?
-				throw new HgBadArgumentException(String.format("File %s nor its origins were not known at repository %s revision", file, cset.shortNotation()), null);
+		try {
+			HgDataFile dataFile = repo.getFileNode(file);
+			if (!dataFile.exists()) {
+				// TODO may benefit from repo.getStoragePath to print revlog location in addition to human-friendly file path 
+				throw new HgPathNotFoundException(String.format("File %s not found in the repository", file), file);
 			}
-			revToExtract = dataFile.getRevisionIndex(toExtract);
-		} else if (revision != null) {
-			revToExtract = dataFile.getRevisionIndex(revision);
-		} else {
-			revToExtract = revisionIndex;
+			int revToExtract;
+			if (cset != null) {
+				int csetRev = repo.getChangelog().getRevisionIndex(cset);
+				Nodeid toExtract = null;
+				do {
+					// TODO post-1.0 perhaps, HgChangesetFileSneaker may come handy?
+					toExtract = repo.getManifest().getFileRevision(csetRev, file);
+					if (toExtract == null) {
+						if (dataFile.isCopy()) {
+							file = dataFile.getCopySourceName();
+							dataFile = repo.getFileNode(file);
+						} else {
+							break;
+						}
+					}
+				} while (toExtract == null);
+				if (toExtract == null) {
+					String m = String.format("File %s nor its origins were known at repository's %s revision", file, cset.shortNotation());
+					throw new HgPathNotFoundException(m, file).setRevision(cset);
+				}
+				revToExtract = dataFile.getRevisionIndex(toExtract);
+			} else if (revision != null) {
+				revToExtract = dataFile.getRevisionIndex(revision);
+			} else {
+				revToExtract = revisionIndex;
+			}
+			ByteChannel sinkWrap;
+			if (getCancelSupport(null, false) == null) {
+				// no command-specific cancel helper, no need for extra proxy
+				// sink itself still may supply CS
+				sinkWrap = sink;
+			} else {
+				// try CS from sink, if any. at least there is CS from command 
+				CancelSupport cancelHelper = getCancelSupport(sink, true);
+				cancelHelper.checkCancelled();
+				sinkWrap = new ByteChannelProxy(sink, cancelHelper);
+			}
+			dataFile.contentWithFilters(revToExtract, sinkWrap);
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		}
-		ByteChannel sinkWrap;
-		if (getCancelSupport(null, false) == null) {
-			// no command-specific cancel helper, no need for extra proxy
-			// sink itself still may supply CS
-			sinkWrap = sink;
-		} else {
-			// try CS from sink, if any. at least there is CS from command 
-			CancelSupport cancelHelper = getCancelSupport(sink, true);
-			cancelHelper.checkCancelled();
-			sinkWrap = new ByteChannelProxy(sink, cancelHelper);
-		}
-		dataFile.contentWithFilters(revToExtract, sinkWrap);
 	}
 
 	private static class ByteChannelProxy implements ByteChannel, Adaptable {

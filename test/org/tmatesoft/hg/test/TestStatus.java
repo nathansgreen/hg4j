@@ -182,7 +182,7 @@ public class TestStatus {
 		private final Map<Path, List<Kind>> name2kinds = new TreeMap<Path, List<Kind>>();
 		private final Map<Path, Status> name2error = new LinkedHashMap<Path, Status>();
 
-		public void handleStatus(HgStatus s) {
+		public void status(HgStatus s) {
 			List<Path> l = kind2names.get(s.getKind());
 			if (l == null) {
 				kind2names.put(s.getKind(), l = new LinkedList<Path>());
@@ -196,7 +196,7 @@ public class TestStatus {
 			k.add(s.getKind());
 		}
 		
-		public void handleError(Path file, Status s) {
+		public void error(Path file, Status s) {
 			name2error.put(file, s);
 		}
 		

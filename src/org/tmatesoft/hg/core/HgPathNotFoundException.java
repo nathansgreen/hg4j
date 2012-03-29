@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,28 +16,21 @@
  */
 package org.tmatesoft.hg.core;
 
+import org.tmatesoft.hg.util.Path;
+
 /**
- * Thrown when client supplied an argument that turned out to be incorrect.
- * E.g. an {@link java.net.URL URL} of remote server  or {@link java.io.File File} destination for a new repository
- * might be otherwise valid, but unsuitable for the purpose of the operation.
- *  
- * Not a replacement for {@link IllegalArgumentException} or {@link NullPointerException}.
- * 
- * TODO review usage to match description
+ * Indicates supplied path/location was is missing in the repository or specific revision.
+ * <p>Use {@link #getFileName()} to access name of the missing file
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
-public class HgBadArgumentException extends HgException {
-
-	public HgBadArgumentException(String message, Throwable cause) {
-		super(message, cause);
-	}
-
-	@Override
-	public HgBadArgumentException setRevision(Nodeid r) {
-		super.setRevision(r);
-		return this;
+public class HgPathNotFoundException extends HgException {
+	
+	public HgPathNotFoundException(String message, Path missingPath) {
+		super(message, null);
+		assert missingPath != null;
+		setFileName(missingPath);
 	}
 }

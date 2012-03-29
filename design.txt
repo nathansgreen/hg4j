@@ -140,3 +140,9 @@ Unfortunately, Revision would be a nice name for a class <int, Nodeid>. As long 
 and not to stick to Revision struct only (to avoid massive instances of Revision<int,Nodeid> when only one is sufficient), I'll need to name
 these separate methods anyway. Present opinion is that I don't need the object right now (will have to live with RevisionObject or RevisionDescriptor
 once change my mind) 
+
+Handlers (HgStatusHandler, HgManifestHandler, HgChangesetHandler, HgChangesetTreeHandler)
+methods DO NOT throw CancelledException. cancellation is separate from processing logic. handlers can implements CancelSupport to become a source of cancellation, if necessary
+methods DO throw HgCallbackTargetException to propagate own errors/exceptions
+methods are supposed to silently pass HgRuntimeExceptions (although callback implementers may decide to wrap them into HgCallbackTargetException)
+descriptive names for the methods, whenever possible (not bare #next)

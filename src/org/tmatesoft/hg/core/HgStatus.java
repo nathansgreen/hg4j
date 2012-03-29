@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ import java.io.File;
 import java.util.Date;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Path;
 
@@ -72,7 +71,7 @@ public class HgStatus {
 	/**
 	 * @return <code>null</code> if author for the change can't be deduced (e.g. for clean files it's senseless)
 	 */
-	public String getModificationAuthor() throws HgInvalidControlFileException {
+	public String getModificationAuthor() {
 		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			if (kind == Kind.Modified || kind == Kind.Added || kind == Kind.Removed /*&& RightBoundary is TIP*/) {
@@ -85,7 +84,7 @@ public class HgStatus {
 		return null;
 	}
 
-	public Date getModificationDate() throws HgInvalidControlFileException {
+	public Date getModificationDate() {
 		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			File localFile = new File(logHelper.getRepo().getWorkingDir(), path.toString());

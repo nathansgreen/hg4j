@@ -17,7 +17,7 @@
 package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.Callback;
-import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * Callback to process {@link HgChangeset changesets}.
@@ -26,11 +26,31 @@ import org.tmatesoft.hg.util.CancelledException;
  * @author TMate Software Ltd.
  */
 @Callback
-public interface HgChangesetHandler/*XXX perhaps, shall parameterize with exception clients can throw, like: <E extends Exception>*/ {
+public interface HgChangesetHandler {
+
 	/**
-	 * @param changeset not necessarily a distinct instance each time, {@link HgChangeset#clone() clone()} if need a copy.
+	 * @param changeset descriptor of a change, not necessarily a distinct instance each time, {@link HgChangeset#clone() clone()} if need a copy.
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce 
-	 * @throws CancelledException if handler is not interested in more changesets and iteration shall stop
 	 */
-	void next(HgChangeset changeset) throws HgCallbackTargetException, CancelledException;
+	void cset(HgChangeset changeset) throws HgCallbackTargetException;
+
+
+	/**
+	 * When {@link HgLogCommand} is executed against file, handler passed to {@link HgLogCommand#execute(HgChangesetHandler)} may optionally
+	 * implement this interface to get information about file renames. Method {@link #copy(HgFileRevision, HgFileRevision)} would
+	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #cset(HgChangeset)}.
+	 * 
+	 * For {@link HgLogCommand#file(Path, boolean)} with renamed file path and follow argument set to false, 
+	 * {@link #copy(HgFileRevision, HgFileRevision)} would be invoked for the first copy/rename in the history of the file, but not 
+	 * followed by any changesets. 
+	 */
+	@Callback
+	public interface WithCopyHistory extends HgChangesetHandler {
+		// XXX perhaps, should distinguish copy from rename? And what about merged revisions and following them?
+
+		/**
+		 * @throws HgCallbackTargetException wrapper object for any exception user code may produce 
+		 */
+		void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException;
+	}
 }

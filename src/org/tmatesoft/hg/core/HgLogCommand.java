@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+s * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,6 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
-import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -136,8 +135,9 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	/**
 	 * Limit to specified subset of Changelog, [min(rev1,rev2), max(rev1,rev2)], inclusive.
 	 * Revision may be specified with {@link HgRepository#TIP}  
-	 * @param rev1 - revision local index
-	 * @param rev2 - revision local index
+	 * 
+	 * @param rev1 - local index of start changeset revision
+	 * @param rev2 - index of end changeset revision
 	 * @return <code>this</code> instance for convenience
 	 */
 	public HgLogCommand range(int rev1, int rev2) {
@@ -159,13 +159,16 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * 
 	 * @param nid changeset revision
 	 * @return <code>this</code> for convenience
-	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgBadArgumentException if failed to find supplied changeset revision 
 	 */
-	public HgLogCommand changeset(Nodeid nid) throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public HgLogCommand changeset(Nodeid nid) throws HgBadArgumentException {
 		// XXX perhaps, shall support multiple (...) arguments and extend #execute to handle not only range, but also set of revisions.
-		final int csetRevIndex = repo.getChangelog().getRevisionIndex(nid);
-		return range(csetRevIndex, csetRevIndex);
+		try {
+			final int csetRevIndex = repo.getChangelog().getRevisionIndex(nid);
+			return range(csetRevIndex, csetRevIndex);
+		} catch (HgRuntimeException ex) {
+			throw new HgBadArgumentException("Can't find revision", ex).setRevision(nid);
+		}
 	}
 	
 	/**
@@ -189,7 +192,9 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 	/**
 	 * Similar to {@link #execute(HgChangesetHandler)}, collects and return result as a list.
-	 * @throws HgException FIXME EXCEPTIONS
+	 * 
+	 * @see #execute(HgChangesetHandler)
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 */
 	public List<HgChangeset> execute() throws HgException {
 		CollectHandler collector = new CollectHandler();
@@ -213,9 +218,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * Iterate over range of changesets configured in the command.
 	 * 
 	 * @param handler callback to process changesets.
-	 * @throws HgCallbackTargetException wrapper for any exception user callback code may produce
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgException in case of some other library issue 
+ 	 * @throws HgCallbackTargetException propagated exception from the handler
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws IllegalArgumentException when inspector argument is null
 	 * @throws ConcurrentModificationException if this log command instance is already running
@@ -241,15 +245,18 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			} else {
 				progressHelper.start(-1/*XXX enum const, or a dedicated method startUnspecified(). How about startAtLeast(int)?*/);
 				HgDataFile fileNode = repo.getFileNode(file);
+				if (!fileNode.exists()) {
+					throw new HgPathNotFoundException(String.format("File %s not found in the repository", file), file);
+				}
 				fileNode.history(startRev, endRev, this);
 				csetTransform.checkFailure();
 				if (fileNode.isCopy()) {
 					// even if we do not follow history, report file rename
 					do {
-						if (handler instanceof FileHistoryHandler) {
+						if (handler instanceof HgChangesetHandler.WithCopyHistory) {
 							HgFileRevision src = new HgFileRevision(repo, fileNode.getCopySourceRevision(), null, fileNode.getCopySourceName());
 							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), null, fileNode.getPath(), src.getPath());
-							((FileHistoryHandler) handler).copy(src, dst);
+							((HgChangesetHandler.WithCopyHistory) handler).copy(src, dst);
 						}
 						if (limit > 0 && count >= limit) {
 							// if limit reach, follow is useless.
@@ -263,8 +270,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					} while (followHistory && fileNode.isCopy());
 				}
 			}
-//		} catch (HgRuntimeException ex) {
-//			FIXME wrap with checked HgRuntime subclass
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		} finally {
 			csetTransform = null;
 			progressHelper.done();
@@ -275,9 +282,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * Tree-wise iteration of a file history, with handy access to parent-child relations between changesets. 
 	 *  
 	 * @param handler callback to process changesets.
-	 * @throws HgCallbackTargetException to re-throw exception from the handler
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgException in case of some other library issue 
+ 	 * @throws HgCallbackTargetException propagated exception from the handler
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws IllegalArgumentException if command is not satisfied with its arguments 
 	 * @throws ConcurrentModificationException if this log command instance is already running
@@ -345,7 +351,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		// XXX shall sort completeHistory according to changeset numbers?
 		for (int i = 0; i < completeHistory.length; i++ ) {
 			final HistoryNode n = completeHistory[i];
-			handler.next(ei.init(n));
+			handler.treeElement(ei.init(n));
 			ph2.worked(1);
 			cancelHelper.checkCancelled();
 		}
@@ -390,26 +396,6 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	}
 
 
-	/**
-	 * When {@link HgLogCommand} is executed against file, handler passed to {@link HgLogCommand#execute(HgChangesetHandler)} may optionally
-	 * implement this interface to get information about file renames. Method {@link #copy(HgFileRevision, HgFileRevision)} would
-	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #next(HgChangeset)}.
-	 * 
-	 * For {@link HgLogCommand#file(Path, boolean)} with renamed file path and follow argument set to false, 
-	 * {@link #copy(HgFileRevision, HgFileRevision)} would be invoked for the first copy/rename in the history of the file, but not 
-	 * followed by any changesets. 
-	 *
-	 * @author Artem Tikhomirov
-	 * @author TMate Software Ltd.
-	 */
-	public interface FileHistoryHandler extends HgChangesetHandler { // FIXME move to stanalone class file, perhaps?
-		// XXX perhaps, should distinguish copy from rename? And what about merged revisions and following them?
-		/**
-		 * @throws HgCallbackTargetException wrapper object for any exception user code may produce 
-		 */
-		void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException;
-	}
-	
 	public static class CollectHandler implements HgChangesetHandler {
 		private final List<HgChangeset> result = new LinkedList<HgChangeset>();
 
@@ -417,7 +403,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			return Collections.unmodifiableList(result);
 		}
 
-		public void next(HgChangeset changeset) {
+		public void cset(HgChangeset changeset) {
 			result.add(changeset.clone());
 		}
 	}

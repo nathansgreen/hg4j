@@ -25,6 +25,7 @@ import java.util.ConcurrentModificationException;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
@@ -162,13 +163,14 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	 * Perform status operation according to parameters set.
 	 *  
 	 * @param statusHandler callback to get status information
-	 * @throws HgCallbackTargetException wrapper for any exception user callback code may produce
+ 	 * @throws HgCallbackTargetException propagated exception from the handler
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws IOException FIXME EXCEPTIONS WTF it's doing here if there are (further unspecified) errors while walking working copy
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
 	 */
-	public void execute(HgStatusHandler statusHandler) throws HgCallbackTargetException, CancelledException, HgException, IOException {
+	public void execute(HgStatusHandler statusHandler) throws HgCallbackTargetException, HgException, CancelledException, IOException {
 		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -197,6 +199,8 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 			// this is our exception, thrown from Mediator.
 			// next check shall throw original cause of the stop - either HgCallbackTargetException or original CancelledException
 			mediator.checkFailure();
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		} finally {
 			mediator.done();
 		}
@@ -264,7 +268,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 
 		private void dispatch(HgStatus s) {
 			try {
-				handler.handleStatus(s);
+				handler.status(s);
 				handlerCancelSupport.checkCancelled();
 			} catch (HgCallbackTargetException ex) {
 				failure = ex;
@@ -317,7 +321,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		
 		public void invalid(Path fname, Exception err) {
 			try {
-				handler.handleError(fname, new Status(Status.Kind.ERROR, "Failed to get file status", err));
+				handler.error(fname, new Status(Status.Kind.ERROR, "Failed to get file status", err));
 				handlerCancelSupport.checkCancelled();
 			} catch (HgCallbackTargetException ex) {
 				failure = ex;

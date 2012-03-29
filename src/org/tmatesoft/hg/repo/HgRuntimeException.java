@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.repo;
 
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgLibraryFailureException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ExceptionInfo;
 import org.tmatesoft.hg.util.Path;
@@ -29,9 +30,10 @@ import org.tmatesoft.hg.util.Path;
  * exceptions are made runtime, rooting at this single class.
  * 
  * <p>Hi-level api, {@link org.tmatesoft.hg.core}, where interaction with user-supplied values is more explicit,
- * may follow different exception strategy.
+ * follows different exception strategy, namely checked exceptions rooted at {@link HgException}.
  * 
  * @see HgException
+ * @see HgLibraryFailureException
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */

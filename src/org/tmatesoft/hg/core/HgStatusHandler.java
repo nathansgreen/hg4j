@@ -28,18 +28,20 @@ import org.tmatesoft.hg.util.Status;
 @Callback
 public interface HgStatusHandler {
 
-	/** #next() as in HgChangesetHandler?
-	 * FIXME perhaps, handle() is better name? If yes, rename method in HgChangesetHandler, too, to make them similar.
-	 * void next(HgStatus s);
+	/**
+	 * Report status of the next file
+	 * 
+	 * @param s file status descriptor 
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
 	 */
-	void handleStatus(HgStatus s) throws HgCallbackTargetException;
+	void status(HgStatus s) throws HgCallbackTargetException;
 
 	/**
 	 * Report non-critical error processing single file during status operation
+	 * 
 	 * @param file name of the file that caused the trouble
 	 * @param s error description object
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
 	 */
-	void handleError(Path file, Status s) throws HgCallbackTargetException;
+	void error(Path file, Status s) throws HgCallbackTargetException;
 }

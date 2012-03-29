@@ -17,11 +17,10 @@
 package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
-import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
@@ -78,10 +77,9 @@ public final class HgFileRevision {
 	
 	/**
 	 * Executable or symbolic link, or <code>null</code> if regular file
-	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public HgManifest.Flags getFileFlags() throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public HgManifest.Flags getFileFlags() throws HgRuntimeException {
 		if (flags == null) {
 			HgDataFile df = repo.getFileNode(path);
 			int revIdx = df.getRevisionIndex(revision);
@@ -112,8 +110,9 @@ public final class HgFileRevision {
 	 * In most cases, only one parent revision would be present, only for merge revisions one can expect both.
 	 * 
 	 * @return parent revisions of this file revision, with {@link Nodeid#NULL} for missing values.
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public Pair<Nodeid, Nodeid> getParents() throws HgInvalidControlFileException {
+	public Pair<Nodeid, Nodeid> getParents() throws HgRuntimeException {
 		if (parents == null) {
 			HgDataFile fn = repo.getFileNode(path);
 			int revisionIndex = fn.getRevisionIndex(revision);

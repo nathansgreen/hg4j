@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
+import org.tmatesoft.hg.core.HgManifestHandler;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgChangeset;
@@ -175,7 +176,7 @@ public class Main {
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		cmd.file("file1", false);
 		cmd.execute(new HgChangesetTreeHandler() {
-			public void next(HgChangesetTreeHandler.TreeElement entry) {
+			public void treeElement(HgChangesetTreeHandler.TreeElement entry) {
 				StringBuilder sb = new StringBuilder();
 				HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
 				for (HgChangeset cc : entry.children()) {
@@ -558,7 +559,7 @@ public class Main {
 	}
 
 	private void dumpCompleteManifestHigh() throws Exception {
-		new HgManifestCommand(hgRepo).dirs(true).execute(new HgManifestCommand.Handler() {
+		new HgManifestCommand(hgRepo).dirs(true).execute(new HgManifestHandler() {
 			
 			public void begin(Nodeid manifestRevision) {
 				System.out.println(">> " + manifestRevision);

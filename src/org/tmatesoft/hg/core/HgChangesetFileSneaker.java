@@ -18,7 +18,6 @@ package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -92,16 +91,21 @@ public class HgChangesetFileSneaker {// TODO mark final once HgFileInformer gone
 
 	/**
 	 * Shortcut to perform {@link #check(Path)} and {@link #exists()}. Result of the check may be accessed via {@link #getCheckStatus()}.
+	 * Errors during the check, if any, are reported through exception.
 	 * 
 	 * @param file name of the file in question
 	 * @return <code>true</code> if file is known at the selected changeset.
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws IllegalArgumentException if {@link #changeset(Nodeid)} not specified or file argument is bad.
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
-	public boolean checkExists(Path file) throws HgInvalidControlFileException {
+	public boolean checkExists(Path file) throws HgException {
 		check(file);
-		if (!checkResult.isOk() && checkResult.getException() instanceof HgInvalidControlFileException) {
-			throw (HgInvalidControlFileException) checkResult.getException();
+		// next seems reasonable, however renders boolean return value useless. perhaps void or distinct method?
+//		if (checkResult.isOk() && !exists()) {
+//			throw new HgPathNotFoundException(checkResult.getMessage(), file);
+//		}
+		if (!checkResult.isOk() && checkResult.getException() instanceof HgRuntimeException) {
+			throw new HgLibraryFailureException((HgRuntimeException) checkResult.getException());
 		}
 		return checkResult.isOk() && exists();
 	}

@@ -27,19 +27,19 @@ import org.tmatesoft.hg.util.Path;
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
-public class HgException extends Exception {
+public abstract class HgException extends Exception {
 	
 	protected final ExceptionInfo<HgException> extras = new ExceptionInfo<HgException>(this);
 
-	public HgException(String reason) {
+	protected HgException(String reason) {
 		super(reason);
 	}
 
-	public HgException(String reason, Throwable cause) {
+	protected HgException(String reason, Throwable cause) {
 		super(reason, cause);
 	}
 
-	public HgException(Throwable cause) {
+	protected HgException(Throwable cause) {
 		super(cause);
 	}
 

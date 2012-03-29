@@ -30,7 +30,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
-import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -227,7 +226,7 @@ public final class HgChangelog extends Revlog {
 			}
 		}
 
-		/*package*/ static RawChangeset parse(DataAccess da) throws IOException, HgBadArgumentException {
+		/*package*/ static RawChangeset parse(DataAccess da) throws IOException, HgInvalidDataFormatException {
 			byte[] data = da.byteArray();
 			RawChangeset rv = new RawChangeset();
 			rv.init(data, 0, data.length, null);
@@ -235,18 +234,17 @@ public final class HgChangelog extends Revlog {
 		}
 
 		// @param usersPool - it's likely user names get repeated again and again throughout repository. can be null
-		// FIXME replace HgBadArgumentException with HgInvalidDataFormatException or HgInvalidControlFileException 
-		/* package-local */void init(byte[] data, int offset, int length, Pool<String> usersPool) throws HgBadArgumentException {
+		/* package-local */void init(byte[] data, int offset, int length, Pool<String> usersPool) throws HgInvalidDataFormatException {
 			final int bufferEndIndex = offset + length;
 			final byte lineBreak = (byte) '\n';
 			int breakIndex1 = indexOf(data, lineBreak, offset, bufferEndIndex);
 			if (breakIndex1 == -1) {
-				throw new HgBadArgumentException("Bad Changeset data", null);
+				throw new HgInvalidDataFormatException("Bad Changeset data");
 			}
 			Nodeid _nodeid = Nodeid.fromAscii(data, 0, breakIndex1);
 			int breakIndex2 = indexOf(data, lineBreak, breakIndex1 + 1, bufferEndIndex);
 			if (breakIndex2 == -1) {
-				throw new HgBadArgumentException("Bad Changeset data", null);
+				throw new HgInvalidDataFormatException("Bad Changeset data");
 			}
 			String _user = new String(data, breakIndex1 + 1, breakIndex2 - breakIndex1 - 1);
 			if (usersPool != null) {
@@ -254,12 +252,12 @@ public final class HgChangelog extends Revlog {
 			}
 			int breakIndex3 = indexOf(data, lineBreak, breakIndex2 + 1, bufferEndIndex);
 			if (breakIndex3 == -1) {
-				throw new HgBadArgumentException("Bad Changeset data", null);
+				throw new HgInvalidDataFormatException("Bad Changeset data");
 			}
 			String _timeString = new String(data, breakIndex2 + 1, breakIndex3 - breakIndex2 - 1);
 			int space1 = _timeString.indexOf(' ');
 			if (space1 == -1) {
-				throw new HgBadArgumentException(String.format("Bad Changeset data: %s in [%d..%d]", "time string", breakIndex2+1, breakIndex3), null);
+				throw new HgInvalidDataFormatException(String.format("Bad Changeset data: %s in [%d..%d]", "time string", breakIndex2+1, breakIndex3));
 			}
 			int space2 = _timeString.indexOf(' ', space1 + 1);
 			if (space2 == -1) {
@@ -305,7 +303,7 @@ public final class HgChangelog extends Revlog {
 					}
 				}
 				if (breakIndex4 == -1 || breakIndex4 >= bufferEndIndex) {
-					throw new HgBadArgumentException("Bad Changeset data", null);
+					throw new HgInvalidDataFormatException("Bad Changeset data");
 				}
 			} else {
 				breakIndex4--;
@@ -317,7 +315,7 @@ public final class HgChangelog extends Revlog {
 			} catch (UnsupportedEncodingException ex) {
 				_comment = "";
 				// Could hardly happen
-				throw new HgBadArgumentException("Bad Changeset data", ex);
+				throw new HgInvalidDataFormatException("Bad Changeset data", ex);
 			}
 			// change this instance at once, don't leave it partially changes in case of error
 			this.manifest = _nodeid;
@@ -381,9 +379,8 @@ public final class HgChangelog extends Revlog {
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 				progressHelper.worked(1);
-			} catch (HgBadArgumentException ex) {
-				// see below about better exception
-				throw new HgInvalidControlFileException("Failed reading changelog", ex, null).setRevisionIndex(revisionNumber);  
+			} catch (HgInvalidDataFormatException ex) {
+				throw ex.setRevisionIndex(revisionNumber);  
 			} catch (IOException ex) {
 				// XXX need better exception, perhaps smth like HgChangelogException (extends HgInvalidControlFileException)
 				throw new HgInvalidControlFileException("Failed reading changelog", ex, null).setRevisionIndex(revisionNumber);  

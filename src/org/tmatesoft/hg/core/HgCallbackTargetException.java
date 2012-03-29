@@ -29,9 +29,11 @@ import org.tmatesoft.hg.util.Path;
  * library's own {@link HgException} are rather obscure. Suggested approach is to wrap whatever exception user code produces with
  * {@link HgCallbackTargetException}, the only checked exception allowed out from a callback.
  * 
- *  <p>It's intentionally not a subclass of {@link HgException} to avoid get mixed with library own errors and be processed separately.
+ * <p>It's intentionally not a subclass of {@link HgException} to avoid get mixed with library own errors and be processed separately.
  * 
- * FIXME REVISIT shall just throw HgCallbackTargetException from any handler, and do not catch anything in commands at all.
+ * <p>Top-level API handlers ({@link HgStatusHandler}, {@link HgManifestHandler}, {@link HgChangesetHandler}, etc) allow to throw 
+ * HgCallbackTargetException from their methods. Exceptions throws this way are not handled in corresponding commands, except for
+ * revision or file name specification, unless already set. The, these exceptions go straight to the command caller.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

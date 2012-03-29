@@ -29,12 +29,12 @@ import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
-import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -103,34 +103,36 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	 *   
 	 * @return list of nodes present at remote and missing locally
 	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws CancelledException if execution of the command was cancelled
 	 */
-	public List<Nodeid> executeLite() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
-		LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
-		RepositoryComparator repoCompare = getComparator();
-		for (BranchChain bc : getMissingBranches()) {
-			List<Nodeid> missing = repoCompare.visitBranches(bc);
-			HashSet<Nodeid> common = new HashSet<Nodeid>(); // ordering is irrelevant  
-			repoCompare.collectKnownRoots(bc, common);
-			// missing could only start with common elements. Once non-common, rest is just distinct branch revision trails.
-			for (Iterator<Nodeid> it = missing.iterator(); it.hasNext() && common.contains(it.next()); it.remove()) ; 
-			result.addAll(missing);
+	public List<Nodeid> executeLite() throws HgException, CancelledException {
+		try {
+			LinkedHashSet<Nodeid> result = new LinkedHashSet<Nodeid>();
+			RepositoryComparator repoCompare = getComparator();
+			for (BranchChain bc : getMissingBranches()) {
+				List<Nodeid> missing = repoCompare.visitBranches(bc);
+				HashSet<Nodeid> common = new HashSet<Nodeid>(); // ordering is irrelevant  
+				repoCompare.collectKnownRoots(bc, common);
+				// missing could only start with common elements. Once non-common, rest is just distinct branch revision trails.
+				for (Iterator<Nodeid> it = missing.iterator(); it.hasNext() && common.contains(it.next()); it.remove()) ; 
+				result.addAll(missing);
+			}
+			ArrayList<Nodeid> rv = new ArrayList<Nodeid>(result);
+			return rv;
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		}
-		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(result);
-		return rv;
 	}
 
 	/**
 	 * Full information about incoming changes
 	 * 
-	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgInvalidFileException to indicate failure working with locally downloaded changes in a bundle file
 	 * @throws HgCallbackTargetException to re-throw exception from the handler
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws CancelledException if execution of the command was cancelled
 	 */
-	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgInvalidControlFileException, HgInvalidFileException, HgCallbackTargetException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
@@ -161,6 +163,8 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 				}
 			});
 			transformer.checkFailure();
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		} finally {
 			ps.done();
 		}

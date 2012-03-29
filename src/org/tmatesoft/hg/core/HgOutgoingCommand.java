@@ -25,6 +25,7 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -95,14 +96,16 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	 * 
 	 * @return list on local nodes known to be missing at remote server 
 	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws CancelledException if execution of the command was cancelled
 	 */
-	public List<Nodeid> executeLite() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
+	public List<Nodeid> executeLite() throws HgRemoteConnectionException, HgException, CancelledException {
 		final ProgressSupport ps = getProgressSupport(null);
 		try {
 			ps.start(10);
 			return getComparator(new ProgressSupport.Sub(ps, 5), getCancelSupport(null, true)).getLocalOnlyRevisions();
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		} finally {
 			ps.done();
 		}
@@ -112,12 +115,12 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	 * Complete information about outgoing changes
 	 * 
 	 * @param handler delegate to process changes
+ 	 * @throws HgCallbackTargetException propagated exception from the handler
 	 * @throws HgRemoteConnectionException when failed to communicate with remote repository
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws HgCallbackTargetException to re-throw exception from the handler
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws CancelledException if execution of the command was cancelled
 	 */
-	public void executeFull(final HgChangesetHandler handler) throws HgRemoteConnectionException, HgInvalidControlFileException, HgCallbackTargetException, CancelledException {
+	public void executeFull(final HgChangesetHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
@@ -129,6 +132,8 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 			inspector.limitBranches(branches);
 			getComparator(new ProgressSupport.Sub(ps, 1), cs).visitLocalOnlyRevisions(inspector);
 			inspector.checkFailure();
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		} finally {
 			ps.done();
 		}

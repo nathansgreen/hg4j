@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,28 +16,25 @@
  */
 package org.tmatesoft.hg.core;
 
+import org.tmatesoft.hg.repo.HgRuntimeException;
+
 /**
- * Thrown when client supplied an argument that turned out to be incorrect.
- * E.g. an {@link java.net.URL URL} of remote server  or {@link java.io.File File} destination for a new repository
- * might be otherwise valid, but unsuitable for the purpose of the operation.
- *  
- * Not a replacement for {@link IllegalArgumentException} or {@link NullPointerException}.
- * 
- * TODO review usage to match description
+ * Sole purpose of this exception is to wrap unexpected errors from the library implementation and 
+ * propagate them to clients of hi-level API for graceful (and explicit) processing.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
-public class HgBadArgumentException extends HgException {
+public class HgLibraryFailureException extends HgException {
 
-	public HgBadArgumentException(String message, Throwable cause) {
-		super(message, cause);
+	public HgLibraryFailureException(HgRuntimeException cause) {
+		super(cause);
+		assert cause != null;
 	}
-
+	
 	@Override
-	public HgBadArgumentException setRevision(Nodeid r) {
-		super.setRevision(r);
-		return this;
+	public HgRuntimeException getCause() {
+		return (HgRuntimeException) super.getCause();
 	}
 }

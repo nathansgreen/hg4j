@@ -74,7 +74,7 @@ public class Status {
 			final EnumMap<HgStatus.Kind, List<Path>> data = new EnumMap<HgStatus.Kind, List<Path>>(HgStatus.Kind.class);
 			final Map<Path, Path> copies = showCopies ? new HashMap<Path,Path>() : null;
 			
-			public void handleStatus(HgStatus s) {
+			public void status(HgStatus s) {
 				List<Path> l = data.get(s.getKind());
 				if (l == null) {
 					l = new LinkedList<Path>();
@@ -86,7 +86,7 @@ public class Status {
 				}
 			}
 			
-			public void handleError(Path file, org.tmatesoft.hg.util.Status s) {
+			public void error(Path file, org.tmatesoft.hg.util.Status s) {
 				System.out.printf("FAILURE: %s %s\n", s.getMessage(), file);
 				s.getException().printStackTrace(System.out);
 			}

@@ -28,6 +28,7 @@ import java.util.Map;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.core.HgManifestHandler;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
@@ -50,7 +51,7 @@ public class TestManifest {
 	private ManifestOutputParser manifestParser;
 	private ExecHelper eh;
 	final LinkedList<HgFileRevision> revisions = new LinkedList<HgFileRevision>();
-	private HgManifestCommand.Handler handler  = new HgManifestCommand.Handler() {
+	private HgManifestHandler handler  = new HgManifestHandler() {
 		
 		public void file(HgFileRevision fileRevision) {
 			revisions.add(fileRevision);

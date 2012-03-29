@@ -19,6 +19,7 @@ package org.tmatesoft.hg.console;
 import static org.tmatesoft.hg.console.Options.asSet;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import org.tmatesoft.hg.core.HgManifestHandler;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.Nodeid;
@@ -45,7 +46,7 @@ public class Manifest {
 		}
 		final boolean debug = cmdLineOpts.getBoolean("--debug");
 		final boolean verbose = cmdLineOpts.getBoolean("-v", "--verbose");
-		HgManifestCommand.Handler h = new HgManifestCommand.Handler() {
+		HgManifestHandler h = new HgManifestHandler() {
 			
 			public void begin(Nodeid manifestRevision) {
 			}

@@ -30,10 +30,11 @@ import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgChangeset;
+import org.tmatesoft.hg.core.HgChangesetHandler;
+import org.tmatesoft.hg.core.HgChangesetHandler.WithCopyHistory;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
-import org.tmatesoft.hg.core.HgLogCommand.FileHistoryHandler;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
@@ -93,7 +94,7 @@ public class TestHistory {
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug", "--follow", f.toString());
 		
-		class H extends CollectHandler implements FileHistoryHandler {
+		class H extends CollectHandler implements HgChangesetHandler.WithCopyHistory {
 			boolean copyReported = false;
 			boolean fromMatched = false;
 			public void copy(HgFileRevision from, HgFileRevision to) {

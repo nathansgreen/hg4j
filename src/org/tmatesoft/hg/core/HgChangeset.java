@@ -21,10 +21,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -201,7 +200,7 @@ public class HgChangeset implements Cloneable {
 		return deletedFiles;
 	}
 
-	public boolean isMerge() throws HgInvalidControlFileException {
+	public boolean isMerge() throws HgRuntimeException {
 		// p1 == -1 and p2 != -1 is legitimate case
 		return !(getFirstParentRevision().isNull() || getSecondParentRevision().isNull()); 
 	}

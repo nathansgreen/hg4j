@@ -427,7 +427,7 @@ public class MapTagsToFileRevisions {
 		final HgLogCommand logCommand = new HgLogCommand(repository);
 		logCommand.file(targetPath, true);
 		logCommand.execute(new HgChangesetHandler() {
-			public void next(HgChangeset changeset) {
+			public void cset(HgChangeset changeset) {
 				if (changeset.getAffectedFiles().contains(targetPath)) {
 					System.out.println(changeset.getRevisionIndex() + " " + changeSetRevisionToTags.get(changeset.getNodeid()));
 				}

@@ -27,7 +27,6 @@ import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgInternals;
-import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -112,6 +111,11 @@ public final class HgUpdateConfigCommand extends HgAbstractCommand<HgUpdateConfi
 		throw new UnsupportedOperationException();
 	}
 	
+	/**
+	 * Perform config file update
+	 * 
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 */
 	public void execute() throws HgException {
 		try {
 			ConfigFile cfg = new ConfigFile();
@@ -132,7 +136,8 @@ public final class HgUpdateConfigCommand extends HgAbstractCommand<HgUpdateConfi
 			}
 			cfg.writeTo(configFile);
 		} catch (IOException ex) {
-			throw new HgInvalidFileException("Failed to update configuration file", ex, configFile);
+			String m = String.format("Failed to update configuration file %s", configFile);
+			throw new HgBadArgumentException(m, ex); // TODO [post-1.0] better exception, it's not bad argument case
 		}
 	}
 
