@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -30,13 +31,16 @@ import java.net.URLConnection;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import java.util.zip.InflaterInputStream;
@@ -68,7 +72,8 @@ public class HgRemoteRepository {
 	private final boolean debug;
 	private HgLookup lookupHelper;
 	private final SessionContext sessionContext;
-
+	private Set<String> remoteCapabilities;
+	
 	HgRemoteRepository(SessionContext ctx, URL url) throws HgBadArgumentException {
 		if (url == null || ctx == null) {
 			throw new IllegalArgumentException();
@@ -121,11 +126,49 @@ public class HgRemoteRepository {
 	}
 	
 	public boolean isInvalid() throws HgRemoteConnectionException {
-		// say hello to server, check response
-		if (Boolean.FALSE.booleanValue()) {
-			throw HgRepository.notImplemented();
+		if (remoteCapabilities == null) {
+			remoteCapabilities = new HashSet<String>();
+			// say hello to server, check response
+			try {
+				URL u = new URL(url, url.getPath() + "?cmd=hello");
+				HttpURLConnection c = setupConnection(u.openConnection());
+				c.connect();
+				if (debug) {
+					dumpResponseHeader(u, c);
+				}
+				BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), "US-ASCII"));
+				String line = r.readLine();
+				c.disconnect();
+				final String capsPrefix = "capabilities:";
+				if (line == null || !line.startsWith(capsPrefix)) {
+					// for whatever reason, some servers do not respond to hello command (e.g. svnkit)
+					// but respond to 'capabilities' instead. Try it.
+					// TODO [post-1.0] tests needed
+					u = new URL(url, url.getPath() + "?cmd=capabilities");
+					c = setupConnection(u.openConnection());
+					c.connect();
+					if (debug) {
+						dumpResponseHeader(u, c);
+					}
+					r = new BufferedReader(new InputStreamReader(c.getInputStream(), "US-ASCII"));
+					line = r.readLine();
+					c.disconnect();
+					if (line == null || line.trim().isEmpty()) {
+						return true;
+					}
+				} else {
+					line = line.substring(capsPrefix.length()).trim();
+				}
+				String[] caps = line.split("\\s");
+				remoteCapabilities.addAll(Arrays.asList(caps));
+				c.disconnect();
+			} catch (MalformedURLException ex) {
+				throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("hello").setServerInfo(getLocation());
+			} catch (IOException ex) {
+				throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("hello").setServerInfo(getLocation());
+			}
 		}
-		return false; // FIXME implement remote repository hello/check
+		return remoteCapabilities.isEmpty();
 	}
 
 	/**
@@ -152,7 +195,7 @@ public class HgRemoteRepository {
 			}
 			InputStreamReader is = new InputStreamReader(c.getInputStream(), "US-ASCII");
 			StreamTokenizer st = new StreamTokenizer(is);
-			st.ordinaryChars('0', '9');
+			st.ordinaryChars('0', '9'); // wordChars performs |, hence need to 0 first
 			st.wordChars('0', '9');
 			st.eolIsSignificant(false);
 			LinkedList<Nodeid> parseResult = new LinkedList<Nodeid>();
