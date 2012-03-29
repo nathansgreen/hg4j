@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
+import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -24,6 +25,7 @@ import org.tmatesoft.hg.util.Path;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
+@Callback
 public interface HgStatusInspector {
 	void modified(Path fname);
 	void added(Path fname);

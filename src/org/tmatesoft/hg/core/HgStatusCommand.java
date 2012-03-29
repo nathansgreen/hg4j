@@ -165,12 +165,12 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	 * @param statusHandler callback to get status information
  	 * @throws HgCallbackTargetException propagated exception from the handler
 	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 * @throws IOException if there are (further unspecified) errors while walking working copy
 	 * @throws CancelledException if execution of the command was cancelled
-	 * @throws IOException FIXME EXCEPTIONS WTF it's doing here if there are (further unspecified) errors while walking working copy
 	 * @throws IllegalArgumentException if handler is <code>null</code>
 	 * @throws ConcurrentModificationException if this command already runs (i.e. being used from another thread)
 	 */
-	public void execute(HgStatusHandler statusHandler) throws HgCallbackTargetException, HgException, CancelledException, IOException {
+	public void execute(HgStatusHandler statusHandler) throws HgCallbackTargetException, HgException, IOException, CancelledException {
 		if (statusHandler == null) {
 			throw new IllegalArgumentException();
 		}

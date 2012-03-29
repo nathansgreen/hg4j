@@ -151,11 +151,16 @@ public class HgWorkingCopyStatusCollector {
 	}
 	
 	/**
-	 * may be invoked few times, TIP or WORKING_COPY indicate comparison shall be run against working copy parent
-	 * XXX NOTE, use of TIP constant requires certain care. TIP here doesn't mean latest cset, but actual working copy parent.
+	 * Walk working copy, analyze status for each file found and missing.
+	 * May be invoked few times.
 	 * 
-	 * @param baseRevision
-	 * @param inspector
+	 * <p>There's no dedicated constant to for working copy parent, at least now. 
+	 * Use {@link HgRepository#WORKING_COPY} to indicate comparison 
+	 * shall be run against working copy parent. Although a bit confusing, single case doesn't 
+	 * justify a dedicated constant.
+	 * 
+	 * @param baseRevision revision index to check against, or {@link HgRepository#WORKING_COPY}. Note, {@link HgRepository#TIP} is not supported.
+	 * @param inspector callback to receive status information
 	 * @throws IOException to propagate IO errors from {@link FileIterator}
 	 * @throws CancelledException if operation execution was cancelled
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
@@ -170,6 +175,7 @@ public class HgWorkingCopyStatusCollector {
 		if (getDirstateParentManifest() == null) {
 			initDirstateParentManifest();
 		}
+		// XXX NOTE, use of TIP for working copy parent is questionable, at least. Instead, TIP shall mean latest cset or not allowed at all
 		ManifestRevision collect = null; // non null indicates we compare against base revision
 		Set<Path> baseRevFiles = Collections.emptySet(); // files from base revision not affected by status calculation 
 		if (baseRevision != TIP && baseRevision != WORKING_COPY) {
@@ -285,11 +291,12 @@ public class HgWorkingCopyStatusCollector {
 	}
 
 	/**
+	 * A {@link #walk(int, HgStatusInspector)} that records all the status information in the {@link HgStatusCollector.Record} object.
 	 * 
-	 * @param baseRevision
+	 * @see #walk(int, HgStatusInspector)
+	 * @param baseRevision revision index to check against, or {@link HgRepository#WORKING_COPY}. Note, {@link HgRepository#TIP} is not supported.
 	 * @return information object that describes change between the revisions
 	 * @throws IOException to propagate IO errors from {@link FileIterator}
-	 * @throws CancelledException if operation execution was cancelled
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public HgStatusCollector.Record status(int baseRevision) throws IOException, HgRuntimeException {

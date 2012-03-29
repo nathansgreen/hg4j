@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -382,7 +383,7 @@ public class TestStatus {
 		final Path file3 = Path.create("dir/file3");
 		HgWorkingCopyStatusCollector sc = HgWorkingCopyStatusCollector.create(repo, file2, file3);
 		HgStatusCollector.Record r = new HgStatusCollector.Record();
-		sc.walk(TIP, r);
+		sc.walk(WORKING_COPY, r);
 		assertTrue(r.getAdded().isEmpty());
 		assertTrue(r.getRemoved().isEmpty());
 		assertTrue(r.getUnknown().isEmpty());
@@ -397,7 +398,7 @@ public class TestStatus {
 		final Path readme = Path.create("readme");
 		final Path dir = Path.create("dir/");
 		sc = HgWorkingCopyStatusCollector.create(repo, readme, dir);
-		sc.walk(TIP, r = new HgStatusCollector.Record());
+		sc.walk(WORKING_COPY, r = new HgStatusCollector.Record());
 		assertTrue(r.getAdded().isEmpty());
 		assertTrue(r.getRemoved().size() == 2);
 		for (Path p : r.getRemoved()) {
@@ -421,13 +422,13 @@ public class TestStatus {
 		
 		HgWorkingCopyStatusCollector sc = HgWorkingCopyStatusCollector.create(repo, file3, file5);
 		HgStatusCollector.Record r;
-		sc.walk(TIP, r = new HgStatusCollector.Record());
+		sc.walk(WORKING_COPY, r = new HgStatusCollector.Record());
 		assertTrue(r.getRemoved().contains(file5));
 		assertTrue(r.getIgnored().contains(file3));
 		//
 		// query for the same file, but with
 		sc = HgWorkingCopyStatusCollector.create(repo, new PathGlobMatcher(file3.toString(), file5.toString()));
-		sc.walk(TIP, r = new HgStatusCollector.Record());
+		sc.walk(WORKING_COPY, r = new HgStatusCollector.Record());
 		assertTrue(r.getRemoved().contains(file5));
 		assertTrue(r.getIgnored().contains(file3));
 	}

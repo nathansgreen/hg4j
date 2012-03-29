@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.console;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 
 import java.io.File;
 import java.io.IOException;
@@ -434,7 +435,7 @@ public class Main {
 //		final Path path = Path.create("missing-dir/");
 //		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, path);
 		HgWorkingCopyStatusCollector wcsc = HgWorkingCopyStatusCollector.create(hgRepo, new PathGlobMatcher("mi**"));
-		wcsc.walk(TIP, new StatusDump());
+		wcsc.walk(WORKING_COPY, new StatusDump());
 	}
 	
 	/*
@@ -600,7 +601,7 @@ public class Main {
 		sc.change(0, dump);
 		System.out.println("\nStatus against working dir:");
 		HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(hgRepo);
-		wcc.walk(TIP, dump);
+		wcc.walk(WORKING_COPY, dump);
 		System.out.println();
 		System.out.printf("Manifest of the revision %d:\n", r2);
 		hgRepo.getManifest().walk(r2, r2, new ManifestDump());

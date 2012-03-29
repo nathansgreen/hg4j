@@ -102,7 +102,7 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 		// can't check isFile because Java would say false for a symlink with non-existing target
 		if (f.isDirectory()) {
 			// perhaps, shall just collect stats for all files and set false to exec/link flags?
-			throw new IllegalArgumentException(); // FIXME EXCEPTIONS
+			throw new IllegalArgumentException();
 		}
 		final String dirName = f.getParentFile().getAbsolutePath();
 		final String fileName = f.getName();
