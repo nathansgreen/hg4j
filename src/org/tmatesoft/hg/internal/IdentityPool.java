@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.internal;
 
+import org.tmatesoft.hg.util.Convertor;
 import org.tmatesoft.hg.util.DirectHashSet;
 
 
@@ -24,15 +25,19 @@ import org.tmatesoft.hg.util.DirectHashSet;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Pool2<T> {
+public class IdentityPool<T> implements Convertor<T> {
 	private final DirectHashSet<T> unify = new DirectHashSet<T>();
 	
-	public Pool2() {
+	public IdentityPool() {
 	}
 	
-	public Pool2(int sizeHint) {
+	public IdentityPool(int sizeHint) {
 	}
 	
+	public T mangle(T t) {
+		return unify(t);
+	}
+
 	public T unify(T t) {
 		T rv = unify.get(t);
 		if (rv == null) {
@@ -62,7 +67,7 @@ public class Pool2<T> {
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append(Pool2.class.getSimpleName());
+		sb.append(IdentityPool.class.getSimpleName());
 		sb.append('@');
 		sb.append(Integer.toString(System.identityHashCode(this)));
 		sb.append(' ');

@@ -32,9 +32,8 @@ import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Convertor;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.PathPool;
-import org.tmatesoft.hg.util.PathRewrite;
 
 
 /**
@@ -52,7 +51,7 @@ public class HgStatusCollector {
 	// no cache limit, but with cached nodeids and filenames - 1730+
 	// cache limit 100 - 19+ minutes to process 10000, and still working (too long, stopped)
 	private final int cacheMaxSize = 50; // do not keep too much manifest revisions
-	private PathPool pathPool;
+	private Convertor<Path> pathPool;
 	private final Pool<Nodeid> cacheNodes;
 	private final Pool<Path> cacheFilenames;
 	private final ManifestRevision emptyFakeState;
@@ -161,9 +160,9 @@ public class HgStatusCollector {
 	/*package-local*/ ManifestRevision raw(int rev) throws HgInvalidControlFileException {
 		return get(rev);
 	}
-	/*package-local*/ PathPool getPathPool() {
+	/*package-local*/ Convertor<Path> getPathPool() {
 		if (pathPool == null) {
-			pathPool = new PathPool(new PathRewrite.Empty());
+			pathPool = cacheFilenames;
 		}
 		return pathPool;
 	}
@@ -171,8 +170,8 @@ public class HgStatusCollector {
 	/**
 	 * Allows sharing of a common path cache 
 	 */
-	public void setPathPool(PathPool pathPool) {
-		this.pathPool = pathPool;
+	public void setPathPool(Convertor<Path> pathConvertor) {
+		pathPool = pathConvertor;
 	}
 
 	/**
@@ -293,7 +292,7 @@ public class HgStatusCollector {
 					Path copyTarget = r2fname;
 					Path copyOrigin = getOriginIfCopy(repo, copyTarget, r1Files, rev1);
 					if (copyOrigin != null) {
-						inspector.copied(getPathPool().path(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
+						inspector.copied(getPathPool().mangle(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
 					} else {
 						inspector.added(copyTarget);
 					}

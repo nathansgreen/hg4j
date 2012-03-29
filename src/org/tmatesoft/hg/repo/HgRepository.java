@@ -38,7 +38,6 @@ import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -335,7 +334,7 @@ public final class HgRepository {
 
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
 	// XXX consider passing Path pool or factory to produce (shared) Path instead of Strings
-	/*package-local*/ final HgDirstate loadDirstate(PathPool pathPool) throws HgInvalidControlFileException {
+	/*package-local*/ final HgDirstate loadDirstate(Path.Source pathFactory) throws HgInvalidControlFileException {
 		PathRewrite canonicalPath = null;
 		if (!impl.isCaseSensitiveFileSystem()) {
 			canonicalPath = new PathRewrite() {
@@ -345,7 +344,7 @@ public final class HgRepository {
 				}
 			};
 		}
-		HgDirstate ds = new HgDirstate(this, new File(repoDir, "dirstate"), pathPool, canonicalPath);
+		HgDirstate ds = new HgDirstate(this, new File(repoDir, "dirstate"), pathFactory, canonicalPath);
 		ds.read(impl.buildFileNameEncodingHelper());
 		return ds;
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -187,24 +187,36 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 	 * Factory for paths
 	 */
 	public interface Source {
-		Path path(String p);
+		Path path(CharSequence p);
 	}
-
+	
 	/**
 	 * Straightforward {@link Source} implementation that creates new Path instance for each supplied string
+	 * and optionally piping through a converter to get e.g. cached instance 
 	 */
 	public static class SimpleSource implements Source {
 		private final PathRewrite normalizer;
+		private final Convertor<Path> convertor;
 
-		public SimpleSource(PathRewrite pathRewrite) {
-			if (pathRewrite == null) {
-				throw new IllegalArgumentException();
-			}
-			normalizer = pathRewrite;
+		public SimpleSource() {
+			this(new PathRewrite.Empty(), null);
 		}
 
-		public Path path(String p) {
-			return Path.create(normalizer.rewrite(p));
+		public SimpleSource(PathRewrite pathRewrite) {
+			this(pathRewrite, null);
+		}
+
+		public SimpleSource(PathRewrite pathRewrite, Convertor<Path> pathConvertor) {
+			normalizer = pathRewrite;
+			convertor = pathConvertor;
+		}
+
+		public Path path(CharSequence p) {
+			Path rv = Path.create(normalizer.rewrite(p));
+			if (convertor != null) {
+				return convertor.mangle(rv);
+			}
+			return rv;
 		}
 	}
 }

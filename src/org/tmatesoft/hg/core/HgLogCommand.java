@@ -323,7 +323,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			HistoryNode[] go(HgDataFile fileNode) throws HgInvalidControlFileException {
 				completeHistory = new HistoryNode[fileNode.getRevisionCount()];
 				commitRevisions = new int[completeHistory.length];
-				fileNode.walk(0, TIP, this);
+				fileNode.indexWalk(0, TIP, this);
 				return completeHistory;
 			}
 		};

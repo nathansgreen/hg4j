@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,13 +18,15 @@ package org.tmatesoft.hg.internal;
 
 import java.util.HashMap;
 
+import org.tmatesoft.hg.util.Convertor;
+
 /**
  * Instance pooling.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Pool<T> {
+public class Pool<T> implements Convertor<T> {
 	private final HashMap<T,T> unify;
 	
 	public Pool() {
@@ -38,7 +40,11 @@ public class Pool<T> {
 			unify = new HashMap<T, T>(sizeHint * 4 / 3, 0.75f);
 		}
 	}
-	
+
+	public T mangle(T t) {
+		return unify(t);
+	}
+
 	public T unify(T t) {
 		T rv = unify.get(t);
 		if (rv == null) {

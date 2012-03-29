@@ -41,7 +41,7 @@ public class HgRepoFacade {
 	private final SessionContext context;
 
 	public HgRepoFacade() {
-		this(new BasicSessionContext(null, null));
+		this(new BasicSessionContext(null));
 	}
 	
 	public HgRepoFacade(SessionContext ctx) {

@@ -147,7 +147,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 		public WriteDownMate(File destDir) {
 			hgDir = new File(destDir, ".hg");
-			implHelper = new Internals(new BasicSessionContext(null, null));
+			implHelper = new Internals(new BasicSessionContext(null));
 			implHelper.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
 			storagePathHelper = implHelper.buildDataFilesHelper();
 		}

@@ -219,14 +219,14 @@ public class TestAuxUtilities {
 	@Test
 	public void testRevlogInspectors() throws Exception { // TODO move to better place
 		HgRepository repository = Configuration.get().find("branches-1"); // any repo
-		repository.getChangelog().walk(0, TIP, new HgChangelog.RevisionInspector() {
+		repository.getChangelog().indexWalk(0, TIP, new HgChangelog.RevisionInspector() {
 
 			public void next(int localRevision, Nodeid revision, int linkedRevision) {
 				Assert.assertEquals(localRevision, linkedRevision);
 			}
 		});
 		final HgDataFile fileNode = repository.getFileNode("file1");
-		fileNode.walk(0, TIP, new HgDataFile.RevisionInspector() {
+		fileNode.indexWalk(0, TIP, new HgDataFile.RevisionInspector() {
 			int i = 0;
 
 			public void next(int localRevision, Nodeid revision, int linkedRevision) {
@@ -235,7 +235,7 @@ public class TestAuxUtilities {
 				Assert.assertEquals(fileNode.getRevision(localRevision), revision);
 			}
 		});
-		fileNode.walk(0, TIP, new HgDataFile.ParentInspector() {
+		fileNode.indexWalk(0, TIP, new HgDataFile.ParentInspector() {
 			int i = 0;
 			Nodeid[] all = new Nodeid[fileNode.getRevisionCount()];
 

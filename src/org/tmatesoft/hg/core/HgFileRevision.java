@@ -42,7 +42,9 @@ public final class HgFileRevision {
 	private Flags flags; // null unless set/extracted
 
 	/**
-	 * FIXME has to be public?
+	 * New description of a file revision from a specific repository.
+	 * 
+	 * <p>Although this constructor is public, and clients can use it to construct own file revisions to pass e.g. to commands, its use is discouraged.  
 	 * 
 	 * @param hgRepo repository
 	 * @param rev file revision

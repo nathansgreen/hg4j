@@ -54,7 +54,7 @@ public class TestStorePath {
 	
 	public TestStorePath() {
 		propertyOverrides.put("hg.consolelog.debug", true);
-		internals = new Internals(new BasicSessionContext(propertyOverrides, null, null));
+		internals = new Internals(new BasicSessionContext(propertyOverrides, null));
 		internals.setStorageConfig(1, 0x7);
 		storePathHelper = internals.buildDataFilesHelper();
 	}

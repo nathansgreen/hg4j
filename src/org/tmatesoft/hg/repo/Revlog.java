@@ -290,7 +290,7 @@ abstract class Revlog {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	@Experimental
-	public void walk(int start, int end, final Revlog.Inspector inspector) throws HgRuntimeException {
+	public void indexWalk(int start, int end, final Revlog.Inspector inspector) throws HgRuntimeException {
 		int lastRev = getLastRevision();
 		if (start == TIP) {
 			start = lastRev;
@@ -387,7 +387,7 @@ abstract class Revlog {
 			//
 			sequential = new Nodeid[revisionCount];
 			sorted = new Nodeid[revisionCount];
-			Revlog.this.walk(0, TIP, this);
+			Revlog.this.indexWalk(0, TIP, this);
 			Arrays.sort(sorted);
 			sorted2natural = new int[revisionCount];
 			for (int i = 0; i < revisionCount; i++) {
@@ -572,7 +572,7 @@ abstract class Revlog {
 			final int revisionCount = Revlog.this.getRevisionCount();
 			sequential = new Nodeid[revisionCount];
 			sorted = new Nodeid[revisionCount];
-			Revlog.this.walk(0, TIP, this);
+			Revlog.this.indexWalk(0, TIP, this);
 			// next is alternative to Arrays.sort(sorted), and build sorted2natural looking up each element of sequential in sorted.
 			// the way sorted2natural was build is O(n*log n).  
 			final ArrayHelper ah = new ArrayHelper();

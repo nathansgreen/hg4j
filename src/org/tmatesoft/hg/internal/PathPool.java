@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,36 +14,58 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.util;
+package org.tmatesoft.hg.internal;
 
 import java.lang.ref.SoftReference;
 import java.util.WeakHashMap;
 
+import org.tmatesoft.hg.util.Convertor;
+import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.PathRewrite;
+
 
 /**
- * Produces path from strings and caches result for reuse
+ * Produces path from strings and caches (weakly) result for reuse
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class PathPool implements Path.Source {
-	private final WeakHashMap<String, SoftReference<Path>> cache;
+public class PathPool implements Path.Source, Convertor<Path> {
+	private final WeakHashMap<CharSequence, SoftReference<Path>> cache;
 	private final PathRewrite pathRewrite;
 	
 	public PathPool(PathRewrite rewrite) {
 		pathRewrite = rewrite;
-		cache = new WeakHashMap<String, SoftReference<Path>>();
+		cache = new WeakHashMap<CharSequence, SoftReference<Path>>();
 	}
 
-	public Path path(String p) {
-		p = pathRewrite.rewrite(p).toString();
+	/*
+	 * (non-Javadoc)
+	 * @see org.tmatesoft.hg.util.Path.Source#path(java.lang.CharSequence)
+	 */
+	public Path path(CharSequence p) {
+		if (p instanceof Path) {
+			return asPath((Path) p);
+		}
+		p = pathRewrite.rewrite(p);
 		return get(p, true);
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see org.tmatesoft.hg.util.Convertor#mangle(java.lang.Object)
+	 */
+	public Path mangle(Path p) {
+		return asPath(p);
 	}
 
 	// pipes path object through cache to reuse instance, if possible
 	// TODO unify with Pool<Path>
-	public Path path(Path p) {
-		String s = pathRewrite.rewrite(p).toString();
+	private Path asPath(Path p) {
+		CharSequence s = pathRewrite.rewrite(p.toString());
+		// rewrite string, not path to avoid use of Path object as key
+		// in case pathRewrite does nothing and returns supplied instance
+		//
 		Path cached = get(s, false);
 		if (cached == null) {
 			cache.put(s, new SoftReference<Path>(cached = p));
@@ -70,7 +92,7 @@ public class PathPool implements Path.Source {
 		cache.clear();
 	}
 
-	private Path get(String p, boolean create) {
+	private Path get(CharSequence p, boolean create) {
 		SoftReference<Path> sr = cache.get(p);
 		Path path = sr == null ? null : sr.get();
 		if (path == null) {

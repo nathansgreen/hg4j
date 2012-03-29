@@ -37,17 +37,18 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ManifestRevision;
+import org.tmatesoft.hg.internal.PathPool;
 import org.tmatesoft.hg.internal.PathScope;
 import org.tmatesoft.hg.internal.Preview;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Convertor;
 import org.tmatesoft.hg.util.FileInfo;
 import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.RegularFileInfo;
 
@@ -62,7 +63,7 @@ public class HgWorkingCopyStatusCollector {
 	private final FileIterator repoWalker;
 	private HgDirstate dirstate;
 	private HgStatusCollector baseRevisionCollector;
-	private PathPool pathPool;
+	private Convertor<Path> pathPool;
 	private ManifestRevision dirstateParentManifest;
 
 	/**
@@ -92,7 +93,7 @@ public class HgWorkingCopyStatusCollector {
 		baseRevisionCollector = sc;
 	}
 
-	/*package-local*/ PathPool getPathPool() {
+	/*package-local*/ Convertor<Path> getPathPool() {
 		if (pathPool == null) {
 			if (baseRevisionCollector == null) {
 				pathPool = new PathPool(new PathRewrite.Empty());
@@ -103,8 +104,8 @@ public class HgWorkingCopyStatusCollector {
 		return pathPool;
 	}
 
-	public void setPathPool(PathPool pathPool) {
-		this.pathPool = pathPool;
+	public void setPathPool(Convertor<Path> pathConvertor) {
+		pathPool = pathConvertor;
 	}
 
 	/**
@@ -113,7 +114,14 @@ public class HgWorkingCopyStatusCollector {
 	 */
 	public HgDirstate getDirstate() throws HgInvalidControlFileException {
 		if (dirstate == null) {
-			dirstate = repo.loadDirstate(getPathPool());
+			Convertor<Path> pp = getPathPool();
+			Path.Source ps;
+			if (pp instanceof Path.Source) {
+				ps = (Path.Source) pp;
+			} else {
+				ps = new Path.SimpleSource(new PathRewrite.Empty(), pp);
+			}
+			dirstate = repo.loadDirstate(ps);
 		}
 		return dirstate;
 	}
@@ -206,7 +214,7 @@ public class HgWorkingCopyStatusCollector {
 		while (repoWalker.hasNext()) {
 			cs.checkCancelled();
 			repoWalker.next();
-			final Path fname = getPathPool().path(repoWalker.name());
+			final Path fname = getPathPool().mangle(repoWalker.name());
 			FileInfo f = repoWalker.file();
 			Path knownInDirstate;
 			if (!f.exists()) {
@@ -385,7 +393,7 @@ public class HgWorkingCopyStatusCollector {
 				try {
 					Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
 					if (origin != null) {
-						inspector.copied(getPathPool().path(origin), fname);
+						inspector.copied(getPathPool().mangle(origin), fname);
 						return;
 					}
 				} catch (HgInvalidFileException ex) {

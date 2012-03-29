@@ -33,7 +33,7 @@ import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
-import org.tmatesoft.hg.internal.Pool2;
+import org.tmatesoft.hg.internal.IdentityPool;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.Path;
@@ -436,8 +436,8 @@ public final class HgManifest extends Revlog {
 
 	private static class ManifestParser implements RevlogStream.Inspector, Lifecycle {
 		private final Inspector inspector;
-		private Pool2<Nodeid> nodeidPool, thisRevPool;
-		private final Pool2<PathProxy> fnamePool;
+		private IdentityPool<Nodeid> nodeidPool, thisRevPool;
+		private final IdentityPool<PathProxy> fnamePool;
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
 		private final ProgressSupport progressHelper;
 		private IterateControlMediator iterateControl;
@@ -447,9 +447,9 @@ public final class HgManifest extends Revlog {
 			assert delegate != null;
 			inspector = delegate;
 			encHelper = eh;
-			nodeidPool = new Pool2<Nodeid>();
-			fnamePool = new Pool2<PathProxy>();
-			thisRevPool = new Pool2<Nodeid>();
+			nodeidPool = new IdentityPool<Nodeid>();
+			fnamePool = new IdentityPool<PathProxy>();
+			thisRevPool = new IdentityPool<Nodeid>();
 			progressHelper = ProgressSupport.Factory.get(delegate);
 		}
 		
@@ -518,7 +518,7 @@ public final class HgManifest extends Revlog {
 				// (next manifest is likely to refer to most of them, although in specific cases 
 				// like commit in another branch a lot may be useless)
 				nodeidPool.clear();
-				Pool2<Nodeid> t = nodeidPool;
+				IdentityPool<Nodeid> t = nodeidPool;
 				nodeidPool = thisRevPool;
 				thisRevPool = t;
 				iterateControl.checkCancelled();

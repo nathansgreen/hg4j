@@ -119,7 +119,7 @@ public class MapTagsToFileRevisions {
 		//
 		final long start_3 = System.nanoTime();
 		final Map<Nodeid, Nodeid> changesetToNodeid_3 = new HashMap<Nodeid, Nodeid>();
-		fileNode.walk(0, TIP, new HgDataFile.RevisionInspector() {
+		fileNode.indexWalk(0, TIP, new HgDataFile.RevisionInspector() {
 
 			public void next(int fileRevisionIndex, Nodeid revision, int linkedRevisionIndex) {
 				changesetToNodeid_3.put(clog.getRevision(linkedRevisionIndex), revision);
@@ -360,7 +360,7 @@ public class MapTagsToFileRevisions {
 		repository.getManifest().walkFileRevisions(targetPath, collectFileRevAtCset,tagLocalRevs);
 
 		final long start2a = System.nanoTime();
-		fileNode.walk(0, lastRev, new HgDataFile.RevisionInspector() {
+		fileNode.indexWalk(0, lastRev, new HgDataFile.RevisionInspector() {
 
 			public void next(int fileRevisionIndex, Nodeid fileRevision, int changesetRevisionIndex) {
 				List<String> associatedTags = new LinkedList<String>();

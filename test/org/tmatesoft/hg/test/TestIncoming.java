@@ -135,7 +135,7 @@ public class TestIncoming {
 
 	static File initEmptyTempRepo(String dirName) throws IOException {
 		File dest = createEmptyDir(dirName);
-		Internals implHelper = new Internals(new BasicSessionContext(null, null, null));
+		Internals implHelper = new Internals(new BasicSessionContext(null));
 		implHelper.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
 		implHelper.initEmptyRepository(new File(dest, ".hg"));
 		return dest;

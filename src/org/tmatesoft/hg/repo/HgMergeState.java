@@ -33,7 +33,6 @@ import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 
 /**
@@ -111,9 +110,8 @@ public class HgMergeState {
 		}
 		try {
 			ArrayList<Entry> result = new ArrayList<Entry>();
-			// FIXME need to settle use of Pool<Path> and PathPool
-			// latter is pool that can create objects on demand, former is just cache
-			PathPool pathPool = new PathPool(new PathRewrite.Empty()); 
+			// pipe (already normalized) names from mergestate through same pool of filenames as use manifest revisions  
+			Path.Source pathPool = new Path.SimpleSource(new PathRewrite.Empty(), fnamePool); 
 			final ManifestRevision m1 = new ManifestRevision(nodeidPool, fnamePool);
 			final ManifestRevision m2 = new ManifestRevision(nodeidPool, fnamePool);
 			if (!wcp2.isNull()) {
@@ -163,7 +161,6 @@ public class HgMergeState {
 			}
 			entries = result.toArray(new Entry[result.size()]);
 			br.close();
-			pathPool.clear();
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException("Merge state read failed", ex, f);
 		}

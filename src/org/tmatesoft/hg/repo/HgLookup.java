@@ -143,7 +143,7 @@ public class HgLookup {
 
 	private SessionContext getContext() {
 		if (sessionContext == null) {
-			sessionContext = new BasicSessionContext(null, null);
+			sessionContext = new BasicSessionContext(null);
 		}
 		return sessionContext;
 	}

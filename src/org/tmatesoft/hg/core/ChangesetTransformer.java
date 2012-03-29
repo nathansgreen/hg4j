@@ -18,6 +18,7 @@ package org.tmatesoft.hg.core;
 
 import java.util.Set;
 
+import org.tmatesoft.hg.internal.PathPool;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -25,7 +26,6 @@ import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
-import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -103,6 +103,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 
 		public Transformation(HgStatusCollector statusCollector, HgChangelog.ParentWalker pw) {
 			// files listed in a changeset don't need their names to be rewritten (they are normalized already)
+			// pp serves as a cache for all filenames encountered and as a source for Path listed in the changeset
 			PathPool pp = new PathPool(new PathRewrite.Empty());
 			statusCollector.setPathPool(pp);
 			changeset = new HgChangeset(statusCollector, pp);

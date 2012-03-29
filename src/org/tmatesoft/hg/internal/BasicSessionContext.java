@@ -21,8 +21,6 @@ import java.util.Map;
 
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.util.LogFacility;
-import org.tmatesoft.hg.util.PathPool;
-import org.tmatesoft.hg.util.PathRewrite;
 
 /**
  *
@@ -31,26 +29,17 @@ import org.tmatesoft.hg.util.PathRewrite;
  */
 public class BasicSessionContext implements SessionContext {
 
-	private PathPool pathPool;
 	private LogFacility logFacility;
 	private final Map<String, Object> properties;
 	
-	public BasicSessionContext(PathPool pathFactory, LogFacility log) {
-		this(null, pathFactory, log);
+	public BasicSessionContext(LogFacility log) {
+		this(null, log);
 	}
 	
 	@SuppressWarnings("unchecked")
-	public BasicSessionContext(Map<String,?> propertyOverrides, PathPool pathFactory, LogFacility log) {
-		pathPool = pathFactory;
+	public BasicSessionContext(Map<String,?> propertyOverrides, LogFacility log) {
 		logFacility = log;
 		properties = propertyOverrides == null ? Collections.<String,Object>emptyMap() : (Map<String, Object>) propertyOverrides;
-	}
-
-	public PathPool getPathPool() {
-		if (pathPool == null) {
-			pathPool = new PathPool(new PathRewrite.Empty());
-		}
-		return pathPool;
 	}
 
 	public LogFacility getLog() {

@@ -33,7 +33,6 @@ import org.tmatesoft.hg.internal.WinToNixPathRewrite;
 import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.PathPool;
 import org.tmatesoft.hg.util.PathRewrite;
 
 
@@ -56,7 +55,7 @@ public class HgInternals {
 	}
 
 	public HgDirstate getDirstate() throws HgInvalidControlFileException {
-		return repo.loadDirstate(new PathPool(new PathRewrite.Empty()));
+		return repo.loadDirstate(new Path.SimpleSource());
 	}
 	
 	// tests
@@ -70,7 +69,7 @@ public class HgInternals {
 				}
 			};
 		}
-		HgDirstate ds = new HgDirstate(repo, new File(repo.getRepositoryRoot(), "dirstate"), new PathPool(new PathRewrite.Empty()), canonicalPath);
+		HgDirstate ds = new HgDirstate(repo, new File(repo.getRepositoryRoot(), "dirstate"), new Path.SimpleSource(), canonicalPath);
 		ds.read(repo.getImplHelper().buildFileNameEncodingHelper());
 		return ds;
 	}

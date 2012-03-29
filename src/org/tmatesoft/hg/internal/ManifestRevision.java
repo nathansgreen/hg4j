@@ -21,6 +21,7 @@ import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.util.Convertor;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -33,14 +34,14 @@ import org.tmatesoft.hg.util.Path;
 public final class ManifestRevision implements HgManifest.Inspector {
 	private final TreeMap<Path, Nodeid> idsMap;
 	private final TreeMap<Path, HgManifest.Flags> flagsMap;
-	private final Pool<Nodeid> idsPool;
-	private final Pool<Path> namesPool;
+	private final Convertor<Nodeid> idsPool;
+	private final Convertor<Path> namesPool;
 	private Nodeid changeset;
 	private int changelogRev; 
 
 	// optional pools for effective management of nodeids and filenames (they are likely
 	// to be duplicated among different manifest revisions
-	public ManifestRevision(Pool<Nodeid> nodeidPool, Pool<Path> filenamePool) {
+	public ManifestRevision(Pool<Nodeid> nodeidPool, Convertor<Path> filenamePool) {
 		idsPool = nodeidPool;
 		namesPool = filenamePool;
 		idsMap = new TreeMap<Path, Nodeid>();
@@ -75,10 +76,10 @@ public final class ManifestRevision implements HgManifest.Inspector {
 
 	public boolean next(Nodeid nid, Path fname, HgManifest.Flags flags) {
 		if (namesPool != null) {
-			fname = namesPool.unify(fname);
+			fname = namesPool.mangle(fname);
 		}
 		if (idsPool != null) {
-			nid = idsPool.unify(nid);
+			nid = idsPool.mangle(nid);
 		}
 		idsMap.put(fname, nid);
 		if (flags != HgManifest.Flags.RegularFile) {

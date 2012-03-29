@@ -265,7 +265,7 @@ public class Main {
 	private void testTreeTraversal() throws Exception {
 		File repoRoot = hgRepo.getWorkingDir();
 		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), hgRepo.getToRepoPathHelper()));
-		FileWalker w =  new FileWalker(new BasicSessionContext(null, null), repoRoot, pathSrc);
+		FileWalker w =  new FileWalker(new BasicSessionContext(null), repoRoot, pathSrc);
 		int count = 0;
 		final long start = System.currentTimeMillis();
 		while (w.hasNext()) {
