@@ -27,6 +27,7 @@ import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 
@@ -43,7 +44,7 @@ public class HgChangeset implements Cloneable {
 	private final HgStatusCollector statusHelper;
 	private final Path.Source pathHelper;
 
-	private HgChangelog.ParentWalker parentHelper;
+	private HgParentChildMap<HgChangelog> parentHelper;
 
 	//
 	private RawChangeset changeset;
@@ -72,7 +73,7 @@ public class HgChangeset implements Cloneable {
 		// keep references to parentHelper, statusHelper and pathHelper
 	}
 
-	/*package-local*/ void setParentHelper(HgChangelog.ParentWalker pw) {
+	/*package-local*/ void setParentHelper(HgParentChildMap<HgChangelog> pw) {
 		parentHelper = pw;
 		if (parentHelper != null) {
 			if (parentHelper.getRepo() != statusHelper.getRepo()) {

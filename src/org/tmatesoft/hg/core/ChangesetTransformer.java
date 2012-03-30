@@ -23,6 +23,7 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
@@ -47,7 +48,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 
 	// repo and delegate can't be null, parent walker can
 	// ps and cs can't be null
-	public ChangesetTransformer(HgRepository hgRepo, HgChangesetHandler delegate, HgChangelog.ParentWalker pw, ProgressSupport ps, CancelSupport cs) {
+	public ChangesetTransformer(HgRepository hgRepo, HgChangesetHandler delegate, HgParentChildMap<HgChangelog> pw, ProgressSupport ps, CancelSupport cs) {
 		if (hgRepo == null || delegate == null) {
 			throw new IllegalArgumentException();
 		}
@@ -101,7 +102,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 	static class Transformation {
 		private final HgChangeset changeset;
 
-		public Transformation(HgStatusCollector statusCollector, HgChangelog.ParentWalker pw) {
+		public Transformation(HgStatusCollector statusCollector, HgParentChildMap<HgChangelog> pw) {
 			// files listed in a changeset don't need their names to be rewritten (they are normalized already)
 			// pp serves as a cache for all filenames encountered and as a source for Path listed in the changeset
 			PathPool pp = new PathPool(new PathRewrite.Empty());

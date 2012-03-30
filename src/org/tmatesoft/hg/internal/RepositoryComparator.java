@@ -38,6 +38,7 @@ import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
 import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -50,11 +51,11 @@ import org.tmatesoft.hg.util.ProgressSupport;
 public class RepositoryComparator {
 
 	private final boolean debug = Boolean.parseBoolean(System.getProperty("hg4j.remote.debug"));
-	private final HgChangelog.ParentWalker localRepo;
+	private final HgParentChildMap<HgChangelog> localRepo;
 	private final HgRemoteRepository remoteRepo;
 	private List<Nodeid> common;
 
-	public RepositoryComparator(HgChangelog.ParentWalker pwLocal, HgRemoteRepository hgRemote) {
+	public RepositoryComparator(HgParentChildMap<HgChangelog> pwLocal, HgRemoteRepository hgRemote) {
 		localRepo = pwLocal;
 		remoteRepo = hgRemote;
 	}

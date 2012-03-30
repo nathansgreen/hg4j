@@ -26,6 +26,7 @@ import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -43,7 +44,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	@SuppressWarnings("unused")
 	private boolean includeSubrepo;
 	private RepositoryComparator comparator;
-	private HgChangelog.ParentWalker parentHelper;
+	private HgParentChildMap<HgChangelog> parentHelper;
 	private Set<String> branches;
 
 	public HgOutgoingCommand(HgRepository hgRepo) {
@@ -150,9 +151,9 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 		return comparator;
 	}
 	
-	private HgChangelog.ParentWalker getParentHelper() throws HgInvalidControlFileException {
+	private HgParentChildMap<HgChangelog> getParentHelper() throws HgInvalidControlFileException {
 		if (parentHelper == null) {
-			parentHelper = localRepo.getChangelog().new ParentWalker();
+			parentHelper = new HgParentChildMap<HgChangelog>(localRepo.getChangelog());
 			parentHelper.init();
 		}
 		return parentHelper;

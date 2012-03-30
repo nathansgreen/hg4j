@@ -129,7 +129,7 @@ public class HgBranches {
 		int lastCached = readCache();
 		isCacheActual = lastCached == repo.getChangelog().getLastRevision();
 		if (!isCacheActual) {
-			final HgChangelog.ParentWalker pw = repo.getChangelog().new ParentWalker();
+			final HgParentChildMap<HgChangelog> pw = new HgParentChildMap<HgChangelog>(repo.getChangelog());
 			pw.init();
 			ps.worked(repo.getChangelog().getRevisionCount());
 			// first revision branch found at

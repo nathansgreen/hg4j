@@ -40,6 +40,7 @@ import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
@@ -70,7 +71,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	private Path file;
 	private boolean followHistory; // makes sense only when file != null
 	private ChangesetTransformer csetTransform;
-	private HgChangelog.ParentWalker parentHelper;
+	private HgParentChildMap<HgChangelog> parentHelper;
 	
 	public HgLogCommand(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -234,7 +235,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		final ProgressSupport progressHelper = getProgressSupport(handler);
 		try {
 			count = 0;
-			HgChangelog.ParentWalker pw = getParentHelper(file == null); // leave it uninitialized unless we iterate whole repo
+			HgParentChildMap<HgChangelog> pw = getParentHelper(file == null); // leave it uninitialized unless we iterate whole repo
 			// ChangesetTransfrom creates a blank PathPool, and #file(String, boolean) above 
 			// may utilize it as well. CommandContext? How about StatusCollector there as well?
 			csetTransform = new ChangesetTransformer(repo, handler, pw, progressHelper, getCancelSupport(handler, true));
@@ -387,9 +388,9 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		csetTransform.next(revisionNumber, nodeid, cset);
 	}
 	
-	private HgChangelog.ParentWalker getParentHelper(boolean create) throws HgInvalidControlFileException {
+	private HgParentChildMap<HgChangelog> getParentHelper(boolean create) throws HgInvalidControlFileException {
 		if (parentHelper == null && create) {
-			parentHelper = repo.getChangelog().new ParentWalker();
+			parentHelper = new HgParentChildMap<HgChangelog>(repo.getChangelog());
 			parentHelper.init();
 		}
 		return parentHelper;
