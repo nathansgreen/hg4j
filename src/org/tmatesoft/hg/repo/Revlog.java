@@ -25,7 +25,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Preview;
@@ -134,7 +133,7 @@ abstract class Revlog {
 	 * If unsure, use {@link #isKnown(Nodeid)} to find out whether nodeid belongs to this revlog.
 	 * 
 	 * For occasional queries, this method works with decent performance, despite its O(n/2) approach.
-	 * Alternatively, if you need to perform multiple queries (e.g. at least 15-20), {@link Revlog.RevisionMap} may come handy.
+	 * Alternatively, if you need to perform multiple queries (e.g. at least 15-20), {@link HgRevisionMap} may come handy.
 	 * 
 	 * @param nid revision to look up 
 	 * @return revision local index in this revlog
@@ -340,73 +339,9 @@ abstract class Revlog {
 		return pw;
 	}
 
-	/**
-	 * Effective int to Nodeid and vice versa translation. It's advised to use this class instead of 
-	 * multiple {@link Revlog#getRevisionIndex(Nodeid)} calls.
-	 * 
-	 * {@link Revlog#getRevisionIndex(Nodeid)} with straightforward lookup approach performs O(n/2)
-	 * {@link RevisionMap#revisionIndex(Nodeid)} is log(n), plus initialization is O(n) (just once).
+	/*
+	 * class with cancel and few other exceptions support. TODO consider general superclass to share with e.g. HgManifestCommand.Mediator
 	 */
-	public final class RevisionMap implements RevisionInspector {
-		/*
-		 * in fact, initialization is much slower as it instantiates Nodeids, while #getRevisionIndex
-		 * compares directly against byte buffer. Measuring cpython with 70k+ gives 3 times difference (47 vs 171)
-		 * for complete changelog iteration. 
-		 */
-		
-		/*
-		 * XXX 3 * (x * 4) bytes. Can I do better?
-		 * It seems, yes. Don't need to keep sorted, always can emulate it with indirect access to sequential through sorted2natural.
-		 * i.e. instead sorted[mid].compareTo(toFind), do sequential[sorted2natural[mid]].compareTo(toFind) 
-		 */
-		private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
-		private Nodeid[] sorted; // for binary search
-		private int[] sorted2natural;
-
-		public RevisionMap() {
-		}
-		
-		public HgRepository getRepo() {
-			return Revlog.this.getRepo();
-		}
-		
-		public void next(int revisionIndex, Nodeid revision, int linkedRevision) {
-			sequential[revisionIndex] = sorted[revisionIndex] = revision;
-		}
-
-		/**
-		 * @return <code>this</code> for convenience.
-		 */
-		public RevisionMap init(/*XXX Pool<Nodeid> to reuse nodeids, if possible. */) throws HgInvalidControlFileException{
-			// XXX HgRepository.register((RepoChangeListener) this); // listen to changes in repo, re-init if needed?
-			final int revisionCount = Revlog.this.getRevisionCount();
-			sequential = new Nodeid[revisionCount];
-			sorted = new Nodeid[revisionCount];
-			Revlog.this.indexWalk(0, TIP, this);
-			// next is alternative to Arrays.sort(sorted), and build sorted2natural looking up each element of sequential in sorted.
-			// the way sorted2natural was build is O(n*log n).  
-			final ArrayHelper ah = new ArrayHelper();
-			ah.sort(sorted);
-			// note, values in ArrayHelper#getReversed are 1-based indexes, not 0-based 
-			sorted2natural = ah.getReverse();
-			return this;
-		}
-		
-		public Nodeid revision(int revisionIndex) {
-			return sequential[revisionIndex];
-		}
-		public int revisionIndex(Nodeid revision) {
-			if (revision == null || revision.isNull()) {
-				return BAD_REVISION;
-			}
-			int x = Arrays.binarySearch(sorted, revision);
-			if (x < 0) {
-				return BAD_REVISION;
-			}
-			return sorted2natural[x]-1;
-		}
-	}
-
 	protected abstract static class ErrorHandlingInspector implements RevlogStream.Inspector, CancelSupport {
 		private Exception failure;
 		private CancelSupport cancelSupport;

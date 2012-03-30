@@ -217,7 +217,7 @@ public class HgBranches {
 			}
 		}
 		final HgChangelog clog = repo.getChangelog();
-		final HgChangelog.RevisionMap rmap = clog.new RevisionMap().init();
+		final HgRevisionMap<HgChangelog> rmap = new HgRevisionMap<HgChangelog>(clog).init();
 		for (BranchInfo bi : branches.values()) {
 			bi.validate(clog, rmap);
 		}
@@ -296,7 +296,7 @@ public class HgBranches {
 			this(branchName, Nodeid.NULL, branchHeads);
 		}
 		
-		void validate(HgChangelog clog, HgChangelog.RevisionMap rmap) throws HgInvalidControlFileException {
+		void validate(HgChangelog clog, HgRevisionMap<HgChangelog> rmap) throws HgInvalidControlFileException {
 			int[] localCset = new int[heads.size()];
 			int i = 0;
 			for (Nodeid h : heads) {

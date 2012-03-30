@@ -65,6 +65,7 @@ import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
+import org.tmatesoft.hg.repo.HgRevisionMap;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Pair;
@@ -288,7 +289,7 @@ public class Main {
 	 */
 	private void testRevisionMap() throws Exception {
 		HgChangelog changelog = hgRepo.getChangelog();
-		HgChangelog.RevisionMap rmap = changelog.new RevisionMap().init(); // warm-up, ensure complete file read
+		HgRevisionMap<HgChangelog> rmap = new HgRevisionMap<HgChangelog>(changelog).init(); // warm-up, ensure complete file read
 		int tip = changelog.getLastRevision();
 		// take 5 arbitrary revisions at 0, 1/4, 2/4, 3/4 and 4/4 
 		final Nodeid[] revs = new Nodeid[5];
@@ -306,7 +307,7 @@ public class Main {
 		System.out.println();
 		//
 		start = System.currentTimeMillis();
-		rmap = changelog.new RevisionMap().init();
+		rmap = new HgRevisionMap<HgChangelog>(changelog).init();
 		long s2 = System.currentTimeMillis();
 		for (int i = 0; i < revs.length; i++) {
 			final int localRev = rmap.revisionIndex(revs[i]);

@@ -49,7 +49,7 @@ import org.tmatesoft.hg.repo.Revlog.ParentInspector;
  * <p> Perhaps, later may add alternative way to access (and reuse) map instance, Revlog#getParentWalker(), 
  * that instantiates and initializes ParentWalker, and keep SoftReference to allow its reuse.
  * 
- * @see Revlog.RevisionMap
+ * @see HgRevisionMap
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

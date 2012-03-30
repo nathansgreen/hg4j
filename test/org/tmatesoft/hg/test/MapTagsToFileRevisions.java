@@ -27,6 +27,7 @@ import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgTags;
 import org.tmatesoft.hg.repo.HgTags.TagInfo;
+import org.tmatesoft.hg.repo.HgRevisionMap;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 
@@ -85,13 +86,13 @@ public class MapTagsToFileRevisions {
 		final HgChangelog clog = repository.getChangelog();
 		final HgDataFile fileNode = repository.getFileNode("configure.in");
 		// warm-up
-		HgChangelog.RevisionMap clogMap = clog.new RevisionMap().init();
-		HgDataFile.RevisionMap fileMap = fileNode.new RevisionMap().init();
+		HgRevisionMap<HgChangelog> clogMap = new HgRevisionMap<HgChangelog>(clog).init();
+		HgRevisionMap<HgDataFile> fileMap = new HgRevisionMap<HgDataFile>(fileNode).init();
 		//
 		final int latestRevision = fileNode.getLastRevision();
 		//
 		final long start_1 = System.nanoTime();
-		fileMap = fileNode.new RevisionMap().init();
+		fileMap = new HgRevisionMap<HgDataFile>(fileNode).init();
 		final long start_1a = System.nanoTime();
 		final Map<Nodeid, Nodeid> changesetToNodeid_1 = new HashMap<Nodeid, Nodeid>();
 		for (int revision = 0; revision <= latestRevision; revision++) {
@@ -104,8 +105,8 @@ public class MapTagsToFileRevisions {
 		final long end_1 = System.nanoTime();
 		//
 		final long start_2 = System.nanoTime();
-		clogMap = clog.new RevisionMap().init();
-		fileMap = fileNode.new RevisionMap().init();
+		clogMap = new HgRevisionMap<HgChangelog>(clog).init();
+		fileMap = new HgRevisionMap<HgDataFile>(fileNode).init();
 		final Map<Nodeid, Nodeid> changesetToNodeid_2 = new HashMap<Nodeid, Nodeid>();
 		final long start_2a = System.nanoTime();
 		for (int revision = 0; revision <= latestRevision; revision++) {
@@ -156,7 +157,7 @@ public class MapTagsToFileRevisions {
 			}
 		}
 		System.out.printf("Direct lookup of %d revisions took %,d ns\n", revisions.size(), System.nanoTime() - s1);
-		HgChangelog.RevisionMap rmap = clog.new RevisionMap();
+		HgRevisionMap<HgChangelog> rmap = new HgRevisionMap<HgChangelog>(clog);
 		final long s2 = System.nanoTime();
 		rmap.init();
 		final long s3 = System.nanoTime();
@@ -207,7 +208,7 @@ public class MapTagsToFileRevisions {
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
 	
-	private int[] collectLocalTagRevisions(HgChangelog.RevisionMap clogrmap, TagInfo[] allTags, IntMap<List<TagInfo>> tagLocalRev2TagInfo) {
+	private int[] collectLocalTagRevisions(HgRevisionMap<HgChangelog> clogrmap, TagInfo[] allTags, IntMap<List<TagInfo>> tagLocalRev2TagInfo) {
 		int[] tagLocalRevs = new int[allTags.length];
 		int x = 0;
 		for (int i = 0; i < allTags.length; i++) {
@@ -241,7 +242,7 @@ public class MapTagsToFileRevisions {
 		final TagInfo[] allTags = new TagInfo[tags.getAllTags().size()];
 		tags.getAllTags().values().toArray(allTags);
 		// effective translation of changeset revisions to their local indexes
-		final HgChangelog.RevisionMap clogrmap = repository.getChangelog().new RevisionMap().init();
+		final HgRevisionMap<HgChangelog> clogrmap = new HgRevisionMap<HgChangelog>(repository.getChangelog()).init();
 		// map to look up tag by changeset local number
 		final IntMap<List<TagInfo>> tagLocalRev2TagInfo = new IntMap<List<TagInfo>>(allTags.length);
 		System.out.printf("Collecting manifests for %d tags\n", allTags.length);
@@ -259,7 +260,7 @@ public class MapTagsToFileRevisions {
 		
 	// Approach 1. Build map with all files, their revisions and corresponding tags
 	//
-	private void collectTagsPerFile_Approach_1(final HgChangelog.RevisionMap clogrmap, final int[] tagLocalRevs, final TagInfo[] allTags, Path targetPath) throws HgException {
+	private void collectTagsPerFile_Approach_1(final HgRevisionMap clogrmap, final int[] tagLocalRevs, final TagInfo[] allTags, Path targetPath) throws HgException {
 		HgRepository repository = clogrmap.getRepo();
 		final long start = System.currentTimeMillis();
 		// file2rev2tag value is array of revisions, always of allTags.length. Revision index in the array
