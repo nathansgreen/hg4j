@@ -57,7 +57,10 @@ Proposed:
 
 RELEASE NOTES 1.0
 * Known issues and limitations:
-  ** Configuration files listed under HKEY_LOCAL_MACHINE\SOFTWARE\Mercurial are not processed 
+  ** Configuration files listed under HKEY_LOCAL_MACHINE\SOFTWARE\Mercurial are not processed
+  ** %include and %unset directives in config files
+  ** additional locations of ignore configuration are not read/processed from ui.ignore.*
+  ** subrepositories and path mapping in cfg 
 
 Read-only support, version 1.1
 ==============================

@@ -47,7 +47,7 @@ import org.tmatesoft.hg.util.Status;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgChangesetFileSneaker {// TODO mark final once HgFileInformer gone
+public final class HgChangesetFileSneaker {
 
 	private final HgRepository repo;
 	private boolean followRenames;
