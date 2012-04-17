@@ -92,14 +92,14 @@ abstract class Revlog {
 	/**
 	 * Map revision index to unique revision identifier (nodeid).
 	 *  
-	 * @param revision index of the entry in this revlog, may be {@link HgRepository#TIP}
+	 * @param revisionIndex index of the entry in this revlog, may be {@link HgRepository#TIP}
 	 * @return revision nodeid of the entry
 	 * 
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public final Nodeid getRevision(int revision) throws HgRuntimeException {
+	public final Nodeid getRevision(int revisionIndex) throws HgRuntimeException {
 		// XXX cache nodeids? Rather, if context.getCache(this).getRevisionMap(create == false) != null, use it
-		return Nodeid.fromBinary(content.nodeid(revision), 0);
+		return Nodeid.fromBinary(content.nodeid(revisionIndex), 0);
 	}
 	
 	/**

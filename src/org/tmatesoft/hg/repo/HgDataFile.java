@@ -362,8 +362,8 @@ public final class HgDataFile extends Revlog {
 	 * @return changeset revision index
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public int getChangesetRevisionIndex(int revision) throws HgRuntimeException {
-		return content.linkRevision(revision);
+	public int getChangesetRevisionIndex(int fileRevisionIndex) throws HgRuntimeException {
+		return content.linkRevision(fileRevisionIndex);
 	}
 
 	/**
