@@ -141,7 +141,7 @@ public class ExceptionInfo<T> {
 				sb.append(String.format("%s is not from [%d..%d]", sr, rangeLeftBoundary, rangeRightBoundary));
 			} else {
 				sb.append(getRevisionIndex());
-				if (isRevisionIndexSet()) {
+				if (isRevisionSet()) {
 					sb.append(':');
 					sb.append(getRevision().shortNotation());
 					needNodeid = false;
