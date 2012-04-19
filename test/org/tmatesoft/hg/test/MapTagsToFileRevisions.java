@@ -5,6 +5,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -55,7 +56,7 @@ public class MapTagsToFileRevisions {
 
 	// revision == 2406  -   5 ms per run (baseRevision == 2406)
 	// revision == 2405  -  69 ms per run (baseRevision == 1403)
-	private void measurePatchAffectsArbitraryRevisionRead() throws Exception {
+	public void measurePatchAffectsArbitraryRevisionRead() throws Exception {
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
 		final DoNothingManifestInspector insp = new DoNothingManifestInspector();
 		final int revision = 2405;
@@ -181,7 +182,7 @@ public class MapTagsToFileRevisions {
 	 * each 2000'th revision, total 36 revision: 620 vs 270
 	 * each 3000'th revision, total 24 revision: 410 vs 275
 	 */
-	private void revisionMap() throws Exception {
+	public void revisionMap() throws Exception {
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
 		final HgChangelog clog = repository.getChangelog();
 		ArrayList<Nodeid> revisions = new ArrayList<Nodeid>();
@@ -210,7 +211,7 @@ public class MapTagsToFileRevisions {
 		System.out.printf("RevisionMap time: %d ms, of that init() %,d ns\n", (System.nanoTime() - s2) / 1000000, s3 - s2);
 	}
 
-	private void changelogWalk() throws Exception {
+	public void changelogWalk() throws Exception {
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
 		final long start = System.currentTimeMillis();
 		repository.getChangelog().all(new HgChangelog.Inspector() {
@@ -230,7 +231,7 @@ public class MapTagsToFileRevisions {
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
 
-	private void manifestWalk() throws Exception {
+	public void manifestWalk() throws Exception {
 		System.out.println(System.getProperty("java.version"));
 		final long start = System.currentTimeMillis();
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
@@ -272,9 +273,9 @@ public class MapTagsToFileRevisions {
 		return tagLocalRevs;
 	}
 
-	private void collectTagsPerFile() throws HgException, CancelledException {
+	public void collectTagsPerFile() throws HgException, CancelledException {
 		final long start = System.currentTimeMillis();
-		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
+		final HgRepository repository = new HgLookup().detect(new File("/home/artem/hg/cpython"));
 		final HgTags tags = repository.getTags();
 		//
 		// build cache
@@ -295,12 +296,12 @@ public class MapTagsToFileRevisions {
 		System.out.printf("Total time: %d ms\n", System.currentTimeMillis() - start);
 
 		System.out.println("\nApproach 2");
-		collectTagsPerFile_Approach_2(repository, tagLocalRevs, tagLocalRev2TagInfo, allTags, targetPath);
+		collectTagsPerFile_Approach_2(repository, tagLocalRevs, tagLocalRev2TagInfo, targetPath);
 	}
 		
 	// Approach 1. Build map with all files, their revisions and corresponding tags
 	//
-	private void collectTagsPerFile_Approach_1(final HgRevisionMap clogrmap, final int[] tagLocalRevs, final TagInfo[] allTags, Path targetPath) throws HgException {
+	private void collectTagsPerFile_Approach_1(final HgRevisionMap<HgChangelog> clogrmap, final int[] tagLocalRevs, final TagInfo[] allTags, Path targetPath) throws HgException {
 		HgRepository repository = clogrmap.getRepo();
 		final long start = System.currentTimeMillis();
 		// file2rev2tag value is array of revisions, always of allTags.length. Revision index in the array
@@ -372,20 +373,29 @@ public class MapTagsToFileRevisions {
 		}
 	}
 	
-	private void collectTagsPerFile_Approach_2(HgRepository repository, final int[] tagLocalRevs, final IntMap<List<TagInfo>> tagLocalRev2TagInfo, TagInfo[] allTags, Path targetPath) throws HgException {
+	private void collectTagsPerFile_Approach_2(HgRepository repository, final int[] tagLocalRevs, final IntMap<List<TagInfo>> tagRevIndex2TagInfo, Path targetPath) throws HgException {
 		//
 		// Approach 2. No all-file map. Collect file revisions recorded at the time of tagging,
 		// then for each file revision check if it is among those above, and if yes, take corresponding tags
 		HgDataFile fileNode = repository.getFileNode(targetPath);
 		final long start2 = System.nanoTime();
-		final int lastRev = fileNode.getLastRevision();
 		final Map<Integer, Nodeid> fileRevisionAtTagRevision = new HashMap<Integer, Nodeid>();
+		final Map<Nodeid, List<String>> fileRev2TagNames = new HashMap<Nodeid, List<String>>();
 		HgManifest.Inspector collectFileRevAtCset = new HgManifest.Inspector() {
 			
 			private int csetRevIndex;
 
 			public boolean next(Nodeid nid, Path fname, Flags flags) {
 				fileRevisionAtTagRevision.put(csetRevIndex, nid);
+				if (tagRevIndex2TagInfo.containsKey(csetRevIndex)) {
+					List<String> tags = fileRev2TagNames.get(nid);
+					if (tags == null) {
+						fileRev2TagNames.put(nid, tags = new ArrayList<String>(3));
+					}
+					for (TagInfo ti : tagRevIndex2TagInfo.get(csetRevIndex)) {
+						tags.add(ti.name());
+					}
+				}
 				return true;
 			}
 			
@@ -399,20 +409,21 @@ public class MapTagsToFileRevisions {
 			}
 		};
 		repository.getManifest().walkFileRevisions(targetPath, collectFileRevAtCset,tagLocalRevs);
-
+		
 		final long start2a = System.nanoTime();
-		fileNode.indexWalk(0, lastRev, new HgDataFile.RevisionInspector() {
+		fileNode.indexWalk(0, TIP, new HgDataFile.RevisionInspector() {
 
 			public void next(int fileRevisionIndex, Nodeid fileRevision, int changesetRevisionIndex) {
 				List<String> associatedTags = new LinkedList<String>();
-				for (int taggetRevision : tagLocalRevs) {
+				
+				for (int taggedRevision : tagLocalRevs) {
 					// current file revision can't appear in tags that point to earlier changelog revisions (they got own file revision)
-					if (taggetRevision >= changesetRevisionIndex) {
+					if (taggedRevision >= changesetRevisionIndex) {
 						// z points to some changeset with tag
-						Nodeid wasKnownAs = fileRevisionAtTagRevision.get(taggetRevision);
+						Nodeid wasKnownAs = fileRevisionAtTagRevision.get(taggedRevision);
 						if (wasKnownAs.equals(fileRevision)) {
 							// has tag associated with changeset at index z
-							List<TagInfo> tagsAtRev = tagLocalRev2TagInfo.get(taggetRevision);
+							List<TagInfo> tagsAtRev = tagRevIndex2TagInfo.get(taggedRevision);
 							assert tagsAtRev != null;
 							for (TagInfo ti : tagsAtRev) {
 								associatedTags.add(ti.name());
@@ -420,9 +431,16 @@ public class MapTagsToFileRevisions {
 						}
 					}
 				}
+				// 
 				System.out.printf("%3d%7d%s\n", fileRevisionIndex, changesetRevisionIndex, associatedTags);
 			}
 		});
+		for (int i = 0, lastRev = fileNode.getLastRevision(); i <= lastRev; i++) {
+			Nodeid fileRevision = fileNode.getRevision(i);
+			List<String> associatedTags2 = fileRev2TagNames.get(fileRevision);
+			int changesetRevIndex = fileNode.getChangesetRevisionIndex(i);
+			System.out.printf("%3d%7d%s\n", i, changesetRevIndex, associatedTags2 == null ? Collections.emptyList() : associatedTags2);
+		}
 		System.out.printf("Alternative total time: %d ms, of that init: %d ms\n", (System.nanoTime() - start2)/1000000, (start2a-start2)/1000000);
 		System.out.printf("Free mem: %,d\n", Runtime.getRuntime().freeMemory());
 	}
