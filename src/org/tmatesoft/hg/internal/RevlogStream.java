@@ -119,7 +119,7 @@ public class RevlogStream {
 			int actualLen = daIndex.readInt();
 			return actualLen; 
 		} catch (IOException ex) {
-			throw new HgInvalidControlFileException(null, ex, indexFile);
+			throw new HgInvalidControlFileException(null, ex, indexFile).setRevisionIndex(revisionIndex);
 		} finally {
 			daIndex.done();
 		}
@@ -141,7 +141,7 @@ public class RevlogStream {
 			daIndex.readBytes(rv, 0, 20);
 			return rv;
 		} catch (IOException ex) {
-			throw new HgInvalidControlFileException(null, ex, indexFile);
+			throw new HgInvalidControlFileException("Revision lookup failed", ex, indexFile).setRevisionIndex(revisionIndex);
 		} finally {
 			daIndex.done();
 		}
@@ -162,7 +162,7 @@ public class RevlogStream {
 			int linkRev = daIndex.readInt();
 			return linkRev;
 		} catch (IOException ex) {
-			throw new HgInvalidControlFileException(null, ex, indexFile);
+			throw new HgInvalidControlFileException("Linked revision lookup failed", ex, indexFile).setRevisionIndex(revisionIndex);
 		} finally {
 			daIndex.done();
 		}
@@ -193,7 +193,7 @@ public class RevlogStream {
 				daIndex.skip(inline ? 12 + compressedLen : 12);
 			}
 		} catch (IOException ex) {
-			throw new HgInvalidControlFileException("Failed", ex, indexFile).setRevision(nodeid);
+			throw new HgInvalidControlFileException("Revision lookup failed", ex, indexFile).setRevision(nodeid);
 		} finally {
 			daIndex.done();
 		}

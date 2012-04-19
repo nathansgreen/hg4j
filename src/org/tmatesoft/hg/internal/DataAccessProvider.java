@@ -167,7 +167,27 @@ public class DataAccessProvider {
 				position += buffer.position(); 
 			}
 			long left = size - position;
-			buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, position, left < memBufferSize ? left : memBufferSize);
+			for (int i = 0; i < 3; i++) {
+				try {
+					buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, position, left < memBufferSize ? left : memBufferSize);
+					return;
+				} catch (IOException ex) {
+					if (i == 2) {
+						throw ex;
+					}
+					if (i == 0) {
+						// if first attempt failed, try to free some virtual memory, see Issue 30 for details
+						logFacility.warn(getClass(), ex, "Memory-map failed, gonna try gc() to free virtual memory");
+					}
+					try {
+						buffer = null;
+						System.gc();
+						Thread.sleep((1+i) * 1000);
+					} catch (Throwable t) {
+						logFacility.error(getClass(), t, "Bad luck");
+					}
+				}
+			}
 		}
 
 		@Override
