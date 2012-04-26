@@ -153,7 +153,7 @@ public class HgRemoteRepository {
 					r = new BufferedReader(new InputStreamReader(c.getInputStream(), "US-ASCII"));
 					line = r.readLine();
 					c.disconnect();
-					if (line == null || line.trim().isEmpty()) {
+					if (line == null || line.trim().length() == 0) {
 						return true;
 					}
 				} else {

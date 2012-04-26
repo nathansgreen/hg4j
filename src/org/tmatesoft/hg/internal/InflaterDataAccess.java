@@ -96,7 +96,7 @@ public class InflaterDataAccess extends FilterDataAccess {
 					c += inflater.inflate(dummy, 0, dummy.length);
 				}
 			} catch (DataFormatException ex) {
-				throw new IOException(ex);
+				throw new IOException(ex.toString());
 			}
 		}
 		decompressedLength = c + oldPos;
