@@ -27,7 +27,7 @@
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
 	<property name="ver.qualifier" value="" />
-	<property name="version.lib" value="0.9.0" />
+	<property name="version.lib" value="0.9.5" />
 	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
 	<property name="compile-with-debug" value="yes"/>
 
@@ -92,6 +92,7 @@
 			<test name="org.tmatesoft.hg.test.TestDirstate" />
 			<test name="org.tmatesoft.hg.test.TestBranches" />
 			<test name="org.tmatesoft.hg.test.TestByteChannel" />
+			<test name="org.tmatesoft.hg.test.TestSubrepo" />
 			<test name="org.tmatesoft.hg.test.TestClone" />
 			<test name="org.tmatesoft.hg.test.TestIncoming" />
 			<test name="org.tmatesoft.hg.test.TestOutgoing" />

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,12 +27,17 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * 
+ * @see http://mercurial.selenic.com/wiki/SubrepoWork
+ * @see http://mercurial.selenic.com/wiki/Subrepository
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -75,6 +80,7 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 		try {
 			String line;
 			LinkedList<HgSubrepoLocation> res = new LinkedList<HgSubrepoLocation>();
+			HgInternals hgRepoInternal = new HgInternals(repo);
 			while ((line = br.readLine()) != null) {
 				int sep = line.indexOf('=');
 				if (sep == -1) {
@@ -84,7 +90,7 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 				// to have separate String instances (new String(line.substring()))
 				String key = line.substring(0, sep).trim();
 				String value = line.substring(sep + 1).trim();
-				if (value.length() == 0) {
+				if (key.length() == 0 || value.length() == 0) {
 					// XXX log bad line?
 					continue;
 				}
@@ -100,7 +106,12 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 					}
 				}
 				// TODO respect paths mappings in config file
-				HgSubrepoLocation loc = new HgSubrepoLocation(repo, key, value, kind, substate.get(key));
+				//
+				// apparently, key value can't end with '/', `hg commit` fails if it does:
+				// abort: path ends in directory separator: fourth/
+				Path p = Path.create(key.charAt(key.length()-1) == '/' ? key : key + '/');
+				String revValue = substate.get(key);
+				HgSubrepoLocation loc = hgRepoInternal.newSubrepo(p, value, kind, revValue == null ? null : Nodeid.fromAscii(revValue));
 				res.add(loc);
 			}
 			return Arrays.asList(res.toArray(new HgSubrepoLocation[res.size()]));
@@ -110,6 +121,7 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 	}
 
 	private Map<String, String> readState(BufferedReader br) throws IOException {
+		// TODO reuse for other files with <revision><space><value> format, like .hgtags
 		HashMap<String, String> rv = new HashMap<String, String>();
 		try {
 			String line;

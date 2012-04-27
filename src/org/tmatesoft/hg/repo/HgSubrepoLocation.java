@@ -19,11 +19,14 @@ package org.tmatesoft.hg.repo;
 import java.io.File;
 
 import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.util.Path;
 
 /**
  * WORK IN PROGRESS, DO NOT USE
+ * 
+ * @see http://mercurial.selenic.com/wiki/Subrepository
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -34,58 +37,92 @@ public class HgSubrepoLocation {
 	private final Kind kind;
 	private final Path location;
 	private final String source;
-	private final String revInfo;
+	private final Nodeid revInfo;
 
 	public enum Kind { Hg, SVN, Git, }
 	
-	public HgSubrepoLocation(HgRepository parentRepo, String repoLocation, String actualLocation, Kind type, String revision) {
+	/**
+	 * 
+	 * @param parentRepo
+	 * @param repoLocation path, shall be valid directory (i.e. even if .hgsub doesn't specify trailing slash, this one shall)
+	 * @param actualLocation
+	 * @param type
+	 * @param revision may be <code>null</code>
+	 */
+	/*package-local*/ HgSubrepoLocation(HgRepository parentRepo, Path repoLocation, String actualLocation, Kind type, Nodeid revision) {
 		owner = parentRepo;
-		location = Path.create(repoLocation);
+		location = repoLocation;
 		source = actualLocation;
 		kind = type;
 		revInfo = revision;
 	}
 	
-	// as defined in .hgsub, key value
+	/**
+	 * Sub-repository's location within owning repository, always directory, <code>path/to/nested</code>.
+	 * <p>
+	 * May differ from left-hand, key value from <code>.hgsub</code> if the latter doesn't include trailing slash, which is required 
+	 * for {@link Path} objects
+	 * 
+	 * @return path to nested repository relative to owner's location
+	 */
 	public Path getLocation() {
 		return location;
 	}
 
-	// value from .hgsub
+	/**
+	 * Right-hand value from <code>.hgsub</code>, with <code>[kind]</code> stripped, if any.
+	 * @return sub-repository's source
+	 */
 	public String getSource() {
 		return source;
 	}
 	
+	/**
+	 * Sub-repository kind, either Mercurial, Subversion or Git
+	 * @return one of predefined constants
+	 */
 	public Kind getType() {
 		return kind;
 	}
 	
-	public String getRevision() {
+	/**
+	 * For a nested repository that has been committed at least once, returns
+	 * its revision as known from <code>.hgsubstate</code>
+	 * 
+	 * <p>Note, this revision belongs to the nested repository history, not that of owning repository.
+	 * 
+	 * @return revision of the nested repository, or <code>null</code> if not yet committed
+	 */
+	public Nodeid getRevision() {
 		return revInfo;
 	}
 
 	/**
-	 * @return whether this sub repository is known only locally
+	 * Answers whether this sub repository has ever been part of a commit of the owner repository
+	 * 
+	 * @return <code>true</code> if owning repository records {@link #getRevision() revision} of this sub-repository  
 	 */
 	public boolean isCommitted() {
 		return revInfo != null;
 	}
 	
 	/**
-	 * @return <code>true</code> when there are local changes in the sub repository
+	 * Answers whether there are local changes in the sub-repository,  
+	 * @return <code>true</code> if it's dirty
 	 */
 	public boolean hasChanges() {
 		throw HgRepository.notImplemented();
 	}
-	
-//	public boolean isLocal() {
-//	}
-	
+
+	/**
+	 * Access repository that owns nested one described by this object
+	 */
 	public HgRepository getOwner() {
 		return owner;
 	}
 
 	/**
+	 * Access nested repository as a full-fledged Mercurial repository
 	 * 
 	 * @return object to access sub-repository
 	 * @throws HgRepositoryNotFoundException if failed to find repository

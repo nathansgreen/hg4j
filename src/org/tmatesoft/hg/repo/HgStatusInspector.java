@@ -31,8 +31,11 @@ public interface HgStatusInspector {
 	void added(Path fname);
 	/**
 	 * This method is invoked for files that we added as a result of a copy/move operation, and it's the sole
-	 * method invoked in this case, that is {@link #added(Path)} method is NOT invoked along with it.
-	 * If copied files of no interest, it is implementation responsibility to delegate to <code>this.added(fnameAdded)</code>
+	 * method invoked in this case, that is {@link #added(Path)} method is NOT invoked along with it. 
+	 * Note, however, {@link #removed(Path)} IS invoked for the removed file in all cases, regardless whether it's a mere rename or not.
+	 * <p>The reason why it's not symmetrical ({@link #copied(Path, Path)} and {@link #removed(Path)} but not {@link #added(Path)}) is that Mercurial 
+	 * does it this way ('copy' is just an extra attribute for Added file), and we try to stay as close as possible here.  
+	 * <p>If copied files of no interest, it is implementation responsibility to delegate to <code>this.added(fnameAdded)</code>
 	 */
 	void copied(Path fnameOrigin, Path fnameAdded);
 	void removed(Path fname);

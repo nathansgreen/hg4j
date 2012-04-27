@@ -97,14 +97,14 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.checkWalkFileRevisions();
+//		m.checkWalkFileRevisions();
 //		m.checkSubProgress();
 //		m.checkFileFlags();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
-//		m.testSubrepos();
+		m.testSubrepos();
 //		m.testReadWorkingCopy();
 //		m.testParents();
 //		m.testEffectiveFileLog();
@@ -318,7 +318,9 @@ public class Main {
 		
 	}
 
+	// any repository with subrepositories
 	private void testSubrepos() throws Exception {
+		// @see TestSubrepo#testAccessAPI
 		for (HgSubrepoLocation l : hgRepo.getSubrepositories()) {
 			System.out.println(l.getLocation());
 			System.out.println(l.getSource());
@@ -326,10 +328,10 @@ public class Main {
 			System.out.println(l.isCommitted() ? l.getRevision() : "not yet committed");
 			if (l.getType() == Kind.Hg) {
 				HgRepository r = l.getRepo();
-				System.out.printf("%s has %d revisions\n", l.getLocation(), r.getChangelog().getLastRevision() + 1);
+				System.out.printf("%s (%s) has %d revisions\n", l.getLocation(), r.getLocation(), r.getChangelog().getLastRevision() + 1);
 				if (r.getChangelog().getLastRevision() >= 0) {
 					final RawChangeset c = r.getChangelog().range(TIP, TIP).get(0);
-					System.out.printf("TIP: %s %s %s\n", c.user(), c.dateString(), c.comment());
+					System.out.printf("TIP: %s %s '%s'\n", c.user(), c.dateString(), c.comment());
 				}
 			}
 		}

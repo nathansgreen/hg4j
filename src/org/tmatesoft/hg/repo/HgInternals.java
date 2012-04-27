@@ -25,11 +25,13 @@ import java.io.Reader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.internal.WinToNixPathRewrite;
+import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
@@ -39,7 +41,9 @@ import org.tmatesoft.hg.util.PathRewrite;
 /**
  * DO NOT USE THIS CLASS, INTENDED FOR TESTING PURPOSES.
  * 
- * This class gives access to repository internals, and holds methods that I'm not confident have to be widely accessible
+ * <p>This class is not part of the public API and may change or vanish any moment.
+ * 
+ * <p>This class gives access to repository internals, and holds methods that I'm not confident have to be widely accessible
  * Debug helper, to access otherwise restricted (package-local) methods
  * 
  * @author Artem Tikhomirov
@@ -80,6 +84,10 @@ public class HgInternals {
 			rv[i] = dirstate.known(toCheck[i]);
 		}
 		return rv;
+	}
+	
+	public HgSubrepoLocation newSubrepo(Path loc, String src, Kind kind, Nodeid rev) {
+		return new HgSubrepoLocation(repo, loc, src, kind, rev);
 	}
 
 	public static File getRepositoryDir(HgRepository hgRepo) {

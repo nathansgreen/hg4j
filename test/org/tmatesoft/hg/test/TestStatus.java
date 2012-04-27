@@ -50,7 +50,6 @@ import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.Status;
 
-
 /**
  * 
  * @author Artem Tikhomirov
@@ -64,6 +63,7 @@ public class TestStatus {
 	private HgRepository repo;
 	private StatusOutputParser statusParser;
 	private ExecHelper eh;
+	private StatusReporter sr;
 
 	public static void main(String[] args) throws Throwable {
 		TestStatus test = new TestStatus();
@@ -79,7 +79,7 @@ public class TestStatus {
 		t3.testDirstateParentOtherThanTipNoUpdate();
 		t3.errorCollector.verify();
 	}
-	
+
 	public TestStatus() throws Exception {
 		this(new HgLookup().detectFromWorkingDir());
 	}
@@ -89,41 +89,42 @@ public class TestStatus {
 		Assume.assumeTrue(!repo.isInvalid());
 		statusParser = new StatusOutputParser();
 		eh = new ExecHelper(statusParser, hgRepo.getWorkingDir());
+		sr = new StatusReporter(errorCollector, statusParser);
 	}
-	
+
 	@Test
 	public void testLowLevel() throws Exception {
 		final HgWorkingCopyStatusCollector wcc = new HgWorkingCopyStatusCollector(repo);
 		statusParser.reset();
 		eh.run("hg", "status", "-A");
 		HgStatusCollector.Record r = wcc.status(HgRepository.TIP);
-		report("hg status -A", r, statusParser);
+		sr.report("hg status -A", r);
 		//
 		statusParser.reset();
 		int revision = 3;
 		eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
 		r = wcc.status(revision);
-		report("status -A --rev " + revision, r, statusParser);
+		sr.report("status -A --rev " + revision, r);
 		//
 		statusParser.reset();
 		eh.run("hg", "status", "-A", "--change", String.valueOf(revision));
 		r = new HgStatusCollector.Record();
 		new HgStatusCollector(repo).change(revision, r);
-		report("status -A --change " + revision, r, statusParser);
+		sr.report("status -A --change " + revision, r);
 		//
 		statusParser.reset();
 		int rev2 = 80;
 		final String range = String.valueOf(revision) + ":" + String.valueOf(rev2);
 		eh.run("hg", "status", "-A", "--rev", range);
 		r = new HgStatusCollector(repo).status(revision, rev2);
-		report("Status -A -rev " + range, r, statusParser);
+		sr.report("Status -A -rev " + range, r);
 	}
 
 	/**
 	 * hg up --rev <earlier rev>; hg status
 	 * 
 	 * To check if HgWorkingCopyStatusCollector respects actual working copy parent (takes from dirstate)
-	 * and if status is calculated correctly 
+	 * and if status is calculated correctly
 	 */
 	@Test
 	@Ignore("modifies test repository, needs careful configuration")
@@ -145,16 +146,15 @@ public class TestStatus {
 		//
 		eh.run("hg", "status", "-A");
 		HgStatusCollector.Record r = wcc.status(HgRepository.TIP);
-		report("hg status -A", r, statusParser);
+		sr.report("hg status -A", r);
 		//
 		statusParser.reset();
 		int revision = 3;
 		eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
 		r = wcc.status(revision);
-		report("status -A --rev " + revision, r, statusParser);
+		sr.report("status -A --rev " + revision, r);
 	}
 
-	
 	@Test
 	public void testStatusCommand() throws Exception {
 		final HgStatusCommand sc = new HgStatusCommand(repo).all();
@@ -162,26 +162,27 @@ public class TestStatus {
 		statusParser.reset();
 		eh.run("hg", "status", "-A");
 		sc.execute(r = new StatusCollector());
-		report("hg status -A", r);
+		sr.report("hg status -A", r);
 		//
 		statusParser.reset();
 		int revision = 3;
 		eh.run("hg", "status", "-A", "--rev", String.valueOf(revision));
 		sc.base(revision).execute(r = new StatusCollector());
-		report("status -A --rev " + revision, r);
+		sr.report("status -A --rev " + revision, r);
 		//
 		statusParser.reset();
 		eh.run("hg", "status", "-A", "--change", String.valueOf(revision));
 		sc.base(TIP).revision(revision).execute(r = new StatusCollector());
-		report("status -A --change " + revision, r);
-		
+		sr.report("status -A --change " + revision, r);
+
 		// TODO check not -A, but defaults()/custom set of modifications 
 	}
-	
-	private static class StatusCollector implements HgStatusHandler {
+
+	static class StatusCollector implements HgStatusHandler {
 		private final Map<Kind, List<Path>> kind2names = new TreeMap<Kind, List<Path>>();
 		private final Map<Path, List<Kind>> name2kinds = new TreeMap<Path, List<Kind>>();
 		private final Map<Path, Status> name2error = new LinkedHashMap<Path, Status>();
+		private final Map<Path, Path> new2oldName = new LinkedHashMap<Path, Path>();
 
 		public void status(HgStatus s) {
 			List<Path> l = kind2names.get(s.getKind());
@@ -189,6 +190,9 @@ public class TestStatus {
 				kind2names.put(s.getKind(), l = new LinkedList<Path>());
 			}
 			l.add(s.getPath());
+			if (s.isCopy()) {
+				new2oldName.put(s.getPath(), s.getOriginalPath());
+			}
 			//
 			List<Kind> k = name2kinds.get(s.getPath());
 			if (k == null) {
@@ -196,23 +200,55 @@ public class TestStatus {
 			}
 			k.add(s.getKind());
 		}
-		
+
 		public void error(Path file, Status s) {
 			name2error.put(file, s);
 		}
-		
+
 		public List<Path> get(Kind k) {
 			List<Path> rv = kind2names.get(k);
-			return rv == null ? Collections.<Path>emptyList() : rv;
+			return rv == null ? Collections.<Path> emptyList() : rv;
 		}
-		
+
 		public List<Kind> get(Path p) {
 			List<Kind> rv = name2kinds.get(p);
-			return rv == null ? Collections.<Kind>emptyList() : rv;
+			return rv == null ? Collections.<Kind> emptyList() : rv;
 		}
-		
+
 		public Map<Path, Status> getErrors() {
 			return name2error;
+		}
+
+		public HgStatusCollector.Record asStatusRecord() {
+			HgStatusCollector.Record rv = new HgStatusCollector.Record();
+			for (Path p : get(Modified)) {
+				rv.modified(p);
+			}
+			for (Path p : get(Added)) {
+				if (!new2oldName.containsKey(p)) {
+					// new files that are result of a copy get reported separately, below
+					rv.added(p);
+				}
+			}
+			for (Path p : get(Removed)) {
+				rv.removed(p);
+			}
+			for (Path p : get(Clean)) {
+				rv.clean(p);
+			}
+			for (Path p : get(Ignored)) {
+				rv.ignored(p);
+			}
+			for (Path p : get(Missing)) {
+				rv.missing(p);
+			}
+			for (Path p : get(Unknown)) {
+				rv.unknown(p);
+			}
+			for (Map.Entry<Path, Path> e : new2oldName.entrySet()) {
+				rv.copied(e.getValue(), e.getKey());
+			}
+			return rv;
 		}
 	}
 
@@ -232,7 +268,7 @@ public class TestStatus {
 		// shall not be listed at all
 		assertTrue(sc.get(file5).isEmpty());
 	}
-	
+
 	/*
 	 * status-1/file2 is tracked, but later .hgignore got entry to ignore it, file2 got modified
 	 * HG doesn't respect .hgignore for tracked files.
@@ -253,8 +289,8 @@ public class TestStatus {
 
 	/*
 	 * status/dir/file4, added in rev 3, has been scheduled for removal (hg remove -Af file4), but still there in the WC.
-	 * Shall be reported as Removed, when comparing against rev 3 
-	 * (despite both rev 3 and WC's parent has file4,  there are different paths in the code for wc against parent and wc against rev)
+	 * Shall be reported as Removed, when comparing against rev 3
+	 * (despite both rev 3 and WC's parent has file4, there are different paths in the code for wc against parent and wc against rev)
 	 */
 	@Test
 	public void testMarkedRemovedButStillInWC() throws Exception {
@@ -280,10 +316,10 @@ public class TestStatus {
 	}
 
 	/*
-	 * status-1/dir/file3 tracked, listed in .hgignore since rev 4, removed (hg remove file3)  from repo and WC 
+	 * status-1/dir/file3 tracked, listed in .hgignore since rev 4, removed (hg remove file3) from repo and WC
 	 * (but entry in .hgignore left) in revision 5, and new file3 got created in WC.
 	 * Shall be reported as ignored when comparing against WC's parent,
-	 * and both ignored and removed when comparing against revision 3 
+	 * and both ignored and removed when comparing against revision 3
 	 */
 	@Test
 	public void testRemovedIgnoredInWC() throws Exception {
@@ -317,7 +353,7 @@ public class TestStatus {
 
 	/*
 	 * status/file1 was removed in cset 2. New file with the same name in the WC.
-	 * Shall report 2 statuses (as cmdline hg does): unknown and removed when comparing against that revision. 
+	 * Shall report 2 statuses (as cmdline hg does): unknown and removed when comparing against that revision.
 	 */
 	@Test
 	public void testNewFileWithSameNameAsDeletedOld() throws Exception {
@@ -339,7 +375,7 @@ public class TestStatus {
 		assertTrue(sc.get(file1).contains(Unknown));
 		assertTrue(sc.get(file1).size() == 1);
 	}
-	
+
 	@Test
 	public void testSubTreeStatus() throws Exception {
 		repo = Configuration.get().find("status-1");
@@ -373,8 +409,7 @@ public class TestStatus {
 		assertTrue(sc.get(Ignored).size() == 1);
 		assertTrue(sc.get(Removed).size() == 2);
 	}
-	
-	
+
 	@Test
 	public void testSpecificFileStatus() throws Exception {
 		repo = Configuration.get().find("status-1");
@@ -413,13 +448,13 @@ public class TestStatus {
 		assertTrue(r.getIgnored().size() == 1);
 		assertTrue(r.getModified().isEmpty());
 	}
-	
+
 	@Test
 	public void testSameResultDirectPathVsMatcher() throws Exception {
 		repo = Configuration.get().find("status-1");
 		final Path file3 = Path.create("dir/file3");
 		final Path file5 = Path.create("dir/file5");
-		
+
 		HgWorkingCopyStatusCollector sc = HgWorkingCopyStatusCollector.create(repo, file3, file5);
 		HgStatusCollector.Record r;
 		sc.walk(WORKING_COPY, r = new HgStatusCollector.Record());
@@ -432,7 +467,7 @@ public class TestStatus {
 		assertTrue(r.getRemoved().contains(file5));
 		assertTrue(r.getIgnored().contains(file3));
 	}
-	
+
 	@Test
 	public void testScopeInHistoricalStatus() throws Exception {
 		repo = Configuration.get().find("status-1");
@@ -459,7 +494,7 @@ public class TestStatus {
 		assertTrue(sc.get(Added).size() == 1);
 
 	}
-	
+
 	/**
 	 * Issue 22
 	 */
@@ -473,34 +508,35 @@ public class TestStatus {
 		// shall pass without exception
 		assertTrue(sc.getErrors().isEmpty());
 		for (HgStatus.Kind k : HgStatus.Kind.values()) {
-			assertTrue("Kind " + k.name() + " shall be empty",sc.get(k).isEmpty());
+			assertTrue("Kind " + k.name() + " shall be empty", sc.get(k).isEmpty());
 		}
 	}
-	
+
 	/**
 	 * Issue 22, two subsequent commits that remove all repository files, each in a different branch.
 	 * Here's excerpt from my RevlogWriter utility:
+	 * 
 	 * <pre>
 	 * 		final List<String> filesList = Collections.singletonList("file1");
-	 *	//
-	 *	file1.writeUncompressed(-1, -1, 0, 0, "garbage".getBytes());
-	 *	//
-	 *	ManifestBuilder mb = new ManifestBuilder();
-	 *	mb.reset().add("file1", file1.getRevision(0));
-	 *	manifest.writeUncompressed(-1, -1, 0, 0, mb.build()); // manifest revision 0
-	 *	final byte[] cset1 = buildChangelogEntry(manifest.getRevision(0), Collections.<String, String>emptyMap(), filesList, "Add a file");
-	 *	changelog.writeUncompressed(-1, -1, 0, 0, cset1);
-	 *	//
-	 *	// pretend we delete all files in a branch 1
-	 *	manifest.writeUncompressed(0, -1, 1, 1, new byte[0]); // manifest revision 1
-	 *	final byte[] cset2 = buildChangelogEntry(manifest.getRevision(1), Collections.singletonMap("branch", "delete-all-1"), filesList, "Delete all files in a first branch");
-	 *	 changelog.writeUncompressed(0, -1, 1, 1, cset2);
-	 *	//
-	 *	// pretend we delete all files in a branch 2 (which is based on revision 0, same as branch 1)
-	 *	manifest.writeUncompressed(1, -1, 1 /*!!! here comes baseRevision != index * /, 2, new byte[0]); // manifest revision 2
-	 *	final byte[] cset3 = buildChangelogEntry(manifest.getRevision(2), Collections.singletonMap("branch", "delete-all-2"), filesList, "Again delete all files but in another branch");
-	 *	changelog.writeUncompressed(0, -1, 2, 2, cset3);
-	 * </pre> 
+	 * //
+	 * file1.writeUncompressed(-1, -1, 0, 0, "garbage".getBytes());
+	 * //
+	 * ManifestBuilder mb = new ManifestBuilder();
+	 * mb.reset().add("file1", file1.getRevision(0));
+	 * manifest.writeUncompressed(-1, -1, 0, 0, mb.build()); // manifest revision 0
+	 * final byte[] cset1 = buildChangelogEntry(manifest.getRevision(0), Collections.<String, String>emptyMap(), filesList, "Add a file");
+	 * changelog.writeUncompressed(-1, -1, 0, 0, cset1);
+	 * //
+	 * // pretend we delete all files in a branch 1
+	 * manifest.writeUncompressed(0, -1, 1, 1, new byte[0]); // manifest revision 1
+	 * final byte[] cset2 = buildChangelogEntry(manifest.getRevision(1), Collections.singletonMap("branch", "delete-all-1"), filesList, "Delete all files in a first branch");
+	 *  changelog.writeUncompressed(0, -1, 1, 1, cset2);
+	 * //
+	 * // pretend we delete all files in a branch 2 (which is based on revision 0, same as branch 1)
+	 * manifest.writeUncompressed(1, -1, 1 /*!!! here comes baseRevision != index * /, 2, new byte[0]); // manifest revision 2
+	 * final byte[] cset3 = buildChangelogEntry(manifest.getRevision(2), Collections.singletonMap("branch", "delete-all-2"), filesList, "Again delete all files but in another branch");
+	 * changelog.writeUncompressed(0, -1, 2, 2, cset3);
+	 * </pre>
 	 */
 	@Test
 	public void testOnEmptyRepositoryWithAllFilesDeletedInBranch() throws Exception {
@@ -512,12 +548,12 @@ public class TestStatus {
 		// shall pass without exception
 		assertTrue(sc.getErrors().isEmpty());
 		for (HgStatus.Kind k : HgStatus.Kind.values()) {
-			assertTrue("Kind " + k.name() + " shall be empty",sc.get(k).isEmpty());
+			assertTrue("Kind " + k.name() + " shall be empty", sc.get(k).isEmpty());
 		}
 	}
-	
+
 	/**
-	 * Issue 23: HgInvalidRevisionException for svn imported repository (changeset 0 references nullid manifest) 
+	 * Issue 23: HgInvalidRevisionException for svn imported repository (changeset 0 references nullid manifest)
 	 */
 	@Test
 	public void testImportedRepoWithOddManifestRevisions() throws Exception {
@@ -529,32 +565,32 @@ public class TestStatus {
 		// shall pass without exception
 		assertTrue(sc.getErrors().isEmpty());
 	}
-	
+
 	/**
 	 * Issue 24: IllegalArgumentException in FilterDataAccess
 	 * There were two related defects in RevlogStream
-	 *  a) for compressedLen == 0, a byte was read and FilterDataAccess  (of length 0, but it didn't help too much) was created - first byte happen to be 0.
-	 *     Patch was not applied (userDataAccess.isEmpty() check thanks to Issue 22)
-	 *  b) That FilterDataAccess (with 0 size represents patch more or less relevantly, but didn't represent actual revision) get successfully
-	 *     reassigned as lastUserData for the next iteration. And at the next step attempt to apply patch recorded in the next revision failed
-	 *     because baseRevisionData is 0 length FilterDataAccess
+	 * a) for compressedLen == 0, a byte was read and FilterDataAccess (of length 0, but it didn't help too much) was created - first byte happen to be 0.
+	 * Patch was not applied (userDataAccess.isEmpty() check thanks to Issue 22)
+	 * b) That FilterDataAccess (with 0 size represents patch more or less relevantly, but didn't represent actual revision) get successfully
+	 * reassigned as lastUserData for the next iteration. And at the next step attempt to apply patch recorded in the next revision failed
+	 * because baseRevisionData is 0 length FilterDataAccess
 	 * 
-	 * Same applies for 
+	 * Same applies for
 	 * Issue 25: IOException: Underflow. Rewind past end of the slice in InflaterDataAccess
 	 * with the difference in separate .i and .d (thus not 0 but 'x' first byte was read)
-	 *
+	 * 
 	 * Sample:
-	 *  status-5/file1 has 3 revisions, second is zero-length patch:
-	 *  Index	   	 Offset    Packed     Actual   Base Rev
-	 *     0:             0     8          7          0
-	 *  DATA
-	 *     1:             8     0          7          0
-	 *  NO DATA
-	 *     2:             8     14         6          0
-	 *  PATCH
+	 * status-5/file1 has 3 revisions, second is zero-length patch:
+	 * Index Offset Packed Actual Base Rev
+	 * 0: 0 8 7 0
+	 * DATA
+	 * 1: 8 0 7 0
+	 * NO DATA
+	 * 2: 8 14 6 0
+	 * PATCH
 	 */
 	@Test
-	public void testZeroLengthPatchAgainstNonEmptyBaseRev() throws Exception{
+	public void testZeroLengthPatchAgainstNonEmptyBaseRev() throws Exception {
 		repo = Configuration.get().find("status-5");
 		// pretend we modified files in the working copy
 		// for HgWorkingCopyStatusCollector to go and retrieve its content from repository 
@@ -569,7 +605,7 @@ public class TestStatus {
 		cmd.execute(sc);
 		// shall pass without exception
 		//
-		for (Map.Entry<Path,Status> e : sc.getErrors().entrySet()) {
+		for (Map.Entry<Path, Status> e : sc.getErrors().entrySet()) {
 			System.out.printf("%s : (%s %s)\n", e.getKey(), e.getValue().getKind(), e.getValue().getMessage());
 		}
 		assertTrue(sc.getErrors().isEmpty());
@@ -579,13 +615,13 @@ public class TestStatus {
 	 * Issue 26: UnsupportedOperationException when patching empty base revision
 	 * 
 	 * Sample:
-	 *  status-5/file2 has 3 revisions, second is patch (complete revision content in a form of the patch) for empty base revision:
-	 *  Index    Offset      Packed     Actual   Base Rev
-	 *     0:         0      0          0          0
-	 *  NO DATA
-	 *     1:         0      20         7          0
-	 *  PATCH: 0..0, 7:garbage
-	 *     2:        20      16         7          0
+	 * status-5/file2 has 3 revisions, second is patch (complete revision content in a form of the patch) for empty base revision:
+	 * Index Offset Packed Actual Base Rev
+	 * 0: 0 0 0 0
+	 * NO DATA
+	 * 1: 0 20 7 0
+	 * PATCH: 0..0, 7:garbage
+	 * 2: 20 16 7 0
 	 */
 	@Test
 	public void testPatchZeroLengthBaseRevision() throws Exception {
@@ -600,13 +636,12 @@ public class TestStatus {
 		cmd.execute(sc);
 		// shall pass without exception
 		//
-		for (Map.Entry<Path,Status> e : sc.getErrors().entrySet()) {
+		for (Map.Entry<Path, Status> e : sc.getErrors().entrySet()) {
 			System.out.printf("%s : (%s %s)\n", e.getKey(), e.getValue().getKind(), e.getValue().getMessage());
 		}
 		assertTrue(sc.getErrors().isEmpty());
 	}
 
-	
 	/*
 	 * With warm-up of previous tests, 10 runs, time in milliseconds
 	 * 'hg status -A': Native client total 953 (95 per run), Java client 94 (9)
@@ -614,13 +649,13 @@ public class TestStatus {
 	 * 'hg log --debug', 10 runs: Native client total 1766 (176 per run), Java client 78 (7)
 	 * 
 	 * 18.02.2011
-	 * 'hg status -A --rev 3:80', 10 runs:  Native client total 2000 (200 per run), Java client 250 (25)
+	 * 'hg status -A --rev 3:80', 10 runs: Native client total 2000 (200 per run), Java client 250 (25)
 	 * 'hg log --debug', 10 runs: Native client total 2297 (229 per run), Java client 125 (12)
 	 * 
 	 * 9.3.2011 (DataAccess instead of byte[] in ReflogStream.Inspector
-	 * 'hg status -A',				10 runs:  Native client total 1516 (151 per run), Java client 219 (21)
-	 * 'hg status -A --rev 3:80',	10 runs:  Native client total 1875 (187 per run), Java client 3187 (318) (!!! ???)
-	 * 'hg log --debug',			10 runs: Native client total 2484 (248 per run), Java client 344 (34)
+	 * 'hg status -A', 10 runs: Native client total 1516 (151 per run), Java client 219 (21)
+	 * 'hg status -A --rev 3:80', 10 runs: Native client total 1875 (187 per run), Java client 3187 (318) (!!! ???)
+	 * 'hg log --debug', 10 runs: Native client total 2484 (248 per run), Java client 344 (34)
 	 */
 	public void testPerformance() throws Exception {
 		final int runs = 10;
@@ -635,67 +670,71 @@ public class TestStatus {
 			new HgStatusCommand(repo).all().base(3).revision(80).execute(r);
 		}
 		final long end = System.currentTimeMillis();
-		System.out.printf("'hg status -A --rev 3:80', %d runs:  Native client total %d (%d per run), Java client %d (%d)\n", runs, start2-start1, (start2-start1)/runs, end-start2, (end-start2)/runs);
+		System.out.printf("'hg status -A --rev 3:80', %d runs:  Native client total %d (%d per run), Java client %d (%d)\n", runs, start2 - start1, (start2 - start1) / runs, end - start2,
+				(end - start2) / runs);
 	}
 	
-	private void report(String what, StatusCollector r) {
-		assertTrue(r.getErrors().isEmpty());
-		reportNotEqual(what + "#MODIFIED", r.get(Modified), statusParser.getModified());
-		reportNotEqual(what + "#ADDED", r.get(Added), statusParser.getAdded());
-		reportNotEqual(what + "#REMOVED", r.get(Removed), statusParser.getRemoved());
-		reportNotEqual(what + "#CLEAN", r.get(Clean), statusParser.getClean());
-		reportNotEqual(what + "#IGNORED", r.get(Ignored), statusParser.getIgnored());
-		reportNotEqual(what + "#MISSING", r.get(Missing), statusParser.getMissing());
-		reportNotEqual(what + "#UNKNOWN", r.get(Unknown), statusParser.getUnknown());
-		// TODO test copies
-	}
+	static class StatusReporter {
+		private final StatusOutputParser statusParser;
+		private final ErrorCollectorExt errorCollector;
 
-	private void report(String what, HgStatusCollector.Record r, StatusOutputParser statusParser) {
-		reportNotEqual(what + "#MODIFIED", r.getModified(), statusParser.getModified());
-		reportNotEqual(what + "#ADDED", r.getAdded(), statusParser.getAdded());
-		reportNotEqual(what + "#REMOVED", r.getRemoved(), statusParser.getRemoved());
-		reportNotEqual(what + "#CLEAN", r.getClean(), statusParser.getClean());
-		reportNotEqual(what + "#IGNORED", r.getIgnored(), statusParser.getIgnored());
-		reportNotEqual(what + "#MISSING", r.getMissing(), statusParser.getMissing());
-		reportNotEqual(what + "#UNKNOWN", r.getUnknown(), statusParser.getUnknown());
-		List<Path> copiedKeyDiff = difference(r.getCopied().keySet(), statusParser.getCopied().keySet());
-		HashMap<Path, String> copyDiff = new HashMap<Path,String>();
-		if (copiedKeyDiff.isEmpty()) {
-			for (Path jk : r.getCopied().keySet()) {
-				Path jv = r.getCopied().get(jk);
-				if (statusParser.getCopied().containsKey(jk)) {
-					Path cmdv = statusParser.getCopied().get(jk);
-					if (!jv.equals(cmdv)) {
-						copyDiff.put(jk, jv + " instead of " + cmdv);
+		public StatusReporter(ErrorCollectorExt ec, StatusOutputParser sp) {
+			errorCollector = ec;
+			statusParser = sp;
+		}
+	
+		public void report(String what, StatusCollector r) {
+			errorCollector.assertTrue(what, r.getErrors().isEmpty());
+			report(what, r.asStatusRecord());
+		}
+
+		public void report(String what, HgStatusCollector.Record r) {
+			reportNotEqual(what + "#MODIFIED", r.getModified(), statusParser.getModified());
+			reportNotEqual(what + "#ADDED", r.getAdded(), statusParser.getAdded());
+			reportNotEqual(what + "#REMOVED", r.getRemoved(), statusParser.getRemoved());
+			reportNotEqual(what + "#CLEAN", r.getClean(), statusParser.getClean());
+			reportNotEqual(what + "#IGNORED", r.getIgnored(), statusParser.getIgnored());
+			reportNotEqual(what + "#MISSING", r.getMissing(), statusParser.getMissing());
+			reportNotEqual(what + "#UNKNOWN", r.getUnknown(), statusParser.getUnknown());
+			List<Path> copiedKeyDiff = difference(r.getCopied().keySet(), statusParser.getCopied().keySet());
+			HashMap<Path, String> copyDiff = new HashMap<Path, String>();
+			if (copiedKeyDiff.isEmpty()) {
+				for (Path jk : r.getCopied().keySet()) {
+					Path jv = r.getCopied().get(jk);
+					if (statusParser.getCopied().containsKey(jk)) {
+						Path cmdv = statusParser.getCopied().get(jk);
+						if (!jv.equals(cmdv)) {
+							copyDiff.put(jk, jv + " instead of " + cmdv);
+						}
+					} else {
+						copyDiff.put(jk, "ERRONEOUSLY REPORTED IN JAVA");
 					}
-				} else {
-					copyDiff.put(jk, "ERRONEOUSLY REPORTED IN JAVA");
 				}
 			}
+			errorCollector.checkThat(what + "#Non-matching 'copied' keys: ", copiedKeyDiff, equalTo(Collections.<Path> emptyList()));
+			errorCollector.checkThat(what + "#COPIED", copyDiff, equalTo(Collections.<Path, String> emptyMap()));
 		}
-		errorCollector.checkThat(what + "#Non-matching 'copied' keys: ", copiedKeyDiff, equalTo(Collections.<Path>emptyList()));
-		errorCollector.checkThat(what + "#COPIED", copyDiff, equalTo(Collections.<Path,String>emptyMap()));
-	}
-	
-	private <T extends Comparable<? super T>> void reportNotEqual(String what, Collection<T> l1, Collection<T> l2) {
-//		List<T> diff = difference(l1, l2);
-//		errorCollector.checkThat(what, diff, equalTo(Collections.<T>emptyList()));
-		ArrayList<T> sl1 = new ArrayList<T>(l1);
-		Collections.sort(sl1);
-		ArrayList<T> sl2 = new ArrayList<T>(l2);
-		Collections.sort(sl2);
-		errorCollector.checkThat(what, sl1, equalTo(sl2));
-	}
 
-	private static <T> List<T> difference(Collection<T> l1, Collection<T> l2) {
-		LinkedList<T> result = new LinkedList<T>(l2);
-		for (T t : l1) {
-			if (l2.contains(t)) {
-				result.remove(t);
-			} else {
-				result.add(t);
-			}
+		private <T extends Comparable<? super T>> void reportNotEqual(String what, Collection<T> l1, Collection<T> l2) {
+		//		List<T> diff = difference(l1, l2);
+		//		errorCollector.checkThat(what, diff, equalTo(Collections.<T>emptyList()));
+			ArrayList<T> sl1 = new ArrayList<T>(l1);
+			Collections.sort(sl1);
+			ArrayList<T> sl2 = new ArrayList<T>(l2);
+			Collections.sort(sl2);
+			errorCollector.checkThat(what, sl1, equalTo(sl2));
 		}
-		return result;
+
+		public static <T> List<T> difference(Collection<T> l1, Collection<T> l2) {
+			LinkedList<T> result = new LinkedList<T>(l2);
+			for (T t : l1) {
+				if (l2.contains(t)) {
+					result.remove(t);
+				} else {
+					result.add(t);
+				}
+			}
+			return result;
+		}
 	}
 }
