@@ -118,11 +118,11 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 	}
 	
 	public enum CompareResult {
-		Same, Unrelated, Nested, Parent, /* perhaps, also ImmediateParent, DirectChild? */
+		Same, Unrelated, ImmediateChild, Nested, ImmediateParent, Parent /* +CommonParent ?*/
 	}
 	
-	/*
-	 * a/file and a/dir ?
+	/**
+	 * @return one of {@link CompareResult} constants to indicate relations between the paths 
 	 */
 	public CompareResult compareWith(Path another) {
 		if (another == null) {
@@ -131,13 +131,22 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 		if (another == this || (another.length() == length() && equals(another))) {
 			return CompareResult.Same;
 		}
-		if (path.startsWith(another.path)) {
-			return CompareResult.Nested;
+		// one of the parties can't be parent in parent/nested, the other may be either file or folder 
+		if (another.isDirectory() && path.startsWith(another.path)) {
+			return isOneSegmentDifference(path, another.path) ? CompareResult.ImmediateChild : CompareResult.Nested;
 		}
-		if (another.path.startsWith(path)) {
-			return CompareResult.Parent;
+		if (isDirectory() && another.path.startsWith(path)) {
+			return isOneSegmentDifference(another.path, path) ? CompareResult.ImmediateParent : CompareResult.Parent;
 		}
 		return CompareResult.Unrelated;
+	}
+	
+	// true if p1 is only one segment larger than p2
+	private static boolean isOneSegmentDifference(String p1, String p2) {
+		assert p1.startsWith(p2);
+		String p1Tail= p1.substring(p2.length());
+		int slashLoc = p1Tail.indexOf('/');
+		return slashLoc == -1 || slashLoc == p1Tail.length() - 1;
 	}
 
 	public static Path create(CharSequence path) {

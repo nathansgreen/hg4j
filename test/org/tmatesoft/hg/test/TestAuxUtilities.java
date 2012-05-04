@@ -17,16 +17,19 @@
 package org.tmatesoft.hg.test;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.util.Path.CompareResult.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.junit.Assert;
 import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
+import org.tmatesoft.hg.internal.PathScope;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -49,6 +52,9 @@ import org.tmatesoft.hg.util.Path;
  * @author TMate Software Ltd.
  */
 public class TestAuxUtilities {
+
+	@Rule
+	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 
 	@Test
 	public void testArrayHelper() {
@@ -290,6 +296,84 @@ public class TestAuxUtilities {
 		Assert.assertTrue(s.equals(r2));
 	}
 
+	@Test
+	public void testPathScope() {
+		// XXX whether PathScope shall accept paths that are leading towards configured elements  
+		Path[] scope = new Path[] {
+			Path.create("a/"),
+			Path.create("b/c"),
+			Path.create("d/e/f/")
+		};
+		//
+		// accept specified path, with files and folders below
+		PathScope ps1 = new PathScope(true, scope);
+		// folders
+		errorCollector.assertTrue(ps1.accept(Path.create("a/")));    // == scope[0]
+		errorCollector.assertTrue(ps1.accept(Path.create("a/d/")));  // scope[0] is parent and recursiveDir = true
+		errorCollector.assertTrue(ps1.accept(Path.create("a/d/e/")));  // scope[0] is parent and recursiveDir = true
+		errorCollector.assertTrue(!ps1.accept(Path.create("b/d/"))); // unrelated to any preconfigured
+		errorCollector.assertTrue(ps1.accept(Path.create("b/")));    // arg is parent to scope[1]
+		errorCollector.assertTrue(ps1.accept(Path.create("d/")));    // arg is parent to scope[2]
+		errorCollector.assertTrue(ps1.accept(Path.create("d/e/")));  // arg is parent to scope[2]
+		errorCollector.assertTrue(!ps1.accept(Path.create("d/g/"))); // unrelated to any preconfigured
+		// files
+		errorCollector.assertTrue(ps1.accept(Path.create("a/d")));  // "a/" is parent
+		errorCollector.assertTrue(ps1.accept(Path.create("a/d/f")));  // "a/" is still a parent
+		errorCollector.assertTrue(ps1.accept(Path.create("b/c")));  // ==
+		errorCollector.assertTrue(!ps1.accept(Path.create("b/d"))); // file, !=
+		//
+		// accept only specified files, folders and their direct children, allow navigate to them from above (FileIterator contract)
+		PathScope ps2 = new PathScope(true, false, true, scope);
+		// folders
+		errorCollector.assertTrue(!ps2.accept(Path.create("a/b/c/"))); // recursiveDirs = false
+		errorCollector.assertTrue(ps2.accept(Path.create("b/")));      // arg is parent to scope[1] (IOW, scope[1] is nested under arg)
+		errorCollector.assertTrue(ps2.accept(Path.create("d/")));      // scope[2] is nested under arg
+		errorCollector.assertTrue(ps2.accept(Path.create("d/e/")));    // scope[2] is nested under arg
+		errorCollector.assertTrue(!ps2.accept(Path.create("d/f/")));
+		errorCollector.assertTrue(!ps2.accept(Path.create("b/f/")));
+		// files
+		errorCollector.assertTrue(!ps2.accept(Path.create("a/b/c")));  // file, no exact match
+		errorCollector.assertTrue(ps2.accept(Path.create("d/e/f/g"))); // file under scope[2]
+		errorCollector.assertTrue(!ps2.accept(Path.create("b/e")));    // unrelated file
+		
+		// matchParentDirs == false
+		PathScope ps3 = new PathScope(false, true, true, Path.create("a/b/")); // match any dir/file under a/b/, but not above
+		errorCollector.assertTrue(!ps3.accept(Path.create("a/")));
+		errorCollector.assertTrue(ps3.accept(Path.create("a/b/c/d")));
+		errorCollector.assertTrue(ps3.accept(Path.create("a/b/c")));
+		errorCollector.assertTrue(!ps3.accept(Path.create("b/")));
+		errorCollector.assertTrue(!ps3.accept(Path.create("d/")));
+		errorCollector.assertTrue(!ps3.accept(Path.create("d/e/")));
+
+		// match nested but not direct dir
+		PathScope ps4 = new PathScope(false, true, false, Path.create("a/b/")); // match any dir/file *deep* under a/b/, 
+		errorCollector.assertTrue(!ps4.accept(Path.create("a/")));
+		errorCollector.assertTrue(!ps4.accept(Path.create("a/b/c")));
+		errorCollector.assertTrue(ps4.accept(Path.create("a/b/c/d")));
+	}
+
+	@Test
+	public void testPathCompareWith() {
+		Path p1 = Path.create("a/b/");
+		Path p2 = Path.create("a/b/c");
+		Path p3 = Path.create("a/b"); // file with the same name as dir
+		Path p4 = Path.create("a/b/c/d/");
+		Path p5 = Path.create("d/");
+		
+		errorCollector.assertEquals(Same, p1.compareWith(p1));
+		errorCollector.assertEquals(Same, p1.compareWith(Path.create(p1.toString())));
+		errorCollector.assertEquals(Unrelated, p1.compareWith(null));
+		errorCollector.assertEquals(Unrelated, p1.compareWith(p5));
+		//
+		errorCollector.assertEquals(Parent, p1.compareWith(p4));
+		errorCollector.assertEquals(Nested, p4.compareWith(p1));
+		errorCollector.assertEquals(ImmediateParent, p1.compareWith(p2));
+		errorCollector.assertEquals(ImmediateChild, p2.compareWith(p1));
+		//
+		errorCollector.assertEquals(Unrelated, p2.compareWith(p3));
+		errorCollector.assertEquals(Unrelated, p3.compareWith(p2));
+	}
+	
 	
 	public static void main(String[] args) throws Exception {
 		new TestAuxUtilities().testRepositoryConfig();
