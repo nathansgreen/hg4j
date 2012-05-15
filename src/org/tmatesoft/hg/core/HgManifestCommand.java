@@ -81,6 +81,8 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 		return this;
 	}
 	
+	// FIXME add changeset(Nodeid), perhaps rename revision(int) to changeset(int), and add changeset(int) to HgLogCommand (and, perhaps, others) 
+	
 	public HgManifestCommand dirs(boolean include) {
 		// XXX whether directories with directories only are include or not
 		// now lists only directories with files

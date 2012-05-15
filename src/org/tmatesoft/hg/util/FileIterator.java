@@ -18,7 +18,8 @@ package org.tmatesoft.hg.util;
 
 import java.io.IOException;
 
-import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.repo.HgStatusCollector;
+import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 
 /**
  * Abstracts iteration over file system.
@@ -60,9 +61,13 @@ public interface FileIterator {
 	 * specific file (path) belongs to that fraction or not. Paths and files returned by this {@link FileIterator}
 	 * are always considered as representing the fraction, nonetheless, {@link FileIterator} shall return true for such names if 
 	 * asked.
+	 * <p>
+	 * Implementors are advised to use {@link Path.Matcher}, as this scope is very similar to what regular 
+	 * {@link HgStatusCollector} (which doesn't use FI) supports, and use of matcher makes {@link HgWorkingCopyStatusCollector}
+	 * look similar.
+	 * 
 	 * @return <code>true</code> if this {@link FileIterator} is responsible for (interested in) specified repository-local path 
 	 */
-	@Experimental(reason="Perhaps, shall not be part of FileIterator, but rather separate Path.Matcher. Approaches in regular StatusCollector (doesn't use FI, but supports scope) and WC collector to look similar, and for HgStatusCommand to use single approach to set the scope")
 	boolean inScope(Path file); // PathMatcher scope()
 
 	/**

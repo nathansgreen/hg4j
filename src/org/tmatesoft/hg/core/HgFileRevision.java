@@ -78,11 +78,20 @@ public final class HgFileRevision {
 	}
 	
 	/**
-	 * Executable or symbolic link, or <code>null</code> if regular file
+	 * Extract flags of the file as recorded in the manifest for this file revision 
+	 * @return whether regular file, executable or a symbolic link
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public HgManifest.Flags getFileFlags() throws HgRuntimeException {
 		if (flags == null) {
+			/*
+			 * Note, for uses other than HgManifestCommand or HgChangesetFileSneaker, when no flags come through the cons,
+			 * it's possible to face next shortcoming:
+			 * Imagine csetA and csetB, with corresponding manifestA and manifestB, the file didn't change (revision/nodeid is the same)
+			 * but flag of the file has changed (e.g. became executable). Since HgFileRevision doesn't keep reference to 
+			 * an actual manifest revision, but only file's, and it's likely the flags returned from this method would 
+			 * yield result as from manifestA (i.e. no flag change in manifestB ever noticed).
+			 */
 			HgDataFile df = repo.getFileNode(path);
 			int revIdx = df.getRevisionIndex(revision);
 			flags = df.getFlags(revIdx);
