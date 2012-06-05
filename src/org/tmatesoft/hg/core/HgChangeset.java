@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,16 @@
 package org.tmatesoft.hg.core;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.util.Path;
@@ -51,6 +55,7 @@ public class HgChangeset implements Cloneable {
 	private List<Path> deletedFiles;
 	private int revNumber;
 	private byte[] parent1, parent2;
+	private PhasesHelper phaseHelper;
 
 	// XXX consider CommandContext with StatusCollector, PathPool etc. Commands optionally get CC through a cons or create new
 	// and pass it around
@@ -154,7 +159,7 @@ public class HgChangeset implements Cloneable {
 		if (parent1 == null) {
 			parent1 = new byte[20];
 			parent2 = new byte[20];
-			statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
+			getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
 		}
 		return Nodeid.fromBinary(parent1, 0);
 	}
@@ -170,9 +175,22 @@ public class HgChangeset implements Cloneable {
 		if (parent2 == null) {
 			parent1 = new byte[20];
 			parent2 = new byte[20];
-			statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
+			getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
 		}
 		return Nodeid.fromBinary(parent2, 0);
+	}
+	
+	/**
+	 * Tells the phase this changeset belongs to.
+	 * @return one of {@link HgPhase} values
+	 */
+	public HgPhase getPhase() throws HgInvalidControlFileException {
+		if (phaseHelper == null) {
+			// XXX would be handy to obtain ProgressSupport (perhaps, from statusHelper?)
+			// and pass it to #init(), so that  there could be indication of file being read and cache being built
+			phaseHelper = new PhasesHelper(getRepo(), parentHelper);
+		}
+		return phaseHelper.getPhase(this);
 	}
 
 	@Override
@@ -185,6 +203,10 @@ public class HgChangeset implements Cloneable {
 			throw new InternalError(ex.toString());
 		}
 	}
+	
+	private HgRepository getRepo() {
+		return statusHelper.getRepo();
+	}
 
 	private /*synchronized*/ void initFileChanges() throws HgInvalidControlFileException {
 		ArrayList<Path> deleted = new ArrayList<Path>();
@@ -192,7 +214,7 @@ public class HgChangeset implements Cloneable {
 		ArrayList<HgFileRevision> added = new ArrayList<HgFileRevision>();
 		HgStatusCollector.Record r = new HgStatusCollector.Record();
 		statusHelper.change(revNumber, r);
-		final HgRepository repo = statusHelper.getRepo();
+		final HgRepository repo = getRepo();
 		for (Path s : r.getModified()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {

@@ -244,9 +244,14 @@ public class TestAuxUtilities {
 				}
 			}
 		});
-		fileNode.walk(0, TIP, new HgDataFile.ParentInspector() {
-			int i = 0;
-			Nodeid[] all = new Nodeid[fileNode.getRevisionCount()];
+		class ParentInspectorCheck implements HgDataFile.ParentInspector {
+			private int i;
+			private Nodeid[] all;
+			
+			public ParentInspectorCheck(int start, int total) {
+				i = start;
+				all = new Nodeid[total];
+			}
 
 			public void next(int localRevision, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
 				Assert.assertEquals(i++, localRevision);
@@ -264,7 +269,11 @@ public class TestAuxUtilities {
 					Assert.assertTrue(nidParent2 == all[parent2]);  
 				}
 			}
-		});
+		}; 
+		fileNode.walk(0, TIP, new ParentInspectorCheck(0, fileNode.getRevisionCount()));
+		assert fileNode.getRevisionCount() > 2 : "prereq"; // need at least few revisions
+		// there used to be a defect in #walk impl, assumption all parents come prior to a revision
+		fileNode.walk(1, 3, new ParentInspectorCheck(1, 3));
 	}
 
 	@Test

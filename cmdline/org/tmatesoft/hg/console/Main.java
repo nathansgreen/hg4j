@@ -43,6 +43,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
+import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.internal.StreamLogFacility;
 import org.tmatesoft.hg.repo.HgBranches;
@@ -57,6 +58,7 @@ import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgMergeState;
+import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
@@ -93,6 +95,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.dumpPhases();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -111,8 +114,27 @@ public class Main {
 //		m.testStatusInternals();
 //		m.catCompleteHistory();
 //		m.dumpCompleteManifestLow();
-		m.dumpCompleteManifestHigh();
+//		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	// hg/test-phases
+	// TODO as junit test
+	private void dumpPhases() throws Exception {
+		HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
+		pw.init();
+		PhasesHelper ph = new PhasesHelper(hgRepo, pw);
+		System.out.println("With ParentWalker(simulates HgChangeset case)");
+		for (int i = 0, l = hgRepo.getChangelog().getLastRevision(); i <= l; i++) {
+			HgPhase phase = ph.getPhase(i, null);
+			System.out.printf("rev:%3d, phase:%s\n", i, phase);
+		}
+		ph = new PhasesHelper(hgRepo);
+		System.out.println("Without ParentWalker");
+		for (int i = 0, l = hgRepo.getChangelog().getLastRevision(); i <= l; i++) {
+			HgPhase phase = ph.getPhase(i, null);
+			System.out.printf("rev:%3d, phase:%s\n", i, phase);
+		}
 	}
 
 	private void buildFileLog() throws Exception {

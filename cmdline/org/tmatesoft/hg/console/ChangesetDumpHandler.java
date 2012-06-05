@@ -106,6 +106,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 			sb.append('\n');
 		}
 		if (complete) {
+			f.format("phase:       %s\n", cset.getPhase().name());
 			Nodeid p1 = cset.getFirstParentRevision();
 			Nodeid p2 = cset.getSecondParentRevision();
 			int p1x = p1.isNull() ? -1 : repo.getChangelog().getRevisionIndex(p1);

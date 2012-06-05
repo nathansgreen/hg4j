@@ -257,7 +257,7 @@ abstract class Revlog {
 	}
 	
 	@Experimental
-	public void walk(int start, int end, final Revlog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public final void walk(int start, int end, final Revlog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
 		int lastRev = getLastRevision();
 		if (start == TIP) {
 			start = lastRev;
@@ -268,6 +268,11 @@ abstract class Revlog {
 		final RevisionInspector revisionInsp = Adaptable.Factory.getAdapter(inspector, RevisionInspector.class, null);
 		final ParentInspector parentInsp = Adaptable.Factory.getAdapter(inspector, ParentInspector.class, null);
 		final Nodeid[] allRevisions = parentInsp == null ? null : new Nodeid[end - start + 1]; 
+		if (parentInsp != null && start != 0) {
+			// e.g. start == 6, end == 7 and parentOf(start) == 5. allRevisions.length == 2, allRevisions[parentOf(start)] => AIOOBE 
+			throw new IllegalStateException("There's a defect in the code that doesn't allow walks other than from the very beginning");
+			// TestAuxUtilities#testRevlogInspectors
+		}
 
 		content.iterate(start, end, false, new RevlogStream.Inspector() {
 			
