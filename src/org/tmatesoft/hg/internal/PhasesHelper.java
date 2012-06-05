@@ -112,16 +112,16 @@ public final class PhasesHelper {
 				 */
 				final HashSet<Nodeid> parents2consider = new HashSet<Nodeid>(roots);
 				final boolean[] result = new boolean[] { false };
-				hgRepo.getChangelog().walk(rootIndexes[0], csetRevIndex, new HgChangelog.ParentInspector() {
+				hgRepo.getChangelog().walk(0/*rootIndexes[0]*/, csetRevIndex, new HgChangelog.ParentInspector() {
 					
 					public void next(int revisionIndex, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
 						boolean descendant = false;
 						if (!nidParent1.isNull() && parents2consider.contains(nidParent1)) {
-							parents2consider.add(nidParent1);
+							parents2consider.add(revision);
 							descendant = true;
 						}
 						if (!nidParent2.isNull() && parents2consider.contains(nidParent2)) {
-							parents2consider.add(nidParent2);
+							parents2consider.add(revision);
 							descendant = true;
 						}
 						if (descendant && revisionIndex == csetRevIndex) {
