@@ -18,6 +18,7 @@ package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgPhase.Draft;
 import static org.tmatesoft.hg.repo.HgPhase.Secret;
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -51,6 +52,7 @@ public final class PhasesHelper {
 	private Boolean repoSupporsPhases;
 	private List<Nodeid> draftPhaseRoots;
 	private List<Nodeid> secretPhaseRoots;
+	private int[] earliestRevIndex = new int[HgPhase.values().length];
 
 	public PhasesHelper(HgRepository repo) {
 		this(repo, null);
@@ -59,6 +61,7 @@ public final class PhasesHelper {
 	public PhasesHelper(HgRepository repo, HgChangelog.ParentWalker pw) {
 		hgRepo = repo;
 		parentHelper = pw;
+		Arrays.fill(earliestRevIndex, BAD_REVISION);
 	}
 
 	public boolean isCapableOfPhases() throws HgInvalidControlFileException {
@@ -98,9 +101,8 @@ public final class PhasesHelper {
 			} else {
 				// no parent helper
 				// search all descendants
-				int[] rootIndexes = toIndexes(roots);
-				Arrays.sort(rootIndexes);
-				if (rootIndexes[0] > csetRevIndex) {
+				int earliestRootRevIndex = getEarliestPhaseRevision(phase);
+				if (earliestRootRevIndex > csetRevIndex) {
 					// this phase started later than our changeset was added, try another phase
 					continue;
 				}
@@ -112,7 +114,7 @@ public final class PhasesHelper {
 				 */
 				final HashSet<Nodeid> parents2consider = new HashSet<Nodeid>(roots);
 				final boolean[] result = new boolean[] { false };
-				hgRepo.getChangelog().walk(0/*rootIndexes[0]*/, csetRevIndex, new HgChangelog.ParentInspector() {
+				hgRepo.getChangelog().walk(0/*earlierstRootRevIndex*/, csetRevIndex, new HgChangelog.ParentInspector() {
 					
 					public void next(int revisionIndex, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
 						boolean descendant = false;
@@ -190,5 +192,16 @@ public final class PhasesHelper {
 		case Secret : return secretPhaseRoots;
 		}
 		return Collections.emptyList();
+	}
+	
+	private int getEarliestPhaseRevision(HgPhase phase) throws HgInvalidControlFileException {
+		int ordinal = phase.ordinal();
+		if (earliestRevIndex[ordinal] == BAD_REVISION) {
+			int[] rootIndexes = toIndexes(getPhaseRoots(phase));
+			Arrays.sort(rootIndexes);
+			// instead of MAX_VALUE may use clog.getLastRevision() + 1
+			earliestRevIndex[ordinal] = rootIndexes.length == 0 ? Integer.MAX_VALUE : rootIndexes[0];
+		}
+		return earliestRevIndex[ordinal];
 	}
 }
