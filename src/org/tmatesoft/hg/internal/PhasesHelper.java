@@ -114,7 +114,7 @@ public final class PhasesHelper {
 				 */
 				final HashSet<Nodeid> parents2consider = new HashSet<Nodeid>(roots);
 				final boolean[] result = new boolean[] { false };
-				hgRepo.getChangelog().walk(0/*earlierstRootRevIndex*/, csetRevIndex, new HgChangelog.ParentInspector() {
+				hgRepo.getChangelog().walk(earliestRootRevIndex, csetRevIndex, new HgChangelog.ParentInspector() {
 					
 					public void next(int revisionIndex, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
 						boolean descendant = false;

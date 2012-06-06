@@ -245,28 +245,35 @@ public class TestAuxUtilities {
 			}
 		});
 		class ParentInspectorCheck implements HgDataFile.ParentInspector {
-			private int i;
+			private int i, c;
 			private Nodeid[] all;
+			private final int start;
 			
 			public ParentInspectorCheck(int start, int total) {
-				i = start;
+				this.start = start;
+				i = start; // revision index being iterated
+				c = 0; // index/counter of visited revisions
 				all = new Nodeid[total];
 			}
 
 			public void next(int localRevision, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
 				Assert.assertEquals(i++, localRevision);
-				all[localRevision] = revision;
+				all[c++] = revision;
 				Assert.assertNotNull(revision);
 				Assert.assertFalse(localRevision == 0 && (parent1 != -1 || parent2 != -1));
 				Assert.assertFalse(localRevision > 0 && parent1 == -1 && parent2 == -1);
 				if (parent1 != -1) {
 					Assert.assertNotNull(nidParent1);
-					// deliberately ==, not asserEquals to ensure same instance
-					Assert.assertTrue(nidParent1 == all[parent1]);  
+					if (parent1 >= start) {
+						// deliberately ==, not asserEquals to ensure same instance
+						Assert.assertTrue(nidParent1 == all[parent1-start]);  
+					}
 				}
 				if (parent2 != -1) {
 					Assert.assertNotNull(nidParent2);
-					Assert.assertTrue(nidParent2 == all[parent2]);  
+					if (parent2 >= start) {
+						Assert.assertTrue(nidParent2 == all[parent2-start]);
+					}
 				}
 			}
 		}; 
