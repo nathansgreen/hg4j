@@ -17,15 +17,13 @@
 package org.tmatesoft.hg.core;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
 import org.tmatesoft.hg.internal.PhasesHelper;
-import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -41,27 +39,37 @@ import org.tmatesoft.hg.util.Path;
  * @author TMate Software Ltd.
  */
 public class HgChangeset implements Cloneable {
-	private final HgStatusCollector statusHelper;
-	private final Path.Source pathHelper;
 
-	private HgChangelog.ParentWalker parentHelper;
-
-	//
+	// these get initialized
 	private RawChangeset changeset;
+	private int revNumber;
 	private Nodeid nodeid;
 
-	//
+	class ShareDataStruct {
+		ShareDataStruct(HgStatusCollector statusCollector, Path.Source pathFactory) {
+			statusHelper = statusCollector;
+			pathHelper = pathFactory;
+		}
+		public final HgStatusCollector statusHelper;
+		public final Path.Source pathHelper;
+
+		public HgChangelog.ParentWalker parentHelper;
+		public PhasesHelper phaseHelper;
+	};
+
+	// Helpers/utilities shared among few instances of HgChangeset
+	private final ShareDataStruct shared;
+
+	// these are built on demand
 	private List<HgFileRevision> modifiedFiles, addedFiles;
 	private List<Path> deletedFiles;
-	private int revNumber;
 	private byte[] parent1, parent2;
-	private PhasesHelper phaseHelper;
+	
 
 	// XXX consider CommandContext with StatusCollector, PathPool etc. Commands optionally get CC through a cons or create new
 	// and pass it around
 	/*package-local*/HgChangeset(HgStatusCollector statusCollector, Path.Source pathFactory) {
-		statusHelper = statusCollector;
-		pathHelper = pathFactory;
+		shared = new ShareDataStruct(statusCollector, pathFactory);
 	}
 
 	/*package-local*/ void init(int localRevNumber, Nodeid nid, RawChangeset rawChangeset) {
@@ -71,16 +79,16 @@ public class HgChangeset implements Cloneable {
 		modifiedFiles = addedFiles = null;
 		deletedFiles = null;
 		parent1 = parent2 = null;
-		// keep references to parentHelper, statusHelper and pathHelper
+		// keep references to shared (and everything in there: parentHelper, statusHelper, phaseHelper and pathHelper)
 	}
 
 	/*package-local*/ void setParentHelper(HgChangelog.ParentWalker pw) {
-		parentHelper = pw;
-		if (parentHelper != null) {
-			if (parentHelper.getRepo() != statusHelper.getRepo()) {
+		if (pw != null) {
+			if (pw.getRepo() != shared.statusHelper.getRepo()) {
 				throw new IllegalArgumentException();
 			}
 		}
+		shared.parentHelper = pw;
 	}
 
 	public int getRevision() {
@@ -116,7 +124,7 @@ public class HgChangeset implements Cloneable {
 		// what #files() gives).
 		ArrayList<Path> rv = new ArrayList<Path>(changeset.files().size());
 		for (String name : changeset.files()) {
-			rv.add(pathHelper.path(name));
+			rv.add(shared.pathHelper.path(name));
 		}
 		return rv;
 	}
@@ -152,8 +160,8 @@ public class HgChangeset implements Cloneable {
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public Nodeid getFirstParentRevision() throws HgInvalidControlFileException {
-		if (parentHelper != null) {
-			return parentHelper.safeFirstParent(nodeid);
+		if (shared.parentHelper != null) {
+			return shared.parentHelper.safeFirstParent(nodeid);
 		}
 		// read once for both p1 and p2
 		if (parent1 == null) {
@@ -169,8 +177,8 @@ public class HgChangeset implements Cloneable {
 	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 */
 	public Nodeid getSecondParentRevision() throws HgInvalidControlFileException {
-		if (parentHelper != null) {
-			return parentHelper.safeSecondParent(nodeid);
+		if (shared.parentHelper != null) {
+			return shared.parentHelper.safeSecondParent(nodeid);
 		}
 		if (parent2 == null) {
 			parent1 = new byte[20];
@@ -185,12 +193,17 @@ public class HgChangeset implements Cloneable {
 	 * @return one of {@link HgPhase} values
 	 */
 	public HgPhase getPhase() throws HgInvalidControlFileException {
-		if (phaseHelper == null) {
+		if (shared.phaseHelper == null) {
 			// XXX would be handy to obtain ProgressSupport (perhaps, from statusHelper?)
 			// and pass it to #init(), so that  there could be indication of file being read and cache being built
-			phaseHelper = new PhasesHelper(getRepo(), parentHelper);
+			synchronized (shared) {
+				// ensure field is initialized only once 
+				if (shared.phaseHelper == null) {
+					shared.phaseHelper = new PhasesHelper(getRepo(), shared.parentHelper);
+				}
+			}
 		}
-		return phaseHelper.getPhase(this);
+		return shared.phaseHelper.getPhase(this);
 	}
 
 	@Override
@@ -205,7 +218,7 @@ public class HgChangeset implements Cloneable {
 	}
 	
 	private HgRepository getRepo() {
-		return statusHelper.getRepo();
+		return shared.statusHelper.getRepo();
 	}
 
 	private /*synchronized*/ void initFileChanges() throws HgInvalidControlFileException {
@@ -213,7 +226,7 @@ public class HgChangeset implements Cloneable {
 		ArrayList<HgFileRevision> modified = new ArrayList<HgFileRevision>();
 		ArrayList<HgFileRevision> added = new ArrayList<HgFileRevision>();
 		HgStatusCollector.Record r = new HgStatusCollector.Record();
-		statusHelper.change(revNumber, r);
+		shared.statusHelper.change(revNumber, r);
 		final HgRepository repo = getRepo();
 		for (Path s : r.getModified()) {
 			Nodeid nid = r.nodeidAfterChange(s);

@@ -96,11 +96,11 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testRevisionDescendants();
-		for (int i : new int[] {1,2,3}) {
-			m.dumpPhases();
+//		m.testRevisionDescendants();
+		for (int i : new int[] {1,2,3,4,5}) {
+//			m.dumpPhases();
+			m.buildFileLog();
 		}
-//		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
@@ -173,6 +173,7 @@ public class Main {
 	}
 
 	private void buildFileLog() throws Exception {
+		final long start = System.nanoTime();
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		cmd.file("file1", false);
 		cmd.execute(new HgChangesetTreeHandler() {
@@ -190,7 +191,7 @@ public class Main {
 					final boolean isJoin = !parents.first().isNull() && !parents.second().isNull();
 					final boolean isFork = entry.children().size() > 1;
 					final HgChangeset cset = entry.changeset();
-					System.out.printf("%d:%s - %s\n", cset.getRevision(), cset.getNodeid().shortNotation(), cset.getComment());
+					System.out.printf("%d:%s - %s (%s)\n", cset.getRevision(), cset.getNodeid().shortNotation(), cset.getComment(), cset.getPhase());
 					if (!isJoin && !isFork && !entry.children().isEmpty()) {
 						System.out.printf("\t=> %s\n", sb);
 					}
@@ -216,6 +217,8 @@ public class Main {
 				}
 			}
 		});
+		final long end = System.nanoTime();
+		System.out.printf("buildFileLog: %,d ms\n", (end-start)/1000);
 	}
 
 	private void buildFileLogOld() throws Exception {

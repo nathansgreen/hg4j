@@ -54,6 +54,9 @@ public class RevisionDescendants {
 	public void build() throws HgInvalidControlFileException {
 		final BitSet result = descendants;
 		result.set(0);
+		if (rootRevIndex == tipRevIndex) {
+			return;
+		}
 		repo.getChangelog().walk(rootRevIndex+1, tipRevIndex, new HgChangelog.ParentInspector() {
 			// TODO ParentRevisionInspector, with no parent nodeids, just indexes?
 
