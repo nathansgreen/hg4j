@@ -45,6 +45,7 @@ import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
 import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
+import org.tmatesoft.hg.internal.RevisionDescendants;
 import org.tmatesoft.hg.internal.StreamLogFacility;
 import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -95,7 +96,10 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.dumpPhases();
+		m.testRevisionDescendants();
+		for (int i : new int[] {1,2,3}) {
+			m.dumpPhases();
+		}
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -118,22 +122,53 @@ public class Main {
 //		m.bunchOfTests();
 	}
 	
-	// hg/test-phases
+	// -R {junit-test-repos}/branches-1
+	private void testRevisionDescendants() throws Exception {
+		int[] roots = new int[] {0, 1, 2, 3, 4, 5};
+		RevisionDescendants[] result = new RevisionDescendants[roots.length];
+		for (int i = 0; i < roots.length; i++) {
+			result[i] = new RevisionDescendants(hgRepo, roots[i]);
+			result[i].build();
+		}
+		for (int i = 0; i < roots.length; i++) {
+			System.out.printf("For root %d descendats are:", roots[i]);
+			for (int j = roots[i], x = hgRepo.getChangelog().getLastRevision(); j <= x; j++) {
+				if (result[i].isDescendant(j)) {
+					System.out.printf("%3d ", j);
+				}
+			}
+			System.out.printf(", isEmpty:%b\n", !result[i].hasDescendants());
+		}
+	}
+	
+	// -R ${system_property:user.home}/hg/test-phases/
 	// TODO as junit test
 	private void dumpPhases() throws Exception {
+		HgPhase[] result1 = new HgPhase[hgRepo.getChangelog().getRevisionCount()];
+		HgPhase[] result2 = new HgPhase[hgRepo.getChangelog().getRevisionCount()];
+		final long start1 = System.nanoTime();
 		HgChangelog.ParentWalker pw = hgRepo.getChangelog().new ParentWalker();
 		pw.init();
+		final long start1bis = System.nanoTime();
 		PhasesHelper ph = new PhasesHelper(hgRepo, pw);
-		System.out.println("With ParentWalker(simulates HgChangeset case)");
 		for (int i = 0, l = hgRepo.getChangelog().getLastRevision(); i <= l; i++) {
-			HgPhase phase = ph.getPhase(i, null);
-			System.out.printf("rev:%3d, phase:%s\n", i, phase);
+			result1[i] = ph.getPhase(i, null);
 		}
+		final long start2 = System.nanoTime();
 		ph = new PhasesHelper(hgRepo);
-		System.out.println("Without ParentWalker");
 		for (int i = 0, l = hgRepo.getChangelog().getLastRevision(); i <= l; i++) {
-			HgPhase phase = ph.getPhase(i, null);
-			System.out.printf("rev:%3d, phase:%s\n", i, phase);
+			result2[i] = ph.getPhase(i, null);
+		}
+		final long end = System.nanoTime();
+		System.out.printf("With ParentWalker(simulates log command for whole repo): %d ms (pw init: %,d ns)\n", (start2 - start1)/1000, start1bis - start1);
+		printPhases(result1);
+		System.out.printf("Without ParentWalker (simulates log command for single file): %d ms\n", (end - start2)/1000);
+		printPhases(result2);
+	}
+	
+	private static void printPhases(HgPhase[] phase) {
+		for (int i = 0; i < phase.length; i++) {
+			System.out.printf("rev:%3d, phase:%s\n", i, phase[i]);
 		}
 	}
 

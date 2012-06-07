@@ -18,16 +18,13 @@ package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgPhase.Draft;
 import static org.tmatesoft.hg.repo.HgPhase.Secret;
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -47,21 +44,20 @@ import org.tmatesoft.hg.repo.HgRepository;
  */
 public final class PhasesHelper {
 
-	private final HgRepository hgRepo;
+	private final HgRepository repo;
 	private final HgChangelog.ParentWalker parentHelper;
 	private Boolean repoSupporsPhases;
 	private List<Nodeid> draftPhaseRoots;
 	private List<Nodeid> secretPhaseRoots;
-	private int[] earliestRevIndex = new int[HgPhase.values().length];
+	private RevisionDescendants[][] phaseDescendants = new RevisionDescendants[HgPhase.values().length][];
 
-	public PhasesHelper(HgRepository repo) {
-		this(repo, null);
+	public PhasesHelper(HgRepository hgRepo) {
+		this(hgRepo, null);
 	}
 
-	public PhasesHelper(HgRepository repo, HgChangelog.ParentWalker pw) {
-		hgRepo = repo;
+	public PhasesHelper(HgRepository hgRepo, HgChangelog.ParentWalker pw) {
+		repo = hgRepo;
 		parentHelper = pw;
-		Arrays.fill(earliestRevIndex, BAD_REVISION);
 	}
 
 	public boolean isCapableOfPhases() throws HgInvalidControlFileException {
@@ -82,8 +78,9 @@ public final class PhasesHelper {
 		if (!isCapableOfPhases()) {
 			return HgPhase.Undefined;
 		}
-		if (csetRev == null || csetRev.isNull()) {
-			csetRev = hgRepo.getChangelog().getRevision(csetRevIndex);
+		// csetRev is only used when parentHelper is available
+		if (parentHelper != null && (csetRev == null || csetRev.isNull())) {
+			csetRev = repo.getChangelog().getRevision(csetRevIndex);
 		}
 					
 		for (HgPhase phase : new HgPhase[] {HgPhase.Secret, HgPhase.Draft }) {
@@ -91,49 +88,21 @@ public final class PhasesHelper {
 			if (roots.isEmpty()) {
 				continue;
 			}
-			if (roots.contains(csetRev)) {
-				return phase;
-			}
 			if (parentHelper != null) {
+				if (roots.contains(csetRev)) {
+					return phase;
+				}
 				if (parentHelper.childrenOf(roots).contains(csetRev)) {
 					return phase;
 				}
 			} else {
 				// no parent helper
-				// search all descendants
-				int earliestRootRevIndex = getEarliestPhaseRevision(phase);
-				if (earliestRootRevIndex > csetRevIndex) {
-					// this phase started later than our changeset was added, try another phase
-					continue;
-				}
-				/*
-				 * TODO descendants() method to build a BitSet with 1 at index of those that are descendants
-				 * wrap it into a class with root nodeid to 
-				 * (a) collect only for a subset of repository, 
-				 * (b) be able to answer isDescendant(int csetRevIndex) using absolute indexing (i.e bitAt(csetRevIndex - rootRevIndex))  
-				 */
-				final HashSet<Nodeid> parents2consider = new HashSet<Nodeid>(roots);
-				final boolean[] result = new boolean[] { false };
-				hgRepo.getChangelog().walk(earliestRootRevIndex, csetRevIndex, new HgChangelog.ParentInspector() {
-					
-					public void next(int revisionIndex, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
-						boolean descendant = false;
-						if (!nidParent1.isNull() && parents2consider.contains(nidParent1)) {
-							parents2consider.add(revision);
-							descendant = true;
-						}
-						if (!nidParent2.isNull() && parents2consider.contains(nidParent2)) {
-							parents2consider.add(revision);
-							descendant = true;
-						}
-						if (descendant && revisionIndex == csetRevIndex) {
-							// revision of interest descends from one of the roots
-							result[0] = true;
-						}
+				// search all descendants.RevisuionDescendats includes root as well.
+				for (RevisionDescendants rd : getPhaseDescendants(phase)) {
+					// isCandidate is to go straight to another root if changeset was added later that the current root
+					if (rd.isCandidate(csetRevIndex) && rd.isDescendant(csetRevIndex)) {
+						return phase;
 					}
-				});
-				if (result[0]) {
-					return phase;
 				}
 			}
 		}
@@ -141,18 +110,9 @@ public final class PhasesHelper {
 
 	}
 
-	
-	private int[] toIndexes(List<Nodeid> roots) throws HgInvalidControlFileException {
-		int[] rv = new int[roots.size()];
-		for (int i = 0; i < rv.length; i++) {
-			rv[i] = hgRepo.getChangelog().getRevisionIndex(roots.get(i));
-		}
-		return rv;
-	}
-
 	private Boolean readRoots() throws HgInvalidControlFileException {
 		// FIXME shall access phaseroots through HgRepository#repoPathHelper
-		File phaseroots = new File(HgInternals.getRepositoryDir(hgRepo), "store/phaseroots");
+		File phaseroots = new File(HgInternals.getRepositoryDir(repo), "store/phaseroots");
 		try {
 			if (!phaseroots.exists()) {
 				return Boolean.FALSE;
@@ -166,7 +126,7 @@ public final class PhasesHelper {
 					continue;
 				}
 				if (lc.length != 2) {
-					HgInternals.getContext(hgRepo).getLog().warn(getClass(), "Bad line in phaseroots:%s", line);
+					HgInternals.getContext(repo).getLog().warn(getClass(), "Bad line in phaseroots:%s", line);
 					continue;
 				}
 				int phaseIndex = Integer.parseInt(lc[0]);
@@ -193,15 +153,31 @@ public final class PhasesHelper {
 		}
 		return Collections.emptyList();
 	}
-	
-	private int getEarliestPhaseRevision(HgPhase phase) throws HgInvalidControlFileException {
+
+
+	private RevisionDescendants[] getPhaseDescendants(HgPhase phase) throws HgInvalidControlFileException {
 		int ordinal = phase.ordinal();
-		if (earliestRevIndex[ordinal] == BAD_REVISION) {
-			int[] rootIndexes = toIndexes(getPhaseRoots(phase));
-			Arrays.sort(rootIndexes);
-			// instead of MAX_VALUE may use clog.getLastRevision() + 1
-			earliestRevIndex[ordinal] = rootIndexes.length == 0 ? Integer.MAX_VALUE : rootIndexes[0];
+		if (phaseDescendants[ordinal] == null) {
+			phaseDescendants[ordinal] = buildPhaseDescendants(phase);
 		}
-		return earliestRevIndex[ordinal];
+		return phaseDescendants[ordinal];
+	}
+
+	private RevisionDescendants[] buildPhaseDescendants(HgPhase phase) throws HgInvalidControlFileException {
+		int[] roots = toIndexes(getPhaseRoots(phase));
+		RevisionDescendants[] rv = new RevisionDescendants[roots.length];
+		for (int i = 0; i < roots.length; i++) {
+			rv[i] = new RevisionDescendants(repo, roots[i]);
+			rv[i].build();
+		}
+		return rv;
+	}
+	
+	private int[] toIndexes(List<Nodeid> roots) throws HgInvalidControlFileException {
+		int[] rv = new int[roots.size()];
+		for (int i = 0; i < rv.length; i++) {
+			rv[i] = repo.getChangelog().getRevisionIndex(roots.get(i));
+		}
+		return rv;
 	}
 }
