@@ -113,12 +113,13 @@ public final class PhasesHelper {
 	private Boolean readRoots() throws HgInvalidControlFileException {
 		// FIXME shall access phaseroots through HgRepository#repoPathHelper
 		File phaseroots = new File(HgInternals.getRepositoryDir(repo), "store/phaseroots");
+		BufferedReader br = null;
 		try {
 			if (!phaseroots.exists()) {
 				return Boolean.FALSE;
 			}
 			HashMap<HgPhase, List<Nodeid>> phase2roots = new HashMap<HgPhase, List<Nodeid>>();
-			BufferedReader br = new BufferedReader(new FileReader(phaseroots));
+			br = new BufferedReader(new FileReader(phaseroots));
 			String line;
 			while ((line = br.readLine()) != null) {
 				String[] lc = line.trim().split("\\s+");
@@ -131,6 +132,10 @@ public final class PhasesHelper {
 				}
 				int phaseIndex = Integer.parseInt(lc[0]);
 				Nodeid rootRev = Nodeid.fromAscii(lc[1]);
+				if (!repo.getChangelog().isKnown(rootRev)) {
+					HgInternals.getContext(repo).getLog().warn(getClass(), "Phase(%d) root node %s doesn't exist in the repository, ignored.", phaseIndex, rootRev);
+					continue;
+				}
 				HgPhase phase = HgPhase.parse(phaseIndex);
 				List<Nodeid> roots = phase2roots.get(phase);
 				if (roots == null) {
@@ -142,6 +147,15 @@ public final class PhasesHelper {
 			secretPhaseRoots = phase2roots.containsKey(Secret) ? phase2roots.get(Secret) : Collections.<Nodeid>emptyList();
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException(ex.toString(), ex, phaseroots);
+		} finally {
+			if (br != null) {
+				try {
+					br.close();
+				} catch (IOException ex) {
+					HgInternals.getContext(repo).getLog().info(getClass(), ex, null);
+					// ignore the exception otherwise 
+				}
+			}
 		}
 		return Boolean.TRUE;
 	}
