@@ -1,0 +1,110 @@
+def isRelease = false
+
+  version = '0.9.0'
+  description = 'Pure Java API and Toolkit for Mercurial DVCS'
+  group = 'org.tmatesoft.hg4j'
+  
+  apply plugin : 'java'
+  apply plugin : 'maven'
+
+  sourceCompatibility = '1.5'
+  targetCompatibility = '1.5'
+  
+  sourceSets {
+    main {
+      java {
+        srcDir 'src/'
+      }
+    }
+    test {
+      java {
+        srcDir 'test/'
+      }
+      resources {
+        srcDir 'test-data/'
+      }
+    }
+    cli {
+      java {
+        srcDir 'cmdline/'
+      }
+    }
+  }
+  
+  repositories {
+    mavenLocal()
+    mavenCentral()
+  }
+  
+  dependencies {
+    testCompile 'junit:junit:4.8.2'
+    cliCompile 'junit:junit:4.8.2'
+    cliCompile files(sourceSets.main.output) {
+      builtBy compileJava
+    } 
+  }
+  
+  configurations {
+    deployJars
+  }
+  
+  def sharedMetaInf = {
+    from project.file('COPYING')
+  }
+
+
+  task sourcesJar(type: Jar) {
+    classifier = 'src'
+    from sourceSets.main.java, sourceSets.test.java, sourceSets.cli.java
+    metaInf sharedMetaInf
+  }
+  
+  task cmdlineJar(type: Jar) {
+    appendix = 'console'
+    from sourceSets.cli.output
+    metaInf sharedMetaInf
+  }
+
+  jar {
+    manifest {
+      attributes ("Implementation-Version": version)
+    }
+    metaInf sharedMetaInf
+  }
+  
+  artifacts {
+    archives sourcesJar, cmdlineJar
+    deployJars jar, sourcesJar
+  }
+  
+  install {
+    configuration = configurations.deployJars
+    repositories.mavenDeployer {
+      addFilter('f1') { artifact, file ->
+         println file.name
+         println artifact.ext
+         println file.name - ('.' + artifact.ext)
+         println '   '
+         def fname = file.name - ('.' + artifact.ext)
+         println fname.endsWith('src')
+         fname.endsWith('src')
+      }
+      addFilter('f2') { artifact, file ->
+         def fname = file.name - ('.' + artifact.ext)
+         fname.endsWith('console')
+      }
+      addFilter('f3') { artifact, file ->
+         def fname = file.name - ('.' + artifact.ext)
+         fname.endsWith(version)
+      }
+    }
+  }
+
+  test {
+// <property name="test-repos-root" value="${java.io.tmpdir}/hg4j-tests/"/>
+// <delete dir="${test-repos-root}" quiet="yes"/>
+// <unjar src="test-data/test-repos.jar" dest="${test-repos-root}"/>
+  
+    systemProperties 'hg4j.tests.repos'  : 'value'
+    systemProperties 'hg4j.tests.remote' : 'http://hg.serpentine.com/tutorial/hello'
+  }
