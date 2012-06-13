@@ -1,6 +1,6 @@
 def isRelease = false
 
-  version = '0.9.0'
+  version = '0.9.0-SNAPSHOT'
   description = 'Pure Java API and Toolkit for Mercurial DVCS'
   group = 'org.tmatesoft.hg4j'
   
@@ -36,18 +36,19 @@ def isRelease = false
     mavenCentral()
   }
   
+  configurations {
+    deployJars
+  }
+  
   dependencies {
     testCompile 'junit:junit:4.8.2'
     cliCompile 'junit:junit:4.8.2'
     cliCompile files(sourceSets.main.output) {
       builtBy compileJava
-    } 
+    }
+    deployJars "org.apache.maven.wagon:wagon-http:1.0-beta-2"
   }
-  
-  configurations {
-    deployJars
-  }
-  
+    
   def sharedMetaInf = {
     from project.file('COPYING')
   }
@@ -79,6 +80,7 @@ def isRelease = false
   
   install {
     configuration = configurations.deployJars
+/*
     repositories.mavenDeployer {
       addFilter('f1') { artifact, file ->
          println file.name
@@ -98,7 +100,20 @@ def isRelease = false
          fname.endsWith(version)
       }
     }
+*/
   }
+  
+  uploadArchives {
+    configuration = configurations.deployJars
+    repositories {
+        mavenDeployer {
+            configuration = configurations.deployJars
+            repository(url: "http://maven.tmatesoft.com/content/repositories/snapshots/") {
+              authentication(userName: "", password: "")
+            }
+        }
+    }
+}
 
   test {
 // <property name="test-repos-root" value="${java.io.tmpdir}/hg4j-tests/"/>
