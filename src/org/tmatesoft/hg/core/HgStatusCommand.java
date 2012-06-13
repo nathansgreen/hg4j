@@ -32,7 +32,7 @@ import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.Status;
+import org.tmatesoft.hg.util.Outcome;
 
 /**
  * Command to obtain file status information, 'hg status' counterpart. 
@@ -321,7 +321,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		
 		public void invalid(Path fname, Exception err) {
 			try {
-				handler.error(fname, new Status(Status.Kind.ERROR, "Failed to get file status", err));
+				handler.error(fname, new Outcome(Outcome.Kind.Failure, "Failed to get file status", err));
 				handlerCancelSupport.checkCancelled();
 			} catch (HgCallbackTargetException ex) {
 				failure = ex;

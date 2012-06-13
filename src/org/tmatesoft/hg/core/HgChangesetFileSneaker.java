@@ -23,7 +23,7 @@ import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.Status;
+import org.tmatesoft.hg.util.Outcome;
 
 /**
  * Primary purpose is to provide information about file revisions at specific changeset. Multiple {@link #check(Path)} calls 
@@ -55,7 +55,7 @@ public final class HgChangesetFileSneaker {
 	private ManifestRevision cachedManifest;
 	private HgFileRevision fileRevision;
 	private boolean renamed;
-	private Status checkResult;
+	private Outcome checkResult;
 
 	public HgChangesetFileSneaker(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -90,7 +90,7 @@ public final class HgChangesetFileSneaker {
 	}
 
 	/**
-	 * Shortcut to perform {@link #check(Path)} and {@link #exists()}. Result of the check may be accessed via {@link #getCheckStatus()}.
+	 * Shortcut to perform {@link #check(Path)} and {@link #exists()}. Result of the check may be accessed via {@link #getCheckResult()}.
 	 * Errors during the check, if any, are reported through exception.
 	 * 
 	 * @param file name of the file in question
@@ -114,11 +114,11 @@ public final class HgChangesetFileSneaker {
 	 * Find file (or its origin, if {@link #followRenames(boolean)} was set to <code>true</code>) among files known at specified {@link #changeset(Nodeid)}.
 	 * 
 	 * @param file name of the file in question
-	 * @return status object that describes outcome, {@link Status#isOk() Ok} status indicates successful completion of the operation, but doesn't imply
+	 * @return status object that describes outcome, {@link Outcome#isOk() Ok} status indicates successful completion of the operation, but doesn't imply
 	 * file existence, use {@link #exists()} for that purpose. Message of the status may provide further hints on what exactly had happened. 
 	 * @throws IllegalArgumentException if {@link #changeset(Nodeid)} not specified or file argument is bad.
 	 */
-	public Status check(Path file) {
+	public Outcome check(Path file) {
 		fileRevision = null;
 		checkResult = null;
 		renamed = false;
@@ -127,7 +127,7 @@ public final class HgChangesetFileSneaker {
 		}
 		HgDataFile dataFile = repo.getFileNode(file);
 		if (!dataFile.exists()) {
-			checkResult = new Status(Status.Kind.OK, String.format("File named %s is not known in the repository", file));
+			checkResult = new Outcome(Outcome.Kind.Success, String.format("File named %s is not known in the repository", file));
 			return checkResult;
 		}
 		Nodeid toExtract = null;
@@ -153,22 +153,29 @@ public final class HgChangesetFileSneaker {
 				}
 			}
 		} catch (HgRuntimeException ex) {
-			checkResult = new Status(Status.Kind.ERROR, phaseMsg, ex);
+			checkResult = new Outcome(Outcome.Kind.Failure, phaseMsg, ex);
 			return checkResult;
 		}
 		if (toExtract != null) {
 			fileRevision = new HgFileRevision(repo, toExtract, extractRevFlags, dataFile.getPath());
-			checkResult = new Status(Status.Kind.OK, String.format("File %s, revision %s found at changeset %s", dataFile.getPath(), toExtract.shortNotation(), cset.shortNotation()));
+			checkResult = new Outcome(Outcome.Kind.Success, String.format("File %s, revision %s found at changeset %s", dataFile.getPath(), toExtract.shortNotation(), cset.shortNotation()));
 			return checkResult;
 		} 
-		checkResult = new Status(Status.Kind.OK, String.format("File %s nor its origins were known at repository %s revision", file, cset.shortNotation()));
+		checkResult = new Outcome(Outcome.Kind.Success, String.format("File %s nor its origins were known at repository %s revision", file, cset.shortNotation()));
 		return checkResult;
 	}
 	
 	/**
+	 * @deprecated use {@link #getCheckResult()} instead
+	 */
+	@Deprecated
+	public Outcome getCheckStatus() {
+		return getCheckResult();
+	}
+	/**
 	 * Re-get latest check status object
 	 */
-	public Status getCheckStatus() {
+	public Outcome getCheckResult() {
 		assertCheckRan();
 		return checkResult;
 	}

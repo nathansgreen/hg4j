@@ -86,7 +86,7 @@ public class Status {
 				}
 			}
 			
-			public void error(Path file, org.tmatesoft.hg.util.Status s) {
+			public void error(Path file, org.tmatesoft.hg.util.Outcome s) {
 				System.out.printf("FAILURE: %s %s\n", s.getMessage(), file);
 				s.getException().printStackTrace(System.out);
 			}

@@ -18,7 +18,7 @@ package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.Status;
+import org.tmatesoft.hg.util.Outcome;
 
 /**
  * Callback to process {@link HgStatus} objects.
@@ -43,5 +43,5 @@ public interface HgStatusHandler {
 	 * @param s error description object
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
 	 */
-	void error(Path file, Status s) throws HgCallbackTargetException;
+	void error(Path file, Outcome s) throws HgCallbackTargetException;
 }

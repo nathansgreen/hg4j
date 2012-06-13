@@ -48,7 +48,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.Status;
+import org.tmatesoft.hg.util.Outcome;
 
 /**
  * 
@@ -181,7 +181,7 @@ public class TestStatus {
 	static class StatusCollector implements HgStatusHandler {
 		private final Map<Kind, List<Path>> kind2names = new TreeMap<Kind, List<Path>>();
 		private final Map<Path, List<Kind>> name2kinds = new TreeMap<Path, List<Kind>>();
-		private final Map<Path, Status> name2error = new LinkedHashMap<Path, Status>();
+		private final Map<Path, Outcome> name2error = new LinkedHashMap<Path, Outcome>();
 		private final Map<Path, Path> new2oldName = new LinkedHashMap<Path, Path>();
 
 		public void status(HgStatus s) {
@@ -201,7 +201,7 @@ public class TestStatus {
 			k.add(s.getKind());
 		}
 
-		public void error(Path file, Status s) {
+		public void error(Path file, Outcome s) {
 			name2error.put(file, s);
 		}
 
@@ -215,7 +215,7 @@ public class TestStatus {
 			return rv == null ? Collections.<Kind> emptyList() : rv;
 		}
 
-		public Map<Path, Status> getErrors() {
+		public Map<Path, Outcome> getErrors() {
 			return name2error;
 		}
 
@@ -605,7 +605,7 @@ public class TestStatus {
 		cmd.execute(sc);
 		// shall pass without exception
 		//
-		for (Map.Entry<Path, Status> e : sc.getErrors().entrySet()) {
+		for (Map.Entry<Path, Outcome> e : sc.getErrors().entrySet()) {
 			System.out.printf("%s : (%s %s)\n", e.getKey(), e.getValue().getKind(), e.getValue().getMessage());
 		}
 		assertTrue(sc.getErrors().isEmpty());
@@ -636,7 +636,7 @@ public class TestStatus {
 		cmd.execute(sc);
 		// shall pass without exception
 		//
-		for (Map.Entry<Path, Status> e : sc.getErrors().entrySet()) {
+		for (Map.Entry<Path, Outcome> e : sc.getErrors().entrySet()) {
 			System.out.printf("%s : (%s %s)\n", e.getKey(), e.getValue().getKind(), e.getValue().getMessage());
 		}
 		assertTrue(sc.getErrors().isEmpty());
