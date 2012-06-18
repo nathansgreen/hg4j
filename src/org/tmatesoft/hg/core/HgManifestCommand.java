@@ -26,6 +26,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.internal.PathPool;
+import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
@@ -76,12 +77,39 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 		return this;
 	}
 	
-	public HgManifestCommand revision(int rev) {
-		startRev = endRev = rev;
-		return this;
+	/**
+	 * Select changeset for the command using revision index 
+	 * @param csetRevisionIndex index of changeset revision
+	 * @return <code>this</code> for convenience.
+	 */
+	public HgManifestCommand changeset(int csetRevisionIndex) {
+		return range(csetRevisionIndex, csetRevisionIndex);
 	}
 	
-	// FIXME add changeset(Nodeid), perhaps rename revision(int) to changeset(int), and add changeset(int) to HgLogCommand (and, perhaps, others) 
+	/**
+	 * Select changeset for the command
+	 * 
+	 * @param nid changeset revision
+	 * @return <code>this</code> for convenience
+	 * @throws HgBadArgumentException if failed to find supplied changeset revision 
+	 */
+	public HgManifestCommand changeset(Nodeid nid) throws HgBadArgumentException {
+		// XXX also see HgLogCommand#changeset(Nodeid)
+		try {
+			final int csetRevIndex = repo.getChangelog().getRevisionIndex(nid);
+			return range(csetRevIndex, csetRevIndex);
+		} catch (HgInvalidRevisionException ex) {
+			throw new HgBadArgumentException("Can't find revision", ex).setRevision(nid);
+		}
+	}
+
+	/**
+	 * @deprecated confusing whether it's changeset or manifest own revision index in use, use {@link #changeset(int)} instead
+	 */
+	@Deprecated
+	public HgManifestCommand revision(int rev) {
+		return changeset(rev);
+	}
 	
 	public HgManifestCommand dirs(boolean include) {
 		// XXX whether directories with directories only are include or not

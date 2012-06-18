@@ -37,6 +37,7 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -168,7 +169,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		try {
 			final int csetRevIndex = repo.getChangelog().getRevisionIndex(nid);
 			return range(csetRevIndex, csetRevIndex);
-		} catch (HgRuntimeException ex) {
+		} catch (HgInvalidRevisionException ex) {
 			throw new HgBadArgumentException("Can't find revision", ex).setRevision(nid);
 		}
 	}

@@ -136,12 +136,12 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	/**
 	 * Shorthand for {@link #base(int) cmd.base(BAD_REVISION)}{@link #change(int) .revision(revision)}
 	 *  
-	 * @param revision compare given revision against its parent
+	 * @param changesetRevisionIndex compare given revision against its parent
 	 * @return <code>this</code> for convenience
 	 */
-	public HgStatusCommand change(int revision) {
+	public HgStatusCommand change(int changesetRevisionIndex) {
 		base(BAD_REVISION);
-		return revision(revision);
+		return revision(changesetRevisionIndex);
 	}
 	
 	/**

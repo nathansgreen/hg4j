@@ -83,6 +83,6 @@ public class Manifest {
 			}
 		};
 		int rev = cmdLineOpts.getSingleInt(TIP, "-r", "--rev");
-		new HgManifestCommand(hgRepo).dirs(false).revision(rev).execute(h); 
+		new HgManifestCommand(hgRepo).dirs(false).changeset(rev).execute(h); 
 	}
 }

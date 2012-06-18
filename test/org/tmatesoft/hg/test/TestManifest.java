@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -103,7 +103,7 @@ public class TestManifest {
 		manifestParser.reset();
 		eh.run("hg", "manifest", "--debug", "--rev", String.valueOf(rev == TIP ? -1 : rev));
 		revisions.clear();
-		new HgManifestCommand(repo).revision(rev).execute(handler);
+		new HgManifestCommand(repo).changeset(rev).execute(handler);
 		report("manifest " + (rev == TIP ? "TIP:" : "--rev " + rev));
 	}
 
