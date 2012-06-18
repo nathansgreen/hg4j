@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
  * contact TMate Software at support@hg4j.com
  */
 package org.tmatesoft.hg.repo;
+
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
 import java.io.IOException;
@@ -135,7 +137,7 @@ public class HgLookup {
 				globalCfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 			} catch (IOException ex) {
 				// XXX perhaps, makes sense to let caller/client know that we've failed to read global config? 
-				getContext().getLog().warn(getClass(), ex, null);
+				getContext().getLog().dump(getClass(), Warn, ex, null);
 			}
 		}
 		return globalCfg;

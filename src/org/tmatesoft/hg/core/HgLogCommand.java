@@ -17,6 +17,7 @@ s * Copyright (c) 2011-2012 TMate Software Ltd
 package org.tmatesoft.hg.core;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,10 +38,10 @@ import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
-import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
@@ -545,7 +546,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 						}
 					}
 					if (!sanity) {
-						HgInternals.getContext(repo).getLog().error(getClass(), "Index of revision %d:%s doesn't match any of requested", cs.getRevisionIndex(), cs.getNodeid().shortNotation());
+						HgInternals.getContext(repo).getLog().dump(getClass(), Error, "Index of revision %d:%s doesn't match any of requested", cs.getRevisionIndex(), cs.getNodeid().shortNotation());
 					}
 					assert sanity;
 				}

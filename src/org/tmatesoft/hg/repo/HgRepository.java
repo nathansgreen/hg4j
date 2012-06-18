@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.*;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
@@ -201,12 +203,12 @@ public final class HgRepository {
 						tags.readGlobal(new StringReader(content));
 					} catch (CancelledException ex) {
 						 // IGNORE, can't happen, we did not configure cancellation
-						getContext().getLog().debug(getClass(), ex, null);
+						getContext().getLog().dump(getClass(), Debug, ex, null);
 					} catch (IOException ex) {
 						// UnsupportedEncodingException can't happen (UTF8)
 						// only from readGlobal. Need to reconsider exceptions thrown from there:
 						// BufferedReader wraps String and unlikely to throw IOException, perhaps, log is enough?
-						getContext().getLog().error(getClass(), ex, null);
+						getContext().getLog().dump(getClass(), Error, ex, null);
 						// XXX need to decide what to do this. failure to read single revision shall not break complete cycle
 					}
 				}
@@ -218,7 +220,7 @@ public final class HgRepository {
 				file2read = new File(repoDir, "localtags");
 				tags.readLocal(file2read);
 			} catch (IOException ex) {
-				getContext().getLog().error(getClass(), ex, null);
+				getContext().getLog().dump(getClass(), Error, ex, null);
 				throw new HgInvalidControlFileException("Failed to read tags", ex, file2read);
 			}
 		}
@@ -314,7 +316,7 @@ public final class HgRepository {
 				repoConfig = new HgRepoConfig(configFile);
 			} catch (IOException ex) {
 				String m = "Errors while reading user configuration file";
-				getContext().getLog().warn(getClass(), ex, m);
+				getContext().getLog().dump(getClass(), Warn, ex, m);
 				return new HgRepoConfig(new ConfigFile()); // empty config, do not cache, allow to try once again
 				//throw new HgInvalidControlFileException(m, ex, null);
 			}
@@ -361,11 +363,11 @@ public final class HgRepository {
 			try {
 				final List<String> errors = ignore.read(ignoreFile);
 				if (errors != null) {
-					getContext().getLog().warn(getClass(), "Syntax errors parsing .hgignore:\n%s", Internals.join(errors, ",\n"));
+					getContext().getLog().dump(getClass(), Warn, "Syntax errors parsing .hgignore:\n%s", Internals.join(errors, ",\n"));
 				}
 			} catch (IOException ex) {
 				final String m = "Error reading .hgignore file";
-				getContext().getLog().warn(getClass(), ex, m);
+				getContext().getLog().dump(getClass(), Warn, ex, m);
 //				throw new HgInvalidControlFileException(m, ex, ignoreFile);
 			}
 		}
@@ -400,7 +402,7 @@ public final class HgRepository {
 					fake.deleteOnExit();
 					return new RevlogStream(dataAccess, fake);
 				} catch (IOException ex) {
-					getContext().getLog().info(getClass(), ex, null);
+					getContext().getLog().dump(getClass(), Info, ex, null);
 				}
 			}
 		}

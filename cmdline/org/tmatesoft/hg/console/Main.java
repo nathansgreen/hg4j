@@ -18,6 +18,7 @@ package org.tmatesoft.hg.console;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
+import static org.tmatesoft.hg.util.LogFacility.Severity.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -72,6 +73,7 @@ import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.ProgressSupport;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * Various debug dumps. 
@@ -250,17 +252,17 @@ public class Main {
 	}
 	
 	private void testConsoleLog() {
-		LogFacility fc = new StreamLogFacility(true, true, true, System.out);
-		System.out.printf("isDebug: %s, isInfo:%s\n", fc.isDebug(), fc.isInfo());
-		fc.debug(getClass(), "%d", 1);
-		fc.info(getClass(), "%d\n", 2);
-		fc.warn(getClass(), "%d\n", 3);
-		fc.error(getClass(), "%d", 4);
+		LogFacility fc = new StreamLogFacility(Debug, true, System.out);
+		System.out.printf("isDebug: %s, isInfo:%s\n", fc.isDebug(), fc.getLevel() == Info);
+		fc.dump(getClass(), Debug, "%d", 1);
+		fc.dump(getClass(), Info, "%d\n", 2);
+		fc.dump(getClass(), Warn, "%d\n", 3);
+		fc.dump(getClass(), Error, "%d", 4);
 		Exception ex = new Exception();
-		fc.debug(getClass(), ex, "message");
-		fc.info(getClass(), ex, null);
-		fc.warn(getClass(), ex, null);
-		fc.error(getClass(), ex, "message");
+		fc.dump(getClass(), Debug, ex, "message");
+		fc.dump(getClass(), Info, ex, null);
+		fc.dump(getClass(), Warn, ex, null);
+		fc.dump(getClass(), Error, ex, "message");
 	}
 	
 	private void testTreeTraversal() throws Exception {

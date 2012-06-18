@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Debug;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -35,6 +36,7 @@ import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 
 
 /**
@@ -141,7 +143,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				} else if (state == 'm') {
 					merged.put(r.name1, r);
 				} else {
-					repo.getContext().getLog().warn(getClass(), "Dirstate record for file %s (size: %d, tstamp:%d) has unknown state '%c'", r.name1, r.size(), r.time, state);
+					repo.getContext().getLog().dump(getClass(), Severity.Warn, "Dirstate record for file %s (size: %d, tstamp:%d) has unknown state '%c'", r.name1, r.size(), r.time, state);
 				}
 			}
 		} catch (IOException ex) {
@@ -205,7 +207,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				branch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
 				r.close();
 			} catch (FileNotFoundException ex) {
-				repo.getContext().getLog().debug(HgDirstate.class, ex, null); // log verbose debug, exception might be legal here 
+				repo.getContext().getLog().dump(HgDirstate.class, Debug, ex, null); // log verbose debug, exception might be legal here 
 				// IGNORE
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Error reading file with branch information", ex, branchFile);

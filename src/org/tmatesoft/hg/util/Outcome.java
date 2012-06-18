@@ -22,7 +22,7 @@ package org.tmatesoft.hg.util;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Outcome {
+public final class Outcome {
 	// XXX perhaps private enum and factory method createError() and createOk()?
 	public enum Kind {
 		Success, Failure;

@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
+
 import java.io.PrintStream;
 
 import org.tmatesoft.hg.util.LogFacility;
@@ -29,13 +31,14 @@ import org.tmatesoft.hg.util.LogFacility;
 public class StreamLogFacility implements LogFacility {
 	
 	private final boolean isDebug;
-	private final boolean isInfo;
+	private final Severity severity;
 	protected final boolean timestamp;
 	protected final PrintStream outStream;
 
-	public StreamLogFacility(boolean pringDebug, boolean printInfo, boolean needTimestamp, PrintStream out) {
-		isDebug = pringDebug;
-		isInfo = printInfo;
+	public StreamLogFacility(Severity level, boolean needTimestamp, PrintStream out) {
+		assert level != null;
+		severity = level;
+		isDebug = level == Severity.Debug;
 		timestamp = needTimestamp;
 		outStream = out;
 	}
@@ -43,56 +46,24 @@ public class StreamLogFacility implements LogFacility {
 	public boolean isDebug() {
 		return isDebug;
 	}
-
-	public boolean isInfo() {
-		return isInfo;
+	
+	public Severity getLevel() {
+		return severity;
 	}
 
-	public void debug(Class<?> src, String format, Object... args) {
-		if (!isDebug) {
-			return;
+	public void dump(Class<?> src, Severity severity, String format, Object... args) {
+		if (severity.ordinal() >= getLevel().ordinal()) {
+			printf(severity, src, format, args);
 		}
-		printf("DEBUG", src, format, args);
 	}
 
-	public void info(Class<?> src, String format, Object... args) {
-		if (!isInfo) {
-			return;
+	public void dump(Class<?> src, Severity severity, Throwable th, String message) {
+		if (severity.ordinal() >= getLevel().ordinal()) {
+			printf(severity, src, th, message);
 		}
-		printf("INFO", src, format, args);
 	}
 
-	public void warn(Class<?> src, String format, Object... args) {
-		printf("WARN", src, format, args);
-	}
-
-	public void error(Class<?> src, String format, Object... args) {
-		printf("ERROR", src, format, args);
-	}
-
-	public void debug(Class<?> src, Throwable th, String message) {
-		if (!isDebug) {
-			return;
-		}
-		printf("DEBUG", src, th, message);
-	}
-
-	public void info(Class<?> src, Throwable th, String message) {
-		if (!isInfo) {
-			return;
-		}
-		printf("INFO", src, th, message);
-	}
-
-	public void warn(Class<?> src, Throwable th, String message) {
-		printf("WARN", src, th, message);
-	}
-
-	public void error(Class<?> src, Throwable th, String message) {
-		printf("ERROR", src, th, message);
-	}
-
-	protected void printf(String level, Class<?> src, String format, Object... args) {
+	protected void printf(Severity level, Class<?> src, String format, Object... args) {
 		String msg = String.format(format, args);
 		if (timestamp) {
 			outStream.printf(isDebug ? "%tT.%1$tL " : "%tT ", System.currentTimeMillis());
@@ -104,17 +75,17 @@ public class StreamLogFacility implements LogFacility {
 			}
 			outStream.printf("(%s) ", cn);
 		}
-		outStream.printf("%s: %s", level, msg);
+		outStream.printf("%s: %s", level.toString().toUpperCase(), msg);
 		if (format.length() == 0 || format.charAt(format.length() - 1) != '\n') {
 			outStream.println();
 		}
 	}
-	protected void printf(String level, Class<?> src, Throwable th, String msg) {
+	protected void printf(Severity level, Class<?> src, Throwable th, String msg) {
 		if (msg != null || timestamp || isDebug || th == null) {
 			printf(level, src, msg == null ? "" : msg, (Object[]) null);
 		}
 		if (th != null) {
-			if (isDebug || isInfo) {
+			if (getLevel().ordinal() <= Info.ordinal()) {
 				// full stack trace
 				th.printStackTrace(outStream);
 			} else {
@@ -126,6 +97,6 @@ public class StreamLogFacility implements LogFacility {
 
 	// alternative to hardcore System.out where SessionContext is not available now (or ever)
 	public static LogFacility newDefault() {
-		return new StreamLogFacility(true, true, true, System.out); 
+		return new StreamLogFacility(Severity.Debug, true, System.out); 
 	}
 }

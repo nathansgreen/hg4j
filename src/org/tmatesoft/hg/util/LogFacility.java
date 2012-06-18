@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,10 +16,9 @@
  */
 package org.tmatesoft.hg.util;
 
-import org.tmatesoft.hg.internal.Experimental;
 
 /**
- * WORK IN PROGRESS
+ * Facility to dump various messages.
  * 
  * Intention of this class is to abstract away almost any log facility out there clients might be using with the <b>Hg4J</b> library, 
  * not to be a full-fledged logging facility of its own.
@@ -30,21 +29,41 @@ import org.tmatesoft.hg.internal.Experimental;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="API might get changed")
 public interface LogFacility {
+	
+	public enum Severity {
+		Debug, Info, Warn, Error // order is important
+	}
 
+	/**
+	 * Effective way to avoid attempts to construct debug dumps when they are of no interest. Basically, <code>getLevel() < Info</code>
+	 * 
+	 * @return <code>true</code> if interested in debug dumps
+	 */
 	boolean isDebug();
-	boolean isInfo();
 
-	// src and format never null
-	void debug(Class<?> src, String format, Object... args);
-	void info(Class<?> src, String format, Object... args);
-	void warn(Class<?> src, String format, Object... args);
-	void error(Class<?> src, String format, Object... args);
-
-	// src shall be non null, either th or message or both
-	void debug(Class<?> src, Throwable th, String message);
-	void info(Class<?> src, Throwable th, String message);
-	void warn(Class<?> src, Throwable th, String message);
-	void error(Class<?> src, Throwable th, String message);
+	/**
+	 * 
+	 * @return lowest (from {@link Severity#Debug} to {@link Severity#Error} active severity level 
+	 */
+	Severity getLevel();
+	
+	/**
+	 * Dump a message
+	 * @param src identifies source of the message, never <code>null</code>
+	 * @param severity one of predefined levels
+	 * @param format message format suitable for {@link String#format(String, Object...)}, never <code>null</code>
+	 * @param args optional arguments for the preceding format argument, may be <code>null</code>
+	 */
+	void dump(Class<?> src, Severity severity, String format, Object... args);
+	
+	/**
+	 * Alternative to dump an exception
+	 *  
+	 * @param src identifies source of the message, never <code>null</code>
+	 * @param severity one of predefined levels
+	 * @param th original exception, never <code>null</code>
+	 * @param message additional description of the error/conditions, may be <code>null</code>
+	 */
+	void dump(Class<?> src, Severity severity, Throwable th, String message);
 }

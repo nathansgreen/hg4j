@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.internal.RequiresFile.*;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -83,8 +84,7 @@ public final class Internals {
 	public Internals(SessionContext ctx) {
 		sessionContext = ctx;
 		isCaseSensitiveFileSystem = !runningOnWindows();
-		Object p = ctx.getProperty(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
-		shallCacheRevlogsInRepo = p instanceof Boolean ? ((Boolean) p).booleanValue() : Boolean.parseBoolean(String.valueOf(p));
+		shallCacheRevlogsInRepo = new PropertyMarshal(ctx).getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
 	}
 	
 	public void parseRequires(HgRepository hgRepo, File requiresFile) throws HgInvalidControlFileException {
@@ -173,7 +173,7 @@ public final class Internals {
 	}
 	
 	private Charset getFileEncoding() {
-		Object altEncoding = sessionContext.getProperty(CFG_PROPERTY_FS_FILENAME_ENCODING, null);
+		Object altEncoding = sessionContext.getConfigurationProperty(CFG_PROPERTY_FS_FILENAME_ENCODING, null);
 		Charset cs;
 		if (altEncoding == null) {
 			cs = Charset.defaultCharset();
@@ -183,7 +183,7 @@ public final class Internals {
 			} catch (IllegalArgumentException ex) {
 				// both IllegalCharsetNameException and UnsupportedCharsetException are subclasses of IAE, too
 				// not severe enough to throw an exception, imo. Just record the fact it's bad ad we ignore it 
-				sessionContext.getLog().error(Internals.class, ex, String.format("Bad configuration value for filename encoding %s", altEncoding));
+				sessionContext.getLog().dump(Internals.class, Error, ex, String.format("Bad configuration value for filename encoding %s", altEncoding));
 				cs = Charset.defaultCharset();
 			}
 		}
@@ -224,7 +224,7 @@ public final class Internals {
 	 */
 	private static File findHgInstallRoot(SessionContext ctx) {
 		// let clients to override Hg install location 
-		String p = (String) ctx.getProperty(CFG_PROPERTY_HG_INSTALL_ROOT, null);
+		String p = (String) ctx.getConfigurationProperty(CFG_PROPERTY_HG_INSTALL_ROOT, null);
 		if (p != null) {
 			return new File(p);
 		}

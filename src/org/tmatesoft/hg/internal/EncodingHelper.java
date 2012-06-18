@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
+
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -71,7 +73,7 @@ public class EncodingHelper {
 			bb.get(rv, 0, rv.length);
 			return rv;
 		} catch (CharacterCodingException ex) {
-			sessionContext.getLog().error(getClass(), ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
+			sessionContext.getLog().dump(getClass(), Error, ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
 			// resort to system-default
 			return s.getBytes();
 		}
@@ -88,7 +90,7 @@ public class EncodingHelper {
 		try {
 			return decoder.decode(ByteBuffer.wrap(data, start, length)).toString();
 		} catch (CharacterCodingException ex) {
-			sessionContext.getLog().error(getClass(), ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
+			sessionContext.getLog().dump(getClass(), Error, ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
 			// resort to system-default
 			return new String(data, start, length);
 		}

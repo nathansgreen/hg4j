@@ -16,6 +16,9 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -98,24 +101,24 @@ public class HgBranches {
 			return lastInCache;
 		} catch (IOException ex) {
 			 // log error, but otherwise do nothing
-			repo.getContext().getLog().warn(getClass(), ex, null);
+			repo.getContext().getLog().dump(getClass(), Warn, ex, null);
 			// FALL THROUGH to return -1 indicating no cache information 
 		} catch (NumberFormatException ex) {
-			repo.getContext().getLog().warn(getClass(), ex, null);
+			repo.getContext().getLog().dump(getClass(), Warn, ex, null);
 			// FALL THROUGH
 		} catch (HgInvalidControlFileException ex) {
 			// shall not happen, thus log as error
-			repo.getContext().getLog().error(getClass(), ex, null);
+			repo.getContext().getLog().dump(getClass(), Error, ex, null);
 			// FALL THROUGH
 		} catch (HgInvalidRevisionException ex) {
-			repo.getContext().getLog().error(getClass(), ex, null);
+			repo.getContext().getLog().dump(getClass(), Error, ex, null);
 			// FALL THROUGH
 		} finally {
 			if (br != null) {
 				try {
 					br.close();
 				} catch (IOException ex) {
-					repo.getContext().getLog().info(getClass(), ex, null); // ignore
+					repo.getContext().getLog().dump(getClass(), Warn, ex, null); // ignore
 				}
 			}
 		}

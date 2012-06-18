@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.repo;
 
-import org.tmatesoft.hg.internal.Experimental;
 
 /**
  * Names of some Mercurial configuration/service files.
@@ -24,7 +23,6 @@ import org.tmatesoft.hg.internal.Experimental;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental
 public enum HgRepositoryFiles {
 
 	HgIgnore(".hgignore"), HgTags(".hgtags"), HgEol(".hgeol"), 

@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.util;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -85,7 +87,7 @@ public class RegularFileInfo implements FileInfo {
 				return new FileInputStream(file).getChannel();
 			}
 		} catch (FileNotFoundException ex) {
-			StreamLogFacility.newDefault().debug(getClass(), ex, null);
+			StreamLogFacility.newDefault().dump(getClass(), Info, ex, null);
 			// shall not happen, provided this class is used correctly
 			return new ByteArrayReadableChannel(null);
 		}

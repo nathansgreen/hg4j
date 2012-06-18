@@ -21,13 +21,14 @@ import java.util.Map;
 
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.util.LogFacility;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class BasicSessionContext implements SessionContext {
+public class BasicSessionContext extends SessionContext {
 
 	private LogFacility logFacility;
 	private final Map<String, Object> properties;
@@ -42,25 +43,23 @@ public class BasicSessionContext implements SessionContext {
 		properties = propertyOverrides == null ? Collections.<String,Object>emptyMap() : (Map<String, Object>) propertyOverrides;
 	}
 
+	@Override
 	public LogFacility getLog() {
 		// e.g. for exceptions that we can't handle but log (e.g. FileNotFoundException when we've checked beforehand file.canRead()
 		if (logFacility == null) {
-			boolean needDebug = _getBooleanProperty("hg.consolelog.debug", false);
-			boolean needInfo = needDebug || _getBooleanProperty("hg.consolelog.info", false);
-			logFacility = new StreamLogFacility(needDebug, needInfo, true, System.out);
+			PropertyMarshal pm = new PropertyMarshal(this);
+			boolean needDebug = pm.getBoolean("hg4j.consolelog.debug", false);
+			boolean needInfo = pm.getBoolean("hg4j.consolelog.info", false);
+			boolean needTime = pm.getBoolean("hg4j.consolelog.tstamp", true);
+			Severity l = needDebug ? Severity.Debug : (needInfo ? Severity.Info : Severity.Warn);
+			logFacility = new StreamLogFacility(l, needTime, System.out);
 		}
 		return logFacility;
 	}
 	
-	private boolean _getBooleanProperty(String name, boolean defaultValue) {
-		// can't use <T> and unchecked cast because got no confidence passed properties are strictly of the kind of my default values,
-		// i.e. if boolean from outside comes as "true", while I pass default as Boolean or vice versa.  
-		Object p = getProperty(name, defaultValue);
-		return p instanceof Boolean ? ((Boolean) p).booleanValue() : Boolean.parseBoolean(String.valueOf(p));
-	}
-
-	// TODO specific helpers for boolean and int values
-	public Object getProperty(String name, Object defaultValue) {
+	// specific helpers for boolean and int values are available from PropertyMarshal
+	@Override
+	public Object getConfigurationProperty(String name, Object defaultValue) {
 		// NOTE, this method is invoked from getLog(), hence do not call getLog from here unless changed appropriately
 		Object value = properties.get(name);
 		if (value != null) {

@@ -18,6 +18,7 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
 import static org.tmatesoft.hg.repo.HgRepository.*;
+import static org.tmatesoft.hg.util.LogFacility.Severity.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -181,7 +182,7 @@ public final class HgDataFile extends Revlog {
 					try {
 						fc.close();
 					} catch (IOException ex) {
-						getRepo().getContext().getLog().info(getClass(), ex, null);
+						getRepo().getContext().getLog().dump(getClass(), Warn, ex, null);
 					}
 				}
 			}
@@ -207,7 +208,7 @@ public final class HgDataFile extends Revlog {
 		final int csetRevIndex;
 		if (p.isNull()) {
 			// no dirstate parents 
-			getRepo().getContext().getLog().info(getClass(), "No dirstate parents, resort to TIP", getPath());
+			getRepo().getContext().getLog().dump(getClass(), Info, "No dirstate parents, resort to TIP", getPath());
 			// if it's a repository with no dirstate, use TIP then
 			csetRevIndex = clog.getLastRevision();
 			if (csetRevIndex == -1) {
@@ -607,7 +608,7 @@ public final class HgDataFile extends Revlog {
 						break;
 					}
 					if (key == null || lastColon == -1 || i <= lastColon) {
-						log.error(getClass(), "Missing key in file revision metadata at index %d", i);
+						log.dump(getClass(), Error, "Missing key in file revision metadata at index %d", i);
 					}
 					value = new String(bos.toByteArray()).trim();
 					bos.reset();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,9 @@
  * contact TMate Software at support@hg4j.com
  */
 package org.tmatesoft.hg.internal;
+
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -46,25 +49,22 @@ public class DataAccessProvider {
 	private static final int DEFAULT_MAPIO_BUFFER = DEFAULT_MAPIO_LIMIT; // same as default boundary
 
 	private final int mapioMagicBoundary;
-	private final int bufferSize;
+	private final int bufferSize, mapioBufSize;
 	private final SessionContext context;
 
 	public DataAccessProvider(SessionContext ctx) {
-		this(ctx, getConfigOption(ctx, CFG_PROPERTY_MAPIO_LIMIT, DEFAULT_MAPIO_LIMIT), getConfigOption(ctx, CFG_PROPERTY_FILE_BUFFER_SIZE, DEFAULT_FILE_BUFFER));
+		context = ctx;
+		PropertyMarshal pm = new PropertyMarshal(ctx);
+		mapioMagicBoundary = pm.getInt(CFG_PROPERTY_MAPIO_LIMIT, DEFAULT_MAPIO_LIMIT);
+		bufferSize = pm.getInt(CFG_PROPERTY_FILE_BUFFER_SIZE, DEFAULT_FILE_BUFFER);
+		mapioBufSize = pm.getInt(CFG_PROPERTY_MAPIO_BUFFER_SIZE, DEFAULT_MAPIO_BUFFER);
 	}
 	
-	private static int getConfigOption(SessionContext ctx, String optName, int defaultValue) {
-		Object v = ctx.getProperty(optName, defaultValue);
-		if (false == v instanceof Number) {
-			v = Integer.parseInt(v.toString());
-		}
-		return ((Number) v).intValue();
-	}
-
-	public DataAccessProvider(SessionContext ctx, int mapioBoundary, int regularBufferSize) {
+	public DataAccessProvider(SessionContext ctx, int mapioBoundary, int regularBufferSize, int mapioBufferSize) {
 		context = ctx;
 		mapioMagicBoundary = mapioBoundary == 0 ? Integer.MAX_VALUE : mapioBoundary;
 		bufferSize = regularBufferSize;
+		mapioBufSize = mapioBufferSize;
 	}
 
 	public DataAccess create(File f) {
@@ -76,7 +76,6 @@ public class DataAccessProvider {
 			long flen = fc.size();
 			if (flen > mapioMagicBoundary) {
 				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
-				int mapioBufSize = getConfigOption(context, CFG_PROPERTY_MAPIO_BUFFER_SIZE, DEFAULT_MAPIO_BUFFER);
 				return new MemoryMapFileAccess(fc, flen, mapioBufSize, context.getLog());
 			} else {
 				// XXX once implementation is more or less stable,
@@ -88,7 +87,7 @@ public class DataAccessProvider {
 			}
 		} catch (IOException ex) {
 			// unlikely to happen, we've made sure file exists.
-			context.getLog().error(getClass(), ex, null);
+			context.getLog().dump(getClass(), Error, ex, null);
 		}
 		return new DataAccess(); // non-null, empty.
 	}
@@ -177,14 +176,14 @@ public class DataAccessProvider {
 					}
 					if (i == 0) {
 						// if first attempt failed, try to free some virtual memory, see Issue 30 for details
-						logFacility.warn(getClass(), ex, "Memory-map failed, gonna try gc() to free virtual memory");
+						logFacility.dump(getClass(), Warn, ex, "Memory-map failed, gonna try gc() to free virtual memory");
 					}
 					try {
 						buffer = null;
 						System.gc();
 						Thread.sleep((1+i) * 1000);
 					} catch (Throwable t) {
-						logFacility.error(getClass(), t, "Bad luck");
+						logFacility.dump(getClass(), Error, t, "Bad luck");
 					}
 				}
 			}
@@ -230,7 +229,7 @@ public class DataAccessProvider {
 				try {
 					fileChannel.close();
 				} catch (IOException ex) {
-					logFacility.debug(getClass(), ex, null);
+					logFacility.dump(getClass(), Warn, ex, null);
 				}
 				fileChannel = null;
 			}
@@ -364,7 +363,7 @@ public class DataAccessProvider {
 				try {
 					fileChannel.close();
 				} catch (IOException ex) {
-					logFacility.debug(getClass(), ex, null);
+					logFacility.dump(getClass(), Warn, ex, null);
 				}
 				fileChannel = null;
 			}

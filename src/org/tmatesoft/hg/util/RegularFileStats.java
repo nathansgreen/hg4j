@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.util;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -140,11 +142,11 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 					symlinkValue = null;
 				}
 			} catch (InterruptedException ex) {
-				sessionContext.getLog().warn(getClass(), ex, String.format("Failed to detect flags for %s", f));
+				sessionContext.getLog().dump(getClass(), Warn, ex, String.format("Failed to detect flags for %s", f));
 				// try again? ensure not too long? stop right away?
 				// IGNORE, keep isExec and isSymlink false
 			} catch (IOException ex) {
-				sessionContext.getLog().warn(getClass(), ex, String.format("Failed to detect flags for %s", f));
+				sessionContext.getLog().dump(getClass(), Warn, ex, String.format("Failed to detect flags for %s", f));
 				// IGNORE, keep isExec and isSymlink false
 			}
 		}

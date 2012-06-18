@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -55,6 +57,7 @@ import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.internal.PropertyMarshal;
 
 /**
  * WORK IN PROGRESS, DO NOT USE
@@ -80,8 +83,7 @@ public class HgRemoteRepository {
 		}
 		this.url = url;
 		sessionContext = ctx;
-		Object debugProp = ctx.getProperty("hg4j.remote.debug", false);
-		debug = debugProp instanceof Boolean ? ((Boolean) debugProp).booleanValue() : Boolean.parseBoolean(String.valueOf(debugProp));
+		debug = new PropertyMarshal(ctx).getBoolean("hg4j.remote.debug", false);
 		if ("https".equals(url.getProtocol())) {
 			try {
 				sslContext = SSLContext.getInstance("SSL");
@@ -116,7 +118,7 @@ public class HgRemoteRepository {
 				ai = tempNode.get("xxx", null);
 				tempNode.removeNode();
 			} catch (BackingStoreException ex) {
-				sessionContext.getLog().info(getClass(), ex, null);
+				sessionContext.getLog().dump(getClass(), Info, ex, null);
 				// IGNORE
 			}
 			authInfo = ai;

@@ -33,6 +33,7 @@ import org.tmatesoft.hg.core.HgStatus;
 import org.tmatesoft.hg.core.HgStatus.Kind;
 import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.core.HgStatusHandler;
+import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -86,7 +87,7 @@ public class Status {
 				}
 			}
 			
-			public void error(Path file, org.tmatesoft.hg.util.Outcome s) {
+			public void error(Path file, Outcome s) {
 				System.out.printf("FAILURE: %s %s\n", s.getMessage(), file);
 				s.getException().printStackTrace(System.out);
 			}

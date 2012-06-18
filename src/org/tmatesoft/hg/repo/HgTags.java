@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
  * contact TMate Software at support@hg4j.com
  */
 package org.tmatesoft.hg.repo;
+
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -107,7 +109,7 @@ public class HgTags {
 				continue;
 			}
 			if (line.length() < 40+2 /*nodeid, space and at least single-char tagname*/) {
-				repo.getContext().getLog().warn(getClass(), "Bad tags line: %s", line); 
+				repo.getContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line); 
 				continue;
 			}
 			int spacePos = line.indexOf(' ');
@@ -151,7 +153,7 @@ public class HgTags {
 				}
 				
 			} else {
-				repo.getContext().getLog().warn(getClass(), "Bad tags line: %s", line);
+				repo.getContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line);
 			}
 		}
 	}

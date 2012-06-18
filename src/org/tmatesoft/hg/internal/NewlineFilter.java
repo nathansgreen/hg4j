@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ import static java.lang.Math.min;
 import static org.tmatesoft.hg.internal.Filter.Direction.FromRepo;
 import static org.tmatesoft.hg.internal.Filter.Direction.ToRepo;
 import static org.tmatesoft.hg.internal.KeywordFilter.copySlice;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
 import java.io.IOException;
@@ -315,7 +316,7 @@ public class NewlineFilter implements Filter, Preview, Adaptable {
 			try {
 				hgeol.addLocation(cfgFile);
 			} catch (IOException ex) {
-				HgInternals.getContext(hgRepo).getLog().warn(getClass(), ex, null);
+				HgInternals.getContext(hgRepo).getLog().dump(getClass(), Warn, ex, null);
 			}
 			nativeRepoFormat = hgeol.getSection("repository").get("native");
 			if (nativeRepoFormat == null) {
@@ -338,7 +339,7 @@ public class NewlineFilter implements Filter, Preview, Adaptable {
 				} else if ("BIN".equals(e.getValue())) {
 					binPatterns.add(e.getKey());
 				} else {
-					HgInternals.getContext(hgRepo).getLog().warn(getClass(), "Can't recognize .hgeol entry: %s for %s", e.getValue(), e.getKey());
+					HgInternals.getContext(hgRepo).getLog().dump(getClass(), Warn, "Can't recognize .hgeol entry: %s for %s", e.getValue(), e.getKey());
 				}
 			}
 			if (!crlfPatterns.isEmpty()) {

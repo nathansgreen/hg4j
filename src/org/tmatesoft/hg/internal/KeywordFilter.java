@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Date;
@@ -263,7 +265,7 @@ public class KeywordFilter implements Filter {
 			int csetRev = repo.getFileNode(path).getChangesetRevisionIndex(HgRepository.TIP);
 			return repo.getChangelog().getRevision(csetRev).shortNotation();
 		} catch (HgRuntimeException ex) {
-			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
+			HgInternals.getContext(repo).getLog().dump(getClass(), Error, ex, null);
 			return Nodeid.NULL.shortNotation(); // XXX perhaps, might return anything better? Not sure how hg approaches this. 
 		}
 	}
@@ -272,7 +274,7 @@ public class KeywordFilter implements Filter {
 		try {
 			return getChangeset().user();
 		} catch (HgRuntimeException ex) {
-			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
+			HgInternals.getContext(repo).getLog().dump(getClass(), Error, ex, null);
 			return "";
 		}
 	}
@@ -282,7 +284,7 @@ public class KeywordFilter implements Filter {
 		try {
 			d = getChangeset().date();
 		} catch (HgRuntimeException ex) {
-			HgInternals.getContext(repo).getLog().error(getClass(), ex, null);
+			HgInternals.getContext(repo).getLog().dump(getClass(), Error, ex, null);
 			d = new Date(0l);
 		}
 		return String.format("%tY/%<tm/%<td %<tH:%<tM:%<tS", d);

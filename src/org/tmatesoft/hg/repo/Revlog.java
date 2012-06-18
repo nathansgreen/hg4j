@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgRepository.*;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -432,7 +433,7 @@ abstract class Revlog {
 					
 					int consumed = sink.write(buf);
 					if ((consumed == 0 || consumed != buf.position()) && logFacility != null) {
-						logFacility.warn(getClass(), "Bad data sink when reading revision %d. Reported %d bytes consumed, byt actually read %d", revisionNumber, consumed, buf.position());
+						logFacility.dump(getClass(), Warn, "Bad data sink when reading revision %d. Reported %d bytes consumed, byt actually read %d", revisionNumber, consumed, buf.position());
 					}
 					if (buf.position() == 0) {
 						throw new HgInvalidStateException("Bad sink implementation (consumes no bytes) results in endless loop");

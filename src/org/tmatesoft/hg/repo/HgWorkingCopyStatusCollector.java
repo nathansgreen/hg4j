@@ -19,6 +19,7 @@ package org.tmatesoft.hg.repo;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.tmatesoft.hg.repo.HgRepository.*;
+import static org.tmatesoft.hg.util.LogFacility.Severity.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,7 +34,6 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ManifestRevision;
@@ -362,7 +362,7 @@ public class HgWorkingCopyStatusCollector {
 						}
 					}
 				} catch (HgRuntimeException ex) {
-					repo.getContext().getLog().warn(getClass(), ex, null);
+					repo.getContext().getLog().dump(getClass(), Warn, ex, null);
 					inspector.invalid(fname, ex);
 				}
 			}
@@ -451,7 +451,7 @@ public class HgWorkingCopyStatusCollector {
 						inspector.modified(fname);
 					}
 				} catch (HgRuntimeException ex) {
-					repo.getContext().getLog().warn(getClass(), ex, null);
+					repo.getContext().getLog().dump(getClass(), Warn, ex, null);
 					inspector.invalid(fname, ex);
 				}
 				baseRevNames.remove(fname); // consumed, processed, handled.
@@ -508,7 +508,7 @@ public class HgWorkingCopyStatusCollector {
 								int offset = max(0, x - 4);
 								exp = new String(data, offset, min(data.length - offset, 20));
 							}
-							repo.getContext().getLog().debug(getClass(), "expected >>%s<< but got >>%s<<", exp, new String(xx));
+							repo.getContext().getLog().dump(getClass(), Debug, "expected >>%s<< but got >>%s<<", exp, new String(xx));
 						}
 						sameSoFar = false;
 						break;
@@ -541,7 +541,7 @@ public class HgWorkingCopyStatusCollector {
 				try {
 					is.close();
 				} catch (IOException ex) {
-					repo.getContext().getLog().info(getClass(), ex, null);
+					repo.getContext().getLog().dump(getClass(), Info, ex, null);
 				}
 				is = f.newInputChannel();
 				fb.clear();
@@ -553,7 +553,7 @@ public class HgWorkingCopyStatusCollector {
 			}
 			return check.ultimatelyTheSame();
 		} catch (CancelledException ex) {
-			repo.getContext().getLog().warn(getClass(), ex, "Unexpected cancellation");
+			repo.getContext().getLog().dump(getClass(), Warn, ex, "Unexpected cancellation");
 			return check.ultimatelyTheSame();
 		} catch (IOException ex) {
 			throw new HgInvalidFileException("File comparison failed", ex).setFileName(p);
@@ -562,7 +562,7 @@ public class HgWorkingCopyStatusCollector {
 				try {
 					is.close();
 				} catch (IOException ex) {
-					repo.getContext().getLog().info(getClass(), ex, null);
+					repo.getContext().getLog().dump(getClass(), Info, ex, null);
 				}
 			}
 		}
@@ -612,7 +612,6 @@ public class HgWorkingCopyStatusCollector {
 	 * 
 	 * @return new instance of {@link HgWorkingCopyStatusCollector}, ready to {@link #walk(int, HgStatusInspector) walk} associated working copy 
 	 */
-	@Experimental(reason="Provisional API")
 	public static HgWorkingCopyStatusCollector create(HgRepository hgRepo, Path... paths) {
 		ArrayList<Path> f = new ArrayList<Path>(5);
 		ArrayList<Path> d = new ArrayList<Path>(5);
@@ -644,7 +643,6 @@ public class HgWorkingCopyStatusCollector {
 	 *  
 	 * @return new instance of {@link HgWorkingCopyStatusCollector}, ready to {@link #walk(int, HgStatusInspector) walk} associated working copy
 	 */
-	@Experimental(reason="Provisional API. May add boolean strict argument for those who write smart matchers that can be used in FileWalker")
 	public static HgWorkingCopyStatusCollector create(HgRepository hgRepo, Path.Matcher scope) {
 		FileIterator w = new HgInternals(hgRepo).createWorkingDirWalker(null);
 		FileIterator wf = (scope == null || scope instanceof Path.Matcher.Any) ? w : new FileIteratorFilter(w, scope);
