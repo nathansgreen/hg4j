@@ -437,7 +437,7 @@ public class TestStatus {
 		assertTrue(r.getAdded().isEmpty());
 		assertTrue(r.getRemoved().size() == 2);
 		for (Path p : r.getRemoved()) {
-			assertEquals(p.compareWith(dir), Path.CompareResult.Nested);
+			assertEquals(Path.CompareResult.ImmediateChild, p.compareWith(dir));
 		}
 		assertTrue(r.getUnknown().isEmpty());
 		assertTrue(r.getClean().size() == 1);
