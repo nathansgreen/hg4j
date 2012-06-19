@@ -1,6 +1,6 @@
 def isRelease = false
 
-  version = '0.9.0-SNAPSHOT'
+  version = '0.9.5-SNAPSHOT'
   description = 'Pure Java API and Toolkit for Mercurial DVCS'
   group = 'org.tmatesoft.hg4j'
   
@@ -115,11 +115,43 @@ def isRelease = false
     }
 }
 
+
+ task findOutWhyProjectCopyDoesntWork() << {
+   // files under .hg/ are not copied with copy {}
+   ext.myjar = zipTree( 'test-data/test-repos.jar' )
+   ext.destDir = new File(project.getBuildDir(), "hg4j-tests1/")
+   outputs.dir ext.destDir
+   CopySpec ss = copySpec {
+     from ext.myjar
+     into ext.destDir
+     include '*', '*/.*', '**/.*/*', '**/.*', '**/*', '*/.*/**', '**/**', '.*/**', '**/.hg/*', '**/.hg*'
+     eachFile {element ->
+       println "AAA:$element.relativePath"
+     }
+   }
+   println "includeEmptyDir: $ss.includeEmptyDirs"
+   println "includes: $ss.includes"
+   println "allIncludes: $ss.allIncludes"
+   println "excludes: $ss.excludes"
+   println "allExcludes: $ss.allExcludes"
+ }
+
+
   test {
 // <property name="test-repos-root" value="${java.io.tmpdir}/hg4j-tests/"/>
 // <delete dir="${test-repos-root}" quiet="yes"/>
 // <unjar src="test-data/test-repos.jar" dest="${test-repos-root}"/>
   
-    systemProperties 'hg4j.tests.repos'  : 'value'
+    File testReposRoot = new File(project.getBuildDir(), "hg4j-tests2/");
+    if ( testReposRoot.exists() ) {
+      project.delete(testReposRoot)
+    }
+    testReposRoot.mkdirs();
+    
+    zipTree('test-data/test-repos.jar').visit {element ->
+     element.copyTo(element.relativePath.getFile(testReposRoot))
+    }
+
+    systemProperties 'hg4j.tests.repos'  : testReposRoot
     systemProperties 'hg4j.tests.remote' : 'http://hg.serpentine.com/tutorial/hello'
   }
