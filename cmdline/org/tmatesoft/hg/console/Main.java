@@ -65,6 +65,8 @@ import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
+import org.tmatesoft.hg.repo.ext.MqManager;
+import org.tmatesoft.hg.repo.ext.MqManager.PatchRecord;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.LogFacility;
@@ -96,11 +98,10 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.testMqManager();
 //		m.testRevisionDescendants();
-		for (int i : new int[] {1,2,3,4,5}) {
-//			m.dumpPhases();
-			m.buildFileLog();
-		}
+//		m.dumpPhases();
+//		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
@@ -121,6 +122,25 @@ public class Main {
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
 	}
+	
+	
+	// TODO as junit tests in 'default'
+	// -R ${system_property:user.home}/hg/test-mq
+	private void testMqManager() throws Exception {
+		MqManager mqManager = new MqManager(hgRepo);
+		mqManager.refresh();
+		int i = 1;
+		System.out.println("Complete patch queue:");
+		for (PatchRecord pr : mqManager.getAllKnownPatches()) {
+			System.out.printf("#%-3d %s from %s\n", i++, pr.getName(), pr.getPatchLocation());
+		}
+		i = 1;
+		System.out.println("Patches from the queue already applied to the repo:");
+		for (PatchRecord pr : mqManager.getAppliedPatches()) {
+			System.out.printf("#%-3d %s, known as cset:%s\n", i++, pr.getName(), pr.getRevision().shortNotation());
+		}
+	}
+	
 	
 	// -R {junit-test-repos}/branches-1
 	private void testRevisionDescendants() throws Exception {
