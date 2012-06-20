@@ -130,7 +130,11 @@ public class FileWalker implements FileIterator {
 						continue;
 					}
 					if (isDir) {
-						if (!".hg/".equals(path.toString())) {
+						// do not dive into <repo>/.hg and
+						// if there's .hg/ under f/, it's a nested repository, which shall not be walked into
+						if (".hg".equals(f.getName()) || new File(f, ".hg").isDirectory()) {
+							continue;
+						} else {
 							dirQueue.addLast(f);
 						}
 					} else {

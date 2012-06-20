@@ -641,6 +641,23 @@ public class TestStatus {
 		}
 		assertTrue(sc.getErrors().isEmpty());
 	}
+	
+	@Test
+	public void testNestedRepositoriesAreNotWalkedIn() throws Exception {
+		repo = Configuration.get().find("status-nested-repo");
+		File s2 = new File(repo.getWorkingDir(), "skip/s2/.hg/");
+		File s1 = new File(repo.getWorkingDir(), "s1/.hg/");
+		File s1b = new File(repo.getWorkingDir(), "s1/b");
+		assertTrue("[sanity]", s1.exists() && s1.isDirectory());
+		assertTrue("[sanity]", s1b.exists() && s1b.isFile());
+		assertTrue("[sanity]", s2.exists() && s2.isDirectory());
+		StatusCollector sc = new StatusCollector();
+		new HgStatusCommand(repo).all().execute(sc);
+		List<Path> ignored = sc.get(Ignored);
+		assertEquals(1, ignored.size());
+		assertEquals(Path.create("skip/a"), ignored.get(0));
+		assertTrue(sc.get(Path.create("s1/b")).isEmpty());
+	}
 
 	/*
 	 * With warm-up of previous tests, 10 runs, time in milliseconds
