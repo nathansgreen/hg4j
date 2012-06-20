@@ -31,7 +31,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetHandler;
-import org.tmatesoft.hg.core.HgChangesetHandler.WithCopyHistory;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
@@ -168,6 +167,7 @@ public class TestHistory {
 
 	@Test
 	public void testOriginalTestLogRepo() throws Exception {
+		// tests fro mercurial distribution, test-log.t
 		repo = Configuration.get().find("log-1");
 		HgLogCommand cmd = new HgLogCommand(repo);
 		// funny enough, but hg log -vf a -R c:\temp\hg\test-log\a doesn't work, while --cwd <same> works fine
@@ -177,9 +177,13 @@ public class TestHistory {
 		report("log a", cmd.file("a", false).execute(), true);
 		//
 		changelogParser.reset();
+		// fails with Mercurial 2.2.1, @see http://selenic.com/pipermail/mercurial-devel/2012-February/038249.html
+		// and http://www.selenic.com/hg/rev/60101427d618?rev=
+/* FIXME either fix test to update to revision 2, where a was still present, or change command to fail/report problem
 		eh.run("hg", "log", "--debug", "-f", "a", "--cwd", repo.getLocation());
 		List<HgChangeset> r = cmd.file("a", true).execute();
 		report("log -f a", r, true);
+*/
 		//
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug", "-f", "e", "--cwd", repo.getLocation());
@@ -190,13 +194,29 @@ public class TestHistory {
 		report("log dir/b", cmd.file("dir/b", false).execute(), true);
 		//
 		changelogParser.reset();
-		eh.run("hg", "log", "--debug", "-f", "dir/b", "--cwd", repo.getLocation());
-		report("log -f dir/b", cmd.file("dir/b", true).execute(), false /*#1, below*/);
+//		
+//		Commented out for the same reason as above hg log -f a - newly introduced error message in Mercurial 2.2 
+//		when files are not part of the parent revision
+//		eh.run("hg", "log", "--debug", "-f", "dir/b", "--cwd", repo.getLocation());
+//		report("log -f dir/b", cmd.file("dir/b", true).execute(), false /*#1, below*/);
 		/*
 		 * #1: false works because presently commands dispatches history of the queried file, and then history
 		 * of it's origin. With history comprising of renames only, this effectively gives reversed (newest to oldest) 
 		 * order of revisions. 
 		 */
+
+		// commented tests from above updated to work in 2.2 - update repo to revision where files are present
+		eh.run("hg", "update", "-q", "-r", "2", "--cwd", repo.getLocation());
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-f", "a", "--cwd", repo.getLocation());
+		List<HgChangeset> r = cmd.file("a", true).execute();
+		report("log -f a", r, true);
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", "-f", "dir/b", "--cwd", repo.getLocation());
+		report("log -f dir/b", cmd.file("dir/b", true).execute(), false /*#1, below*/);
+		//
+		// get repo back into clear state, up to the tip
+		eh.run("hg", "update", "-q", "--cwd", repo.getLocation());
 	}
 
 	@Test

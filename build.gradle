@@ -142,7 +142,7 @@ def isRelease = false
 // <delete dir="${test-repos-root}" quiet="yes"/>
 // <unjar src="test-data/test-repos.jar" dest="${test-repos-root}"/>
   
-    File testReposRoot = new File(project.getBuildDir(), "hg4j-tests2/");
+    File testReposRoot = new File(project.getBuildDir(), "hg4j-tests/");
     if ( testReposRoot.exists() ) {
       project.delete(testReposRoot)
     }
