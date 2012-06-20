@@ -109,7 +109,7 @@ def isRelease = false
         mavenDeployer {
             configuration = configurations.deployJars
             repository(url: "http://maven.tmatesoft.com/content/repositories/snapshots/") {
-              authentication(userName: "", password: "")
+              authentication(userName: project.ext.deploySnapshotsRepositoryUser, password: project.ext.deploySnapshotsRepositoryPassword)
             }
         }
     }
