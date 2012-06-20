@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.util;
 
-import org.tmatesoft.hg.internal.Experimental;
 
 /**
  * Nothing but a holder for two values.
@@ -24,7 +23,6 @@ import org.tmatesoft.hg.internal.Experimental;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental
 public final class Pair<T1,T2> {
 	private final T1 value1;
 	private final T2 value2;
