@@ -139,6 +139,13 @@ public class Main {
 		for (PatchRecord pr : mqManager.getAppliedPatches()) {
 			System.out.printf("#%-3d %s, known as cset:%s\n", i++, pr.getName(), pr.getRevision().shortNotation());
 		}
+		boolean allAppliedAreKnown = mqManager.getAllKnownPatches().containsAll(mqManager.getAppliedPatches());
+		System.out.printf("[sanity] allAppliedAreKnown:%b, not yet applied:%d\n", allAppliedAreKnown, mqManager.getQueueSize());
+		Assert.assertTrue(allAppliedAreKnown);
+
+		System.out.printf("Queues: %s, active:%s\n", mqManager.getQueueNames(), mqManager.getActiveQueueName());
+		Assert.assertTrue(mqManager.getQueueNames().size() > 1);
+		Assert.assertTrue(mqManager.getActiveQueueName().length() > 0);
 	}
 	
 	
