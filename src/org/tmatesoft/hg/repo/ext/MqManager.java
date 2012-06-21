@@ -45,11 +45,13 @@ import org.tmatesoft.hg.util.Path;
  */
 public class MqManager {
 	
+	private static final String PATCHES_DIR = "patches";
+
 	private final HgRepository repo;
 	private List<PatchRecord> applied = Collections.emptyList();
 	private List<PatchRecord> allKnown = Collections.emptyList();
 	private List<String> queueNames = Collections.emptyList();
-	private String activeQueue = "patches";
+	private String activeQueue = PATCHES_DIR;
 
 	public MqManager(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -63,27 +65,42 @@ public class MqManager {
 		queueNames = Collections.emptyList();
 		File repoDir = HgInternals.getRepositoryDir(repo);
 		final LogFacility log = HgInternals.getContext(repo).getLog();
-		final File fileStatus = new File(repoDir, "patches/status");
-		final File fileSeries = new File(repoDir, "patches/series");
 		try {
 			File queues = new File(repoDir, "patches.queues");
 			if (queues.isFile()) {
 				LineReader lr = new LineReader(queues, log).trimLines(true).skipEmpty(true);
 				lr.read(new SimpleLineCollector(), queueNames = new LinkedList<String>());
 			}
+			final String queueLocation; // path under .hg to patch queue information (status, series and diff files)
 			File activeQueueFile = new File(repoDir, "patches.queue");
-			ArrayList<String> contents = new ArrayList<String>();
+			// file is there only if it's not default queue ('patches') that is active
 			if (activeQueueFile.isFile()) {
+				ArrayList<String> contents = new ArrayList<String>();
 				new LineReader(activeQueueFile, log).read(new SimpleLineCollector(), contents);
 				if (contents.isEmpty()) {
 					log.warn(getClass(), "File %s with active queue name is empty", activeQueueFile.getName());
-					activeQueue = "patches";
+					activeQueue = PATCHES_DIR;
+					queueLocation = PATCHES_DIR + '/';
 				} else {
 					activeQueue = contents.get(0);
+					queueLocation = PATCHES_DIR + '-' + activeQueue +  '/';
 				}
 			} else {
-				activeQueue = "patches";
+				activeQueue = PATCHES_DIR;
+				queueLocation = PATCHES_DIR + '/';
 			}
+			final Path.Source patchLocation = new Path.Source() {
+				
+				public Path path(String p) {
+					StringBuilder sb = new StringBuilder(64);
+					sb.append(".hg/");
+					sb.append(queueLocation);
+					sb.append(p);
+					return Path.create(sb);
+				}
+			};
+			final File fileStatus = new File(repoDir, queueLocation + "status");
+			final File fileSeries = new File(repoDir, queueLocation + "series");
 			if (fileStatus.isFile()) {
 				new LineReader(fileStatus, log).read(new LineConsumer<List<PatchRecord>>() {
 	
@@ -95,7 +112,7 @@ public class MqManager {
 						}
 						Nodeid nid = Nodeid.fromAscii(line.substring(0, sep));
 						String name = new String(line.substring(sep+1));
-						result.add(new PatchRecord(nid, name, Path.create(".hg/patches/" + name)));
+						result.add(new PatchRecord(nid, name, patchLocation.path(name)));
 						return true;
 					}
 				}, applied = new LinkedList<PatchRecord>());
@@ -112,7 +129,7 @@ public class MqManager {
 				for (String name : knownPatchNames) {
 					PatchRecord pr = name2patch.get(name);
 					if (pr == null) {
-						pr = new PatchRecord(null, name, Path.create(".hg/patches/" + name));
+						pr = new PatchRecord(null, name, patchLocation.path(name));
 					}
 					allKnown.add(pr);
 				}
@@ -152,7 +169,7 @@ public class MqManager {
 	}
 	
 	/**
-	 * All of the patches that MQ knows about for this repository
+	 * All of the patches in the active queue that MQ knows about for this repository
 	 * 
 	 * <p>Clients shall call {@link #refresh()} prior to first use
 	 * @return collection of records in no particular order, may be empty if there are no patches in the queue
