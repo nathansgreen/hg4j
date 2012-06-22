@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.util;
 
-import org.tmatesoft.hg.internal.Experimental;
 
 /**
  * Memory-friendly alternative to HashSet. With slightly worse performance than that of HashSet, uses n * sizeof(HashMap.Entry) less memory 
@@ -26,7 +25,6 @@ import org.tmatesoft.hg.internal.Experimental;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental
 public class DirectHashSet<T> {
 	
 	private Object[] table;

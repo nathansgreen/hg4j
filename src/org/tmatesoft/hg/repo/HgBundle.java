@@ -40,6 +40,7 @@ import org.tmatesoft.hg.util.CancelledException;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
+@Experimental(reason="API is not stable")
 public class HgBundle {
 
 	private final File bundleFile;

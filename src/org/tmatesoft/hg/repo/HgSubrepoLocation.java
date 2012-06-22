@@ -20,17 +20,15 @@ import java.io.File;
 
 import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * WORK IN PROGRESS, DO NOT USE
+ * Descriptor for subrepository location
  * 
  * @see http://mercurial.selenic.com/wiki/Subrepository
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="Work in progress")
 public class HgSubrepoLocation {
 	
 	private final HgRepository owner;

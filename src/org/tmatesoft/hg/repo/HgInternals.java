@@ -139,7 +139,6 @@ public class HgInternals {
 		}
 	}
 	
-	@Experimental(reason="Don't want to expose io.File from HgRepository; need to create FileIterator for working dir. Need a place to keep that code")
 	/*package-local*/ FileIterator createWorkingDirWalker(Path.Matcher workindDirScope) {
 		File repoRoot = repo.getWorkingDir();
 		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), repo.getToRepoPathHelper()));

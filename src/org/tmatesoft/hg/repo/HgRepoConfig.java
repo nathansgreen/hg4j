@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,18 +23,14 @@ import java.util.List;
 import java.util.Map;
 
 import org.tmatesoft.hg.internal.ConfigFile;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.util.Pair;
 
 /**
- * WORK IN PROGRESS
- * 
  * Repository-specific configuration. 
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="WORK IN PROGRESS")
 public final class HgRepoConfig /*implements RepoChangeListener, perhaps, also RepoChangeNotifier? */{
 	/*ease access for inner classes*/ final ConfigFile config;
 
