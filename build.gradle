@@ -3,7 +3,7 @@
  */
 def isRelease = false
 
-  version = '1.0.0'
+  version = '1.1.0-SNAPSHOT'
   description = 'Pure Java API and Toolkit for Mercurial DVCS'
   group = 'org.tmatesoft.hg4j'
   
@@ -111,7 +111,7 @@ def isRelease = false
     repositories {
         mavenDeployer {
             configuration = configurations.deployJars
-            repository(url: "http://maven.tmatesoft.com/content/repositories/releases/") {
+            repository(url: "http://maven.tmatesoft.com/content/repositories/snapshots/") {
               authentication(userName: project.ext.deploySnapshotsRepositoryUser, password: project.ext.deploySnapshotsRepositoryPassword)
             }
         }
