@@ -28,6 +28,7 @@ import java.util.List;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.Preview;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.Adaptable;
@@ -287,33 +288,82 @@ abstract class Revlog {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	@Experimental
-	public void indexWalk(int start, int end, final Revlog.Inspector inspector) throws HgRuntimeException {
+	public final void indexWalk(int start, int end, final Revlog.Inspector inspector) throws HgRuntimeException { 
 		int lastRev = getLastRevision();
-		if (start == TIP) {
-			start = lastRev;
-		}
+		final int _start = start == TIP ? lastRev : start;
 		if (end == TIP) {
 			end = lastRev;
 		}
 		final RevisionInspector revisionInsp = Adaptable.Factory.getAdapter(inspector, RevisionInspector.class, null);
 		final ParentInspector parentInsp = Adaptable.Factory.getAdapter(inspector, ParentInspector.class, null);
-		final Nodeid[] allRevisions = parentInsp == null ? null : new Nodeid[end - start + 1]; 
+		final Nodeid[] allRevisions = parentInsp == null ? null : new Nodeid[end - _start + 1];
+		// next are to build set of parent indexes that are not part of the range iteration
+		// i.e. those parents we need to read separately. See Issue 31 for details.
+		final int[]      firstParentIndexes = parentInsp == null || _start == 0 ? null : new int[allRevisions.length];
+		final int[]     secondParentIndexes = parentInsp == null || _start == 0 ? null : new int[allRevisions.length];
+		final IntMap<Nodeid> missingParents = parentInsp == null || _start == 0 ? null : new IntMap<Nodeid>(16); 
 
-		content.iterate(start, end, false, new RevlogStream.Inspector() {
+		content.iterate(_start, end, false, new RevlogStream.Inspector() {
+			private int i = 0;
 			
-			public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+			public void next(int revisionIndex, int actualLen, int baseRevIndex, int linkRevIndex, int parent1RevIndex, int parent2RevIndex, byte[] nodeid, DataAccess data) {
 				Nodeid nid = Nodeid.fromBinary(nodeid, 0);
 				if (revisionInsp != null) {
-					revisionInsp.next(revisionNumber, nid, linkRevision);
+					revisionInsp.next(revisionIndex, nid, linkRevIndex);
 				}
 				if (parentInsp != null) {
-					Nodeid p1 = parent1Revision == -1 ? Nodeid.NULL : allRevisions[parent1Revision];
-					Nodeid p2 = parent2Revision == -1 ? Nodeid.NULL : allRevisions[parent2Revision];
-					allRevisions[revisionNumber] = nid;
-					parentInsp.next(revisionNumber, nid, parent1Revision, parent2Revision, p1, p2);
+					allRevisions[i] = nid;
+					if (_start > 0) {
+						firstParentIndexes[i] = parent1RevIndex;
+						secondParentIndexes[i] = parent2RevIndex;
+						if (parent1RevIndex < _start && parent1RevIndex >= 0) {
+							missingParents.put(parent1RevIndex, null);
+						}
+						if (parent2RevIndex < _start && parent2RevIndex >= 0) {
+							missingParents.put(parent2RevIndex, null);
+						}
+					} else {
+						Nodeid p1 = parent1RevIndex == -1 ? Nodeid.NULL : allRevisions[parent1RevIndex];
+						Nodeid p2 = parent2RevIndex == -1 ? Nodeid.NULL : allRevisions[parent2RevIndex];
+						parentInsp.next(revisionIndex, allRevisions[i], parent1RevIndex, parent2RevIndex, p1, p2);
+					}
+					i++;
 				}
 			}
 		});
+		if (parentInsp != null && _start > 0) {
+			assert missingParents.size() > 0; // in fact, more relaxed than assert. rather 'assume'
+			// TODO int[] IntMap#keys() or even sort of iterator that can modify values
+			for (int k = missingParents.firstKey(), l = missingParents.lastKey(); k <= l; k++) {
+				if (missingParents.containsKey(k)) {
+					Nodeid nid = getRepo().getChangelog().getRevision(k);
+					missingParents.put(k, nid);
+				}
+			}
+
+			for (int i = 0, revNum = _start; i < allRevisions.length; i++, revNum++) {
+				int riP1 = firstParentIndexes[i];
+				int riP2 = secondParentIndexes[i];
+				Nodeid p1, p2;
+				p1 = p2 = Nodeid.NULL;
+				if (riP1 >= _start) {
+					// p1 of revNum's revision is out of iterated range
+					// (don't check for riP1<end as I assume parents come prior to children in the changelog)
+					p1 = allRevisions[riP1 - start];
+				} else if (riP1 != -1) {
+					assert riP1 >=0 && riP1 < _start;
+					p1 = missingParents.get(riP1);
+				}
+				// same for Pp2
+				if (riP2 >= _start) {
+					p2 = allRevisions[riP2 - start];
+				} else if (riP2 != -1) {
+					assert riP2 >= 0 && riP2 < _start;
+					p2 = missingParents.get(riP2);
+				}
+				parentInsp.next(revNum, allRevisions[i], riP1, riP2, p1, p2);
+			}
+		}
 	}
 
 	/**

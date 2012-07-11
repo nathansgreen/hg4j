@@ -56,6 +56,8 @@ public class HgStatusCollector {
 	private final Pool<Path> cacheFilenames;
 	private final ManifestRevision emptyFakeState;
 	private Path.Matcher scope = new Path.Matcher.Any();
+	// @see #detectCopies()
+	private boolean detectCopies = true;
 	
 
 	public HgStatusCollector(HgRepository hgRepo) {
@@ -182,6 +184,30 @@ public class HgStatusCollector {
 		// do not assign null, ever
 		scope = scopeMatcher == null ? new Path.Matcher.Any() : scopeMatcher;
 	}
+
+	/**
+	 * Select whether Collector shall tell "added-new" from "added-by-copy/rename" files.
+	 * This is analogous to '-C' switch of 'hg status' command.
+	 * 
+	 * <p>With copy detection turned off, files continue be reported as plain 'added' files.
+	 * 
+	 * <p>By default, copy detection is <em>on</em>, as it's reasonably cheap. However,
+	 * in certain scenarios it may be reasonable to turn it off, for example when it's a merge
+	 * of two very different branches and there are a lot of files added/moved.
+	 *  
+	 * Another legitimate reason to set detection to off if you're lazy to 
+	 * implement {@link HgStatusInspector#copied(Path, Path)} ;)
+	 * 
+	 * @param detect <code>true</code> if copies detection is desirable
+	 */
+	public void detectCopies(boolean detect) {
+		// cpython, revision:72161, p1:72159, p2:72160
+		// p2 comes from another branch with 321 file added (looks like copied/moved, however, the isCopy
+		// record present only for couple of them). With 2,5 ms per isCopy() operation, almost a second
+		// is spent detecting origins (according to Marc, of little use in this scenario, as it's second parent 
+		// in the merge) - in fact, most of the time of the status operation
+		detectCopies = detect;
+	}
 	
 	/**
 	 * 'hg status --change REV' command counterpart.
@@ -290,7 +316,7 @@ public class HgStatusCollector {
 			} else {
 				try {
 					Path copyTarget = r2fname;
-					Path copyOrigin = getOriginIfCopy(repo, copyTarget, r1Files, rev1);
+					Path copyOrigin = detectCopies ? getOriginIfCopy(repo, copyTarget, r1Files, rev1) : null;
 					if (copyOrigin != null) {
 						inspector.copied(getPathPool().mangle(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
 					} else {

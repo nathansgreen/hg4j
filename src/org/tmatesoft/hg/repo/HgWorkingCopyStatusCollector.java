@@ -385,29 +385,31 @@ public class HgWorkingCopyStatusCollector {
 		Nodeid nid1 = collect.nodeid(fname);
 		HgManifest.Flags flags = collect.flags(fname);
 		HgDirstate.Record r;
+		final HgDirstate ds = getDirstateImpl();
 		if (nid1 == null) {
-			// normal: added?
-			// added: not known at the time of baseRevision, shall report
-			// merged: was not known, report as added?
-			if ((r = getDirstateImpl().checkNormal(fname)) != null) {
+			// not known at the time of baseRevision:
+			// normal, added, merged: either added or copied since base revision.
+			// removed: nothing to report, 
+			if (ds.checkNormal(fname) != null || ds.checkMerged(fname) != null) {
 				try {
 					Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, baseRevNames, baseRevision);
 					if (origin != null) {
 						inspector.copied(getPathPool().mangle(origin), fname);
 						return;
 					}
+					// fall-through, report as added
 				} catch (HgInvalidFileException ex) {
 					// report failure and continue status collection
 					inspector.invalid(fname, ex);
 				}
-			} else if ((r = getDirstateImpl().checkAdded(fname)) != null) {
+			} else if ((r = ds.checkAdded(fname)) != null) {
 				if (r.copySource() != null && baseRevNames.contains(r.copySource())) {
-					baseRevNames.remove(r.copySource()); // XXX surely I shall not report rename source as Removed?
+					baseRevNames.remove(r.copySource()); // FIXME likely I shall report rename source as Removed, same as above for Normal?
 					inspector.copied(r.copySource(), fname);
 					return;
 				}
 				// fall-through, report as added
-			} else if (getDirstateImpl().checkRemoved(fname) != null) {
+			} else if (ds.checkRemoved(fname) != null) {
 				// removed: removed file was not known at the time of baseRevision, and we should not report it as removed
 				return;
 			}
@@ -415,7 +417,7 @@ public class HgWorkingCopyStatusCollector {
 		} else {
 			// was known; check whether clean or modified
 			Nodeid nidFromDirstate = getDirstateParentManifest().nodeid(fname);
-			if ((r = getDirstateImpl().checkNormal(fname)) != null && nid1.equals(nidFromDirstate)) {
+			if ((r = ds.checkNormal(fname)) != null && nid1.equals(nidFromDirstate)) {
 				// regular file, was the same up to WC initialization. Check if was modified since, and, if not, report right away
 				// same code as in #checkLocalStatusAgainstFile
 				final boolean timestampEqual = f.lastModified() == r.modificationTime(), sizeEqual = r.size() == f.length();
@@ -439,7 +441,7 @@ public class HgWorkingCopyStatusCollector {
 				// or nodeid in dirstate is different, but local change might have brought it back to baseRevision state)
 				// FALL THROUGH
 			}
-			if (r != null || (r = getDirstateImpl().checkMerged(fname)) != null || (r = getDirstateImpl().checkAdded(fname)) != null) {
+			if (r != null || (r = ds.checkMerged(fname)) != null || (r = ds.checkAdded(fname)) != null) {
 				try {
 					// check actual content to see actual changes
 					// when added - seems to be the case of a file added once again, hence need to check if content is different

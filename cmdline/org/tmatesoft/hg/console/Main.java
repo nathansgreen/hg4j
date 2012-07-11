@@ -45,7 +45,9 @@ import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
+import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
+import org.tmatesoft.hg.internal.RevisionDescendants;
 import org.tmatesoft.hg.internal.StreamLogFacility;
 import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -59,12 +61,16 @@ import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgMergeState;
+import org.tmatesoft.hg.repo.HgParentChildMap;
+import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
+import org.tmatesoft.hg.repo.ext.MqManager;
+import org.tmatesoft.hg.repo.ext.MqManager.PatchRecord;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgRevisionMap;
 import org.tmatesoft.hg.util.FileWalker;
@@ -102,6 +108,9 @@ public class Main {
 //		m.checkWalkFileRevisions();
 //		m.checkSubProgress();
 //		m.checkFileFlags();
+		m.testMqManager();
+//		m.testRevisionDescendants();
+//		m.dumpPhases();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -124,6 +133,82 @@ public class Main {
 //		m.bunchOfTests();
 	}
 	
+	
+	// TODO as junit tests in 'default'
+	// -R ${system_property:user.home}/hg/test-mq
+	private void testMqManager() throws Exception {
+		MqManager mqManager = new MqManager(hgRepo);
+		mqManager.refresh();
+		int i = 1;
+		System.out.println("Complete patch queue:");
+		for (PatchRecord pr : mqManager.getAllKnownPatches()) {
+			System.out.printf("#%-3d %s from %s\n", i++, pr.getName(), pr.getPatchLocation());
+		}
+		i = 1;
+		System.out.println("Patches from the queue already applied to the repo:");
+		for (PatchRecord pr : mqManager.getAppliedPatches()) {
+			System.out.printf("#%-3d %s, known as cset:%s\n", i++, pr.getName(), pr.getRevision().shortNotation());
+		}
+		boolean allAppliedAreKnown = mqManager.getAllKnownPatches().containsAll(mqManager.getAppliedPatches());
+		System.out.printf("[sanity] allAppliedAreKnown:%b, not yet applied:%d\n", allAppliedAreKnown, mqManager.getQueueSize());
+		Assert.assertTrue(allAppliedAreKnown);
+
+		System.out.printf("Queues: %s, active:%s\n", mqManager.getQueueNames(), mqManager.getActiveQueueName());
+		Assert.assertTrue(mqManager.getQueueNames().size() > 1);
+		Assert.assertTrue(mqManager.getActiveQueueName().length() > 0);
+	}
+	
+	
+	// -R {junit-test-repos}/branches-1
+	private void testRevisionDescendants() throws Exception {
+		int[] roots = new int[] {0, 1, 2, 3, 4, 5};
+		RevisionDescendants[] result = new RevisionDescendants[roots.length];
+		for (int i = 0; i < roots.length; i++) {
+			result[i] = new RevisionDescendants(hgRepo, roots[i]);
+			result[i].build();
+		}
+		for (int i = 0; i < roots.length; i++) {
+			System.out.printf("For root %d descendats are:", roots[i]);
+			for (int j = roots[i], x = hgRepo.getChangelog().getLastRevision(); j <= x; j++) {
+				if (result[i].isDescendant(j)) {
+					System.out.printf("%3d ", j);
+				}
+			}
+			System.out.printf(", isEmpty:%b\n", !result[i].hasDescendants());
+		}
+	}
+	
+	// -R ${system_property:user.home}/hg/test-phases/
+	// TODO as junit test
+	private void dumpPhases() throws Exception {
+		HgPhase[] result1 = new HgPhase[hgRepo.getChangelog().getRevisionCount()];
+		HgPhase[] result2 = new HgPhase[hgRepo.getChangelog().getRevisionCount()];
+		final long start1 = System.nanoTime();
+		HgParentChildMap<HgChangelog> pw = new HgParentChildMap<HgChangelog>(hgRepo.getChangelog());
+		pw.init();
+		final long start1bis = System.nanoTime();
+		PhasesHelper ph = new PhasesHelper(hgRepo, pw);
+		for (int i = 0, l = hgRepo.getChangelog().getLastRevision(); i <= l; i++) {
+			result1[i] = ph.getPhase(i, null);
+		}
+		final long start2 = System.nanoTime();
+		ph = new PhasesHelper(hgRepo);
+		for (int i = 0, l = hgRepo.getChangelog().getLastRevision(); i <= l; i++) {
+			result2[i] = ph.getPhase(i, null);
+		}
+		final long end = System.nanoTime();
+		System.out.printf("With ParentWalker(simulates log command for whole repo): %d ms (pw init: %,d ns)\n", (start2 - start1)/1000, start1bis - start1);
+		printPhases(result1);
+		System.out.printf("Without ParentWalker (simulates log command for single file): %d ms\n", (end - start2)/1000);
+		printPhases(result2);
+	}
+	
+	private static void printPhases(HgPhase[] phase) {
+		for (int i = 0; i < phase.length; i++) {
+			System.out.printf("rev:%3d, phase:%s\n", i, phase[i]);
+		}
+	}
+
 	// hg4j repo
 	public void checkWalkFileRevisions() throws Exception {
 		//  hg --debug manifest --rev 150 | grep cmdline/org/tmatesoft/hg/console/Main.java
@@ -131,6 +216,7 @@ public class Main {
 	}
 	
 	// no repo
+	// FIXME as test, perhaps in TestAuxUtilities
 	private void checkSubProgress() {
 		ProgressSupport ps = new ProgressSupport() {
 			private int units;
@@ -176,7 +262,9 @@ public class Main {
 		System.out.println("File: " + file.getFlags(TIP));
 	}
 	
+
 	private void buildFileLog() throws Exception {
+		final long start = System.nanoTime();
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		cmd.file("file1", false);
 		cmd.execute(new HgChangesetTreeHandler() {
@@ -193,7 +281,7 @@ public class Main {
 				final boolean isJoin = !parents.first().isNull() && !parents.second().isNull();
 				final boolean isFork = entry.children().size() > 1;
 				final HgChangeset cset = entry.changeset();
-				System.out.printf("%d:%s - %s\n", cset.getRevisionIndex(), cset.getNodeid().shortNotation(), cset.getComment());
+				System.out.printf("%d:%s - %s (%s)\n", cset.getRevisionIndex(), cset.getNodeid().shortNotation(), cset.getComment(), cset.getPhase());
 				if (!isJoin && !isFork && !entry.children().isEmpty()) {
 					System.out.printf("\t=> %s\n", sb);
 				}
@@ -216,6 +304,8 @@ public class Main {
 				}
 			}
 		});
+		final long end = System.nanoTime();
+		System.out.printf("buildFileLog: %,d ms\n", (end-start)/1000);
 	}
 
 	private void buildFileLogOld() throws Exception {

@@ -21,8 +21,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -41,26 +43,37 @@ import org.tmatesoft.hg.util.Path;
  * @author TMate Software Ltd.
  */
 public class HgChangeset implements Cloneable {
-	private final HgStatusCollector statusHelper;
-	private final Path.Source pathHelper;
 
-	private HgParentChildMap<HgChangelog> parentHelper;
-
-	//
+	// these get initialized
 	private RawChangeset changeset;
+	private int revNumber;
 	private Nodeid nodeid;
 
-	//
+	class ShareDataStruct {
+		ShareDataStruct(HgStatusCollector statusCollector, Path.Source pathFactory) {
+			statusHelper = statusCollector;
+			pathHelper = pathFactory;
+		}
+		public final HgStatusCollector statusHelper;
+		public final Path.Source pathHelper;
+
+		public HgParentChildMap<HgChangelog> parentHelper;
+		public PhasesHelper phaseHelper;
+	};
+
+	// Helpers/utilities shared among few instances of HgChangeset
+	private final ShareDataStruct shared;
+
+	// these are built on demand
 	private List<HgFileRevision> modifiedFiles, addedFiles;
 	private List<Path> deletedFiles;
-	private int revNumber;
 	private byte[] parent1, parent2;
+	
 
 	// XXX consider CommandContext with StatusCollector, PathPool etc. Commands optionally get CC through a cons or create new
 	// and pass it around
 	/*package-local*/HgChangeset(HgStatusCollector statusCollector, Path.Source pathFactory) {
-		statusHelper = statusCollector;
-		pathHelper = pathFactory;
+		shared = new ShareDataStruct(statusCollector, pathFactory);
 	}
 
 	/*package-local*/ void init(int localRevNumber, Nodeid nid, RawChangeset rawChangeset) {
@@ -70,16 +83,16 @@ public class HgChangeset implements Cloneable {
 		modifiedFiles = addedFiles = null;
 		deletedFiles = null;
 		parent1 = parent2 = null;
-		// keep references to parentHelper, statusHelper and pathHelper
+		// keep references to shared (and everything in there: parentHelper, statusHelper, phaseHelper and pathHelper)
 	}
 
 	/*package-local*/ void setParentHelper(HgParentChildMap<HgChangelog> pw) {
-		parentHelper = pw;
-		if (parentHelper != null) {
-			if (parentHelper.getRepo() != statusHelper.getRepo()) {
+		if (pw != null) {
+			if (pw.getRepo() != shared.statusHelper.getRepo()) {
 				throw new IllegalArgumentException();
 			}
 		}
+		shared.parentHelper = pw;
 	}
 
 	/**
@@ -157,7 +170,7 @@ public class HgChangeset implements Cloneable {
 		// what #files() gives).
 		ArrayList<Path> rv = new ArrayList<Path>(changeset.files().size());
 		for (String name : changeset.files()) {
-			rv.add(pathHelper.path(name));
+			rv.add(shared.pathHelper.path(name));
 		}
 		return rv;
 	}
@@ -211,14 +224,14 @@ public class HgChangeset implements Cloneable {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public Nodeid getFirstParentRevision() throws HgRuntimeException {
-		if (parentHelper != null) {
-			return parentHelper.safeFirstParent(nodeid);
+		if (shared.parentHelper != null) {
+			return shared.parentHelper.safeFirstParent(nodeid);
 		}
 		// read once for both p1 and p2
 		if (parent1 == null) {
 			parent1 = new byte[20];
 			parent2 = new byte[20];
-			statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
+			getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
 		}
 		return Nodeid.fromBinary(parent1, 0);
 	}
@@ -228,15 +241,34 @@ public class HgChangeset implements Cloneable {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public Nodeid getSecondParentRevision() throws HgRuntimeException {
-		if (parentHelper != null) {
-			return parentHelper.safeSecondParent(nodeid);
+		if (shared.parentHelper != null) {
+			return shared.parentHelper.safeSecondParent(nodeid);
 		}
 		if (parent2 == null) {
 			parent1 = new byte[20];
 			parent2 = new byte[20];
-			statusHelper.getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
+			getRepo().getChangelog().parents(revNumber, new int[2], parent1, parent2);
 		}
 		return Nodeid.fromBinary(parent2, 0);
+	}
+
+	/**	
+	 * Tells the phase this changeset belongs to.
+	 * @return one of {@link HgPhase} values
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public HgPhase getPhase() throws HgRuntimeException {
+		if (shared.phaseHelper == null) {
+			// XXX would be handy to obtain ProgressSupport (perhaps, from statusHelper?)
+			// and pass it to #init(), so that  there could be indication of file being read and cache being built
+			synchronized (shared) {
+				// ensure field is initialized only once 
+				if (shared.phaseHelper == null) {
+					shared.phaseHelper = new PhasesHelper(getRepo(), shared.parentHelper);
+				}
+			}
+		}
+		return shared.phaseHelper.getPhase(this);
 	}
 
 	/**
@@ -252,6 +284,10 @@ public class HgChangeset implements Cloneable {
 			throw new InternalError(ex.toString());
 		}
 	}
+	
+	private HgRepository getRepo() {
+		return shared.statusHelper.getRepo();
+	}
 
 	private /*synchronized*/ void initFileChanges() throws HgRuntimeException {
 		ArrayList<Path> deleted = new ArrayList<Path>();
@@ -259,12 +295,12 @@ public class HgChangeset implements Cloneable {
 		ArrayList<HgFileRevision> added = new ArrayList<HgFileRevision>();
 		HgStatusCollector.Record r = new HgStatusCollector.Record();
 		try {
-			statusHelper.change(revNumber, r);
+			shared.statusHelper.change(revNumber, r);
 		} catch (CancelledException ex) {
 			// Record can't cancel
 			throw new HgInvalidStateException("Internal error");
 		}
-		final HgRepository repo = statusHelper.getRepo();
+		final HgRepository repo = getRepo();
 		for (Path s : r.getModified()) {
 			Nodeid nid = r.nodeidAfterChange(s);
 			if (nid == null) {

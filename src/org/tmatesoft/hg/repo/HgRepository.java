@@ -97,9 +97,9 @@ public final class HgRepository {
 	private final File workingDir; // .hg/../
 	private final String repoLocation;
 	private final DataAccessProvider dataAccess;
-	private final PathRewrite normalizePath;
-	private final PathRewrite dataPathHelper;
-	private final PathRewrite repoPathHelper;
+	private final PathRewrite normalizePath; // normalized slashes but otherwise regular file names
+	private final PathRewrite dataPathHelper; // access to file storage area (usually under .hg/store/data/), with filenames mangled  
+	private final PathRewrite repoPathHelper; // access to system files
 	private final SessionContext sessionContext;
 
 	private HgChangelog changelog;

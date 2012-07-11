@@ -241,27 +241,43 @@ public class TestAuxUtilities {
 				Assert.assertEquals(fileNode.getRevision(localRevision), revision);
 			}
 		});
-		fileNode.indexWalk(0, TIP, new HgDataFile.ParentInspector() {
-			int i = 0;
-			Nodeid[] all = new Nodeid[fileNode.getRevisionCount()];
+		class ParentInspectorCheck implements HgDataFile.ParentInspector {
+			private int i, c;
+			private Nodeid[] all;
+			private final int start;
+			
+			public ParentInspectorCheck(int start, int total) {
+				this.start = start;
+				i = start; // revision index being iterated
+				c = 0; // index/counter of visited revisions
+				all = new Nodeid[total];
+			}
 
 			public void next(int localRevision, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
 				Assert.assertEquals(i++, localRevision);
-				all[localRevision] = revision;
+				all[c++] = revision;
 				Assert.assertNotNull(revision);
 				Assert.assertFalse(localRevision == 0 && (parent1 != -1 || parent2 != -1));
 				Assert.assertFalse(localRevision > 0 && parent1 == -1 && parent2 == -1);
 				if (parent1 != -1) {
 					Assert.assertNotNull(nidParent1);
-					// deliberately ==, not asserEquals to ensure same instance
-					Assert.assertTrue(nidParent1 == all[parent1]);  
+					if (parent1 >= start) {
+						// deliberately ==, not asserEquals to ensure same instance
+						Assert.assertTrue(nidParent1 == all[parent1-start]);  
+					}
 				}
 				if (parent2 != -1) {
 					Assert.assertNotNull(nidParent2);
-					Assert.assertTrue(nidParent2 == all[parent2]);  
+					if (parent2 >= start) {
+						Assert.assertTrue(nidParent2 == all[parent2-start]);
+					}
 				}
 			}
-		});
+		}; 
+		fileNode.indexWalk(0, TIP, new ParentInspectorCheck(0, fileNode.getRevisionCount()));
+		assert fileNode.getRevisionCount() > 2 : "prereq"; // need at least few revisions
+		// there used to be a defect in #walk impl, assumption all parents come prior to a revision
+		fileNode.indexWalk(1, 3, new ParentInspectorCheck(1, 3));
 	}
 
 	@Test

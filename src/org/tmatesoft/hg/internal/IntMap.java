@@ -24,6 +24,7 @@ import java.util.NoSuchElementException;
 
 /**
  * Map implementation that uses plain int keys and performs with log n effectiveness.
+ * May contain null values
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
