@@ -270,9 +270,12 @@ public class HgWorkingCopyStatusCollector {
 			}
 		}
 		if (collect != null) {
+			// perhaps, this code shall go after processing leftovers of knownEntries, below
+			// as it's sort of last resort - what to do with otherwise unprocessed base revision files
 			for (Path fromBase : baseRevFiles) {
 				if (repoWalker.inScope(fromBase)) {
 					inspector.removed(fromBase);
+					processed.add(fromBase);
 					cs.checkCancelled();
 				}
 			}
@@ -404,7 +407,8 @@ public class HgWorkingCopyStatusCollector {
 				}
 			} else if ((r = ds.checkAdded(fname)) != null) {
 				if (r.copySource() != null && baseRevNames.contains(r.copySource())) {
-					baseRevNames.remove(r.copySource()); // FIXME likely I shall report rename source as Removed, same as above for Normal?
+					// shall not remove rename source from baseRevNames, as the source
+					// likely needs to be reported as Removed as well
 					inspector.copied(r.copySource(), fname);
 					return;
 				}

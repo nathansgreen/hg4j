@@ -739,6 +739,9 @@ public class TestStatus {
 			Collections.sort(sl1);
 			ArrayList<T> sl2 = new ArrayList<T>(l2);
 			Collections.sort(sl2);
+			if (!sl1.isEmpty() && !sl2.isEmpty()) {
+				what = what + ", diff:" + difference(sl1, sl2);
+			}
 			errorCollector.checkThat(what, sl1, equalTo(sl2));
 		}
 

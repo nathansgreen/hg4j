@@ -318,7 +318,7 @@ public class TestAuxUtilities {
 		}
 		*/
 		for (int i = 0; i < roots.length; i++) {
-			System.out.printf("%s & %s = 0x%x\n", toBinaryString(descendantBitset[i]), toBinaryString(~(1<<roots[i])), descendantBitset[i] & ~(1<<roots[i]));
+//			System.out.printf("%s & %s = 0x%x\n", toBinaryString(descendantBitset[i]), toBinaryString(~(1<<roots[i])), descendantBitset[i] & ~(1<<roots[i]));
 			if ((descendantBitset[i] & ~(1<<roots[i])) != 0) {
 				assertTrue(result[i].hasDescendants());
 			} else {
