@@ -1,6 +1,9 @@
+/*
+ * Copyright (c) 2012 TMate Software Ltd
+ */
 def isRelease = false
 
-  version = '0.9.5-SNAPSHOT'
+  version = '1.0.0'
   description = 'Pure Java API and Toolkit for Mercurial DVCS'
   group = 'org.tmatesoft.hg4j'
   
@@ -108,7 +111,7 @@ def isRelease = false
     repositories {
         mavenDeployer {
             configuration = configurations.deployJars
-            repository(url: "http://maven.tmatesoft.com/content/repositories/snapshots/") {
+            repository(url: "http://maven.tmatesoft.com/content/repositories/releases/") {
               authentication(userName: project.ext.deploySnapshotsRepositoryUser, password: project.ext.deploySnapshotsRepositoryPassword)
             }
         }

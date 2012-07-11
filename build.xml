@@ -27,7 +27,7 @@
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
 	<property name="ver.qualifier" value="" />
-	<property name="version.lib" value="0.9.5" />
+	<property name="version.lib" value="1.0.0" />
 	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
 	<property name="compile-with-debug" value="yes"/>
 
@@ -145,6 +145,7 @@
 		</javac>
 		<jar destfile="${hg4j-tests.jar}">
 			<fileset dir="bin" includes="org/tmatesoft/hg/test/**"/>
+			<fileset dir="bin" includes="org/tmatesoft/hg/tools/**"/>
 			<fileset file="COPYING"/>
 			<!-- XXX perhaps, shall include test-data as well? -->
 		</jar>

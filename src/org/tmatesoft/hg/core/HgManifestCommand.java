@@ -103,14 +103,6 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 		}
 	}
 
-	/**
-	 * @deprecated confusing whether it's changeset or manifest own revision index in use, use {@link #changeset(int)} instead
-	 */
-	@Deprecated
-	public HgManifestCommand revision(int rev) {
-		return changeset(rev);
-	}
-	
 	public HgManifestCommand dirs(boolean include) {
 		// XXX whether directories with directories only are include or not
 		// now lists only directories with files

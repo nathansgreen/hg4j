@@ -179,11 +179,11 @@ public class TestHistory {
 		changelogParser.reset();
 		// fails with Mercurial 2.2.1, @see http://selenic.com/pipermail/mercurial-devel/2012-February/038249.html
 		// and http://www.selenic.com/hg/rev/60101427d618?rev=
-/* FIXME either fix test to update to revision 2, where a was still present, or change command to fail/report problem
-		eh.run("hg", "log", "--debug", "-f", "a", "--cwd", repo.getLocation());
-		List<HgChangeset> r = cmd.file("a", true).execute();
-		report("log -f a", r, true);
-*/
+		// fix for the test (replacement) is available below  
+//		eh.run("hg", "log", "--debug", "-f", "a", "--cwd", repo.getLocation());
+//		List<HgChangeset> r = cmd.file("a", true).execute();
+//		report("log -f a", r, true);
+
 		//
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug", "-f", "e", "--cwd", repo.getLocation());

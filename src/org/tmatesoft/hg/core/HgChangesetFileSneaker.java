@@ -166,13 +166,6 @@ public final class HgChangesetFileSneaker {
 	}
 	
 	/**
-	 * @deprecated use {@link #getCheckResult()} instead
-	 */
-	@Deprecated
-	public Outcome getCheckStatus() {
-		return getCheckResult();
-	}
-	/**
 	 * Re-get latest check status object
 	 */
 	public Outcome getCheckResult() {

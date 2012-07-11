@@ -32,7 +32,6 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RevlogStream;
@@ -235,7 +234,6 @@ public final class HgRepository {
 		return branches;
 	}
 
-	@Experimental(reason="Perhaps, shall not cache instance, and provide loadMergeState as it may change often")
 	public HgMergeState getMergeState() {
 		if (mergeState == null) {
 			mergeState = new HgMergeState(this);
