@@ -95,6 +95,13 @@ public class RevisionDescendants {
 		return descendants.nextSetBit(rootRevIndex+1) != -1;
 	}
 
+	/**
+	 * Tells whether specified revision is on a descent line from the root revision.
+	 * <p>NOTE, root revision itself is considered to be its own descendant.
+	 * 
+	 * @param revisionIndex revision index to check, shall pass {@link #isCandidate(int)}
+	 * @return <code>true</code> if revision is descendant of or is the same as root revision
+	 */
 	public boolean isDescendant(int revisionIndex) {
 		assert isCandidate(revisionIndex);
 		int ix = revisionIndex - rootRevIndex;

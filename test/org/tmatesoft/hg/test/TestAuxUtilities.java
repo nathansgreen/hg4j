@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.test;
 
+import static java.lang.Integer.toBinaryString;
+import static org.junit.Assert.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.util.Path.CompareResult.*;
 
@@ -30,6 +32,7 @@ import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.PathScope;
+import org.tmatesoft.hg.internal.RevisionDescendants;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -63,14 +66,14 @@ public class TestAuxUtilities {
 		String[] result = initial.clone();
 		ah.sort(result);
 		String[] restored = restore(result, ah.getReverse());
-		Assert.assertArrayEquals(initial, restored);
+		assertArrayEquals(initial, restored);
 		//
 		// few elements are on the right place from the very start and do not shift during sort.
 		// make sure for them we've got correct reversed indexes as well
 		initial = new String[] {"d", "h", "c", "b", "k", "i", "a", "r", "e", "w" };
 		ah.sort(result = initial.clone());
 		restored = restore(result, ah.getReverse());
-		Assert.assertArrayEquals(initial, restored);
+		assertArrayEquals(initial, restored);
 	}
 
 	private static String[] restore(String[] sorted, int[] sortReverse) {
@@ -236,9 +239,9 @@ public class TestAuxUtilities {
 			int i = 0;
 
 			public void next(int localRevision, Nodeid revision, int linkedRevision) {
-				Assert.assertEquals(i++, localRevision);
-				Assert.assertEquals(fileNode.getChangesetRevisionIndex(localRevision), linkedRevision);
-				Assert.assertEquals(fileNode.getRevision(localRevision), revision);
+				assertEquals(i++, localRevision);
+				assertEquals(fileNode.getChangesetRevisionIndex(localRevision), linkedRevision);
+				assertEquals(fileNode.getRevision(localRevision), revision);
 			}
 		});
 		class ParentInspectorCheck implements HgDataFile.ParentInspector {
@@ -254,11 +257,11 @@ public class TestAuxUtilities {
 			}
 
 			public void next(int localRevision, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
-				Assert.assertEquals(i++, localRevision);
+				assertEquals(i++, localRevision);
 				all[c++] = revision;
-				Assert.assertNotNull(revision);
-				Assert.assertFalse(localRevision == 0 && (parent1 != -1 || parent2 != -1));
-				Assert.assertFalse(localRevision > 0 && parent1 == -1 && parent2 == -1);
+				assertNotNull(revision);
+				assertFalse(localRevision == 0 && (parent1 != -1 || parent2 != -1));
+				assertFalse(localRevision > 0 && parent1 == -1 && parent2 == -1);
 				if (parent1 != -1) {
 					Assert.assertNotNull(nidParent1);
 					if (parent1 >= start) {
@@ -279,6 +282,61 @@ public class TestAuxUtilities {
 		// there used to be a defect in #walk impl, assumption all parents come prior to a revision
 		fileNode.indexWalk(1, 3, new ParentInspectorCheck(1, 3));
 	}
+
+	/*
+	 * This test checks not only RevisionDescendants class, but also
+	 * Revlog.indexWalk implementation defect, aka:
+	 * Issue 31: Revlog#walk doesn't handle ParentInspector correctly with start revision other than 0, fails with AIOOBE
+	 */
+	@Test
+	public void testRevisionDescendants() throws Exception {
+		HgRepository hgRepo = Configuration.get().find("branches-1");
+		int[] roots = new int[] {0, 1, 2, 3, 4, 5};
+		// 0: all revisions are descendants, 17 total.
+		// 1: 2, 4, 7, 8, 9
+		// 2: 7, 8, 9 
+		// 3: 5,6, 10-16
+		// 4: no children
+		// 5: 6, 10-16
+		// array values represent bit mask, '1' for revision that shall re reported as descendant
+		// least significant bit is revision 0, and so on, so that 1<<revision points to bit in the bitmask
+		int[] descendantBitset = new int[] { 0x01FFFF, 0x0396, 0x0384, 0x01FC68, 0x010, 0x01FC60 };
+		RevisionDescendants[] result = new RevisionDescendants[roots.length];
+		for (int i = 0; i < roots.length; i++) {
+			result[i] = new RevisionDescendants(hgRepo, roots[i]);
+			result[i].build();
+		}
+		/*
+		for (int i = 0; i < roots.length; i++) {
+			System.out.printf("For root %d descendats are:", roots[i]);
+			for (int j = roots[i], x = hgRepo.getChangelog().getLastRevision(); j <= x; j++) {
+				if (result[i].isDescendant(j)) {
+					System.out.printf("%3d ", j);
+				}
+			}
+			System.out.printf(", isEmpty:%b\n", !result[i].hasDescendants());
+		}
+		*/
+		for (int i = 0; i < roots.length; i++) {
+			System.out.printf("%s & %s = 0x%x\n", toBinaryString(descendantBitset[i]), toBinaryString(~(1<<roots[i])), descendantBitset[i] & ~(1<<roots[i]));
+			if ((descendantBitset[i] & ~(1<<roots[i])) != 0) {
+				assertTrue(result[i].hasDescendants());
+			} else {
+				assertFalse(result[i].hasDescendants());
+			}
+			for (int j = roots[i], x = hgRepo.getChangelog().getLastRevision(); j <= x; j++) {
+				int bit = 1<<j;
+				boolean shallBeDescendant = (descendantBitset[i] & bit) != 0;
+				String m = String.format("Check rev %d from root %d. Bit %s in %s, shallBeDescendant:%b", j, roots[i], toBinaryString(bit), toBinaryString(descendantBitset[i]), shallBeDescendant);
+				if (result[i].isDescendant(j)) {
+					assertTrue(m, shallBeDescendant);
+				} else {
+					assertFalse(m, shallBeDescendant);
+				}
+			}
+		}
+	}
+
 
 	@Test
 	@Ignore("just a dump for now, to compare values visually")

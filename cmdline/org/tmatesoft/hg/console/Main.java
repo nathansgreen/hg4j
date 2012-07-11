@@ -108,14 +108,13 @@ public class Main {
 //		m.checkWalkFileRevisions();
 //		m.checkSubProgress();
 //		m.checkFileFlags();
-		m.testMqManager();
-//		m.testRevisionDescendants();
+//		m.testMqManager();
 //		m.dumpPhases();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
-		m.testSubrepos();
+//		m.testSubrepos();
 //		m.testReadWorkingCopy();
 //		m.testParents();
 //		m.testEffectiveFileLog();
@@ -158,25 +157,6 @@ public class Main {
 		Assert.assertTrue(mqManager.getActiveQueueName().length() > 0);
 	}
 	
-	
-	// -R {junit-test-repos}/branches-1
-	private void testRevisionDescendants() throws Exception {
-		int[] roots = new int[] {0, 1, 2, 3, 4, 5};
-		RevisionDescendants[] result = new RevisionDescendants[roots.length];
-		for (int i = 0; i < roots.length; i++) {
-			result[i] = new RevisionDescendants(hgRepo, roots[i]);
-			result[i].build();
-		}
-		for (int i = 0; i < roots.length; i++) {
-			System.out.printf("For root %d descendats are:", roots[i]);
-			for (int j = roots[i], x = hgRepo.getChangelog().getLastRevision(); j <= x; j++) {
-				if (result[i].isDescendant(j)) {
-					System.out.printf("%3d ", j);
-				}
-			}
-			System.out.printf(", isEmpty:%b\n", !result[i].hasDescendants());
-		}
-	}
 	
 	// -R ${system_property:user.home}/hg/test-phases/
 	// TODO as junit test
