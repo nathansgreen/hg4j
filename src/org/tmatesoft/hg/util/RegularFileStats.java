@@ -108,10 +108,10 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 		}
 		final String dirName = f.getParentFile().getAbsolutePath();
 		final String fileName = f.getName();
-		Map<String, String> links = dir2links.get(dirName);
-		Set<String> execs = dir2execs.get(dirName);
-		if (links == null || execs == null) {
-			try {
+		try {
+			Map<String, String> links = dir2links.get(dirName);
+			Set<String> execs = dir2execs.get(dirName);
+			if (links == null || execs == null) {
 				ArrayList<String> cmd = new ArrayList<String>(command);
 				cmd.add(dirName);
 				CharSequence result = execHelper.exec(cmd);
@@ -134,23 +134,23 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 				}
 				dir2links.put(dirName, links);
 				dir2execs.put(dirName, execs);
-				isExec = execs.contains(fileName);
-				isSymlink = links.containsKey(fileName);
-				if (isSymlink) {
-					symlinkValue = links.get(fileName);
-				} else {
-					symlinkValue = null;
-				}
-			} catch (InterruptedException ex) {
-				sessionContext.getLog().dump(getClass(), Warn, ex, String.format("Failed to detect flags for %s", f));
-				// try again? ensure not too long? stop right away?
-				// IGNORE, keep isExec and isSymlink false
-			} catch (IOException ex) {
-				sessionContext.getLog().dump(getClass(), Warn, ex, String.format("Failed to detect flags for %s", f));
-				// IGNORE, keep isExec and isSymlink false
 			}
+			isExec = execs.contains(fileName);
+			isSymlink = links.containsKey(fileName);
+			if (isSymlink) {
+				symlinkValue = links.get(fileName);
+			} else {
+				symlinkValue = null;
+			}
+		} catch (InterruptedException ex) {
+			sessionContext.getLog().dump(getClass(), Warn, ex, String.format("Failed to detect flags for %s", f));
+			// try again? ensure not too long? stop right away?
+			// IGNORE, keep isExec and isSymlink false
+		} catch (IOException ex) {
+			sessionContext.getLog().dump(getClass(), Warn, ex, String.format("Failed to detect flags for %s", f));
+			// IGNORE, keep isExec and isSymlink false
 		}
-	}
+}
 
 	public boolean isExecutable() {
 		return isExec;

@@ -101,6 +101,12 @@ public class RegularFileInfo implements FileInfo {
 		return supportsLink && fileFlagsHelper.isSymlink();
 	}
 	
+	@Override
+	public String toString() {
+		char t = exists() ? (isExecutable() ? '*' : (isSymlink() ? '@' : '-')) : '!';
+		return String.format("RegularFileInfo[%s %c]", file.getPath(), t);
+	}
+	
 	private byte[] getLinkTargetBytes() {
 		assert isSymlink();
 		// no idea what encoding Mercurial uses for link targets, assume platform native is ok
