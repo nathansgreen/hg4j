@@ -108,8 +108,6 @@ public class Main {
 //		m.checkWalkFileRevisions();
 //		m.checkSubProgress();
 //		m.checkFileFlags();
-//		m.testMqManager();
-//		m.dumpPhases();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -131,32 +129,7 @@ public class Main {
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
 	}
-	
-	
-	// TODO as junit tests in 'default'
-	// -R ${system_property:user.home}/hg/test-mq
-	private void testMqManager() throws Exception {
-		MqManager mqManager = new MqManager(hgRepo);
-		mqManager.refresh();
-		int i = 1;
-		System.out.println("Complete patch queue:");
-		for (PatchRecord pr : mqManager.getAllKnownPatches()) {
-			System.out.printf("#%-3d %s from %s\n", i++, pr.getName(), pr.getPatchLocation());
-		}
-		i = 1;
-		System.out.println("Patches from the queue already applied to the repo:");
-		for (PatchRecord pr : mqManager.getAppliedPatches()) {
-			System.out.printf("#%-3d %s, known as cset:%s\n", i++, pr.getName(), pr.getRevision().shortNotation());
-		}
-		boolean allAppliedAreKnown = mqManager.getAllKnownPatches().containsAll(mqManager.getAppliedPatches());
-		System.out.printf("[sanity] allAppliedAreKnown:%b, not yet applied:%d\n", allAppliedAreKnown, mqManager.getQueueSize());
-		Assert.assertTrue(allAppliedAreKnown);
 
-		System.out.printf("Queues: %s, active:%s\n", mqManager.getQueueNames(), mqManager.getActiveQueueName());
-		Assert.assertTrue(mqManager.getQueueNames().size() > 1);
-		Assert.assertTrue(mqManager.getActiveQueueName().length() > 0);
-	}
-	
 	// hg4j repo
 	public void checkWalkFileRevisions() throws Exception {
 		//  hg --debug manifest --rev 150 | grep cmdline/org/tmatesoft/hg/console/Main.java
@@ -202,6 +175,8 @@ public class Main {
 	private void checkFileFlags() throws Exception {
 		// ~/hg/test-flags repo
 		// TODO transform to a test once I keep test-flags in test-repos.jar
+		// JAR can't keep symlinks. Perhaps, a solution would be to keep repo without WC and
+		// perform an `hg up` before use
 		HgDataFile link = hgRepo.getFileNode("file-link");
 		HgDataFile exec = hgRepo.getFileNode("file-exec");
 		HgDataFile file = hgRepo.getFileNode("regular-file");

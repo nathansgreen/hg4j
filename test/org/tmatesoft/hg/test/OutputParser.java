@@ -16,6 +16,11 @@
  */
 package org.tmatesoft.hg.test;
 
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  *
  * @author Artem Tikhomirov
@@ -44,6 +49,40 @@ public interface OutputParser {
 		}
 		public CharSequence result() {
 			return result;
+		}
+
+		public Iterable<String> lines() {
+			return lines("(.+)$");
+		}
+		public Iterable<String> lines(String pattern) {
+			final Matcher m = Pattern.compile(pattern, Pattern.MULTILINE).matcher(result);
+			class S implements Iterable<String>, Iterator<String> {
+				public Iterator<String> iterator() {
+					return this;
+				}
+				private boolean next;
+				{
+					next = m.find();
+				}
+
+				public boolean hasNext() {
+					return next;
+				}
+
+				public String next() {
+					if (next) {
+						String rv = m.group();
+						next = m.find();
+						return rv;
+					}
+					throw new NoSuchElementException();
+				}
+
+				public void remove() {
+					throw new UnsupportedOperationException();
+				}
+			};
+			return new S();
 		}
 	}
 }

@@ -198,7 +198,7 @@ public class MqManager {
 		return Collections.unmodifiableList(queueNames);
 	}
 	
-	public class PatchRecord {
+	public final class PatchRecord {
 		private final Nodeid nodeid;
 		private final String name;
 		private final Path location;
@@ -237,6 +237,13 @@ public class MqManager {
 		 */
 		public Path getPatchLocation() {
 			return location;
+		}
+		
+		@Override
+		public String toString() {
+			String fmt = "mq.PatchRecord[name:%s; %spath:%s]";
+			String ni = nodeid != null ? String.format("applied as: %s; ", nodeid.shortNotation()) : "";
+			return String.format(fmt, name, ni, location);
 		}
 	}
 
