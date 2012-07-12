@@ -157,38 +157,6 @@ public class Main {
 		Assert.assertTrue(mqManager.getActiveQueueName().length() > 0);
 	}
 	
-	
-	// -R ${system_property:user.home}/hg/test-phases/
-	// TODO as junit test
-	private void dumpPhases() throws Exception {
-		HgPhase[] result1 = new HgPhase[hgRepo.getChangelog().getRevisionCount()];
-		HgPhase[] result2 = new HgPhase[hgRepo.getChangelog().getRevisionCount()];
-		final long start1 = System.nanoTime();
-		HgParentChildMap<HgChangelog> pw = new HgParentChildMap<HgChangelog>(hgRepo.getChangelog());
-		pw.init();
-		final long start1bis = System.nanoTime();
-		PhasesHelper ph = new PhasesHelper(hgRepo, pw);
-		for (int i = 0, l = hgRepo.getChangelog().getLastRevision(); i <= l; i++) {
-			result1[i] = ph.getPhase(i, null);
-		}
-		final long start2 = System.nanoTime();
-		ph = new PhasesHelper(hgRepo);
-		for (int i = 0, l = hgRepo.getChangelog().getLastRevision(); i <= l; i++) {
-			result2[i] = ph.getPhase(i, null);
-		}
-		final long end = System.nanoTime();
-		System.out.printf("With ParentWalker(simulates log command for whole repo): %d ms (pw init: %,d ns)\n", (start2 - start1)/1000, start1bis - start1);
-		printPhases(result1);
-		System.out.printf("Without ParentWalker (simulates log command for single file): %d ms\n", (end - start2)/1000);
-		printPhases(result2);
-	}
-	
-	private static void printPhases(HgPhase[] phase) {
-		for (int i = 0; i < phase.length; i++) {
-			System.out.printf("rev:%3d, phase:%s\n", i, phase[i]);
-		}
-	}
-
 	// hg4j repo
 	public void checkWalkFileRevisions() throws Exception {
 		//  hg --debug manifest --rev 150 | grep cmdline/org/tmatesoft/hg/console/Main.java

@@ -62,6 +62,10 @@ public final class PhasesHelper {
 		repo = hgRepo;
 		parentHelper = pw;
 	}
+	
+	public HgRepository getRepo() {
+		return repo;
+	}
 
 	public boolean isCapableOfPhases() throws HgInvalidControlFileException {
 		if (null == repoSupporsPhases) {

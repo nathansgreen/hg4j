@@ -26,7 +26,6 @@ public enum HgPhase {
 	
 	Public("public"), Draft("draft"), Secret("secret"), Undefined("");
 
-	@SuppressWarnings("unused")
 	private final String hgString;
 
 	private HgPhase(String stringRepresentation) {
@@ -44,5 +43,18 @@ public enum HgPhase {
 		case 2 : return Secret;
 		}
 		throw new IllegalArgumentException(String.format("Bad phase index: %d", value));
+	}
+	
+	public static HgPhase parse(String value) {
+		if (Public.hgString.equals(value)) {
+			return Public;
+		}
+		if (Draft.hgString.equals(value)) {
+			return Draft;
+		}
+		if (Secret.hgString.equals(value)) {
+			return Secret;
+		}
+		throw new IllegalArgumentException(String.format("Bad phase name: %d", value));
 	}
 }

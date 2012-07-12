@@ -96,6 +96,7 @@
 			<test name="org.tmatesoft.hg.test.TestClone" />
 			<test name="org.tmatesoft.hg.test.TestIncoming" />
 			<test name="org.tmatesoft.hg.test.TestOutgoing" />
+			<test name="org.tmatesoft.hg.test.TestPhases" />
 		</junit>
 	</target>
 
