@@ -52,10 +52,10 @@ public interface OutputParser {
 		}
 
 		public Iterable<String> lines() {
-			return lines("(.+)$");
+			return lines(Pattern.compile("(.+)$", Pattern.MULTILINE), 1);
 		}
-		public Iterable<String> lines(String pattern) {
-			final Matcher m = Pattern.compile(pattern, Pattern.MULTILINE).matcher(result);
+		public Iterable<String> lines(Pattern pattern, final int group) {
+			final Matcher m = pattern.matcher(result);
 			class S implements Iterable<String>, Iterator<String> {
 				public Iterator<String> iterator() {
 					return this;
@@ -71,7 +71,7 @@ public interface OutputParser {
 
 				public String next() {
 					if (next) {
-						String rv = m.group(1);
+						String rv = m.group(group);
 						next = m.find();
 						return rv;
 					}

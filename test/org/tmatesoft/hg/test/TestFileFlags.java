@@ -77,7 +77,7 @@ public class TestFileFlags {
 			assertTrue(fw.supportsExecFlag());
 			assertTrue(fw.supportsLinkFlag());
 		}
-		ExecHelper eh = new ExecHelper(new OutputParser.Stub(true), repo.getWorkingDir());
+		ExecHelper eh = new ExecHelper(new OutputParser.Stub(false), repo.getWorkingDir());
 		eh.run("hg", "checkout", "-C");
 
 		boolean exec, link, file;

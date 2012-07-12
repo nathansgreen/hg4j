@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.console;
 
+import static org.junit.Assert.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 import static org.tmatesoft.hg.util.LogFacility.Severity.*;
@@ -28,8 +29,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
-import org.junit.Assert;
 import org.tmatesoft.hg.core.HgManifestHandler;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgCatCommand;
@@ -44,6 +45,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
 import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
@@ -73,6 +75,8 @@ import org.tmatesoft.hg.repo.ext.MqManager;
 import org.tmatesoft.hg.repo.ext.MqManager.PatchRecord;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgRevisionMap;
+import org.tmatesoft.hg.test.ExecHelper;
+import org.tmatesoft.hg.test.OutputParser;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Pair;
@@ -105,7 +109,6 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-//		m.checkWalkFileRevisions();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -114,7 +117,6 @@ public class Main {
 //		m.testReadWorkingCopy();
 //		m.testParents();
 //		m.testEffectiveFileLog();
-//		m.testCatAtCsetRevision();
 //		m.testMergeState();
 //		m.testFileStatus();
 //		m.dumpBranches();
@@ -126,12 +128,6 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
-	}
-
-	// hg4j repo
-	public void checkWalkFileRevisions() throws Exception {
-		//  hg --debug manifest --rev 150 | grep cmdline/org/tmatesoft/hg/console/Main.java
-		hgRepo.getManifest().walkFileRevisions(Path.create("cmdline/org/tmatesoft/hg/console/Main.java"), new ManifestDump(), 100, 150, 200, 210, 300);
 	}
 
 	private void buildFileLog() throws Exception {
@@ -349,30 +345,6 @@ public class Main {
 			}
 			System.out.printf("Done: %d\n", System.currentTimeMillis() - start);
 		}
-	}
-	
-	// TODO as test in TestCat
-	private void testCatAtCsetRevision() throws Exception {
-		HgCatCommand cmd = new HgCatCommand(hgRepo);
-		final Path file = Path.create("src/org/tmatesoft/hg/internal/RevlogStream.java");
-		cmd.file(file);
-		final Nodeid cset = Nodeid.fromAscii("08db726a0fb7914ac9d27ba26dc8bbf6385a0554");
-		cmd.changeset(cset);
-		final ByteArrayChannel sink = new ByteArrayChannel();
-		cmd.execute(sink);
-		System.out.println(sink.toArray().length);
-		HgChangesetFileSneaker i = new HgChangesetFileSneaker(hgRepo);
-		boolean result = i.changeset(cset).checkExists(file);
-		Assert.assertFalse(result);
-		Assert.assertFalse(i.exists());
-		result = i.followRenames(true).checkExists(file);
-		Assert.assertTrue(result);
-		Assert.assertTrue(i.exists());
-		HgCatCommand cmd2 = new HgCatCommand(hgRepo).revision(i.getFileRevision());
-		final ByteArrayChannel sink2 = new ByteArrayChannel();
-		cmd2.execute(sink2);
-		System.out.println(sink2.toArray().length);
-		Assert.assertEquals(sink.toArray().length, sink2.toArray().length);
 	}
 	
 	private void testMergeState() throws Exception {

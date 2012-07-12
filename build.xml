@@ -99,6 +99,7 @@
 			<test name="org.tmatesoft.hg.test.TestPhases" />
 			<test name="org.tmatesoft.hg.test.TestMqExtension" />
 			<test name="org.tmatesoft.hg.test.TestFileFlags" />
+			<test name="org.tmatesoft.hg.test.TestCatCommand" />
 		</junit>
 	</target>
 
