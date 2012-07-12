@@ -48,6 +48,7 @@ import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  *
@@ -84,6 +85,56 @@ public class TestAuxUtilities {
 		}
 		return rebuilt;
 	}
+	
+
+	@Test
+	public void checkSubProgress() {
+		// no repo
+		class PS implements ProgressSupport {
+			
+			@SuppressWarnings("unused")
+			public int units;
+			public int worked;
+			public boolean done = false;
+			
+			public void start(int totalUnits) {
+				units = totalUnits;
+			}
+			public void worked(int wu) {
+				worked += wu;
+			}
+			public void done() {
+				done = true;
+			}
+		};
+		PS ps = new PS();
+		ps.start(10);
+		ProgressSupport.Sub s1 = new ProgressSupport.Sub(ps, 3);
+		ProgressSupport.Sub s2 = new ProgressSupport.Sub(ps, 7);
+		s1.start(10);
+		s1.worked(1);
+		s1.worked(1);
+		s1.worked(1);
+		s1.worked(1);
+		// so far s1 consumed 40% of total 3 units
+		assertEquals(1, ps.worked);
+		s1.done();
+		// now s1 consumed 100% of total 3 units
+		assertEquals(3, ps.worked);
+		assertFalse(ps.done);
+		//
+		s2.start(5);
+		s2.worked(3);
+		// s2 consumed 60% (3/5) of ps's 7 units
+		// 3+4 == 3 from s1 + 0.6*7 
+		assertEquals(3 + 4, ps.worked);
+		s2.worked(2);
+		assertEquals(3 + 7, ps.worked);
+		assertFalse(ps.done);
+		s2.done();
+		//assertTrue(ps.done);
+	}
+
 
 	static class CancelImpl implements CancelSupport {
 		private boolean shallStop = false;

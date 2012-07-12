@@ -71,7 +71,7 @@ public interface OutputParser {
 
 				public String next() {
 					if (next) {
-						String rv = m.group();
+						String rv = m.group(1);
 						next = m.find();
 						return rv;
 					}

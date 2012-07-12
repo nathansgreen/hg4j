@@ -106,7 +106,6 @@ public class Main {
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
 //		m.checkWalkFileRevisions();
-//		m.checkSubProgress();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -133,42 +132,6 @@ public class Main {
 	public void checkWalkFileRevisions() throws Exception {
 		//  hg --debug manifest --rev 150 | grep cmdline/org/tmatesoft/hg/console/Main.java
 		hgRepo.getManifest().walkFileRevisions(Path.create("cmdline/org/tmatesoft/hg/console/Main.java"), new ManifestDump(), 100, 150, 200, 210, 300);
-	}
-	
-	// no repo
-	// FIXME as test, perhaps in TestAuxUtilities
-	private void checkSubProgress() {
-		ProgressSupport ps = new ProgressSupport() {
-			private int units;
-			
-			public void start(int totalUnits) {
-				units = totalUnits;
-				System.out.printf("%d:", totalUnits);
-				
-			}
-			public void worked(int wu) {
-				for (int i = 0; i < wu; i++) {
-					System.out.print(units-- == 0 ? '!' : '.');
-				}
-			}
-			public void done() {
-				System.out.println("DONE");
-			}
-		};
-		ps.start(10);
-		ProgressSupport.Sub s1 = new ProgressSupport.Sub(ps, 3);
-		ProgressSupport.Sub s2 = new ProgressSupport.Sub(ps, 7);
-		s1.start(10);
-		s1.worked(1);
-		s1.worked(2);
-		s1.worked(3);
-		s1.worked(4);
-		s1.done();
-		//
-		s2.start(5);
-		s2.worked(3);
-		s2.worked(2);
-		s2.done();
 	}
 
 	private void buildFileLog() throws Exception {
