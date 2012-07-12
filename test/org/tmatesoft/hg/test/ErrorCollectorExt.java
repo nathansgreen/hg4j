@@ -52,6 +52,10 @@ final class ErrorCollectorExt extends ErrorCollector {
 		});
 	}
 	
+	public void assertFalse(final boolean value) {
+		assertTrue(!value);
+	}
+	
 	public void assertTrue(final boolean value) {
 		assertTrue(null, value);
 	}

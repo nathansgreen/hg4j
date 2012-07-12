@@ -107,7 +107,6 @@ public class Main {
 		Main m = new Main(args);
 //		m.checkWalkFileRevisions();
 //		m.checkSubProgress();
-//		m.checkFileFlags();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -171,20 +170,6 @@ public class Main {
 		s2.worked(2);
 		s2.done();
 	}
-
-	private void checkFileFlags() throws Exception {
-		// ~/hg/test-flags repo
-		// TODO transform to a test once I keep test-flags in test-repos.jar
-		// JAR can't keep symlinks. Perhaps, a solution would be to keep repo without WC and
-		// perform an `hg up` before use
-		HgDataFile link = hgRepo.getFileNode("file-link");
-		HgDataFile exec = hgRepo.getFileNode("file-exec");
-		HgDataFile file = hgRepo.getFileNode("regular-file");
-		System.out.println("Link: " + link.getFlags(TIP));
-		System.out.println("Exec: " + exec.getFlags(TIP));
-		System.out.println("File: " + file.getFlags(TIP));
-	}
-	
 
 	private void buildFileLog() throws Exception {
 		final long start = System.nanoTime();

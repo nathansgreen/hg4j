@@ -97,6 +97,8 @@
 			<test name="org.tmatesoft.hg.test.TestIncoming" />
 			<test name="org.tmatesoft.hg.test.TestOutgoing" />
 			<test name="org.tmatesoft.hg.test.TestPhases" />
+			<test name="org.tmatesoft.hg.test.TestMqExtension" />
+			<test name="org.tmatesoft.hg.test.TestFileFlags" />
 		</junit>
 	</target>
 

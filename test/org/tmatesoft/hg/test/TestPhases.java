@@ -48,7 +48,8 @@ public class TestPhases {
 		PhasesHelper ph = new PhasesHelper(repo, null);
 		initAndCheck(ph, expected);
 		final long end = System.nanoTime();
-		System.out.printf("Without ParentWalker (simulates log command for single file): %d ms\n", (end - start)/1000);
+		// μ == \u03bc
+		System.out.printf("Without ParentWalker (simulates log command for single file): %,d μs\n", (end - start)/1000);
 	}
 	
 	@Test
@@ -62,7 +63,7 @@ public class TestPhases {
 		PhasesHelper ph = new PhasesHelper(repo, pw);
 		initAndCheck(ph, expected);
 		final long end = System.nanoTime();
-		System.out.printf("With ParentWalker(simulates log command for whole repo): %d ms (pw init: %,d ns)\n", (end - start1)/1000, start2 - start1);
+		System.out.printf("With ParentWalker(simulates log command for whole repo): %,d μs (pw init: %,d ns)\n", (end - start1)/1000, start2 - start1);
 	}
 
 	private HgPhase[] initAndCheck(PhasesHelper ph, HgPhase[] expected) {
