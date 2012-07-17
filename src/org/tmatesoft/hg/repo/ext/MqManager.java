@@ -18,12 +18,9 @@ package org.tmatesoft.hg.repo.ext;
 
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -31,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.LineReader;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidFileException;
@@ -71,14 +69,14 @@ public class MqManager {
 			File queues = new File(repoDir, "patches.queues");
 			if (queues.isFile()) {
 				LineReader lr = new LineReader(queues, log).trimLines(true).skipEmpty(true);
-				lr.read(new SimpleLineCollector(), queueNames = new LinkedList<String>());
+				lr.read(new LineReader.SimpleLineCollector(), queueNames = new LinkedList<String>());
 			}
 			final String queueLocation; // path under .hg to patch queue information (status, series and diff files)
 			File activeQueueFile = new File(repoDir, "patches.queue");
 			// file is there only if it's not default queue ('patches') that is active
 			if (activeQueueFile.isFile()) {
 				ArrayList<String> contents = new ArrayList<String>();
-				new LineReader(activeQueueFile, log).read(new SimpleLineCollector(), contents);
+				new LineReader(activeQueueFile, log).read(new LineReader.SimpleLineCollector(), contents);
 				if (contents.isEmpty()) {
 					log.dump(getClass(), Warn, "File %s with active queue name is empty", activeQueueFile.getName());
 					activeQueue = PATCHES_DIR;
@@ -104,7 +102,7 @@ public class MqManager {
 			final File fileStatus = new File(repoDir, queueLocation + "status");
 			final File fileSeries = new File(repoDir, queueLocation + "series");
 			if (fileStatus.isFile()) {
-				new LineReader(fileStatus, log).read(new LineConsumer<List<PatchRecord>>() {
+				new LineReader(fileStatus, log).read(new LineReader.LineConsumer<List<PatchRecord>>() {
 	
 					public boolean consume(String line, List<PatchRecord> result) throws IOException {
 						int sep = line.indexOf(':');
@@ -125,7 +123,7 @@ public class MqManager {
 					name2patch.put(pr.getName(), pr);
 				}
 				LinkedList<String> knownPatchNames = new LinkedList<String>();
-				new LineReader(fileSeries, log).read(new SimpleLineCollector(), knownPatchNames);
+				new LineReader(fileSeries, log).read(new LineReader.SimpleLineCollector(), knownPatchNames);
 				// XXX read other queues?
 				allKnown = new ArrayList<PatchRecord>(knownPatchNames.size());
 				for (String name : knownPatchNames) {
@@ -140,14 +138,6 @@ public class MqManager {
 			HgInvalidControlFileException th = new HgInvalidControlFileException(ex.getMessage(), ex.getCause(), ex.getFile());
 			th.setStackTrace(ex.getStackTrace());
 			throw th;
-		}
-	}
-	
-	static class SimpleLineCollector implements LineConsumer<Collection<String>> {
-
-		public boolean consume(String line, Collection<String> result) throws IOException {
-			result.add(line);
-			return true;
 		}
 	}
 	
@@ -244,89 +234,6 @@ public class MqManager {
 			String fmt = "mq.PatchRecord[name:%s; %spath:%s]";
 			String ni = nodeid != null ? String.format("applied as: %s; ", nodeid.shortNotation()) : "";
 			return String.format(fmt, name, ni, location);
-		}
-	}
-
-	// TODO refine API and extract into separate classes
-
-	interface LineConsumer<T> {
-//		boolean begin(File f, T paramObj) throws IOException;
-		boolean consume(String line, T paramObj) throws IOException;
-//		boolean end(File f, T paramObj) throws IOException;
-	}
-	
-	class LineReader {
-		
-		private final File file;
-		private final LogFacility log;
-		private boolean trimLines = true;
-		private boolean skipEmpty = true;
-		private String ignoreThatStars = null;
-
-		LineReader(File f, LogFacility logFacility) {
-			file = f;
-			log = logFacility;
-		}
-		
-		/**
-		 * default: <code>true</code>
-		 * <code>false</code> to return line as is
-		 */
-		LineReader trimLines(boolean trim) {
-			trimLines = trim;
-			return this;
-		}
-		
-		/**
-		 * default: <code>true</code>
-		 * <code>false</code> to pass empty lines to consumer
-		 */
-		LineReader skipEmpty(boolean skip) {
-			skipEmpty = skip;
-			return this;
-		}
-		
-		/**
-		 * default: doesn't skip any line.
-		 * set e.g. to "#" or "//" to skip lines that start with such prefix
-		 */
-		LineReader ignoreLineComments(String lineStart) {
-			ignoreThatStars = lineStart;
-			return this;
-		}
-
-		<T> void read(LineConsumer<T> consumer, T paramObj) throws HgInvalidFileException {
-			BufferedReader statusFileReader = null;
-			try {
-//				consumer.begin(file, paramObj);
-				statusFileReader = new BufferedReader(new FileReader(file));
-				String line;
-				boolean ok = true;
-				while (ok && (line = statusFileReader.readLine()) != null) {
-					if (trimLines) {
-						line = line.trim();
-					}
-					if (ignoreThatStars != null && line.startsWith(ignoreThatStars)) {
-						continue;
-					}
-					if (!skipEmpty || line.length() > 0) {
-						ok = consumer.consume(line, paramObj);
-					}
-				}
-			} catch (IOException ex) {
-				throw new HgInvalidFileException(ex.getMessage(), ex, file);
-			} finally {
-				try {
-					statusFileReader.close();
-				} catch (IOException ex) {
-					log.dump(MqManager.class, Warn, ex, null);
-				}
-//				try {
-//					consumer.end(file, paramObj);
-//				} catch (IOException ex) {
-//					log.warn(MqManager.class, ex, null);
-//				}
-			}
 		}
 	}
 }
