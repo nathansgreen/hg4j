@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.*;
 
 import java.io.File;
@@ -190,10 +191,13 @@ public final class HgRepository {
 		return manifest;
 	}
 	
+	/**
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
 	public HgTags getTags() throws HgInvalidControlFileException {
 		if (tags == null) {
 			tags = new HgTags(this);
-			HgDataFile hgTags = getFileNode(".hgtags");
+			HgDataFile hgTags = getFileNode(HgTags.getPath());
 			if (hgTags.exists()) {
 				for (int i = 0; i <= hgTags.getLastRevision(); i++) { // TODO post-1.0 in fact, would be handy to have walk(start,end) 
 					// method for data files as well, though it looks odd.
@@ -216,9 +220,9 @@ public final class HgRepository {
 			}
 			File file2read = null;
 			try {
-				file2read = new File(getWorkingDir(), ".hgtags");
+				file2read = new File(getWorkingDir(), HgTags.getPath());
 				tags.readGlobal(file2read); // XXX replace with HgDataFile.workingCopy
-				file2read = new File(repoDir, "localtags");
+				file2read = new File(repoDir, HgLocalTags.getName());
 				tags.readLocal(file2read);
 			} catch (IOException ex) {
 				getContext().getLog().dump(getClass(), Error, ex, null);
@@ -228,6 +232,9 @@ public final class HgRepository {
 		return tags;
 	}
 	
+	/**
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
 	public HgBranches getBranches() throws HgInvalidControlFileException {
 		if (branches == null) {
 			branches = new HgBranches(this);
@@ -274,7 +281,7 @@ public final class HgRepository {
 	 * @throws HgInvalidControlFileException if attempt to read information about working copy parents from dirstate failed 
 	 */
 	public Pair<Nodeid,Nodeid> getWorkingCopyParents() throws HgInvalidControlFileException {
-		return HgDirstate.readParents(this, new File(repoDir, "dirstate"));
+		return HgDirstate.readParents(this, new File(repoDir, Dirstate.getName()));
 	}
 	
 	/**
@@ -299,6 +306,7 @@ public final class HgRepository {
 	 * Provides access to sub-repositories defined in this repository. Enumerated  sub-repositories are those directly
 	 * known, not recursive collection of all nested sub-repositories.
 	 * @return list of all known sub-repositories in this repository, or empty list if none found.
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public List<HgSubrepoLocation> getSubrepositories() throws HgInvalidControlFileException {
 		if (subRepos == null) {
@@ -346,7 +354,8 @@ public final class HgRepository {
 				}
 			};
 		}
-		HgDirstate ds = new HgDirstate(this, new File(repoDir, "dirstate"), pathFactory, canonicalPath);
+		File dirstateFile = new File(repoDir, Dirstate.getName());
+		HgDirstate ds = new HgDirstate(this, dirstateFile, pathFactory, canonicalPath);
 		ds.read(impl.buildFileNameEncodingHelper());
 		return ds;
 	}
@@ -354,34 +363,35 @@ public final class HgRepository {
 	/**
 	 * Access to configured set of ignored files.
 	 * @see HgIgnore#isIgnored(Path)
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public HgIgnore getIgnore() /*throws HgInvalidControlFileException */{
+	public HgIgnore getIgnore() throws HgInvalidControlFileException {
 		// TODO read config for additional locations
 		if (ignore == null) {
 			ignore = new HgIgnore(getToRepoPathHelper());
-			File ignoreFile = new File(getWorkingDir(), HgRepositoryFiles.HgIgnore.getPath());
+			File ignoreFile = new File(getWorkingDir(), HgIgnore.getPath());
 			try {
 				final List<String> errors = ignore.read(ignoreFile);
 				if (errors != null) {
 					getContext().getLog().dump(getClass(), Warn, "Syntax errors parsing %s:\n%s", ignoreFile.getName(), Internals.join(errors, ",\n"));
 				}
 			} catch (IOException ex) {
-				final String m = "Error reading .hgignore file";
-				getContext().getLog().dump(getClass(), Warn, ex, m);
-//				throw new HgInvalidControlFileException(m, ex, ignoreFile);
+				final String m = String.format("Error reading %s file", ignoreFile);
+				throw new HgInvalidControlFileException(m, ex, ignoreFile);
 			}
 		}
 		return ignore;
 	}
-	
+
 	/**
 	 * Mercurial saves message user has supplied for a commit to facilitate message re-use in case commit fails.
 	 * This method provides this saved message.
 	 *  
 	 * @return message used for last commit attempt, or <code>null</code> if none
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public String getCommitLastMessage() {
-		File lastMessage = new File(getRepositoryRoot(), HgRepositoryFiles.LastMessage.getPath());
+	public String getCommitLastMessage() throws HgInvalidControlFileException {
+		File lastMessage = new File(repoDir, LastMessage.getPath());
 		if (!lastMessage.canRead()) {
 			return null;
 		}

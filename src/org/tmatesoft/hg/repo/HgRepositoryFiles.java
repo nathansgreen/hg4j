@@ -26,17 +26,57 @@ package org.tmatesoft.hg.repo;
 public enum HgRepositoryFiles {
 
 	HgIgnore(".hgignore"), HgTags(".hgtags"), HgEol(".hgeol"), 
-	Dirstate(".hg/dirstate"), HgLocalTags(".hg/localtags"),
+	Dirstate(false, "dirstate"), HgLocalTags(false, "localtags"),
 	HgSub(".hgsub"), HgSubstate(".hgsubstate"),
-	LastMessage("last-message.txt");
+	LastMessage(false, "last-message.txt");
 
-	private String fname;
+	private final String fname;
+	private final boolean livesInWC; 
 	
 	private HgRepositoryFiles(String filename) {
-		fname = filename;
+		this(true, filename);
 	}
 
+	private HgRepositoryFiles(boolean wcNotRepoRoot, String filename) {
+		fname = filename;
+		livesInWC = wcNotRepoRoot;
+	}
+
+	/**
+	 * Path to the file, relative to the parent it lives in.
+	 * 
+	 * For repository files that reside in working directory, return their location relative to the working dir.
+	 * For files that reside under repository root, path returned would include '.hg/' prefix.
+	 * @return file location, never <code>null</code>
+	 */
 	public String getPath() {
+		return livesInWC ? getName() : ".hg/" + getName();
+	}
+
+	/**
+	 * File name without any path information
+	 * @return file name, never <code>null</code>
+	 */
+	public String getName() {
 		return fname;
+	}
+
+	/**
+	 * Files that reside under working directory may be accessed like:
+	 * <pre>
+	 *   HgRepository hgRepo = ...;
+	 *   File f = new File(hgRepo.getWorkingDir(), HgRepositoryFiles.HgIgnore.getPath())
+	 * </pre>
+	 * @return <code>true</code> if file lives in working tree
+	 */
+	public boolean residesUnderWorkingDir() {
+		return livesInWC;
+	}
+
+	/**
+	 * @return <code>true</code> if file lives under '.hg/' 
+	 */
+	public boolean residesUnderRepositoryRoot() {
+		return !livesInWC;
 	}
 }
