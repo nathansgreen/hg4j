@@ -150,6 +150,7 @@ public class HgInternals {
 	
 	// expose otherwise package-local information primarily to use in our own o.t.hg.core package
 	public static SessionContext getContext(HgRepository repo) {
+		// TODO SessionContext.Source and HgRepo to implement it
 		return repo.getContext();
 	}
 

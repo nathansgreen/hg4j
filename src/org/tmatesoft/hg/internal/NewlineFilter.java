@@ -24,12 +24,12 @@ import static org.tmatesoft.hg.internal.KeywordFilter.copySlice;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Adaptable;
@@ -312,10 +312,10 @@ public class NewlineFilter implements Filter, Preview, Adaptable {
 //				return;
 //			}
 			// XXX perhaps, add HgDataFile.hasWorkingCopy and workingCopyContent()?
-			ConfigFile hgeol = new ConfigFile();
+			ConfigFile hgeol = new ConfigFile(HgInternals.getContext(hgRepo));
 			try {
 				hgeol.addLocation(cfgFile);
-			} catch (IOException ex) {
+			} catch (HgInvalidFileException ex) {
 				HgInternals.getContext(hgRepo).getLog().dump(getClass(), Warn, ex, null);
 			}
 			nativeRepoFormat = hgeol.getSection("repository").get("native");

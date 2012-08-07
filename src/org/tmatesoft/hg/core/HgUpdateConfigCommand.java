@@ -43,21 +43,24 @@ public final class HgUpdateConfigCommand extends HgAbstractCommand<HgUpdateConfi
 	private Map<String,List<String>> toRemove;
 	private Map<String,Map<String,String>> toSet;
 
-	private HgUpdateConfigCommand(File configurationFile) {
+	private final SessionContext sessionCtx;
+
+	private HgUpdateConfigCommand(SessionContext sessionContext, File configurationFile) {
+		sessionCtx = sessionContext;
 		configFile = configurationFile;
 	}
 	
 	public static HgUpdateConfigCommand forRepository(HgRepository hgRepo) {
 		// XXX HgRepository to implement SessionContextProvider (with getContext())?
-		return new HgUpdateConfigCommand(new File(HgInternals.getRepositoryDir(hgRepo), "hgrc"));
+		return new HgUpdateConfigCommand(HgInternals.getContext(hgRepo), new File(HgInternals.getRepositoryDir(hgRepo), "hgrc"));
 	}
 	
 	public static HgUpdateConfigCommand forUser(SessionContext ctx) {
-		return new HgUpdateConfigCommand(Internals.getUserConfigurationFileToWrite(ctx));
+		return new HgUpdateConfigCommand(ctx, Internals.getUserConfigurationFileToWrite(ctx));
 	}
 	
 	public static HgUpdateConfigCommand forInstallation(SessionContext ctx) {
-		return new HgUpdateConfigCommand(Internals.getInstallationConfigurationFileToWrite(ctx));
+		return new HgUpdateConfigCommand(ctx, Internals.getInstallationConfigurationFileToWrite(ctx));
 	}
 	
 	/**
@@ -118,7 +121,7 @@ public final class HgUpdateConfigCommand extends HgAbstractCommand<HgUpdateConfi
 	 */
 	public void execute() throws HgException {
 		try {
-			ConfigFile cfg = new ConfigFile();
+			ConfigFile cfg = new ConfigFile(sessionCtx);
 			cfg.addLocation(configFile);
 			if (toRemove != null) {
 				for (Map.Entry<String,List<String>> s : toRemove.entrySet()) {

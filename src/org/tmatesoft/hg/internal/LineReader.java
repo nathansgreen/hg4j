@@ -109,10 +109,12 @@ public final class LineReader {
 			} catch (IOException ex) {
 				throw new HgInvalidFileException(ex.getMessage(), ex, file);
 			} finally {
-				try {
-					statusFileReader.close();
-				} catch (IOException ex) {
-					log.dump(MqManager.class, Warn, ex, null);
+				if (statusFileReader != null) {
+					try {
+						statusFileReader.close();
+					} catch (IOException ex) {
+						log.dump(MqManager.class, Warn, ex, null);
+					}
 				}
 //				try {
 //					consumer.end(file, paramObj);

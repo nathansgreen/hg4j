@@ -246,8 +246,10 @@ public final class Internals {
 	 * @see http://www.selenic.com/mercurial/hgrc.5.html
 	 */
 	public ConfigFile readConfiguration(HgRepository hgRepo, File repoRoot) throws IOException {
-		ConfigFile configFile = new ConfigFile();
-		File hgInstallRoot = findHgInstallRoot(HgInternals.getContext(hgRepo)); // may be null
+		// XXX Internals now have sessionContext field, is there real need to extract one from the repo?
+		SessionContext sessionCtx = HgInternals.getContext(hgRepo);
+		ConfigFile configFile = new ConfigFile(sessionCtx);
+		File hgInstallRoot = findHgInstallRoot(sessionCtx); // may be null
 		//
 		if (runningOnWindows()) {
 			if (hgInstallRoot != null) {

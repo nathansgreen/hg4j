@@ -325,7 +325,7 @@ public final class HgRepository {
 			} catch (IOException ex) {
 				String m = "Errors while reading user configuration file";
 				getContext().getLog().dump(getClass(), Warn, ex, m);
-				return new HgRepoConfig(new ConfigFile()); // empty config, do not cache, allow to try once again
+				return new HgRepoConfig(new ConfigFile(getContext())); // empty config, do not cache, allow to try once again
 				//throw new HgInvalidControlFileException(m, ex, null);
 			}
 		}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,11 +16,9 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
@@ -33,6 +31,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.repo.HgInvalidFileException;
+import org.tmatesoft.hg.util.LogFacility;
+
 /**
  * .ini / .rc file reader
  * @author Artem Tikhomirov
@@ -40,13 +42,15 @@ import java.util.Map;
  */
 public class ConfigFile {
 
+	private final SessionContext sessionContext;
 	private List<String> sections;
 	private List<Map<String,String>> content;
 
-	public ConfigFile() {
+	public ConfigFile(SessionContext ctx) {
+		sessionContext = ctx;
 	}
 
-	public void addLocation(File path) throws IOException {
+	public void addLocation(File path) throws HgInvalidFileException {
 		read(path);
 	}
 	
@@ -111,10 +115,7 @@ public class ConfigFile {
 		}
 	}
 	
-	// TODO handle %include and %unset directives
-	// TODO "" and lists
-	// XXX perhaps, single string to keep whole section with substrings for keys/values to minimize number of arrays (String.value)
-	private void read(File f) throws IOException {
+	private void read(File f) throws HgInvalidFileException {
 		if (f == null || !f.canRead()) {
 			return;
 		}
@@ -122,54 +123,9 @@ public class ConfigFile {
 			sections = new ArrayList<String>();
 			content = new ArrayList<Map<String,String>>();
 		}
-		BufferedReader br = null;
-		try {
-			br = new BufferedReader(new FileReader(f));
-			String line;
-			String sectionName = "";
-			Map<String,String> section = new LinkedHashMap<String, String>();
-			while ((line = br.readLine()) != null) {
-				line = line.trim();
-				int x;
-				if ((x = line.indexOf('#')) != -1) {
-					// do not keep comments in memory, get new, shorter string
-					line = new String(line.substring(0, x).trim());
-				}
-				if (line.length() <= 2) { // a=b or [a] are at least of length 3
-					continue;
-				}
-				if (line.charAt(0) == '[' && line.charAt(line.length() - 1) == ']') {
-					sectionName = line.substring(1, line.length() - 1);
-					if (sections.indexOf(sectionName) == -1) {
-						sections.add(sectionName);
-						content.add(section = new LinkedHashMap<String, String>());
-					} else {
-						section = null; // drop cached value
-					}
-				} else if ((x = line.indexOf('=')) != -1) {
-					// share char[] of the original string
-					String key = line.substring(0, x).trim();
-					String value = line.substring(x+1).trim();
-					if (section == null) {
-						int i = sections.indexOf(sectionName);
-						assert i >= 0;
-						section = content.get(i);
-					}
-					if (sectionName.length() == 0) {
-						// add fake section only if there are any values 
-						sections.add(sectionName);
-						content.add(section);
-					}
-					section.put(key, value);
-				}
-			}
-		} finally {
-			((ArrayList<?>) sections).trimToSize();
-			((ArrayList<?>) content).trimToSize();
-			if (br != null) {
-				br.close();
-			}
-		}
+		new Parser().go(f, this);
+		((ArrayList<?>) sections).trimToSize();
+		((ArrayList<?>) content).trimToSize();
 		assert sections.size() == content.size();
 	}
 
@@ -209,5 +165,85 @@ public class ConfigFile {
 		}
 		ps.flush();
 		return bos.toByteArray();
+	}
+
+	private static class Parser implements LineReader.LineConsumer<ConfigFile> {
+		
+		private String sectionName = "";
+		private Map<String,String> section = new LinkedHashMap<String, String>();
+		private File contextFile;
+
+		// TODO "" and lists
+		// XXX perhaps, single string to keep whole section with substrings for keys/values to minimize number of arrays (String.value)
+		public boolean consume(String line, ConfigFile cfg) throws IOException {
+			int x;
+			if ((x = line.indexOf('#')) != -1) {
+				// do not keep comments in memory, get new, shorter string
+				line = new String(line.substring(0, x).trim());
+			}
+			if (line.length() <= 2) { // a=b or [a] are at least of length 3
+				return true;
+			}
+			if (line.charAt(0) == '[' && line.charAt(line.length() - 1) == ']') {
+				sectionName = line.substring(1, line.length() - 1);
+				if (cfg.sections.indexOf(sectionName) == -1) {
+					cfg.sections.add(sectionName);
+					cfg.content.add(section = new LinkedHashMap<String, String>());
+				} else {
+					section = null; // drop cached value
+				}
+			} else if (line.startsWith("%unset")) {
+				if (section != null) {
+					section.remove(line.substring(7).trim());
+				}
+			} else if (line.startsWith("%include")) {
+				processInclude(line.substring(9).trim(), cfg);
+			} else if ((x = line.indexOf('=')) != -1) {
+				// share char[] of the original string
+				String key = line.substring(0, x).trim();
+				String value = line.substring(x+1).trim();
+				if (section == null) {
+					int i = cfg.sections.indexOf(sectionName);
+					assert i >= 0;
+					section = cfg.content.get(i);
+				}
+				if (sectionName.length() == 0) {
+					// add fake section only if there are any values 
+					cfg.sections.add(sectionName);
+					cfg.content.add(section);
+				}
+				section.put(key, value);
+			}
+			return true;
+		}
+		
+		public void go(File f, ConfigFile cfg) throws HgInvalidFileException {
+			contextFile = f;
+			LineReader lr = new LineReader(f, cfg.sessionContext.getLog());
+			lr.ignoreLineComments("#");
+			lr.read(this, cfg);
+		}
+		
+		// include failure doesn't propagate
+		private void processInclude(String includeValue, ConfigFile cfg) {
+			File f; 
+			// TODO handle environment variable expansion
+			if (includeValue.startsWith("~/")) {
+				f = new File(System.getProperty("user.home"), includeValue.substring(2));
+			} else {
+				f = new File(contextFile.getParentFile(), includeValue);
+			}
+			try {
+				if (f.canRead()) {
+					new Parser().go(f, cfg);
+				} else {
+					LogFacility lf = cfg.sessionContext.getLog();
+					lf.dump(ConfigFile.class, LogFacility.Severity.Debug, "Can't read file to  include: %s", f);
+				}
+			} catch (HgInvalidFileException ex) {
+				LogFacility lf = cfg.sessionContext.getLog();
+				lf.dump(ConfigFile.class, LogFacility.Severity.Warn, "Can't include %s (%s)", f, includeValue);
+			}
+		}
 	}
 }

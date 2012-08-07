@@ -132,10 +132,10 @@ public class HgLookup {
 
 	private ConfigFile getGlobalConfig() {
 		if (globalCfg == null) {
-			globalCfg = new ConfigFile();
+			globalCfg = new ConfigFile(getContext());
 			try {
 				globalCfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
-			} catch (IOException ex) {
+			} catch (HgInvalidFileException ex) {
 				// XXX perhaps, makes sense to let caller/client know that we've failed to read global config? 
 				getContext().getLog().dump(getClass(), Warn, ex, null);
 			}

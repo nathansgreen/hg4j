@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 
 /**
@@ -90,7 +91,7 @@ public class Remote {
 	 empty result
 	 */
 	public static void main(String[] args) throws Exception {
-		ConfigFile cfg =  new ConfigFile();
+		ConfigFile cfg =  new ConfigFile(new BasicSessionContext(null));
 		cfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 		String svnkitServer = cfg.getSection("paths").get("svnkit");
 //		URL url = new URL(svnkitServer + "?cmd=branches&nodes=30bd389788464287cee22ccff54c330a4b715de5");
