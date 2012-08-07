@@ -27,7 +27,8 @@ public enum HgRepositoryFiles {
 
 	HgIgnore(".hgignore"), HgTags(".hgtags"), HgEol(".hgeol"), 
 	Dirstate(".hg/dirstate"), HgLocalTags(".hg/localtags"),
-	HgSub(".hgsub"), HgSubstate(".hgsubstate");
+	HgSub(".hgsub"), HgSubstate(".hgsubstate"),
+	LastMessage("last-message.txt");
 
 	private String fname;
 	

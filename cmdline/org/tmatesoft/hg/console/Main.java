@@ -109,6 +109,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.dumpCommitLastMessage();
 //		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
@@ -128,6 +129,10 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void dumpCommitLastMessage() throws Exception {
+		System.out.println(hgRepo.getCommitLastMessage());
 	}
 
 	private void buildFileLog() throws Exception {

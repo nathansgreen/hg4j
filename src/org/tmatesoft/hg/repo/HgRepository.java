@@ -19,9 +19,11 @@ package org.tmatesoft.hg.repo;
 import static org.tmatesoft.hg.util.LogFacility.Severity.*;
 
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.lang.ref.SoftReference;
+import java.nio.CharBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -357,11 +359,11 @@ public final class HgRepository {
 		// TODO read config for additional locations
 		if (ignore == null) {
 			ignore = new HgIgnore(getToRepoPathHelper());
-			File ignoreFile = new File(getWorkingDir(), ".hgignore");
+			File ignoreFile = new File(getWorkingDir(), HgRepositoryFiles.HgIgnore.getPath());
 			try {
 				final List<String> errors = ignore.read(ignoreFile);
 				if (errors != null) {
-					getContext().getLog().dump(getClass(), Warn, "Syntax errors parsing .hgignore:\n%s", Internals.join(errors, ",\n"));
+					getContext().getLog().dump(getClass(), Warn, "Syntax errors parsing %s:\n%s", ignoreFile.getName(), Internals.join(errors, ",\n"));
 				}
 			} catch (IOException ex) {
 				final String m = "Error reading .hgignore file";
@@ -370,6 +372,36 @@ public final class HgRepository {
 			}
 		}
 		return ignore;
+	}
+	
+	/**
+	 * Mercurial saves message user has supplied for a commit to facilitate message re-use in case commit fails.
+	 * This method provides this saved message.
+	 *  
+	 * @return message used for last commit attempt, or <code>null</code> if none
+	 */
+	public String getCommitLastMessage() {
+		File lastMessage = new File(getRepositoryRoot(), HgRepositoryFiles.LastMessage.getPath());
+		if (!lastMessage.canRead()) {
+			return null;
+		}
+		FileReader fr = null;
+		try {
+			fr = new FileReader(lastMessage);
+			CharBuffer cb = CharBuffer.allocate(Internals.ltoi(lastMessage.length()));
+			fr.read(cb);
+			return cb.flip().toString();
+		} catch (IOException ex) {
+			throw new HgInvalidControlFileException("Can't retrieve message of last commit attempt", ex, lastMessage);
+		} finally {
+			if (fr != null) {
+				try {
+					fr.close();
+				} catch (IOException ex) {
+					getContext().getLog().dump(getClass(), Warn, "Failed to close %s after read", lastMessage);
+				}
+			}
+		}
 	}
 
 	/*package-local*/ DataAccessProvider getDataAccess() {
