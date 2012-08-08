@@ -28,7 +28,8 @@ public enum HgRepositoryFiles {
 	HgIgnore(".hgignore"), HgTags(".hgtags"), HgEol(".hgeol"), 
 	Dirstate(false, "dirstate"), HgLocalTags(false, "localtags"),
 	HgSub(".hgsub"), HgSubstate(".hgsubstate"),
-	LastMessage(false, "last-message.txt");
+	LastMessage(false, "last-message.txt"),
+	Bookmarks(false, "bookmarks"), BookmarksCurrent(false, "bookmarks.current");
 
 	private final String fname;
 	private final boolean livesInWC; 

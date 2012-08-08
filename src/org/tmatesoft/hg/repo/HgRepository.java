@@ -111,6 +111,7 @@ public final class HgRepository {
 	private HgBranches branches;
 	private HgMergeState mergeState;
 	private SubrepoManager subRepos;
+	private HgBookmarks bookmarks;
 
 	// XXX perhaps, shall enable caching explicitly
 	private final HashMap<Path, SoftReference<RevlogStream>> streamsCache = new HashMap<Path, SoftReference<RevlogStream>>();
@@ -233,6 +234,8 @@ public final class HgRepository {
 	}
 	
 	/**
+	 * Access branch information
+	 * @return branch manager instance, never <code>null</code>
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public HgBranches getBranches() throws HgInvalidControlFileException {
@@ -243,6 +246,10 @@ public final class HgRepository {
 		return branches;
 	}
 
+	/**
+	 * Access state of the recent merge
+	 * @return merge state facility, never <code>null</code> 
+	 */
 	public HgMergeState getMergeState() {
 		if (mergeState == null) {
 			mergeState = new HgMergeState(this);
@@ -412,6 +419,19 @@ public final class HgRepository {
 				}
 			}
 		}
+	}
+	
+	/**
+	 * Access bookmarks-related functionality
+	 * @return facility to manage bookmarks, never <code>null</code>
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public HgBookmarks getBookmarks() throws HgInvalidControlFileException {
+		if (bookmarks == null) {
+			bookmarks = new HgBookmarks(this);
+			bookmarks.read();
+		}
+		return bookmarks;
 	}
 
 	/*package-local*/ DataAccessProvider getDataAccess() {

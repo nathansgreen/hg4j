@@ -53,6 +53,7 @@ import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.internal.RevisionDescendants;
 import org.tmatesoft.hg.internal.StreamLogFacility;
+import org.tmatesoft.hg.repo.HgBookmarks;
 import org.tmatesoft.hg.repo.HgBranches;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -111,7 +112,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.readConfigFile();
+		m.dumpBookmarks();
+//		m.readConfigFile();
 //		m.dumpCommitLastMessage();
 //		m.buildFileLog();
 //		m.testConsoleLog();
@@ -132,6 +134,22 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	// TODO as test
+	private void dumpBookmarks() throws Exception {
+		HgBookmarks bm = hgRepo.getBookmarks();
+		String active = bm.getActiveBookmarkName();
+		ArrayList<String> all = new ArrayList(bm.getAllBookmarks());
+		Collections.sort(all);
+		for (String bmname : all) {
+			if (bmname.equals(active)) {
+				System.out.print(" * ");
+			} else {
+				System.out.print("   ");
+			}
+			System.out.printf("%-26s (%s)\n", bmname, bm.getRevision(bmname).shortNotation());
+		}
 	}
 
 	// TODO as test
