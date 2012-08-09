@@ -121,35 +121,35 @@ public class ExceptionInfo<T> {
 			sb.append(';');
 			sb.append(' ');
 		}
-		sb.append("rev:");
-		boolean needNodeid = true;
-		if (isRevisionIndexSet()) {
-			if (rangeLeftBoundary != BAD_REVISION || rangeRightBoundary != BAD_REVISION) {
-				String sr;
-				switch (getRevisionIndex()) {
-				case BAD_REVISION:
-					sr = "UNKNOWN"; break;
-				case TIP:
-					sr = "TIP"; break;
-				case WORKING_COPY:
-					sr = "WORKING-COPY"; break;
-				case NO_REVISION:
-					sr = "NO REVISION"; break;
-				default:
-					sr = String.valueOf(getRevisionIndex());
-				}
-				sb.append(String.format("%s is not from [%d..%d]", sr, rangeLeftBoundary, rangeRightBoundary));
-			} else {
-				sb.append(getRevisionIndex());
-				if (isRevisionSet()) {
-					sb.append(':');
-					sb.append(getRevision().shortNotation());
-					needNodeid = false;
+		if (isRevisionIndexSet() || isRevisionSet()) {
+			if (isRevisionIndexSet()) {
+				if (rangeLeftBoundary != BAD_REVISION || rangeRightBoundary != BAD_REVISION) {
+					String sr;
+					switch (getRevisionIndex()) {
+					case BAD_REVISION:
+						sr = "UNKNOWN"; break;
+					case TIP:
+						sr = "TIP"; break;
+					case WORKING_COPY:
+						sr = "WORKING-COPY"; break;
+					case NO_REVISION:
+						sr = "NO REVISION"; break;
+					default:
+						sr = String.valueOf(getRevisionIndex());
+					}
+					sb.append(String.format("%s is not from [%d..%d]", sr, rangeLeftBoundary, rangeRightBoundary));
+				} else {
+					sb.append("rev:");
+					sb.append(getRevisionIndex());
+					if (isRevisionSet()) {
+						sb.append(':');
+						// fall-through to get revision appended
+					}
 				}
 			}
-		}
-		if (isRevisionSet() && needNodeid) {
-			sb.append(getRevision().shortNotation());
+			if (isRevisionSet()) {
+				sb.append(getRevision().shortNotation());
+			}
 		}
 		if (localFile != null) {
 			sb.append(';');

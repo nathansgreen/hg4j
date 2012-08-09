@@ -90,11 +90,12 @@ public abstract class HgRuntimeException extends RuntimeException {
 
 	@Override
 	public String toString() {
-		StringBuilder sb = new StringBuilder(super.toString());
-		sb.append(' ');
-		sb.append('(');
+		String base = super.toString();
+		StringBuilder sb = new StringBuilder();
 		details.appendDetails(sb);
-		sb.append(')');
-		return sb.toString();
+		if (sb.length() == 0) {
+			return base;
+		}
+		return new StringBuilder(base).append(' ').append('(').append(sb).append(')').toString();
 	}
 }
