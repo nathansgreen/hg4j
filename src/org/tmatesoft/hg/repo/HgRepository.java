@@ -35,8 +35,10 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.Lock;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
@@ -420,7 +422,44 @@ public final class HgRepository {
 			}
 		}
 	}
-	
+
+	private Lock wdLock, storeLock;
+
+	/**
+	 * PROVISIONAL CODE, DO NOT USE
+	 * 
+	 * Access repository lock that covers non-store parts of the repository (dirstate, branches, etc - 
+	 * everything that has to do with working directory state).
+	 * 
+	 * Note, the lock object returned merely gives access to lock mechanism. NO ACTUAL LOCKING IS DONE.
+	 * Use {@link Lock#acquire()} to actually lock the repository.  
+	 *   
+	 * @return lock object, never <code>null</code>
+	 */
+	@Experimental(reason="WORK IN PROGRESS")
+	public Lock getWorkingDirLock() {
+		if (wdLock == null) {
+			synchronized (this) {
+				if (wdLock == null) {
+					wdLock = new Lock(new File(repoPathHelper.rewrite("wlock").toString()));
+				}
+			}
+		}
+		return wdLock;
+	}
+
+	@Experimental(reason="WORK IN PROGRESS")
+	public Lock getStoreLock() {
+		if (storeLock == null) {
+			synchronized (this) {
+				if (storeLock == null) {
+					storeLock = new Lock(new File(repoPathHelper.rewrite("store/lock").toString()));
+				}
+			}
+		}
+		return storeLock;
+	}
+
 	/**
 	 * Access bookmarks-related functionality
 	 * @return facility to manage bookmarks, never <code>null</code>
