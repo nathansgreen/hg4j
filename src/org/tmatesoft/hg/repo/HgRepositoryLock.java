@@ -25,16 +25,37 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 
 /**
  * NOT SAFE FOR MULTITHREAD USE!
  * 
+ * <p>Usage:
+ * <pre>
+ * HgRepositoryLock lock = hgRepo.getWorkingDirLock();
+ * try {
+ *     // Actually lock the repo
+ *     lock.acquire();
+ *     ///
+ *     // do whatever modifies working directory
+ *     ...
+ * } finally {
+ *     if (lock.isLocked()) {
+ *         // this check is needed not to release() 
+ *         // erroneously in case acquire() failed (e.g. due to timeout)
+ *         lock.release();
+ *     }
+ * 
+ * </pre>
+ * 
  * Unlike original mechanism, we don't use symlinks, rather files, as it's easier to implement
  * 
+ * @see http://code.google.com/p/hg4j/issues/detail?id=35
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
+@Experimental(reason="Work in progress")
 public class HgRepositoryLock {
 	/*
 	 * Lock .hg/ except .hg/store/      .hg/wlock (new File(hgRepo.getRepoRoot(),"wlock"))
@@ -68,10 +89,21 @@ public class HgRepositoryLock {
 		return null;
 	}
 	
+	/**
+	 * @return <code>true</code> if we hold the lock
+	 */
 	public boolean isLocked() {
 		return use > 0;
 	}
 
+	/**
+	 * Perform actual locking. Waits for timeout (if specified at construction time)
+	 * before throwing {@link HgInvalidStateException} in case lock is not available 
+	 * immediately.
+	 * 
+	 * <p>Multiple calls are possible, but corresponding number of {@link #release()} 
+	 * calls shall be made.
+	 */
 	public void acquire() {
 		if (use > 0) {
 			use++;
@@ -106,9 +138,12 @@ public class HgRepositoryLock {
 		throw new HgInvalidStateException(msg);
 	}
 	
+	/**
+	 * Release lock we own
+	 */
 	public void release() {
 		if (use == 0) {
-			throw new HgInvalidStateException("");
+			throw new HgInvalidStateException("Lock is not held!");
 		}
 		use--;
 		if (use > 0) {
