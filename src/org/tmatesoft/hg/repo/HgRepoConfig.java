@@ -62,6 +62,10 @@ public final class HgRepoConfig /*implements RepoChangeListener, perhaps, also R
 	public String getStringValue(String section, String key, String defaultValue) {
 		return config.getString(section, key, defaultValue);
 	}
+	
+	public int getIntegerValue(String section, String key, int defaultValue) {
+		return config.getInteger(section, key, defaultValue);
+	}
 
 	//
 	//

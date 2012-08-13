@@ -14,7 +14,7 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.internal;
+package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -25,7 +25,7 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
-import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.internal.Internals;
 
 /**
  * NOT SAFE FOR MULTITHREAD USE!
@@ -35,7 +35,7 @@ import org.tmatesoft.hg.repo.HgInvalidStateException;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Lock {
+public class HgRepositoryLock {
 	/*
 	 * Lock .hg/ except .hg/store/      .hg/wlock (HgRepository.repoPathHelper("wlock"))
 	 * Lock .hg/store/                  .hg/store/lock (HgRepository.repoPathHelper("store/lock") ???)
@@ -45,11 +45,7 @@ public class Lock {
 	private int use = 0;
 	private final int timeoutSeconds;
 	
-	public Lock(File lock) {
-		this(lock, 10);
-	}
-
-	public Lock(File lock, int timeoutInSeconds) {
+	 HgRepositoryLock(File lock, int timeoutInSeconds) {
 		lockFile = lock;
 		timeoutSeconds = timeoutInSeconds;
 	}
@@ -86,7 +82,7 @@ public class Lock {
 		lockDescription.append(':');
 		lockDescription.append(getPid());
 		byte[] bytes = lockDescription.toString().getBytes();
-		long stopTime = System.currentTimeMillis() + timeoutSeconds*1000;
+		long stopTime = timeoutSeconds < 0 ? -1 : (System.currentTimeMillis() + timeoutSeconds*1000);
 		do {
 			synchronized(this) {
 				try {
@@ -105,7 +101,7 @@ public class Lock {
 				}
 			}
 			
-		} while (System.currentTimeMillis() <= stopTime);
+		} while (stopTime == -1/*no timeout*/ || System.currentTimeMillis() <= stopTime);
 		String msg = String.format("Failed to aquire lock, waited for %d seconds, present owner: '%s'", timeoutSeconds, readLockInfo());
 		throw new HgInvalidStateException(msg);
 	}

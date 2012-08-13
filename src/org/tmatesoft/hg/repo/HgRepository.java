@@ -38,7 +38,6 @@ import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
-import org.tmatesoft.hg.internal.Lock;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.util.CancelledException;
@@ -423,7 +422,7 @@ public final class HgRepository {
 		}
 	}
 
-	private Lock wdLock, storeLock;
+	private HgRepositoryLock wdLock, storeLock;
 
 	/**
 	 * PROVISIONAL CODE, DO NOT USE
@@ -432,16 +431,17 @@ public final class HgRepository {
 	 * everything that has to do with working directory state).
 	 * 
 	 * Note, the lock object returned merely gives access to lock mechanism. NO ACTUAL LOCKING IS DONE.
-	 * Use {@link Lock#acquire()} to actually lock the repository.  
+	 * Use {@link HgRepositoryLock#acquire()} to actually lock the repository.  
 	 *   
 	 * @return lock object, never <code>null</code>
 	 */
 	@Experimental(reason="WORK IN PROGRESS")
-	public Lock getWorkingDirLock() {
+	public HgRepositoryLock getWorkingDirLock() {
 		if (wdLock == null) {
+			int timeout = getLockTimeout();
 			synchronized (this) {
 				if (wdLock == null) {
-					wdLock = new Lock(new File(repoPathHelper.rewrite("wlock").toString()));
+					wdLock = new HgRepositoryLock(new File(repoPathHelper.rewrite("wlock").toString()), timeout);
 				}
 			}
 		}
@@ -449,11 +449,12 @@ public final class HgRepository {
 	}
 
 	@Experimental(reason="WORK IN PROGRESS")
-	public Lock getStoreLock() {
+	public HgRepositoryLock getStoreLock() {
 		if (storeLock == null) {
+			int timeout = getLockTimeout();
 			synchronized (this) {
 				if (storeLock == null) {
-					storeLock = new Lock(new File(repoPathHelper.rewrite("store/lock").toString()));
+					storeLock = new HgRepositoryLock(new File(repoPathHelper.rewrite("store/lock").toString()), timeout);
 				}
 			}
 		}
@@ -541,5 +542,9 @@ public final class HgRepository {
 			}
 		}
 		return rv;
+	}
+
+	private int getLockTimeout() {
+		return getConfiguration().getIntegerValue("ui", "timeout", 600);
 	}
 }

@@ -91,6 +91,11 @@ public class ConfigFile {
 		return value == null ? defaultValue : value;
 	}
 	
+	public int getInteger(String sectionName, String key, int defaultValue) {
+		String value = getSection(sectionName).get(key);
+		return value == null ? defaultValue : Integer.parseInt(value);
+	}
+	
 	public void putString(String sectionName, String key, String newValue) {
 		Map<String, String> section = null;
 		if (sections == null) {
