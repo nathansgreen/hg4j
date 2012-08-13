@@ -37,8 +37,8 @@ import org.tmatesoft.hg.internal.Internals;
  */
 public class HgRepositoryLock {
 	/*
-	 * Lock .hg/ except .hg/store/      .hg/wlock (HgRepository.repoPathHelper("wlock"))
-	 * Lock .hg/store/                  .hg/store/lock (HgRepository.repoPathHelper("store/lock") ???)
+	 * Lock .hg/ except .hg/store/      .hg/wlock (new File(hgRepo.getRepoRoot(),"wlock"))
+	 * Lock .hg/store/                  .hg/store/lock (HgRepository.repoPathHelper("lock"))
 	 */
 
 	private final File lockFile;

@@ -439,9 +439,10 @@ public final class HgRepository {
 	public HgRepositoryLock getWorkingDirLock() {
 		if (wdLock == null) {
 			int timeout = getLockTimeout();
+			File lf = new File(getRepositoryRoot(), "wlock");
 			synchronized (this) {
 				if (wdLock == null) {
-					wdLock = new HgRepositoryLock(new File(repoPathHelper.rewrite("wlock").toString()), timeout);
+					wdLock = new HgRepositoryLock(lf, timeout);
 				}
 			}
 		}
@@ -452,9 +453,10 @@ public final class HgRepository {
 	public HgRepositoryLock getStoreLock() {
 		if (storeLock == null) {
 			int timeout = getLockTimeout();
+			File fl = new File(getRepositoryRoot(), repoPathHelper.rewrite("lock").toString());
 			synchronized (this) {
 				if (storeLock == null) {
-					storeLock = new HgRepositoryLock(new File(repoPathHelper.rewrite("store/lock").toString()), timeout);
+					storeLock = new HgRepositoryLock(fl, timeout);
 				}
 			}
 		}
