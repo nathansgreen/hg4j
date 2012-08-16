@@ -45,4 +45,11 @@ public abstract class SessionContext {
 	public abstract Object getConfigurationProperty(String name, Object defaultValue);
 	// perhaps, later may add Configuration object, with PropertyMarshal's helpers
 	// e.g. when there's standalone Caches and WritableSessionProperties objects
+
+	/**
+	 * Providers of the context may implement
+	 */
+	public interface Source {
+		SessionContext getSessionContext();
+	}
 }

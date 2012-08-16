@@ -182,7 +182,7 @@ public final class HgDataFile extends Revlog {
 					try {
 						fc.close();
 					} catch (IOException ex) {
-						getRepo().getContext().getLog().dump(getClass(), Warn, ex, null);
+						getRepo().getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 					}
 				}
 			}
@@ -208,7 +208,7 @@ public final class HgDataFile extends Revlog {
 		final int csetRevIndex;
 		if (p.isNull()) {
 			// no dirstate parents 
-			getRepo().getContext().getLog().dump(getClass(), Info, "No dirstate parents, resort to TIP", getPath());
+			getRepo().getSessionContext().getLog().dump(getClass(), Info, "No dirstate parents, resort to TIP", getPath());
 			// if it's a repository with no dirstate, use TIP then
 			csetRevIndex = clog.getLastRevision();
 			if (csetRevIndex == -1) {
@@ -283,7 +283,7 @@ public final class HgDataFile extends Revlog {
 			metadata = new Metadata();
 		}
 		ErrorHandlingInspector insp;
-		final LogFacility lf = getRepo().getContext().getLog();
+		final LogFacility lf = getRepo().getSessionContext().getLog();
 		if (metadata.none(fileRevisionIndex)) {
 			insp = new ContentPipe(sink, 0, lf);
 		} else if (metadata.known(fileRevisionIndex)) {

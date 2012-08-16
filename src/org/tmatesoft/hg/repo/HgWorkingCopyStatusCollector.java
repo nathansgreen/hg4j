@@ -365,7 +365,7 @@ public class HgWorkingCopyStatusCollector {
 						}
 					}
 				} catch (HgRuntimeException ex) {
-					repo.getContext().getLog().dump(getClass(), Warn, ex, null);
+					repo.getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 					inspector.invalid(fname, ex);
 				}
 			}
@@ -457,7 +457,7 @@ public class HgWorkingCopyStatusCollector {
 						inspector.modified(fname);
 					}
 				} catch (HgRuntimeException ex) {
-					repo.getContext().getLog().dump(getClass(), Warn, ex, null);
+					repo.getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 					inspector.invalid(fname, ex);
 				}
 				baseRevNames.remove(fname); // consumed, processed, handled.
@@ -494,7 +494,7 @@ public class HgWorkingCopyStatusCollector {
 	private boolean areTheSame(FileInfo f, final byte[] data, Path p) throws HgInvalidFileException {
 		ReadableByteChannel is = null;
 		class Check implements ByteChannel {
-			final boolean debug = repo.getContext().getLog().isDebug(); 
+			final boolean debug = repo.getSessionContext().getLog().isDebug(); 
 			boolean sameSoFar = true;
 			int x = 0;
 
@@ -514,7 +514,7 @@ public class HgWorkingCopyStatusCollector {
 								int offset = max(0, x - 4);
 								exp = new String(data, offset, min(data.length - offset, 20));
 							}
-							repo.getContext().getLog().dump(getClass(), Debug, "expected >>%s<< but got >>%s<<", exp, new String(xx));
+							repo.getSessionContext().getLog().dump(getClass(), Debug, "expected >>%s<< but got >>%s<<", exp, new String(xx));
 						}
 						sameSoFar = false;
 						break;
@@ -547,7 +547,7 @@ public class HgWorkingCopyStatusCollector {
 				try {
 					is.close();
 				} catch (IOException ex) {
-					repo.getContext().getLog().dump(getClass(), Info, ex, null);
+					repo.getSessionContext().getLog().dump(getClass(), Info, ex, null);
 				}
 				is = f.newInputChannel();
 				fb.clear();
@@ -559,7 +559,7 @@ public class HgWorkingCopyStatusCollector {
 			}
 			return check.ultimatelyTheSame();
 		} catch (CancelledException ex) {
-			repo.getContext().getLog().dump(getClass(), Warn, ex, "Unexpected cancellation");
+			repo.getSessionContext().getLog().dump(getClass(), Warn, ex, "Unexpected cancellation");
 			return check.ultimatelyTheSame();
 		} catch (IOException ex) {
 			throw new HgInvalidFileException("File comparison failed", ex).setFileName(p);
@@ -568,7 +568,7 @@ public class HgWorkingCopyStatusCollector {
 				try {
 					is.close();
 				} catch (IOException ex) {
-					repo.getContext().getLog().dump(getClass(), Info, ex, null);
+					repo.getSessionContext().getLog().dump(getClass(), Info, ex, null);
 				}
 			}
 		}
@@ -631,7 +631,7 @@ public class HgWorkingCopyStatusCollector {
 //		final Path[] dirs = f.toArray(new Path[d.size()]);
 		if (d.isEmpty()) {
 			final Path[] files = f.toArray(new Path[f.size()]);
-			FileIterator fi = new FileListIterator(hgRepo.getContext(), hgRepo.getWorkingDir(), files);
+			FileIterator fi = new FileListIterator(hgRepo.getSessionContext(), hgRepo.getWorkingDir(), files);
 			return new HgWorkingCopyStatusCollector(hgRepo, fi);
 		}
 		//

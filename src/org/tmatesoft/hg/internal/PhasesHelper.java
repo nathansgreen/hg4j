@@ -40,7 +40,10 @@ import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
- * Support to deal with phases feature fo Mercurial (as of Mercutial version 2.1)
+ * Support to deal with Mercurial phases feature (as of Mercurial version 2.1)
+ * 
+ * @see http://mercurial.selenic.com/wiki/Phases
+ * @see http://mercurial.selenic.com/wiki/PhasesDevel
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -134,13 +137,13 @@ public final class PhasesHelper {
 					continue;
 				}
 				if (lc.length != 2) {
-					HgInternals.getContext(repo).getLog().dump(getClass(), Warn, "Bad line in phaseroots:%s", line);
+					repo.getSessionContext().getLog().dump(getClass(), Warn, "Bad line in phaseroots:%s", line);
 					continue;
 				}
 				int phaseIndex = Integer.parseInt(lc[0]);
 				Nodeid rootRev = Nodeid.fromAscii(lc[1]);
 				if (!repo.getChangelog().isKnown(rootRev)) {
-					HgInternals.getContext(repo).getLog().dump(getClass(), Warn, "Phase(%d) root node %s doesn't exist in the repository, ignored.", phaseIndex, rootRev);
+					repo.getSessionContext().getLog().dump(getClass(), Warn, "Phase(%d) root node %s doesn't exist in the repository, ignored.", phaseIndex, rootRev);
 					continue;
 				}
 				HgPhase phase = HgPhase.parse(phaseIndex);
@@ -159,7 +162,7 @@ public final class PhasesHelper {
 				try {
 					br.close();
 				} catch (IOException ex) {
-					HgInternals.getContext(repo).getLog().dump(getClass(), Info, ex, null);
+					repo.getSessionContext().getLog().dump(getClass(), Info, ex, null);
 					// ignore the exception otherwise 
 				}
 			}

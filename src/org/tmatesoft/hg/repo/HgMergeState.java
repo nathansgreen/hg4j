@@ -29,6 +29,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.util.Pair;
@@ -83,11 +84,11 @@ public class HgMergeState {
 		}
 	}
 
-	private final HgRepository repo;
+	private final Internals repo;
 	private Entry[] entries;
 
-	HgMergeState(HgRepository hgRepo) {
-		repo = hgRepo;
+	HgMergeState(Internals internalRepo) {
+		repo = internalRepo;
 	}
 
 	/**
@@ -95,15 +96,16 @@ public class HgMergeState {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public void refresh() throws HgRuntimeException {
+		final HgRepository hgRepo = repo.getRepo();
 		entries = null;
 		// it's possible there are two parents but no merge/state, we shall report this case as 'merging', with proper
 		// first and second parent values
 		stateParent = Nodeid.NULL;
 		Pool<Nodeid> nodeidPool = new Pool<Nodeid>();
 		Pool<Path> fnamePool = new Pool<Path>();
-		Pair<Nodeid, Nodeid> wcParents = repo.getWorkingCopyParents();
+		Pair<Nodeid, Nodeid> wcParents = hgRepo.getWorkingCopyParents();
 		wcp1 = nodeidPool.unify(wcParents.first()); wcp2 = nodeidPool.unify(wcParents.second());
-		final File f = new File(repo.getRepositoryRoot(), "merge/state");
+		final File f = repo.getFileFromRepoDir("merge/state");
 		if (!f.canRead()) {
 			// empty state
 			return;
@@ -115,25 +117,25 @@ public class HgMergeState {
 			final ManifestRevision m1 = new ManifestRevision(nodeidPool, fnamePool);
 			final ManifestRevision m2 = new ManifestRevision(nodeidPool, fnamePool);
 			if (!wcp2.isNull()) {
-				final int rp2 = repo.getChangelog().getRevisionIndex(wcp2);
-				repo.getManifest().walk(rp2, rp2, m2);
+				final int rp2 = hgRepo.getChangelog().getRevisionIndex(wcp2);
+				hgRepo.getManifest().walk(rp2, rp2, m2);
 			}
 			BufferedReader br = new BufferedReader(new FileReader(f));
 			String s = br.readLine();
 			stateParent = nodeidPool.unify(Nodeid.fromAscii(s));
-			final int rp1 = repo.getChangelog().getRevisionIndex(stateParent);
-			repo.getManifest().walk(rp1, rp1, m1);
+			final int rp1 = hgRepo.getChangelog().getRevisionIndex(stateParent);
+			hgRepo.getManifest().walk(rp1, rp1, m1);
 			while ((s = br.readLine()) != null) {
 				String[] r = s.split("\\00");
 				Path p1fname = pathPool.path(r[3]);
 				Nodeid nidP1 = m1.nodeid(p1fname);
 				Nodeid nidCA = nodeidPool.unify(Nodeid.fromAscii(r[5]));
-				HgFileRevision p1 = new HgFileRevision(repo, nidP1, m1.flags(p1fname), p1fname);
+				HgFileRevision p1 = new HgFileRevision(hgRepo, nidP1, m1.flags(p1fname), p1fname);
 				HgFileRevision ca;
 				if (nidCA == nidP1 && r[3].equals(r[4])) {
 					ca = p1;
 				} else {
-					ca = new HgFileRevision(repo, nidCA, null, pathPool.path(r[4]));
+					ca = new HgFileRevision(hgRepo, nidCA, null, pathPool.path(r[4]));
 				}
 				HgFileRevision p2;
 				if (!wcp2.isNull() || !r[6].equals(r[4])) {
@@ -143,7 +145,7 @@ public class HgMergeState {
 						assert false : "There's not enough information (or I don't know where to look) in merge/state to find out what's the second parent";
 						nidP2 = NULL;
 					}
-					p2 = new HgFileRevision(repo, nidP2, m2.flags(p2fname), p2fname);
+					p2 = new HgFileRevision(hgRepo, nidP2, m2.flags(p2fname), p2fname);
 				} else {
 					// no second parent known. no idea what to do here, assume linear merge, use common ancestor as parent
 					p2 = ca;

@@ -202,7 +202,7 @@ abstract class Revlog {
 			throw new IllegalArgumentException();
 		}
 		try {
-			ContentPipe insp = new ContentPipe(sink, 0, repo.getContext().getLog());
+			ContentPipe insp = new ContentPipe(sink, 0, repo.getSessionContext().getLog());
 			insp.checkCancelled();
 			content.iterate(revisionIndex, revisionIndex, true, insp);
 			insp.checkFailed();

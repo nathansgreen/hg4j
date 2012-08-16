@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
 import org.tmatesoft.hg.util.LogFacility;
 
@@ -33,17 +34,18 @@ import org.tmatesoft.hg.util.LogFacility;
  * @author TMate Software Ltd.
  */
 public final class HgBookmarks {
-	private final HgRepository repo;
+	private final Internals internalRepo;
 	private Map<String, Nodeid> bookmarks = Collections.emptyMap();
 	private String activeBookmark; 
 
-	HgBookmarks(HgRepository hgRepo) {
-		repo = hgRepo;
+	HgBookmarks(Internals internals) {
+		internalRepo = internals;
 	}
 	
 	/*package-local*/ void read() throws HgInvalidControlFileException {
-		final LogFacility log = repo.getContext().getLog();
-		File all = new File (repo.getRepositoryRoot(), HgRepositoryFiles.Bookmarks.getName());
+		final LogFacility log = internalRepo.getContext().getLog();
+		final HgRepository repo = internalRepo.getRepo();
+		File all = internalRepo.getFileFromRepoDir(HgRepositoryFiles.Bookmarks.getName());
 		LinkedHashMap<String, Nodeid> bm = new LinkedHashMap<String, Nodeid>();
 		if (all.canRead()) {
 			LineReader lr1 = new LineReader(all, log);
@@ -74,9 +76,9 @@ public final class HgBookmarks {
 		}
 		
 		activeBookmark = null;
-		File active = new File(repo.getRepositoryRoot(), HgRepositoryFiles.BookmarksCurrent.getName());
+		File active = internalRepo.getFileFromRepoDir(HgRepositoryFiles.BookmarksCurrent.getName());
 		if (active.canRead()) {
-			LineReader lr2 = new LineReader(active, repo.getContext().getLog());
+			LineReader lr2 = new LineReader(active, log);
 			ArrayList<String> c = new ArrayList<String>(2);
 			lr2.read(new LineReader.SimpleLineCollector(), c);
 			if (c.size() > 0) {

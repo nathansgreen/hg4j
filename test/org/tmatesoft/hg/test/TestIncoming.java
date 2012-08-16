@@ -32,8 +32,7 @@ import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgIncomingCommand;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.BasicSessionContext;
-import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -135,9 +134,9 @@ public class TestIncoming {
 
 	static File initEmptyTempRepo(String dirName) throws IOException {
 		File dest = createEmptyDir(dirName);
-		Internals implHelper = new Internals(new BasicSessionContext(null));
-		implHelper.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
-		implHelper.initEmptyRepository(new File(dest, ".hg"));
+		RepoInitializer ri = new RepoInitializer();
+		ri.setRequires(STORE | FNCACHE | DOTENCODE);
+		ri.initEmptyRepository(new File(dest, ".hg"));
 		return dest;
 	}
 }

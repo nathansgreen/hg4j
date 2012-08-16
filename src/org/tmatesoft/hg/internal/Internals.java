@@ -20,7 +20,6 @@ import static org.tmatesoft.hg.internal.RequiresFile.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -32,7 +31,6 @@ import java.util.List;
 import java.util.StringTokenizer;
 
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -77,17 +75,43 @@ public final class Internals {
 	
 	private int requiresFlags = 0;
 	private List<Filter.Factory> filterFactories;
-	private final SessionContext sessionContext;
+	private final HgRepository repo;
+	private final File repoDir;
 	private final boolean isCaseSensitiveFileSystem;
 	private final boolean shallCacheRevlogsInRepo;
+	private final DataAccessProvider dataAccess;
 
-	public Internals(SessionContext ctx) {
-		sessionContext = ctx;
+	public Internals(HgRepository hgRepo, File hgDir) {
+		repo = hgRepo;
+		repoDir = hgDir;
 		isCaseSensitiveFileSystem = !runningOnWindows();
+		SessionContext ctx = repo.getSessionContext();
 		shallCacheRevlogsInRepo = new PropertyMarshal(ctx).getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
+		dataAccess = new DataAccessProvider(ctx);
 	}
 	
-	public void parseRequires(HgRepository hgRepo, File requiresFile) throws HgInvalidControlFileException {
+	public boolean isInvalid() {
+		return !repoDir.exists() || !repoDir.isDirectory();
+	}
+	
+	public File getFileFromRepoDir(String name) {
+		return new File(repoDir, name);
+	}
+	
+	public SessionContext getContext() {
+		return repo.getSessionContext();
+	}
+	
+	public HgRepository getRepo() {
+		return repo;
+	}
+	
+	public DataAccessProvider getDataAccess() {
+		return dataAccess;
+	}
+
+	public void parseRequires() throws HgInvalidControlFileException {
+		File requiresFile =getFileFromRepoDir("requires");
 		try {
 			new RequiresFile().parse(this, requiresFile);
 		} catch (IOException ex) {
@@ -109,10 +133,7 @@ public final class Internals {
 
 	// XXX perhaps, should keep both fields right here, not in the HgRepository
 	public PathRewrite buildDataFilesHelper() {
-		// Note, tests in TestStorePath depend on the encoding not being cached
-		Charset cs = getFileEncoding();
-		// StoragePathHelper needs fine-grained control over char encoding, hence doesn't use EncodingHelper
-		return new StoragePathHelper((requiresFlags & STORE) != 0, (requiresFlags & FNCACHE) != 0, (requiresFlags & DOTENCODE) != 0, cs);
+		return new RepoInitializer().setRequires(requiresFlags).buildDataFilesHelper(getContext());
 	}
 
 	public PathRewrite buildRepositoryFilesHelper() {
@@ -127,41 +148,22 @@ public final class Internals {
 		}
 	}
 
-	public List<Filter.Factory> getFilters(HgRepository hgRepo) {
+	public List<Filter.Factory> getFilters() {
 		if (filterFactories == null) {
 			filterFactories = new ArrayList<Filter.Factory>();
-			ExtensionsSection cfg = hgRepo.getConfiguration().getExtensions();
+			ExtensionsSection cfg = repo.getConfiguration().getExtensions();
 			if (cfg.isEnabled("eol")) {
 				NewlineFilter.Factory ff = new NewlineFilter.Factory();
-				ff.initialize(hgRepo);
+				ff.initialize(repo);
 				filterFactories.add(ff);
 			}
 			if (cfg.isEnabled("keyword")) {
 				KeywordFilter.Factory ff = new KeywordFilter.Factory();
-				ff.initialize(hgRepo);
+				ff.initialize(repo);
 				filterFactories.add(ff);
 			}
 		}
 		return filterFactories;
-	}
-	
-	public void initEmptyRepository(File hgDir) throws IOException {
-		hgDir.mkdir();
-		FileOutputStream requiresFile = new FileOutputStream(new File(hgDir, "requires"));
-		StringBuilder sb = new StringBuilder(40);
-		sb.append("revlogv1\n");
-		if ((requiresFlags & STORE) != 0) {
-			sb.append("store\n");
-		}
-		if ((requiresFlags & FNCACHE) != 0) {
-			sb.append("fncache\n");
-		}
-		if ((requiresFlags & DOTENCODE) != 0) {
-			sb.append("dotencode\n");
-		}
-		requiresFile.write(sb.toString().getBytes());
-		requiresFile.close();
-		new File(hgDir, "store").mkdir(); // with that, hg verify says ok.
 	}
 	
 	public boolean isCaseSensitiveFileSystem() {
@@ -169,11 +171,12 @@ public final class Internals {
 	}
 	
 	public EncodingHelper buildFileNameEncodingHelper() {
-		return new EncodingHelper(getFileEncoding(), sessionContext);
+		SessionContext ctx = repo.getSessionContext();
+		return new EncodingHelper(getFileEncoding(ctx), ctx);
 	}
 	
-	private Charset getFileEncoding() {
-		Object altEncoding = sessionContext.getConfigurationProperty(CFG_PROPERTY_FS_FILENAME_ENCODING, null);
+	/*package-local*/ static Charset getFileEncoding(SessionContext ctx) {
+		Object altEncoding = ctx.getConfigurationProperty(CFG_PROPERTY_FS_FILENAME_ENCODING, null);
 		Charset cs;
 		if (altEncoding == null) {
 			cs = Charset.defaultCharset();
@@ -183,7 +186,7 @@ public final class Internals {
 			} catch (IllegalArgumentException ex) {
 				// both IllegalCharsetNameException and UnsupportedCharsetException are subclasses of IAE, too
 				// not severe enough to throw an exception, imo. Just record the fact it's bad ad we ignore it 
-				sessionContext.getLog().dump(Internals.class, Error, ex, String.format("Bad configuration value for filename encoding %s", altEncoding));
+				ctx.getLog().dump(Internals.class, Error, ex, String.format("Bad configuration value for filename encoding %s", altEncoding));
 				cs = Charset.defaultCharset();
 			}
 		}
@@ -245,9 +248,8 @@ public final class Internals {
 	/**
 	 * @see http://www.selenic.com/mercurial/hgrc.5.html
 	 */
-	public ConfigFile readConfiguration(HgRepository hgRepo, File repoRoot) throws IOException {
-		// XXX Internals now have sessionContext field, is there real need to extract one from the repo?
-		SessionContext sessionCtx = HgInternals.getContext(hgRepo);
+	public ConfigFile readConfiguration() throws IOException {
+		SessionContext sessionCtx = repo.getSessionContext();
 		ConfigFile configFile = new ConfigFile(sessionCtx);
 		File hgInstallRoot = findHgInstallRoot(sessionCtx); // may be null
 		//
@@ -288,7 +290,7 @@ public final class Internals {
 		}
 		// last one, overrides anything else
 		// <repo>/.hg/hgrc
-		configFile.addLocation(new File(repoRoot, "hgrc"));
+		configFile.addLocation(getFileFromRepoDir("hgrc"));
 		return configFile;
 	}
 	

@@ -34,7 +34,6 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
-import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
@@ -54,7 +53,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class HgRepository {
+public final class HgRepository implements SessionContext.Source {
 
 	// IMPORTANT: if new constants added, consider fixing HgInternals#wrongRevisionIndex and HgInvalidRevisionException#getMessage
 
@@ -100,7 +99,6 @@ public final class HgRepository {
 	private final File repoDir; // .hg folder
 	private final File workingDir; // .hg/../
 	private final String repoLocation;
-	private final DataAccessProvider dataAccess;
 	private final PathRewrite normalizePath; // normalized slashes but otherwise regular file names
 	private final PathRewrite dataPathHelper; // access to file storage area (usually under .hg/store/data/), with filenames mangled  
 	private final PathRewrite repoPathHelper; // access to system files
@@ -133,7 +131,6 @@ public final class HgRepository {
 		repoDir = null;
 		workingDir = null;
 		repoLocation = repositoryPath;
-		dataAccess = null;
 		dataPathHelper = repoPathHelper = null;
 		normalizePath = null;
 		sessionContext = null;
@@ -153,11 +150,10 @@ public final class HgRepository {
 		if (workingDir == null) {
 			throw new IllegalArgumentException(repoDir.toString());
 		}
-		impl = new org.tmatesoft.hg.internal.Internals(ctx);
 		repoLocation = repositoryPath;
 		sessionContext = ctx;
-		dataAccess = new DataAccessProvider(ctx);
-		impl.parseRequires(this, new File(repoDir, "requires"));
+		impl = new org.tmatesoft.hg.internal.Internals(this, repositoryRoot);
+		impl.parseRequires();
 		normalizePath = impl.buildNormalizePathRewrite(); 
 		dataPathHelper = impl.buildDataFilesHelper();
 		repoPathHelper = impl.buildRepositoryFilesHelper();
@@ -173,7 +169,7 @@ public final class HgRepository {
 	}
 
 	public boolean isInvalid() {
-		return repoDir == null || !repoDir.exists() || !repoDir.isDirectory();
+		return impl == null || impl.isInvalid();
 	}
 	
 	public HgChangelog getChangelog() {
@@ -210,12 +206,12 @@ public final class HgRepository {
 						tags.readGlobal(new StringReader(content));
 					} catch (CancelledException ex) {
 						 // IGNORE, can't happen, we did not configure cancellation
-						getContext().getLog().dump(getClass(), Debug, ex, null);
+						getSessionContext().getLog().dump(getClass(), Debug, ex, null);
 					} catch (IOException ex) {
 						// UnsupportedEncodingException can't happen (UTF8)
 						// only from readGlobal. Need to reconsider exceptions thrown from there:
 						// BufferedReader wraps String and unlikely to throw IOException, perhaps, log is enough?
-						getContext().getLog().dump(getClass(), Error, ex, null);
+						getSessionContext().getLog().dump(getClass(), Error, ex, null);
 						// XXX need to decide what to do this. failure to read single revision shall not break complete cycle
 					}
 				}
@@ -224,10 +220,10 @@ public final class HgRepository {
 			try {
 				file2read = new File(getWorkingDir(), HgTags.getPath());
 				tags.readGlobal(file2read); // XXX replace with HgDataFile.workingCopy
-				file2read = new File(repoDir, HgLocalTags.getName());
+				file2read = impl.getFileFromRepoDir(HgLocalTags.getName()); // XXX pass internalrepo to readLocal, keep filename there
 				tags.readLocal(file2read);
 			} catch (IOException ex) {
-				getContext().getLog().dump(getClass(), Error, ex, null);
+				getSessionContext().getLog().dump(getClass(), Error, ex, null);
 				throw new HgInvalidControlFileException("Failed to read tags", ex, file2read);
 			}
 		}
@@ -241,7 +237,7 @@ public final class HgRepository {
 	 */
 	public HgBranches getBranches() throws HgInvalidControlFileException {
 		if (branches == null) {
-			branches = new HgBranches(this);
+			branches = new HgBranches(impl);
 			branches.collect(ProgressSupport.Factory.get(null));
 		}
 		return branches;
@@ -253,7 +249,7 @@ public final class HgRepository {
 	 */
 	public HgMergeState getMergeState() {
 		if (mergeState == null) {
-			mergeState = new HgMergeState(this);
+			mergeState = new HgMergeState(impl);
 		}
 		return mergeState;
 	}
@@ -289,7 +285,7 @@ public final class HgRepository {
 	 * @throws HgInvalidControlFileException if attempt to read information about working copy parents from dirstate failed 
 	 */
 	public Pair<Nodeid,Nodeid> getWorkingCopyParents() throws HgInvalidControlFileException {
-		return HgDirstate.readParents(this, new File(repoDir, Dirstate.getName()));
+		return HgDirstate.readParents(impl);
 	}
 	
 	/**
@@ -298,7 +294,7 @@ public final class HgRepository {
 	 */
 	public String getWorkingCopyBranchName() throws HgInvalidControlFileException {
 		if (wcBranch == null) {
-			wcBranch = HgDirstate.readBranch(this, new File(repoDir, "branch"));
+			wcBranch = HgDirstate.readBranch(impl);
 		}
 		return wcBranch;
 	}
@@ -328,12 +324,12 @@ public final class HgRepository {
 	public HgRepoConfig getConfiguration() /* XXX throws HgInvalidControlFileException? Description of the exception suggests it is only for files under ./hg/*/ {
 		if (repoConfig == null) {
 			try {
-				ConfigFile configFile = impl.readConfiguration(this, getRepositoryRoot());
+				ConfigFile configFile = impl.readConfiguration();
 				repoConfig = new HgRepoConfig(configFile);
 			} catch (IOException ex) {
 				String m = "Errors while reading user configuration file";
-				getContext().getLog().dump(getClass(), Warn, ex, m);
-				return new HgRepoConfig(new ConfigFile(getContext())); // empty config, do not cache, allow to try once again
+				getSessionContext().getLog().dump(getClass(), Warn, ex, m);
+				return new HgRepoConfig(new ConfigFile(getSessionContext())); // empty config, do not cache, allow to try once again
 				//throw new HgInvalidControlFileException(m, ex, null);
 			}
 		}
@@ -362,9 +358,8 @@ public final class HgRepository {
 				}
 			};
 		}
-		File dirstateFile = new File(repoDir, Dirstate.getName());
-		HgDirstate ds = new HgDirstate(this, dirstateFile, pathFactory, canonicalPath);
-		ds.read(impl.buildFileNameEncodingHelper());
+		HgDirstate ds = new HgDirstate(impl, pathFactory, canonicalPath);
+		ds.read();
 		return ds;
 	}
 
@@ -381,7 +376,7 @@ public final class HgRepository {
 			try {
 				final List<String> errors = ignore.read(ignoreFile);
 				if (errors != null) {
-					getContext().getLog().dump(getClass(), Warn, "Syntax errors parsing %s:\n%s", ignoreFile.getName(), Internals.join(errors, ",\n"));
+					getSessionContext().getLog().dump(getClass(), Warn, "Syntax errors parsing %s:\n%s", ignoreFile.getName(), Internals.join(errors, ",\n"));
 				}
 			} catch (IOException ex) {
 				final String m = String.format("Error reading %s file", ignoreFile);
@@ -399,7 +394,7 @@ public final class HgRepository {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public String getCommitLastMessage() throws HgInvalidControlFileException {
-		File lastMessage = new File(repoDir, LastMessage.getPath());
+		File lastMessage = impl.getFileFromRepoDir(LastMessage.getPath());
 		if (!lastMessage.canRead()) {
 			return null;
 		}
@@ -416,7 +411,7 @@ public final class HgRepository {
 				try {
 					fr.close();
 				} catch (IOException ex) {
-					getContext().getLog().dump(getClass(), Warn, "Failed to close %s after read", lastMessage);
+					getSessionContext().getLog().dump(getClass(), Warn, "Failed to close %s after read", lastMessage);
 				}
 			}
 		}
@@ -439,7 +434,7 @@ public final class HgRepository {
 	public HgRepositoryLock getWorkingDirLock() {
 		if (wdLock == null) {
 			int timeout = getLockTimeout();
-			File lf = new File(getRepositoryRoot(), "wlock");
+			File lf = impl.getFileFromRepoDir("wlock");
 			synchronized (this) {
 				if (wdLock == null) {
 					wdLock = new HgRepositoryLock(lf, timeout);
@@ -453,7 +448,7 @@ public final class HgRepository {
 	public HgRepositoryLock getStoreLock() {
 		if (storeLock == null) {
 			int timeout = getLockTimeout();
-			File fl = new File(getRepositoryRoot(), repoPathHelper.rewrite("lock").toString());
+			File fl = impl.getFileFromRepoDir(repoPathHelper.rewrite("lock").toString());
 			synchronized (this) {
 				if (storeLock == null) {
 					storeLock = new HgRepositoryLock(fl, timeout);
@@ -470,14 +465,17 @@ public final class HgRepository {
 	 */
 	public HgBookmarks getBookmarks() throws HgInvalidControlFileException {
 		if (bookmarks == null) {
-			bookmarks = new HgBookmarks(this);
+			bookmarks = new HgBookmarks(impl);
 			bookmarks.read();
 		}
 		return bookmarks;
 	}
 
-	/*package-local*/ DataAccessProvider getDataAccess() {
-		return dataAccess;
+	/**
+	 * @return session environment of the repository
+	 */
+	public SessionContext getSessionContext() {
+		return sessionContext;
 	}
 
 	/**
@@ -492,7 +490,7 @@ public final class HgRepository {
 		}
 		File f = new File(repoDir, path.toString());
 		if (f.exists()) {
-			RevlogStream s = new RevlogStream(dataAccess, f);
+			RevlogStream s = new RevlogStream(impl.getDataAccess(), f);
 			if (impl.shallCacheRevlogs()) {
 				streamsCache.put(path, new SoftReference<RevlogStream>(s));
 			}
@@ -502,9 +500,9 @@ public final class HgRepository {
 				try {
 					File fake = File.createTempFile(f.getName(), null);
 					fake.deleteOnExit();
-					return new RevlogStream(dataAccess, fake);
+					return new RevlogStream(impl.getDataAccess(), fake);
 				} catch (IOException ex) {
-					getContext().getLog().dump(getClass(), Info, ex, null);
+					getSessionContext().getLog().dump(getClass(), Info, ex, null);
 				}
 			}
 		}
@@ -523,16 +521,12 @@ public final class HgRepository {
 		return new File(getWorkingDir(), dataFile.getPath().toString());
 	}
 	
-	/*package-local*/ SessionContext getContext() {
-		return sessionContext;
-	}
-	
 	/*package-local*/ Internals getImplHelper() {
 		return impl;
 	}
 
 	private List<Filter> instantiateFilters(Path p, Filter.Options opts) {
-		List<Filter.Factory> factories = impl.getFilters(this);
+		List<Filter.Factory> factories = impl.getFilters();
 		if (factories.isEmpty()) {
 			return Collections.emptyList();
 		}

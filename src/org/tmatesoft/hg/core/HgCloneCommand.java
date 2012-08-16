@@ -30,11 +30,10 @@ import java.util.LinkedList;
 import java.util.TreeMap;
 import java.util.zip.DeflaterOutputStream;
 
-import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
-import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
@@ -108,7 +107,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		// pull all changes from the very beginning
 		// XXX consult getContext() if by any chance has a bundle ready, if not, then read and register 
 		HgBundle completeChanges = srcRepo.getChanges(Collections.singletonList(NULL));
-		WriteDownMate mate = new WriteDownMate(destination);
+		WriteDownMate mate = new WriteDownMate(srcRepo.getSessionContext(), destination);
 		try {
 			// instantiate new repo in the destdir
 			mate.initEmptyRepository();
@@ -143,17 +142,17 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		private final ArrayList<Nodeid> revisionSequence = new ArrayList<Nodeid>(); // last visited nodes first
 
 		private final LinkedList<String> fncacheFiles = new LinkedList<String>();
-		private Internals implHelper;
+		private RepoInitializer repoInit;
 
-		public WriteDownMate(File destDir) {
+		public WriteDownMate(SessionContext ctx, File destDir) {
 			hgDir = new File(destDir, ".hg");
-			implHelper = new Internals(new BasicSessionContext(null));
-			implHelper.setStorageConfig(1, STORE | FNCACHE | DOTENCODE);
-			storagePathHelper = implHelper.buildDataFilesHelper();
+			repoInit = new RepoInitializer();
+			repoInit.setRequires(STORE | FNCACHE | DOTENCODE);
+			storagePathHelper = repoInit.buildDataFilesHelper(ctx);
 		}
 
 		public void initEmptyRepository() throws IOException {
-			implHelper.initEmptyRepository(hgDir);
+			repoInit.initEmptyRepository(hgDir);
 		}
 
 		public void complete() throws IOException {

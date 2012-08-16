@@ -35,7 +35,6 @@ import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
@@ -547,7 +546,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 						}
 					}
 					if (!sanity) {
-						HgInternals.getContext(repo).getLog().dump(getClass(), Error, "Index of revision %d:%s doesn't match any of requested", cs.getRevisionIndex(), cs.getNodeid().shortNotation());
+						repo.getSessionContext().getLog().dump(getClass(), Error, "Index of revision %d:%s doesn't match any of requested", cs.getRevisionIndex(), cs.getNodeid().shortNotation());
 					}
 					assert sanity;
 				}

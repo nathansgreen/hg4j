@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.Dirstate;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Debug;
 
 import java.io.BufferedReader;
@@ -33,6 +34,7 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.EncodingHelper;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -52,8 +54,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		Normal, Added, Removed, Merged, // order is being used in code of this class, don't change unless any use is checked
 	}
 
-	private final HgRepository repo;
-	private final File dirstateFile;
+	private final Internals repo;
 	private final Path.Source pathPool;
 	private final PathRewrite canonicalPathRewrite;
 	private Map<Path, Record> normal;
@@ -67,14 +68,14 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	private Pair<Nodeid, Nodeid> parents;
 	
 	// canonicalPath may be null if we don't need to check for names other than in dirstate
-	/*package-local*/ HgDirstate(HgRepository hgRepo, File dirstate, Path.Source pathSource, PathRewrite canonicalPath) {
+	/*package-local*/ HgDirstate(Internals hgRepo, Path.Source pathSource, PathRewrite canonicalPath) {
 		repo = hgRepo;
-		dirstateFile = dirstate; // XXX decide whether file names shall be kept local to reader (see #branches()) or passed from outside
 		pathPool = pathSource;
 		canonicalPathRewrite = canonicalPath;
 	}
 
-	/*package-local*/ void read(EncodingHelper encodingHelper) throws HgInvalidControlFileException {
+	/*package-local*/ void read() throws HgInvalidControlFileException {
+		EncodingHelper encodingHelper = repo.buildFileNameEncodingHelper();
 		normal = added = removed = merged = Collections.<Path, Record>emptyMap();
 		parents = new Pair<Nodeid,Nodeid>(Nodeid.NULL, Nodeid.NULL);
 		if (canonicalPathRewrite != null) {
@@ -82,6 +83,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		} else {
 			canonical2dirstateName = Collections.emptyMap();
 		}
+		File dirstateFile = getDirstateFile(repo);
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return;
 		}
@@ -170,15 +172,20 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		return parents;
 	}
 	
+	private static File getDirstateFile(Internals repo) {
+		return repo.getFileFromRepoDir(Dirstate.getName());
+	}
+
 	/**
 	 * @return pair of parents, both {@link Nodeid#NULL} if dirstate is not available
 	 */
-	/*package-local*/ static Pair<Nodeid, Nodeid> readParents(HgRepository repo, File dirstateFile) throws HgInvalidControlFileException {
+	/*package-local*/ static Pair<Nodeid, Nodeid> readParents(Internals internalRepo) throws HgInvalidControlFileException {
 		// do not read whole dirstate if all we need is WC parent information
+		File dirstateFile = getDirstateFile(internalRepo);
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return new Pair<Nodeid,Nodeid>(NULL, NULL);
 		}
-		DataAccess da = repo.getDataAccess().create(dirstateFile);
+		DataAccess da = internalRepo.getDataAccess().create(dirstateFile);
 		try {
 			if (da.isEmpty()) {
 				return new Pair<Nodeid,Nodeid>(NULL, NULL);
@@ -195,7 +202,8 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	 * TODO [post-1.0] it's really not a proper place for the method, need WorkingCopyContainer or similar
 	 * @return branch associated with the working directory
 	 */
-	/*package-local*/ static String readBranch(HgRepository repo, File branchFile) throws HgInvalidControlFileException {
+	/*package-local*/ static String readBranch(Internals internalRepo) throws HgInvalidControlFileException {
+		File branchFile = internalRepo.getFileFromRepoDir("branch");
 		String branch = HgRepository.DEFAULT_BRANCH_NAME;
 		if (branchFile.exists()) {
 			try {
@@ -207,7 +215,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				branch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
 				r.close();
 			} catch (FileNotFoundException ex) {
-				repo.getContext().getLog().dump(HgDirstate.class, Debug, ex, null); // log verbose debug, exception might be legal here 
+				internalRepo.getContext().getLog().dump(HgDirstate.class, Debug, ex, null); // log verbose debug, exception might be legal here 
 				// IGNORE
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Error reading file with branch information", ex, branchFile);

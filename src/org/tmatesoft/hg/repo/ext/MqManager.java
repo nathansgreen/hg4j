@@ -64,7 +64,7 @@ public class MqManager {
 		applied = allKnown = Collections.emptyList();
 		queueNames = Collections.emptyList();
 		File repoDir = HgInternals.getRepositoryDir(repo);
-		final LogFacility log = HgInternals.getContext(repo).getLog();
+		final LogFacility log = repo.getSessionContext().getLog();
 		try {
 			File queues = new File(repoDir, "patches.queues");
 			if (queues.isFile()) {

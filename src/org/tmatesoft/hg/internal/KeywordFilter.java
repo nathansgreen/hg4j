@@ -25,7 +25,6 @@ import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Pair;
@@ -265,7 +264,7 @@ public class KeywordFilter implements Filter {
 			int csetRev = repo.getFileNode(path).getChangesetRevisionIndex(HgRepository.TIP);
 			return repo.getChangelog().getRevision(csetRev).shortNotation();
 		} catch (HgRuntimeException ex) {
-			HgInternals.getContext(repo).getLog().dump(getClass(), Error, ex, null);
+			repo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
 			return Nodeid.NULL.shortNotation(); // XXX perhaps, might return anything better? Not sure how hg approaches this. 
 		}
 	}
@@ -274,7 +273,7 @@ public class KeywordFilter implements Filter {
 		try {
 			return getChangeset().user();
 		} catch (HgRuntimeException ex) {
-			HgInternals.getContext(repo).getLog().dump(getClass(), Error, ex, null);
+			repo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
 			return "";
 		}
 	}
@@ -284,7 +283,7 @@ public class KeywordFilter implements Filter {
 		try {
 			d = getChangeset().date();
 		} catch (HgRuntimeException ex) {
-			HgInternals.getContext(repo).getLog().dump(getClass(), Error, ex, null);
+			repo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
 			d = new Date(0l);
 		}
 		return String.format("%tY/%<tm/%<td %<tH:%<tM:%<tS", d);

@@ -109,7 +109,7 @@ public class HgTags {
 				continue;
 			}
 			if (line.length() < 40+2 /*nodeid, space and at least single-char tagname*/) {
-				repo.getContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line); 
+				repo.getSessionContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line); 
 				continue;
 			}
 			int spacePos = line.indexOf(' ');
@@ -153,7 +153,7 @@ public class HgTags {
 				}
 				
 			} else {
-				repo.getContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line);
+				repo.getSessionContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line);
 			}
 		}
 	}

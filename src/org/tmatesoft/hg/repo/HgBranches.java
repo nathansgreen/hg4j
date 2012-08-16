@@ -39,6 +39,7 @@ import java.util.regex.Pattern;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -51,10 +52,12 @@ public class HgBranches {
 	
 	private final Map<String, BranchInfo> branches = new TreeMap<String, BranchInfo>();
 	private final HgRepository repo;
+	private final Internals internalRepo;
 	private boolean isCacheActual = false;
 
-	HgBranches(HgRepository hgRepo) {
-		repo = hgRepo;
+	HgBranches(Internals internals) {
+		internalRepo = internals;
+		repo = internals.getRepo(); // merely a cached value
 	}
 
 	private int readCache() {
@@ -101,24 +104,24 @@ public class HgBranches {
 			return lastInCache;
 		} catch (IOException ex) {
 			 // log error, but otherwise do nothing
-			repo.getContext().getLog().dump(getClass(), Warn, ex, null);
+			repo.getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 			// FALL THROUGH to return -1 indicating no cache information 
 		} catch (NumberFormatException ex) {
-			repo.getContext().getLog().dump(getClass(), Warn, ex, null);
+			repo.getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 			// FALL THROUGH
 		} catch (HgInvalidControlFileException ex) {
 			// shall not happen, thus log as error
-			repo.getContext().getLog().dump(getClass(), Error, ex, null);
+			repo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
 			// FALL THROUGH
 		} catch (HgInvalidRevisionException ex) {
-			repo.getContext().getLog().dump(getClass(), Error, ex, null);
+			repo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
 			// FALL THROUGH
 		} finally {
 			if (br != null) {
 				try {
 					br.close();
 				} catch (IOException ex) {
-					repo.getContext().getLog().dump(getClass(), Warn, ex, null); // ignore
+					repo.getSessionContext().getLog().dump(getClass(), Warn, ex, null); // ignore
 				}
 			}
 		}
@@ -275,7 +278,7 @@ public class HgBranches {
 
 	private File getCacheFile() {
 		// prior to 1.8 used to be .hg/branchheads.cache
-		return new File(repo.getRepositoryRoot(), "cache/branchheads");
+		return internalRepo.getFileFromRepoDir("cache/branchheads");
 	}
 
 	public static class BranchInfo {

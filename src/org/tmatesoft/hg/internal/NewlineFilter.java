@@ -28,7 +28,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -312,11 +311,11 @@ public class NewlineFilter implements Filter, Preview, Adaptable {
 //				return;
 //			}
 			// XXX perhaps, add HgDataFile.hasWorkingCopy and workingCopyContent()?
-			ConfigFile hgeol = new ConfigFile(HgInternals.getContext(hgRepo));
+			ConfigFile hgeol = new ConfigFile(hgRepo.getSessionContext());
 			try {
 				hgeol.addLocation(cfgFile);
 			} catch (HgInvalidFileException ex) {
-				HgInternals.getContext(hgRepo).getLog().dump(getClass(), Warn, ex, null);
+				hgRepo.getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 			}
 			nativeRepoFormat = hgeol.getSection("repository").get("native");
 			if (nativeRepoFormat == null) {
@@ -339,7 +338,7 @@ public class NewlineFilter implements Filter, Preview, Adaptable {
 				} else if ("BIN".equals(e.getValue())) {
 					binPatterns.add(e.getKey());
 				} else {
-					HgInternals.getContext(hgRepo).getLog().dump(getClass(), Warn, "Can't recognize .hgeol entry: %s for %s", e.getValue(), e.getKey());
+					hgRepo.getSessionContext().getLog().dump(getClass(), Warn, "Can't recognize .hgeol entry: %s for %s", e.getValue(), e.getKey());
 				}
 			}
 			if (!crlfPatterns.isEmpty()) {

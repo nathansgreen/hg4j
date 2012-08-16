@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.tmatesoft.hg.internal.RequiresFile.*;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,8 +27,10 @@ import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.util.PathRewrite;
 
 /**
@@ -42,7 +46,8 @@ public class TestStorePath {
 	private PathRewrite storePathHelper;
 	private final Map<String, Object> propertyOverrides = new HashMap<String, Object>();
 
-	private Internals internals;
+	private final SessionContext sessionCtx;
+	private final RepoInitializer repoInit;
 
 	public static void main(String[] args) throws Throwable {
 		final TestStorePath test = new TestStorePath();
@@ -54,9 +59,9 @@ public class TestStorePath {
 	
 	public TestStorePath() {
 		propertyOverrides.put("hg.consolelog.debug", true);
-		internals = new Internals(new BasicSessionContext(propertyOverrides, null));
-		internals.setStorageConfig(1, 0x7);
-		storePathHelper = internals.buildDataFilesHelper();
+		sessionCtx = new BasicSessionContext(propertyOverrides, null);
+		repoInit = new RepoInitializer().setRequires(STORE + FNCACHE + DOTENCODE);
+		storePathHelper = repoInit.buildDataFilesHelper(sessionCtx);
 	}
 	
 	@Before
@@ -120,11 +125,11 @@ public class TestStorePath {
 		String s = "Привет.txt";
 		//
 		propertyOverrides.put(Internals.CFG_PROPERTY_FS_FILENAME_ENCODING, "cp1251");
-		PathRewrite sph = internals.buildDataFilesHelper();
+		PathRewrite sph = repoInit.buildDataFilesHelper(sessionCtx);
 		errorCollector.checkThat(sph.rewrite(s), CoreMatchers.<CharSequence>equalTo("store/data/~cf~f0~e8~e2~e5~f2.txt.i"));
 		//
 		propertyOverrides.put(Internals.CFG_PROPERTY_FS_FILENAME_ENCODING, "UTF8");
-		sph = internals.buildDataFilesHelper();
+		sph = repoInit.buildDataFilesHelper(sessionCtx);
 		errorCollector.checkThat(sph.rewrite(s), CoreMatchers.<CharSequence>equalTo("store/data/~d0~9f~d1~80~d0~b8~d0~b2~d0~b5~d1~82.txt.i"));
 	}
 }

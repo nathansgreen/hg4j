@@ -26,7 +26,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
@@ -73,8 +72,8 @@ public class HgInternals {
 				}
 			};
 		}
-		HgDirstate ds = new HgDirstate(repo, new File(repo.getRepositoryRoot(), "dirstate"), new Path.SimpleSource(), canonicalPath);
-		ds.read(repo.getImplHelper().buildFileNameEncodingHelper());
+		HgDirstate ds = new HgDirstate(repo.getImplHelper(), new Path.SimpleSource(), canonicalPath);
+		ds.read();
 		return ds;
 	}
 	
@@ -145,16 +144,9 @@ public class HgInternals {
 		// Impl note: simple source is enough as files in the working dir are all unique
 		// even if they might get reused (i.e. after FileIterator#reset() and walking once again),
 		// path caching is better to be done in the code which knows that path are being reused 
-		return new FileWalker(repo.getContext(), repoRoot, pathSrc, workindDirScope);
+		return new FileWalker(repo.getSessionContext(), repoRoot, pathSrc, workindDirScope);
 	}
 	
-	// expose otherwise package-local information primarily to use in our own o.t.hg.core package
-	public static SessionContext getContext(HgRepository repo) {
-		// TODO SessionContext.Source and HgRepo to implement it
-		return repo.getContext();
-	}
-
-
 	// Convenient check of revision index for validity (not all negative values are wrong as long as we use negative constants)
 	public static boolean wrongRevisionIndex(int rev) {
 		// TODO Another method to check,throw and expand TIP at once (check[Revision|Revlog]Index()

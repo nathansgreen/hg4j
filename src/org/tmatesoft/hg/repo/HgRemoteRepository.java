@@ -67,7 +67,7 @@ import org.tmatesoft.hg.internal.PropertyMarshal;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgRemoteRepository {
+public class HgRemoteRepository implements SessionContext.Source {
 	
 	private final URL url;
 	private final SSLContext sslContext;
@@ -185,6 +185,10 @@ public class HgRemoteRepository {
 		} else {
 			return String.format("%s://%s%s", url.getProtocol(), url.getHost(), url.getPath());
 		}
+	}
+	
+	public SessionContext getSessionContext() {
+		return sessionContext;
 	}
 
 	public List<Nodeid> heads() throws HgRemoteConnectionException {

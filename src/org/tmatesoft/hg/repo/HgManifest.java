@@ -169,7 +169,7 @@ public final class HgManifest extends Revlog {
 			i++;
 		} while (manifestFirst == BAD_REVISION && csetFirst+i <= csetLast);
 		if (manifestFirst == BAD_REVISION) {
-			getRepo().getContext().getLog().dump(getClass(), Info, "None of changesets [%d..%d] have associated manifest revision", csetFirst, csetLast);
+			getRepo().getSessionContext().getLog().dump(getClass(), Info, "None of changesets [%d..%d] have associated manifest revision", csetFirst, csetLast);
 			// we ran through all revisions in [start..end] and none of them had manifest.
 			// we reported that to inspector and proceeding is done now.
 			return;
@@ -618,7 +618,7 @@ public final class HgManifest extends Revlog {
 				// TODO calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
 				// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
 				if (manifest.isNull()) {
-					repo.getContext().getLog().dump(getClass(), Severity.Warn, "Changeset %d has no associated manifest entry", u);
+					repo.getSessionContext().getLog().dump(getClass(), Severity.Warn, "Changeset %d has no associated manifest entry", u);
 					// keep -1 in the changelog2manifest map.
 				} else {
 					changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);

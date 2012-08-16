@@ -154,7 +154,7 @@ public class Main {
 
 	// TODO as test
 	private void readConfigFile() throws Exception {
-		ConfigFile configFile = new ConfigFile(HgInternals.getContext(hgRepo));
+		ConfigFile configFile = new ConfigFile(hgRepo.getSessionContext());
 		configFile.addLocation(new File(System.getProperty("user.home"), "test-cfg/aaa/config1"));
 		for (String s : configFile.getSectionNames()) {
 			System.out.printf("[%s]\n", s);

@@ -28,7 +28,6 @@ import org.junit.Test;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.FileInfo;
@@ -66,7 +65,7 @@ public class TestFileFlags {
 	public void testFlagsInWorkingCopy() throws Exception {
 		File repoRoot = repo.getWorkingDir();
 		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), repo.getToRepoPathHelper()));
-		FileWalker fw = new FileWalker(HgInternals.getContext(repo), repoRoot, pathSrc);
+		FileWalker fw = new FileWalker(repo.getSessionContext(), repoRoot, pathSrc);
 		
 		if (Internals.runningOnWindows()) {
 			System.out.println("Executing tests on Windows, no actual file flags in working area are checked");
