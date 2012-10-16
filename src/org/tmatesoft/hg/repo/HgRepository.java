@@ -164,6 +164,17 @@ public final class HgRepository implements SessionContext.Source {
 		return getClass().getSimpleName() + "[" + getLocation() + (isInvalid() ? "(BAD)" : "") + "]";
 	}                         
 	
+	/**
+	 * Path to repository which has been used to initialize this instance. The value is always present, even 
+	 * if no repository has been found at that location ({@link #isInvalid()} is <code>true</code>) and serves 
+	 * as an extra description of the failure.
+	 * 
+	 * <p> It's important to understand this is purely descriptive attribute, it's kept as close as possible to 
+	 * original value users supply to {@link HgLookup}. To get actual repository location, use methods that 
+	 * provide {@link File}, e.g. {@link #getWorkingDir()}
+	 * 
+	 * @return repository location information, never <code>null</code>
+	 */
 	public String getLocation() {
 		return repoLocation;
 	}
