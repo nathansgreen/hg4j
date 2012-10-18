@@ -19,7 +19,6 @@ package org.tmatesoft.hg.repo;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 
@@ -58,28 +57,22 @@ public class HgLookup {
 
 	// look up in specified location and above
 	public HgRepository detect(File location) throws HgRepositoryNotFoundException {
-		try {
-			File dir = location.getAbsoluteFile();
-			File repository;
-			do {
-				repository = new File(dir, ".hg");
-				if (repository.exists() && repository.isDirectory()) {
-					break;
-				}
-				repository = null;
-				dir = dir.getParentFile();
-				
-			} while(dir != null);
-			if (repository == null) {
-				throw new HgRepositoryNotFoundException(String.format("Can't locate .hg/ directory of Mercurial repository in %s nor in parent dirs", location)).setLocation(location.getPath());
+		File dir = location.getAbsoluteFile();
+		File repository;
+		do {
+			repository = new File(dir, ".hg");
+			if (repository.exists() && repository.isDirectory()) {
+				break;
 			}
-			String repoPath = repository.getParentFile().getCanonicalPath();
-			return new HgRepository(getContext(), repoPath, repository);
-		} catch (IOException ex) {
-			HgRepositoryNotFoundException t = new HgRepositoryNotFoundException("Failed to access repository");
-			t.setLocation(location.getPath()).initCause(ex);
-			throw t;
+			repository = null;
+			dir = dir.getParentFile();
+			
+		} while(dir != null);
+		if (repository == null) {
+			throw new HgRepositoryNotFoundException(String.format("Can't locate .hg/ directory of Mercurial repository in %s nor in parent dirs", location)).setLocation(location.getPath());
 		}
+		String repoPath = repository.getParentFile().getAbsolutePath();
+		return new HgRepository(getContext(), repoPath, repository);
 	}
 	
 	public HgBundle loadBundle(File location) throws HgRepositoryNotFoundException {
