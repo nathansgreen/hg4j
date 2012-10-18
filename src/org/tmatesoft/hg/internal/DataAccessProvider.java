@@ -55,16 +55,21 @@ public class DataAccessProvider {
 	public DataAccessProvider(SessionContext ctx) {
 		context = ctx;
 		PropertyMarshal pm = new PropertyMarshal(ctx);
-		mapioMagicBoundary = pm.getInt(CFG_PROPERTY_MAPIO_LIMIT, DEFAULT_MAPIO_LIMIT);
+		mapioMagicBoundary = mapioBoundaryValue(pm.getInt(CFG_PROPERTY_MAPIO_LIMIT, DEFAULT_MAPIO_LIMIT));
 		bufferSize = pm.getInt(CFG_PROPERTY_FILE_BUFFER_SIZE, DEFAULT_FILE_BUFFER);
 		mapioBufSize = pm.getInt(CFG_PROPERTY_MAPIO_BUFFER_SIZE, DEFAULT_MAPIO_BUFFER);
 	}
 	
 	public DataAccessProvider(SessionContext ctx, int mapioBoundary, int regularBufferSize, int mapioBufferSize) {
 		context = ctx;
-		mapioMagicBoundary = mapioBoundary == 0 ? Integer.MAX_VALUE : mapioBoundary;
+		mapioMagicBoundary = mapioBoundaryValue(mapioBoundary);
 		bufferSize = regularBufferSize;
 		mapioBufSize = mapioBufferSize;
+	}
+
+	// ensure contract of CFG_PROPERTY_MAPIO_LIMIT, for mapioBoundary == 0 use MAX_VALUE so that no file is memmap-ed
+	private static int mapioBoundaryValue(int mapioBoundary) {
+		return mapioBoundary == 0 ? Integer.MAX_VALUE : mapioBoundary;
 	}
 
 	public DataAccess create(File f) {
