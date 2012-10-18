@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,36 +28,43 @@ import java.io.InputStreamReader;
  * @author TMate Software Ltd.
  */
 public class RequiresFile {
-	public static final int STORE = 1;
-	public static final int FNCACHE = 2;
-	public static final int DOTENCODE = 4;
+	public static final int STORE 		= 1 << 0;
+	public static final int FNCACHE		= 1 << 1;
+	public static final int DOTENCODE	= 1 << 2;
+	public static final int REVLOGV0	= 1 << 31;
+	public static final int REVLOGV1	= 1 << 30;
 	
 	public RequiresFile() {
 	}
 
-	public void parse(Internals repoImpl, File requiresFile) throws IOException {
+	/**
+	 * Settings from requires file as bits
+	 */
+	public int parse(File requiresFile) throws IOException {
 		if (!requiresFile.exists()) {
-			return;
+			// TODO check what's going on in Mercurial if no requires exist
+			return 0;
 		}
 		BufferedReader br = null;
 		try {
-			boolean revlogv1 = false;
-			boolean store = false;
-			boolean fncache = false;
-			boolean dotencode = false;
 			br = new BufferedReader(new InputStreamReader(new FileInputStream(requiresFile)));
 			String line;
-			while ((line = br.readLine()) != null) {
-				revlogv1 |= "revlogv1".equals(line);
-				store |= "store".equals(line);
-				fncache |= "fncache".equals(line);
-				dotencode |= "dotencode".equals(line);
-			}
 			int flags = 0;
-			flags += store ? STORE : 0;
-			flags += fncache ? FNCACHE : 0;
-			flags += dotencode ? DOTENCODE : 0;
-			repoImpl.setStorageConfig(revlogv1 ? 1 : 0, flags);
+			while ((line = br.readLine()) != null) {
+				if ("revlogv1".equals(line)) {
+					flags |= REVLOGV1;
+				} else if ("store".equals(line)) {
+					flags |= STORE;
+				} else if ("fncache".equals(line)) {
+					flags |= FNCACHE;
+				} else if ("dotencode".equals(line)) {
+					flags |= DOTENCODE;
+				}
+			}
+			if ((flags & REVLOGV1) == 0) {
+				flags |= REVLOGV0; // TODO check if there's no special flag for V0 indeed
+			}
+			return flags;
 		} finally {
 			if (br != null) {
 				br.close();

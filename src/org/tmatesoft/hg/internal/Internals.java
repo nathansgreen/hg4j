@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.internal;
 
-import static org.tmatesoft.hg.internal.RequiresFile.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.io.File;
@@ -31,7 +30,8 @@ import java.util.List;
 import java.util.StringTokenizer;
 
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -73,29 +73,66 @@ public final class Internals {
 	 */
 	public static final String CFG_PROPERTY_FS_FILENAME_ENCODING = "hg.fs.filename.encoding";
 	
-	private int requiresFlags = 0;
 	private List<Filter.Factory> filterFactories;
 	private final HgRepository repo;
 	private final File repoDir;
 	private final boolean isCaseSensitiveFileSystem;
 	private final boolean shallCacheRevlogsInRepo;
 	private final DataAccessProvider dataAccess;
+	
+	@SuppressWarnings("unused")
+	private final int requiresFlags;
 
-	public Internals(HgRepository hgRepo, File hgDir) {
+	private final PathRewrite dataPathHelper; // access to file storage area (usually under .hg/store/data/), with filenames mangled  
+	private final PathRewrite repoPathHelper; // access to system files (under .hg/store if requires has 'store' flag)
+
+	public Internals(HgRepository hgRepo, File hgDir) throws HgRuntimeException {
 		repo = hgRepo;
 		repoDir = hgDir;
 		isCaseSensitiveFileSystem = !runningOnWindows();
 		SessionContext ctx = repo.getSessionContext();
 		shallCacheRevlogsInRepo = new PropertyMarshal(ctx).getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
 		dataAccess = new DataAccessProvider(ctx);
+		RepoInitializer repoInit = new RepoInitializer().initRequiresFromFile(repoDir);
+		requiresFlags = repoInit.getRequires();
+		dataPathHelper = repoInit.buildDataFilesHelper(getContext());
+		repoPathHelper = repoInit.buildStoreFilesHelper();
 	}
 	
 	public boolean isInvalid() {
 		return !repoDir.exists() || !repoDir.isDirectory();
 	}
 	
+	/**
+	 * Access files under ".hg/".
+	 * File not necessarily exists, this method is merely a factory for Files at specific, configuration-dependent location. 
+	 * 
+	 * @param name shall be normalized path
+	 */
 	public File getFileFromRepoDir(String name) {
 		return new File(repoDir, name);
+	}
+
+	/**
+	 * Access files under ".hg/store/" or ".hg/" depending on use of 'store' in requires.
+	 * File not necessarily exists, this method is merely a factory for Files at specific, configuration-dependent location.
+	 *  
+	 * @param name shall be normalized path
+	 */
+	public File getFileFromStoreDir(String name) {
+		CharSequence location = repoPathHelper.rewrite(name);
+		return new File(repoDir, location.toString());
+	}
+	
+	/**
+	 * Access files under ".hg/store/data", ".hg/store/dh/" or ".hg/data" according to settings in requires file.
+	 * File not necessarily exists, this method is merely a factory for Files at specific, configuration-dependent location.
+	 * 
+	 * @param name shall be normalized path, without .i or .d suffixes
+	 */
+	public File getFileFromDataDir(CharSequence path) {
+		CharSequence storagePath = dataPathHelper.rewrite(path);
+		return new File(repoDir, storagePath.toString());
 	}
 	
 	public SessionContext getContext() {
@@ -110,41 +147,11 @@ public final class Internals {
 		return dataAccess;
 	}
 
-	public void parseRequires() throws HgInvalidControlFileException {
-		File requiresFile =getFileFromRepoDir("requires");
-		try {
-			new RequiresFile().parse(this, requiresFile);
-		} catch (IOException ex) {
-			throw new HgInvalidControlFileException("Parse failed", ex, requiresFile);
-		}
-	}
-
-	public/*for tests, otherwise pkg*/ void setStorageConfig(int version, int flags) {
-		requiresFlags = flags;
-	}
-	
 	public PathRewrite buildNormalizePathRewrite() {
 		if (runningOnWindows()) {
 			return new WinToNixPathRewrite();
 		} else {
 			return new PathRewrite.Empty(); // or strip leading slash, perhaps? 
-		}
-	}
-
-	// XXX perhaps, should keep both fields right here, not in the HgRepository
-	public PathRewrite buildDataFilesHelper() {
-		return new RepoInitializer().setRequires(requiresFlags).buildDataFilesHelper(getContext());
-	}
-
-	public PathRewrite buildRepositoryFilesHelper() {
-		if ((requiresFlags & STORE) != 0) {
-			return new PathRewrite() {
-				public CharSequence rewrite(CharSequence path) {
-					return "store/" + path;
-				}
-			};
-		} else {
-			return new PathRewrite.Empty();
 		}
 	}
 
@@ -192,6 +199,15 @@ public final class Internals {
 		}
 		return cs;
 	}
+	
+	/**
+	 * Access to mangled name of a file in repository storage, may come handy for debug.
+	 * @return mangled path of the repository file
+	 */
+	public CharSequence getStoragePath(HgDataFile df) {
+		return dataPathHelper.rewrite(df.getPath().toString());
+	}
+
 
 	public static boolean runningOnWindows() {
 		return System.getProperty("os.name").indexOf("Windows") != -1;

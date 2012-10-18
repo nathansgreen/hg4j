@@ -24,6 +24,7 @@ import java.util.Map;
 import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -264,7 +265,7 @@ public class HgChangeset implements Cloneable {
 			synchronized (shared) {
 				// ensure field is initialized only once 
 				if (shared.phaseHelper == null) {
-					shared.phaseHelper = new PhasesHelper(getRepo(), shared.parentHelper);
+					shared.phaseHelper = new PhasesHelper(HgInternals.getImplementationRepo(getRepo()), shared.parentHelper);
 				}
 			}
 		}

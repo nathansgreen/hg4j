@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 
 import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.util.PathRewrite;
 
 /**
@@ -39,6 +40,16 @@ public class RepoInitializer {
 	public RepoInitializer() {
 	}
 	
+	public RepoInitializer initRequiresFromFile(File repoDir) throws HgInvalidControlFileException {
+		File requiresFile = new File(repoDir, "requires"); // not #getFileFromRepoDir() just in case it gets modified later 
+		try {
+			int flags = new RequiresFile().parse(requiresFile);
+			return setRequires(flags);
+		} catch (IOException ex) {
+			throw new HgInvalidControlFileException("Parse failed", ex, requiresFile);
+		}
+	}
+	
 	public RepoInitializer setRequires(int flags) {
 		requiresFlags = flags;
 		return this;
@@ -48,9 +59,9 @@ public class RepoInitializer {
 		return requiresFlags;
 	}
 
-	public void initEmptyRepository(File hgDir) throws IOException {
-		hgDir.mkdir();
-		FileOutputStream requiresFile = new FileOutputStream(new File(hgDir, "requires"));
+	public void initEmptyRepository(File repoDir) throws IOException {
+		repoDir.mkdirs();
+		FileOutputStream requiresFile = new FileOutputStream(new File(repoDir, "requires"));
 		StringBuilder sb = new StringBuilder(40);
 		sb.append("revlogv1\n");
 		if ((requiresFlags & STORE) != 0) {
@@ -64,12 +75,24 @@ public class RepoInitializer {
 		}
 		requiresFile.write(sb.toString().getBytes());
 		requiresFile.close();
-		new File(hgDir, "store").mkdir(); // with that, hg verify says ok.
+		new File(repoDir, "store").mkdir(); // with that, hg verify says ok.
 	}
 
 	public PathRewrite buildDataFilesHelper(SessionContext ctx) {
 		Charset cs = Internals.getFileEncoding(ctx);
 		// StoragePathHelper needs fine-grained control over char encoding, hence doesn't use EncodingHelper
 		return new StoragePathHelper((requiresFlags & STORE) != 0, (requiresFlags & FNCACHE) != 0, (requiresFlags & DOTENCODE) != 0, cs);
+	}
+
+	public PathRewrite buildStoreFilesHelper() {
+		if ((requiresFlags & STORE) != 0) {
+			return new PathRewrite() {
+				public CharSequence rewrite(CharSequence path) {
+					return "store/" + path;
+				}
+			};
+		} else {
+			return new PathRewrite.Empty();
+		}
 	}
 }

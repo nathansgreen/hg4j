@@ -88,11 +88,11 @@ public class HgInternals {
 	public HgSubrepoLocation newSubrepo(Path loc, String src, Kind kind, Nodeid rev) {
 		return new HgSubrepoLocation(repo, loc, src, kind, rev);
 	}
-
-	public static File getRepositoryDir(HgRepository hgRepo) {
-		return hgRepo.getRepositoryRoot();
-	}
 	
+	public static Internals getImplementationRepo(HgRepository hgRepo) {
+		return hgRepo.getImplHelper();
+	}
+
 	/**
 	 * @param source where to read definitions from
 	 * @param globPathRewrite <code>null</code> to use default, or pass an instance to override defaults

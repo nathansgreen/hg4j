@@ -99,9 +99,12 @@ public final class HgRepository implements SessionContext.Source {
 	private final File repoDir; // .hg folder
 	private final File workingDir; // .hg/../
 	private final String repoLocation;
-	private final PathRewrite normalizePath; // normalized slashes but otherwise regular file names
-	private final PathRewrite dataPathHelper; // access to file storage area (usually under .hg/store/data/), with filenames mangled  
-	private final PathRewrite repoPathHelper; // access to system files
+	/*
+	 * normalized slashes but otherwise regular file names
+	 * the only front-end path rewrite, kept here as rest of the library shall
+	 * not bother with names normalization.
+	 */
+	private final PathRewrite normalizePath;
 	private final SessionContext sessionContext;
 
 	private HgChangelog changelog;
@@ -131,7 +134,6 @@ public final class HgRepository implements SessionContext.Source {
 		repoDir = null;
 		workingDir = null;
 		repoLocation = repositoryPath;
-		dataPathHelper = repoPathHelper = null;
 		normalizePath = null;
 		sessionContext = null;
 		impl = null;
@@ -153,10 +155,7 @@ public final class HgRepository implements SessionContext.Source {
 		repoLocation = repositoryPath;
 		sessionContext = ctx;
 		impl = new org.tmatesoft.hg.internal.Internals(this, repositoryRoot);
-		impl.parseRequires();
 		normalizePath = impl.buildNormalizePathRewrite(); 
-		dataPathHelper = impl.buildDataFilesHelper();
-		repoPathHelper = impl.buildRepositoryFilesHelper();
 	}
 
 	@Override
@@ -185,8 +184,12 @@ public final class HgRepository implements SessionContext.Source {
 	
 	public HgChangelog getChangelog() {
 		if (changelog == null) {
-			CharSequence storagePath = repoPathHelper.rewrite("00changelog.i");
-			RevlogStream content = resolve(Path.create(storagePath), true);
+			File chlogFile = impl.getFileFromStoreDir("00changelog.i");
+			if (!chlogFile.exists()) {
+				// fake its existence
+				chlogFile = fakeNonExistentFile(chlogFile);
+			}
+			RevlogStream content = new RevlogStream(impl.getDataAccess(), chlogFile);
 			changelog = new HgChangelog(this, content);
 		}
 		return changelog;
@@ -194,7 +197,11 @@ public final class HgRepository implements SessionContext.Source {
 	
 	public HgManifest getManifest() {
 		if (manifest == null) {
-			RevlogStream content = resolve(Path.create(repoPathHelper.rewrite("00manifest.i")), true);
+			File manifestFile = impl.getFileFromStoreDir("00manifest.i");
+			if (!manifestFile.exists()) {
+				manifestFile = fakeNonExistentFile(manifestFile);
+			}
+			RevlogStream content = new RevlogStream(impl.getDataAccess(), manifestFile);
 			manifest = new HgManifest(this, content, impl.buildFileNameEncodingHelper());
 		}
 		return manifest;
@@ -267,19 +274,12 @@ public final class HgRepository implements SessionContext.Source {
 	
 	public HgDataFile getFileNode(String path) {
 		CharSequence nPath = normalizePath.rewrite(path);
-		CharSequence storagePath = dataPathHelper.rewrite(nPath);
-		RevlogStream content = resolve(Path.create(storagePath), false);
 		Path p = Path.create(nPath);
-		if (content == null) {
-			return new HgDataFile(this, p);
-		}
-		return new HgDataFile(this, p, content);
+		return getFileNode(p);
 	}
 
 	public HgDataFile getFileNode(Path path) {
-		CharSequence storagePath = dataPathHelper.rewrite(path.toString());
-		RevlogStream content = resolve(Path.create(storagePath), false);
-		// XXX no content when no file? or HgDataFile.exists() to detect that?
+		RevlogStream content = resolveStoreFile(path);
 		if (content == null) {
 			return new HgDataFile(this, path);
 		}
@@ -345,16 +345,6 @@ public final class HgRepository implements SessionContext.Source {
 			}
 		}
 		return repoConfig;
-	}
-
-	// shall be of use only for internal classes 
-	/*package-local*/ File getRepositoryRoot() {
-		return repoDir;
-	}
-	
-	/*package-local, debug*/String getStoragePath(HgDataFile df) {
-		// may come handy for debug
-		return dataPathHelper.rewrite(df.getPath().toString()).toString();
 	}
 
 	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
@@ -459,7 +449,7 @@ public final class HgRepository implements SessionContext.Source {
 	public HgRepositoryLock getStoreLock() {
 		if (storeLock == null) {
 			int timeout = getLockTimeout();
-			File fl = impl.getFileFromRepoDir(repoPathHelper.rewrite("lock").toString());
+			File fl = impl.getFileFromStoreDir("lock");
 			synchronized (this) {
 				if (storeLock == null) {
 					storeLock = new HgRepositoryLock(fl, timeout);
@@ -491,33 +481,35 @@ public final class HgRepository implements SessionContext.Source {
 
 	/**
 	 * Perhaps, should be separate interface, like ContentLookup
-	 * path - repository storage path (i.e. one usually with .i or .d)
+	 * @param path - normalized file name
+	 * @return <code>null</code> if path doesn't resolve to a existing file
 	 */
-	/*package-local*/ RevlogStream resolve(Path path, boolean shallFakeNonExistent) {
+	/*package-local*/ RevlogStream resolveStoreFile(Path path) {
 		final SoftReference<RevlogStream> ref = streamsCache.get(path);
 		RevlogStream cached = ref == null ? null : ref.get();
 		if (cached != null) {
 			return cached;
 		}
-		File f = new File(repoDir, path.toString());
+		File f = impl.getFileFromDataDir(path);
 		if (f.exists()) {
 			RevlogStream s = new RevlogStream(impl.getDataAccess(), f);
 			if (impl.shallCacheRevlogs()) {
 				streamsCache.put(path, new SoftReference<RevlogStream>(s));
 			}
 			return s;
-		} else {
-			if (shallFakeNonExistent) {
-				try {
-					File fake = File.createTempFile(f.getName(), null);
-					fake.deleteOnExit();
-					return new RevlogStream(impl.getDataAccess(), fake);
-				} catch (IOException ex) {
-					getSessionContext().getLog().dump(getClass(), Info, ex, null);
-				}
-			}
 		}
-		return null; // XXX empty stream instead?
+		return null;
+	}
+	
+	private File fakeNonExistentFile(File expected) throws HgInvalidFileException {
+		try {
+			File fake = File.createTempFile(expected.getName(), null);
+			fake.deleteOnExit();
+			return fake;
+		} catch (IOException ex) {
+			getSessionContext().getLog().dump(getClass(), Info, ex, null);
+			throw new HgInvalidFileException(String.format("Failed to fake existence of file %s", expected), ex);
+		}
 	}
 	
 	/*package-local*/ List<Filter> getFiltersFromRepoToWorkingDir(Path p) {

@@ -52,7 +52,7 @@ public final class HgUpdateConfigCommand extends HgAbstractCommand<HgUpdateConfi
 	
 	public static HgUpdateConfigCommand forRepository(HgRepository hgRepo) {
 		// XXX HgRepository to implement SessionContext.Provider (with getContext())?
-		return new HgUpdateConfigCommand(hgRepo.getSessionContext(), new File(HgInternals.getRepositoryDir(hgRepo), "hgrc"));
+		return new HgUpdateConfigCommand(hgRepo.getSessionContext(), HgInternals.getImplementationRepo(hgRepo).getFileFromRepoDir("hgrc"));
 	}
 	
 	public static HgUpdateConfigCommand forUser(SessionContext ctx) {

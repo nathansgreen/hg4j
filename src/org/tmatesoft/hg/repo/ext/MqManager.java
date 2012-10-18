@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
@@ -63,16 +64,16 @@ public class MqManager {
 	public void refresh() throws HgInvalidControlFileException {
 		applied = allKnown = Collections.emptyList();
 		queueNames = Collections.emptyList();
-		File repoDir = HgInternals.getRepositoryDir(repo);
+		Internals repoImpl = HgInternals.getImplementationRepo(repo);
 		final LogFacility log = repo.getSessionContext().getLog();
 		try {
-			File queues = new File(repoDir, "patches.queues");
+			File queues = repoImpl.getFileFromRepoDir("patches.queues");
 			if (queues.isFile()) {
 				LineReader lr = new LineReader(queues, log).trimLines(true).skipEmpty(true);
 				lr.read(new LineReader.SimpleLineCollector(), queueNames = new LinkedList<String>());
 			}
 			final String queueLocation; // path under .hg to patch queue information (status, series and diff files)
-			File activeQueueFile = new File(repoDir, "patches.queue");
+			File activeQueueFile = repoImpl.getFileFromRepoDir("patches.queue");
 			// file is there only if it's not default queue ('patches') that is active
 			if (activeQueueFile.isFile()) {
 				ArrayList<String> contents = new ArrayList<String>();
@@ -99,8 +100,8 @@ public class MqManager {
 					return Path.create(sb);
 				}
 			};
-			final File fileStatus = new File(repoDir, queueLocation + "status");
-			final File fileSeries = new File(repoDir, queueLocation + "series");
+			final File fileStatus = repoImpl.getFileFromRepoDir(queueLocation + "status");
+			final File fileSeries = repoImpl.getFileFromRepoDir(queueLocation + "series");
 			if (fileStatus.isFile()) {
 				new LineReader(fileStatus, log).read(new LineReader.LineConsumer<List<PatchRecord>>() {
 	

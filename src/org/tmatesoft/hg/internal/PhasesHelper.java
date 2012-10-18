@@ -33,7 +33,6 @@ import java.util.List;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgPhase;
@@ -50,24 +49,24 @@ import org.tmatesoft.hg.repo.HgRepository;
  */
 public final class PhasesHelper {
 
-	private final HgRepository repo;
+	private final Internals repo;
 	private final HgParentChildMap<HgChangelog> parentHelper;
 	private Boolean repoSupporsPhases;
 	private List<Nodeid> draftPhaseRoots;
 	private List<Nodeid> secretPhaseRoots;
 	private RevisionDescendants[][] phaseDescendants = new RevisionDescendants[HgPhase.values().length][];
 
-	public PhasesHelper(HgRepository hgRepo) {
-		this(hgRepo, null);
+	public PhasesHelper(Internals internalRepo) {
+		this(internalRepo, null);
 	}
 
-	public PhasesHelper(HgRepository hgRepo, HgParentChildMap<HgChangelog> pw) {
-		repo = hgRepo;
+	public PhasesHelper(Internals internalRepo, HgParentChildMap<HgChangelog> pw) {
+		repo = internalRepo;
 		parentHelper = pw;
 	}
 	
 	public HgRepository getRepo() {
-		return repo;
+		return repo.getRepo();
 	}
 
 	public boolean isCapableOfPhases() throws HgInvalidControlFileException {
@@ -90,7 +89,7 @@ public final class PhasesHelper {
 		}
 		// csetRev is only used when parentHelper is available
 		if (parentHelper != null && (csetRev == null || csetRev.isNull())) {
-			csetRev = repo.getChangelog().getRevision(csetRevIndex);
+			csetRev = getRepo().getChangelog().getRevision(csetRevIndex);
 		}
 					
 		for (HgPhase phase : new HgPhase[] {HgPhase.Secret, HgPhase.Draft }) {
@@ -121,8 +120,7 @@ public final class PhasesHelper {
 	}
 
 	private Boolean readRoots() throws HgInvalidControlFileException {
-		// FIXME shall access phaseroots through HgRepository#repoPathHelper
-		File phaseroots = new File(HgInternals.getRepositoryDir(repo), "store/phaseroots");
+		File phaseroots = repo.getFileFromStoreDir("phaseroots");
 		BufferedReader br = null;
 		try {
 			if (!phaseroots.exists()) {
@@ -137,13 +135,13 @@ public final class PhasesHelper {
 					continue;
 				}
 				if (lc.length != 2) {
-					repo.getSessionContext().getLog().dump(getClass(), Warn, "Bad line in phaseroots:%s", line);
+					repo.getContext().getLog().dump(getClass(), Warn, "Bad line in phaseroots:%s", line);
 					continue;
 				}
 				int phaseIndex = Integer.parseInt(lc[0]);
 				Nodeid rootRev = Nodeid.fromAscii(lc[1]);
-				if (!repo.getChangelog().isKnown(rootRev)) {
-					repo.getSessionContext().getLog().dump(getClass(), Warn, "Phase(%d) root node %s doesn't exist in the repository, ignored.", phaseIndex, rootRev);
+				if (!getRepo().getChangelog().isKnown(rootRev)) {
+					repo.getContext().getLog().dump(getClass(), Warn, "Phase(%d) root node %s doesn't exist in the repository, ignored.", phaseIndex, rootRev);
 					continue;
 				}
 				HgPhase phase = HgPhase.parse(phaseIndex);
@@ -162,7 +160,7 @@ public final class PhasesHelper {
 				try {
 					br.close();
 				} catch (IOException ex) {
-					repo.getSessionContext().getLog().dump(getClass(), Info, ex, null);
+					repo.getContext().getLog().dump(getClass(), Info, ex, null);
 					// ignore the exception otherwise 
 				}
 			}
@@ -191,7 +189,7 @@ public final class PhasesHelper {
 		int[] roots = toIndexes(getPhaseRoots(phase));
 		RevisionDescendants[] rv = new RevisionDescendants[roots.length];
 		for (int i = 0; i < roots.length; i++) {
-			rv[i] = new RevisionDescendants(repo, roots[i]);
+			rv[i] = new RevisionDescendants(getRepo(), roots[i]);
 			rv[i].build();
 		}
 		return rv;
@@ -200,7 +198,7 @@ public final class PhasesHelper {
 	private int[] toIndexes(List<Nodeid> roots) throws HgInvalidControlFileException {
 		int[] rv = new int[roots.size()];
 		for (int i = 0; i < rv.length; i++) {
-			rv[i] = repo.getChangelog().getRevisionIndex(roots.get(i));
+			rv[i] = getRepo().getChangelog().getRevisionIndex(roots.get(i));
 		}
 		return rv;
 	}

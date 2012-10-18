@@ -25,6 +25,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgPhase;
@@ -45,7 +46,7 @@ public class TestPhases {
 		HgRepository repo = Configuration.get().find("test-phases");
 		HgPhase[] expected = readPhases(repo);
 		final long start = System.nanoTime();
-		PhasesHelper ph = new PhasesHelper(repo, null);
+		PhasesHelper ph = new PhasesHelper(HgInternals.getImplementationRepo(repo), null);
 		initAndCheck(ph, expected);
 		final long end = System.nanoTime();
 		// μ == \u03bc
@@ -60,7 +61,7 @@ public class TestPhases {
 		HgParentChildMap<HgChangelog> pw = new HgParentChildMap<HgChangelog>(repo.getChangelog());
 		pw.init();
 		final long start2 = System.nanoTime();
-		PhasesHelper ph = new PhasesHelper(repo, pw);
+		PhasesHelper ph = new PhasesHelper(HgInternals.getImplementationRepo(repo), pw);
 		initAndCheck(ph, expected);
 		final long end = System.nanoTime();
 		System.out.printf("With ParentWalker(simulates log command for whole repo): %,d μs (pw init: %,d ns)\n", (end - start1)/1000, start2 - start1);

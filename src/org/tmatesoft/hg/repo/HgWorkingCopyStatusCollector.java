@@ -350,7 +350,9 @@ public class HgWorkingCopyStatusCollector {
 					} else {
 						HgDataFile df = repo.getFileNode(fname);
 						if (!df.exists()) {
-							String msg = String.format("File %s known as normal in dirstate (%d, %d), doesn't exist at %s", fname, r.modificationTime(), r.size(), repo.getStoragePath(df));
+							// TODO pass Internals right into HgWCSC cons
+							Internals implRepo = HgInternals.getImplementationRepo(repo);
+							String msg = String.format("File %s known as normal in dirstate (%d, %d), doesn't exist at %s", fname, r.modificationTime(), r.size(), implRepo.getStoragePath(df));
 							throw new HgInvalidFileException(msg, null).setFileName(fname);
 						}
 						Nodeid rev = getDirstateParentManifest().nodeid(fname);
