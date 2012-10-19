@@ -47,7 +47,6 @@ import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 
-
 /**
  * Regular user data file stored in the repository.
  * 
@@ -440,23 +439,12 @@ public final class HgDataFile extends Revlog {
 	}
 	
 	private void checkAndRecordMetadata(int localRev) throws HgInvalidControlFileException {
-		// content() always initializes metadata.
-		// TODO [post-1.0] this is expensive way to find out metadata, distinct RevlogStream.Iterator would be better.
-		// Alternatively, may parameterize MetadataContentPipe to do prepare only.
-		// For reference, when throwing CancelledException, hg status -A --rev 3:80 takes 70 ms
-		// however, if we just consume buffer instead (buffer.position(buffer.limit()), same command takes ~320ms
-		// (compared to command-line counterpart of 190ms)
-		try {
-			content(localRev, new ByteChannel() { // No-op channel
-				public int write(ByteBuffer buffer) throws IOException, CancelledException {
-					throw new CancelledException();
-				}
-			});
-		} catch (CancelledException ex) {
-			// it's ok, we did that
-		} catch (HgInvalidControlFileException ex) {
-			throw ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(localRev);
+		if (metadata == null) {
+			metadata = new Metadata();
 		}
+		// use MetadataInspector without delegate to process metadata only
+		RevlogStream.Inspector insp = new MetadataInspector(metadata, getRepo().getSessionContext().getLog(), null);
+		super.content.iterate(localRev, localRev, true, insp);
 	}
 
 	private static final class MetadataEntry {
@@ -553,6 +541,11 @@ public final class HgDataFile extends Revlog {
 		private final RevlogStream.Inspector delegate;
 		private final LogFacility log;
 
+		/**
+		 * @param _metadata never <code>null</code>
+		 * @param logFacility log facility from the session context
+		 * @param chain <code>null</code> if no further data processing other than metadata is desired
+		 */
 		public MetadataInspector(Metadata _metadata, LogFacility logFacility, RevlogStream.Inspector chain) {
 			metadata = _metadata;
 			log = logFacility;
