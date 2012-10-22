@@ -340,6 +340,10 @@ public class HgWorkingCopyStatusCollector {
 				}
 			} else if (!sizeEqual && r.size() >= 0) {
 				inspector.modified(fname);
+			} else if (r.size() == -2) {
+				// DirState wiki calls this np2 metastate: 
+				// 'np2': merged from other parent (status == 'n', size == -2) 
+				inspector.modified(fname);
 			} else {
 				// size is the same or unknown, and, perhaps, different timestamp
 				// check actual content to avoid false modified files
