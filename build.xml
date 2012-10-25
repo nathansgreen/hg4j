@@ -83,6 +83,7 @@
 			<sysproperty key="hg4j.tests.remote" value="http://hg.serpentine.com/tutorial/hello"/>
 			<test name="org.tmatesoft.hg.test.TestIntMap" />
 			<test name="org.tmatesoft.hg.test.TestAuxUtilities" />
+			<test name="org.tmatesoft.hg.test.TestConfigFileParser" />
 			<test name="org.tmatesoft.hg.test.TestHistory" />
 			<test name="org.tmatesoft.hg.test.TestManifest" />
 			<test name="org.tmatesoft.hg.test.TestStatus" />
