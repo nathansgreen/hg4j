@@ -62,6 +62,11 @@ public class ConfigFile {
 		return sections == null ? Collections.<String>emptyList() : Collections.unmodifiableList(sections);
 	}
 
+	/**
+	 * Access map of section keys and values.
+	 * @param sectionName name of the section to retrieve
+	 * @return never <code>null</code>, empty map in case no section with specified name found 
+	 */
 	public Map<String,String> getSection(String sectionName) {
 		if (sections == null) {
 			return Collections.emptyMap();

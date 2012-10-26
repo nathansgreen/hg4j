@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -209,7 +208,27 @@ public class ConfigFileParser {
 			// if section comes more than once, update only first one.
 			processedSections.add(section.name);
 		}
+		// push rest of the contents
 		out.write(contents, contentsOffset, contents.length - contentsOffset);
+		//
+		// add entries in new sections
+		LinkedHashSet<String> newSections = new LinkedHashSet<String>();
+		for (Iterator<String> it = additions.iterator(); it.hasNext();) {
+			String s = it.next(); it.next(); it.next();
+			if (!processedSections.contains(s)) {
+				newSections.add(s);
+			}
+		}
+		for (String newSectionName : newSections) {
+			out.write(String.format("\n[%s]", newSectionName).getBytes());
+			for (Iterator<String> it = additions.iterator(); it.hasNext();) {
+				String s = it.next(), k = it.next(), v = it.next();
+				if (newSectionName.equals(s)) {
+					out.write(String.format("\n%s = %s", k, v).getBytes());
+				}
+			}
+			out.write("\n".getBytes());
+		}
 	}
 	
 	private void processLine(int lineNumber, int offset, byte[] line) throws IOException {
@@ -359,25 +378,4 @@ public class ConfigFileParser {
 			e.toArray(entries);
 		}
 	}
-
-	public static void main(String[] args) throws Exception {
-		ConfigFileParser p = new ConfigFileParser();
-		p.parse(new ByteArrayInputStream(xx.getBytes()));
-		System.out.println(">>>");
-		System.out.println(xx);
-		System.out.println("===");
-		p.add("sect1", "key5", "x");
-		ByteArrayOutputStream out = new ByteArrayOutputStream(xx.length());
-		p.update(out);
-		System.out.println(new String(out.toByteArray()));
-		/*
-		for (Section s : p.sections) {
-			System.out.printf("[%s@%d]\n", s.name, s.start);
-			for (Entry e : s.entries) {
-				System.out.printf("%s@%d = %d..%d\n", e.name, e.start, e.valueStart, e.valueEnd);
-			}
-		}
-		*/
-	}
-	private static final String xx = "#comment1\n [sect1]\nkey = value #not a comment2\n#comment3\nkey2=   \nkey3 =  \n  value1, #cc\n  value2\nkey4 = v1,\n  v2 \n  ,v3\n\n\n[sect2]\nx = a";
 }
