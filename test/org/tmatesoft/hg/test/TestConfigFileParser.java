@@ -125,10 +125,22 @@ public class TestConfigFileParser {
 	}
 	
 	@Test
-	public void testOnlyKeyInSection() throws IOException {
+	public void testDeleteOnlyKeyInSection() throws IOException {
 		String text1 = "[sect-a]\n%skey1=value1\n%s[sect-b]\nkey3=value3\n";
 		String text2 = "[sect-a]\n%s\n%s[sect-b]\nkey3=value3\n";
 		withTwoCommentsDeleteKey1(text1, text2);
+	}
+	
+	@Test
+	public void testAddNewSection() throws IOException {
+		byte[] inp = "[sect-a]\nkey1=value1\n".getBytes();
+		byte[] exp = "[sect-a]\nkey1=value1\n\n[sect-b]\nkey2 = value2\n".getBytes();
+		doTest(inp, exp, new Inspector() {
+			
+			public void visit(ConfigFileParser p) {
+				p.add("sect-b", "key2", "value2");
+			}
+		});
 	}
 	
 	private void withTwoCommentsDeleteKey1(String text1, String text2) throws IOException {
