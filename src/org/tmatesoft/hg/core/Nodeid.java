@@ -44,13 +44,13 @@ public final class Nodeid implements Comparable<Nodeid> {
 	/**
 	 * @param binaryRepresentation - array of exactly 20 bytes
 	 * @param shallClone - true if array is subject to future modification and shall be copied, not referenced
-	 * @throws IllegalArgumentException if supplied binary representation doesn't correspond to 20 bytes of sha1 digest 
+	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass if supplied binary representation doesn't correspond to 20 bytes of sha1 digest 
 	 */
 	public Nodeid(byte[] binaryRepresentation, boolean shallClone) {
 		// 5 int fields => 32 bytes
 		// byte[20] => 48 bytes (16 bytes is Nodeid with one field, 32 bytes for byte[20] 
 		if (binaryRepresentation == null || binaryRepresentation.length != 20) {
-			throw new IllegalArgumentException();
+			throw new HgBadNodeidFormatException(String.format("Bad value: %s", String.valueOf(binaryRepresentation)));
 		}
 		/*
 		 * byte[].clone() is not reflected when ran with -agentlib:hprof=heap=sites
@@ -140,11 +140,11 @@ public final class Nodeid implements Comparable<Nodeid> {
 	 * duplication - this method always makes a copy of an array passed
 	 * @param binaryRepresentation - byte array of a length at least offset + 20
 	 * @param offset - index in the array to start from
-	 * @throws IllegalArgumentException when arguments don't select 20 bytes
+	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass when arguments don't select 20 bytes
 	 */
 	public static Nodeid fromBinary(byte[] binaryRepresentation, int offset) {
 		if (binaryRepresentation == null || binaryRepresentation.length - offset < 20) {
-			throw new IllegalArgumentException();
+			throw new HgBadNodeidFormatException(String.format("Bad value: %s", String.valueOf(binaryRepresentation)));
 		}
 		int i = 0;
 		while (i < 20 && binaryRepresentation[offset+i] == 0) i++;
@@ -164,11 +164,11 @@ public final class Nodeid implements Comparable<Nodeid> {
 	 * 
 	 * @param asciiRepresentation - encoded form of the Nodeid.
 	 * @return object representation
-	 * @throws IllegalArgumentException when argument doesn't match encoded form of 20-bytes sha1 digest. 
+	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass when argument doesn't match encoded form of 20-bytes sha1 digest. 
 	 */
 	public static Nodeid fromAscii(String asciiRepresentation) {
 		if (asciiRepresentation.length() != 40) {
-			throw new IllegalArgumentException();
+			throw new HgBadNodeidFormatException(String.format("Bad value: %s", asciiRepresentation));
 		}
 		// XXX is better impl for String possible?
 		return fromAscii(asciiRepresentation.toCharArray(), 0, 40);
@@ -176,17 +176,22 @@ public final class Nodeid implements Comparable<Nodeid> {
 	
 	/**
 	 * Parse encoded representation. Similar to {@link #fromAscii(String)}.
+	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass when bytes are not hex digits or number of bytes != 40 (160 bits) 
 	 */
 	public static Nodeid fromAscii(byte[] asciiRepresentation, int offset, int length) {
 		if (length != 40) {
 			throw new IllegalArgumentException();
 		}
-		byte[] data = new byte[20];
-		boolean zeroBytes = DigestHelper.ascii2bin(asciiRepresentation, offset, length, data);
-		if (zeroBytes) {
-			return NULL;
+		try {
+			byte[] data = new byte[20];
+			boolean zeroBytes = DigestHelper.ascii2bin(asciiRepresentation, offset, length, data);
+			if (zeroBytes) {
+				return NULL;
+			}
+			return new Nodeid(data, false);
+		} catch (IllegalArgumentException ex) {
+			throw new HgBadNodeidFormatException(ex.getMessage());
 		}
-		return new Nodeid(data, false);
 	}
 	
 	public static Nodeid fromAscii(char[] asciiRepresentation, int offset, int length) {
