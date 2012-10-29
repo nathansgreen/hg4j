@@ -145,7 +145,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				} else if (state == 'm') {
 					merged.put(r.name1, r);
 				} else {
-					repo.getContext().getLog().dump(getClass(), Severity.Warn, "Dirstate record for file %s (size: %d, tstamp:%d) has unknown state '%c'", r.name1, r.size(), r.time, state);
+					repo.getSessionContext().getLog().dump(getClass(), Severity.Warn, "Dirstate record for file %s (size: %d, tstamp:%d) has unknown state '%c'", r.name1, r.size(), r.time, state);
 				}
 			}
 		} catch (IOException ex) {
@@ -215,7 +215,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 				branch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
 				r.close();
 			} catch (FileNotFoundException ex) {
-				internalRepo.getContext().getLog().dump(HgDirstate.class, Debug, ex, null); // log verbose debug, exception might be legal here 
+				internalRepo.getSessionContext().getLog().dump(HgDirstate.class, Debug, ex, null); // log verbose debug, exception might be legal here 
 				// IGNORE
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Error reading file with branch information", ex, branchFile);

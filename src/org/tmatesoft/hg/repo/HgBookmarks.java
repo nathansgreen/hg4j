@@ -43,7 +43,7 @@ public final class HgBookmarks {
 	}
 	
 	/*package-local*/ void read() throws HgInvalidControlFileException {
-		final LogFacility log = internalRepo.getContext().getLog();
+		final LogFacility log = internalRepo.getSessionContext().getLog();
 		final HgRepository repo = internalRepo.getRepo();
 		File all = internalRepo.getFileFromRepoDir(HgRepositoryFiles.Bookmarks.getName());
 		LinkedHashMap<String, Nodeid> bm = new LinkedHashMap<String, Nodeid>();

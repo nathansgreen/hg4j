@@ -23,7 +23,9 @@ import java.util.LinkedList;
 
 import org.junit.Test;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.ext.HgExtensionsManager;
 import org.tmatesoft.hg.repo.ext.MqManager;
+import org.tmatesoft.hg.repo.ext.HgExtensionsManager.HgExt;
 import org.tmatesoft.hg.repo.ext.MqManager.PatchRecord;
 
 /**
@@ -37,7 +39,9 @@ public class TestMqExtension {
 	@Test
 	public void testMqManager() throws Exception {
 		HgRepository repo = Configuration.get().find("test-mq");
-		MqManager mqManager = new MqManager(repo);
+		HgExtensionsManager extManager = repo.getExtensions();
+		assertTrue(extManager.isEnabled(HgExt.MQ));
+		MqManager mqManager = extManager.getMQ();
 		mqManager.refresh();
 		OutputParser.Stub output = new OutputParser.Stub();
 		ExecHelper eh = new ExecHelper(output, repo.getWorkingDir());

@@ -39,6 +39,7 @@ import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
+import org.tmatesoft.hg.repo.ext.HgExtensionsManager;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
@@ -114,6 +115,7 @@ public final class HgRepository implements SessionContext.Source {
 	private HgMergeState mergeState;
 	private SubrepoManager subRepos;
 	private HgBookmarks bookmarks;
+	private HgExtensionsManager extManager;
 
 	// XXX perhaps, shall enable caching explicitly
 	private final HashMap<Path, SoftReference<RevlogStream>> streamsCache = new HashMap<Path, SoftReference<RevlogStream>>();
@@ -470,6 +472,18 @@ public final class HgRepository implements SessionContext.Source {
 			bookmarks.read();
 		}
 		return bookmarks;
+	}
+	
+	public HgExtensionsManager getExtensions() {
+		if (extManager == null) {
+			class EM extends HgExtensionsManager {
+				EM() {
+					super(HgRepository.this.getImplHelper());
+				}
+			}
+			extManager = new EM();
+		}
+		return extManager;
 	}
 
 	/**

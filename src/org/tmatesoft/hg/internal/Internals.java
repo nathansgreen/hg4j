@@ -42,7 +42,7 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class Internals {
+public final class Internals implements SessionContext.Source {
 	
 	/**
 	 * Allows to specify Mercurial installation directory to detect installation-wide configurations.
@@ -95,7 +95,7 @@ public final class Internals {
 		dataAccess = new DataAccessProvider(ctx);
 		RepoInitializer repoInit = new RepoInitializer().initRequiresFromFile(repoDir);
 		requiresFlags = repoInit.getRequires();
-		dataPathHelper = repoInit.buildDataFilesHelper(getContext());
+		dataPathHelper = repoInit.buildDataFilesHelper(getSessionContext());
 		repoPathHelper = repoInit.buildStoreFilesHelper();
 	}
 	
@@ -135,7 +135,7 @@ public final class Internals {
 		return new File(repoDir, storagePath.toString());
 	}
 	
-	public SessionContext getContext() {
+	public SessionContext getSessionContext() {
 		return repo.getSessionContext();
 	}
 	

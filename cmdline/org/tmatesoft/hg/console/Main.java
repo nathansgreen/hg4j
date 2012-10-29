@@ -74,7 +74,10 @@ import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
+import org.tmatesoft.hg.repo.ext.HgExtensionsManager;
+import org.tmatesoft.hg.repo.ext.HgExtensionsManager.HgExt;
 import org.tmatesoft.hg.repo.ext.MqManager;
+import org.tmatesoft.hg.repo.ext.Rebase;
 import org.tmatesoft.hg.repo.ext.MqManager.PatchRecord;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.HgRevisionMap;
@@ -112,7 +115,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.dumpBookmarks();
+		m.tryExtensions();
+//		m.dumpBookmarks();
 //		m.readConfigFile();
 //		m.dumpCommitLastMessage();
 //		m.buildFileLog();
@@ -134,6 +138,21 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void tryExtensions() throws Exception {
+		HgExtensionsManager em = hgRepo.getExtensions();
+		if (!em.isEnabled(HgExt.Rebase)) {
+			System.out.println("Rebase is not enabled");
+			return;
+		}
+		Rebase re = em.getRebaseExtension();
+		if (!re.refresh().isRebaseInProgress()) {
+			System.out.println("No rebase is in progress");
+			return;
+		}
+		System.out.printf("%s %s %s\n", re.getWorkingDirParent().shortNotation(), re.getTarget().shortNotation(), re.getExternalParent().shortNotation());
+		System.out.printf("collapse:%b, keep:%b, keepbranches:%b\n", re.isCollapse(), re.isKeepOriginalRevisions(), re.isKeepBranchNames());
 	}
 	
 	// TODO as test

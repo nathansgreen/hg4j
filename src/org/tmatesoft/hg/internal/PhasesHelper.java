@@ -135,13 +135,13 @@ public final class PhasesHelper {
 					continue;
 				}
 				if (lc.length != 2) {
-					repo.getContext().getLog().dump(getClass(), Warn, "Bad line in phaseroots:%s", line);
+					repo.getSessionContext().getLog().dump(getClass(), Warn, "Bad line in phaseroots:%s", line);
 					continue;
 				}
 				int phaseIndex = Integer.parseInt(lc[0]);
 				Nodeid rootRev = Nodeid.fromAscii(lc[1]);
 				if (!getRepo().getChangelog().isKnown(rootRev)) {
-					repo.getContext().getLog().dump(getClass(), Warn, "Phase(%d) root node %s doesn't exist in the repository, ignored.", phaseIndex, rootRev);
+					repo.getSessionContext().getLog().dump(getClass(), Warn, "Phase(%d) root node %s doesn't exist in the repository, ignored.", phaseIndex, rootRev);
 					continue;
 				}
 				HgPhase phase = HgPhase.parse(phaseIndex);
@@ -160,7 +160,7 @@ public final class PhasesHelper {
 				try {
 					br.close();
 				} catch (IOException ex) {
-					repo.getContext().getLog().dump(getClass(), Info, ex, null);
+					repo.getSessionContext().getLog().dump(getClass(), Info, ex, null);
 					// ignore the exception otherwise 
 				}
 			}

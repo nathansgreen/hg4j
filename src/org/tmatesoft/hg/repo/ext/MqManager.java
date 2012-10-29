@@ -30,10 +30,8 @@ import java.util.Map;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidFileException;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Path;
 
@@ -41,6 +39,10 @@ import org.tmatesoft.hg.util.Path;
  * Mercurial Queues Support. 
  * Access to MqExtension functionality.
  * 
+ * FIXME check we don't hold any mq files for too long, close them, use
+ * the same lock mechanism as mq does (if any). Check if MQ uses Mercurial's store lock
+ * 
+ * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -48,32 +50,32 @@ public class MqManager {
 	
 	private static final String PATCHES_DIR = "patches";
 
-	private final HgRepository repo;
+	private final Internals repo;
 	private List<PatchRecord> applied = Collections.emptyList();
 	private List<PatchRecord> allKnown = Collections.emptyList();
 	private List<String> queueNames = Collections.emptyList();
 	private String activeQueue = PATCHES_DIR;
 
-	public MqManager(HgRepository hgRepo) {
-		repo = hgRepo;
+	/*package-local*/ MqManager(Internals internalRepo) {
+		repo = internalRepo;
 	}
 	
 	/**
 	 * Updates manager with up-to-date state of the mercurial queues.
+	 * @return <code>this</code> for convenience
 	 */
-	public void refresh() throws HgInvalidControlFileException {
+	public MqManager refresh() throws HgInvalidControlFileException {
 		applied = allKnown = Collections.emptyList();
 		queueNames = Collections.emptyList();
-		Internals repoImpl = HgInternals.getImplementationRepo(repo);
 		final LogFacility log = repo.getSessionContext().getLog();
 		try {
-			File queues = repoImpl.getFileFromRepoDir("patches.queues");
+			File queues = repo.getFileFromRepoDir("patches.queues");
 			if (queues.isFile()) {
 				LineReader lr = new LineReader(queues, log).trimLines(true).skipEmpty(true);
 				lr.read(new LineReader.SimpleLineCollector(), queueNames = new LinkedList<String>());
 			}
 			final String queueLocation; // path under .hg to patch queue information (status, series and diff files)
-			File activeQueueFile = repoImpl.getFileFromRepoDir("patches.queue");
+			File activeQueueFile = repo.getFileFromRepoDir("patches.queue");
 			// file is there only if it's not default queue ('patches') that is active
 			if (activeQueueFile.isFile()) {
 				ArrayList<String> contents = new ArrayList<String>();
@@ -100,8 +102,8 @@ public class MqManager {
 					return Path.create(sb);
 				}
 			};
-			final File fileStatus = repoImpl.getFileFromRepoDir(queueLocation + "status");
-			final File fileSeries = repoImpl.getFileFromRepoDir(queueLocation + "series");
+			final File fileStatus = repo.getFileFromRepoDir(queueLocation + "status");
+			final File fileSeries = repo.getFileFromRepoDir(queueLocation + "series");
 			if (fileStatus.isFile()) {
 				new LineReader(fileStatus, log).read(new LineReader.LineConsumer<List<PatchRecord>>() {
 	
@@ -140,6 +142,7 @@ public class MqManager {
 			th.setStackTrace(ex.getStackTrace());
 			throw th;
 		}
+		return this;
 	}
 	
 	/**
