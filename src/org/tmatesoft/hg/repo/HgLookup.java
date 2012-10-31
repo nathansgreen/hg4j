@@ -28,6 +28,7 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.repo.HgRepoConfig.PathsSection;
 
 /**
  * Utility methods to find Mercurial repository at a given location
@@ -83,9 +84,10 @@ public class HgLookup {
 	}
 	
 	/**
-	 * Try to instantiate remote server.
-	 * @param key either URL or a key from configuration file that points to remote server  
-	 * @param hgRepo <em>NOT USED YET<em> local repository that may have extra config, or default remote location
+	 * Try to instantiate remote server using an immediate url or an url from configuration files
+	 * 
+	 * @param key either URL or a key from configuration file that points to remote server; if <code>null</code> or empty string, default remote location of the supplied repository (if any) is looked up
+	 * @param hgRepo optional local repository to get default or otherwise configured remote location
 	 * @return an instance featuring access to remote repository, check {@link HgRemoteRepository#isInvalid()} before actually using it
 	 * @throws HgBadArgumentException if anything is wrong with the remote server's URL
 	 */
@@ -100,7 +102,16 @@ public class HgLookup {
 			toReport = ex;
 		}
 		if (url == null) {
-			String server = getGlobalConfig().getSection("paths").get(key);
+			String server = null;
+			if (hgRepo != null && !hgRepo.isInvalid()) {
+				PathsSection ps = hgRepo.getConfiguration().getPaths();
+				server = key == null || key.trim().isEmpty() ? ps.getDefault() : ps.getString(key, null);
+			} else if (key == null || key.trim().length() == 0) {
+				throw new HgBadArgumentException("Can't look up empty key in a global configuration", null);
+			}
+			if (server == null) {
+				server = getGlobalConfig().getSection("paths").get(key);
+			}
 			if (server == null) {
 				throw new HgBadArgumentException(String.format("Can't find server %s specification in the config", key), toReport);
 			}
