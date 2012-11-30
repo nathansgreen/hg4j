@@ -16,42 +16,31 @@
  */
 package org.tmatesoft.hg.console;
 
-import static org.junit.Assert.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
 import static org.tmatesoft.hg.util.LogFacility.Severity.*;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
-import org.tmatesoft.hg.core.HgManifestHandler;
-import org.tmatesoft.hg.core.HgCallbackTargetException;
-import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgChangeset;
-import org.tmatesoft.hg.core.HgChangesetFileSneaker;
 import org.tmatesoft.hg.core.HgChangesetTreeHandler;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgManifestCommand;
+import org.tmatesoft.hg.core.HgManifestHandler;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DigestHelper;
-import org.tmatesoft.hg.internal.IntMap;
-import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
-import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
-import org.tmatesoft.hg.internal.RevisionDescendants;
 import org.tmatesoft.hg.internal.StreamLogFacility;
 import org.tmatesoft.hg.repo.HgBookmarks;
 import org.tmatesoft.hg.repo.HgBranches;
@@ -66,30 +55,22 @@ import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgMergeState;
-import org.tmatesoft.hg.repo.HgParentChildMap;
-import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRevisionMap;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgSubrepoLocation;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
+import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.ext.HgExtensionsManager;
 import org.tmatesoft.hg.repo.ext.HgExtensionsManager.HgExt;
-import org.tmatesoft.hg.repo.ext.MqManager;
 import org.tmatesoft.hg.repo.ext.Rebase;
-import org.tmatesoft.hg.repo.ext.MqManager.PatchRecord;
-import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
-import org.tmatesoft.hg.repo.HgRevisionMap;
-import org.tmatesoft.hg.test.ExecHelper;
-import org.tmatesoft.hg.test.OutputParser;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
-import org.tmatesoft.hg.util.ProgressSupport;
-import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * Various debug dumps. 
@@ -159,7 +140,7 @@ public class Main {
 	private void dumpBookmarks() throws Exception {
 		HgBookmarks bm = hgRepo.getBookmarks();
 		String active = bm.getActiveBookmarkName();
-		ArrayList<String> all = new ArrayList(bm.getAllBookmarks());
+		ArrayList<String> all = new ArrayList<String>(bm.getAllBookmarks());
 		Collections.sort(all);
 		for (String bmname : all) {
 			if (bmname.equals(active)) {

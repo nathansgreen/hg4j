@@ -34,6 +34,7 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ManifestRevision;
@@ -162,7 +163,7 @@ public class HgWorkingCopyStatusCollector {
 	 * Walk working copy, analyze status for each file found and missing.
 	 * May be invoked few times.
 	 * 
-	 * <p>There's no dedicated constant to for working copy parent, at least now. 
+	 * <p>There's no dedicated constant for working copy parent, at least now. 
 	 * Use {@link HgRepository#WORKING_COPY} to indicate comparison 
 	 * shall be run against working copy parent. Although a bit confusing, single case doesn't 
 	 * justify a dedicated constant.
@@ -321,6 +322,26 @@ public class HgWorkingCopyStatusCollector {
 			throw t;
 		}
 		return rv;
+	}
+	
+	/**
+	 * Compares file state from working directory against parent recorded in dirstate. 
+	 * Might be handy for merged files, always reported as 'modified' or files deemed modified
+	 * based on their flags change.
+	 * 
+	 * @param fname repository-relative path to the file in question
+	 * @param fileInfo file content mediator 
+	 * @return <code>true</code> when content in working dir differs from that of manifest-recorded revision 
+	 */
+	@Experimental(reason="Perhaps, HgDataFile#isWorkingCopyChanged() would be better - no need to pass any arguments?")
+	public boolean hasTangibleChanges(Path fname, FileInfo fileInfo) throws HgRuntimeException {
+		// see #checkLocalStatusAgainstFile() below for the origin of changed file check
+		HgDataFile df = repo.getFileNode(fname);
+		if (!df.exists()) {
+			throw new HgInvalidFileException("File not found", null).setFileName(fname);
+		}
+		Nodeid rev = getDirstateParentManifest().nodeid(fname);
+		return rev == null || !areTheSame(fileInfo, df, rev);
 	}
 
 	//********************************************
