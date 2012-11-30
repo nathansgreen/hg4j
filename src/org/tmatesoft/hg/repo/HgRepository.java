@@ -37,6 +37,7 @@ import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.PropertyMarshal;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.repo.ext.HgExtensionsManager;
@@ -558,6 +559,10 @@ public final class HgRepository implements SessionContext.Source {
 	}
 
 	private int getLockTimeout() {
-		return getConfiguration().getIntegerValue("ui", "timeout", 600);
+		int cfgValue = getConfiguration().getIntegerValue("ui", "timeout", 600);
+		if (getSessionContext().getConfigurationProperty(Internals.CFG_PROPERTY_FS_LOCK_TIMEOUT, null) != null) {
+			return new PropertyMarshal(sessionContext).getInt(Internals.CFG_PROPERTY_FS_LOCK_TIMEOUT, cfgValue);
+		}
+		return cfgValue;
 	}
 }

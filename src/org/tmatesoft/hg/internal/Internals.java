@@ -73,6 +73,19 @@ public final class Internals implements SessionContext.Source {
 	 */
 	public static final String CFG_PROPERTY_FS_FILENAME_ENCODING = "hg.fs.filename.encoding";
 	
+	/**
+	 * Timeout, in seconds, to acquire filesystem {@link HgRepositoryLock lock}.
+	 * 
+	 * Mercurial provides 'ui.timeout' in hgrc (defaults to 600 seconds) to specify how long 
+	 * it shall try to acquire a lock for storage or working directory prior to fail.
+	 *  
+	 * This configuration property allows to override timeout value from Mercurial's configuration
+	 * file and use Hg4J-specific value instead. 
+	 * 
+	 * Integer value, use negative for attempts to acquire lock until success, and zero to try once and fail immediately. 
+	 */
+	public static final String CFG_PROPERTY_FS_LOCK_TIMEOUT = "hg4j.fs.lock.timeout";
+	
 	private List<Filter.Factory> filterFactories;
 	private final HgRepository repo;
 	private final File repoDir;
