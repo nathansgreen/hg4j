@@ -25,6 +25,7 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
+import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 
@@ -103,8 +104,9 @@ public class HgRepositoryLock {
 	 * 
 	 * <p>Multiple calls are possible, but corresponding number of {@link #release()} 
 	 * calls shall be made.
+	 * @throws HgRepositoryLockException if failed to grab a lock
 	 */
-	public void acquire() {
+	public void acquire() throws HgRepositoryLockException {
 		if (use > 0) {
 			use++;
 			return;
@@ -135,15 +137,16 @@ public class HgRepositoryLock {
 			
 		} while (stopTime == -1/*no timeout*/ || System.currentTimeMillis() <= stopTime);
 		String msg = String.format("Failed to aquire lock, waited for %d seconds, present owner: '%s'", timeoutSeconds, readLockInfo());
-		throw new HgInvalidStateException(msg);
+		throw new HgRepositoryLockException(msg);
 	}
 	
 	/**
 	 * Release lock we own
+	 * @throws HgRepositoryLockException if there's no evidence we do own a lock
 	 */
-	public void release() {
+	public void release() throws HgRepositoryLockException {
 		if (use == 0) {
-			throw new HgInvalidStateException("Lock is not held!");
+			throw new HgRepositoryLockException("Lock is not held!");
 		}
 		use--;
 		if (use > 0) {
