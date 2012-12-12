@@ -47,7 +47,7 @@ public interface HgChangesetTreeHandler {
 		public Nodeid fileRevision();
 
 		/**
-		 * @return changeset associated with the current revision
+		 * @return changeset associated with the current file revision
 		 */
 		public HgChangeset changeset();
 
@@ -58,7 +58,26 @@ public interface HgChangesetTreeHandler {
 		public Nodeid changesetRevision();
 
 		/**
-		 * Node, these are not necessarily in direct relation to parents of changeset from {@link #changeset()} 
+		 * Identifies parent changes, changesets where file/revlog in question was modified prior to change being visited.
+		 * 
+		 * Note, these are not necessarily in direct relation to parents of changeset from {@link #changeset()}
+		 * 
+		 * Imagine next history (grows from bottom to top):
+		 * <pre>
+		 * o A    o
+		 * |   \  |
+		 * o B  \/
+		 * |    o C
+		 * |   /
+		 * o  /
+		 * | /
+		 * o D
+		 * </pre>
+		 * 
+		 * When we are at {@link TreeElement} for <code>A</code>, <code>B</code> and <code>C</code> are changeset parents, naturally. However
+		 * if the file/revlog we've been walking has not been changed in <code>B</code> and <code>C</code>, but e.g. in <code>D</code> only,
+		 * then this {@link #parents()} call would return pair with single element only, pointing to <code>D</code>
+		 * 
 		 * @return changesets that correspond to parents of the current file node, either pair element may be <code>null</code>.
 		 */
 		public Pair<HgChangeset, HgChangeset> parents();

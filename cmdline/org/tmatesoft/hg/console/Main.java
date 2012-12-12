@@ -96,11 +96,11 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.tryExtensions();
+//		m.tryExtensions();
 //		m.dumpBookmarks();
 //		m.readConfigFile();
 //		m.dumpCommitLastMessage();
-//		m.buildFileLog();
+		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();

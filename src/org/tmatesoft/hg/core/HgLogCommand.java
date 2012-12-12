@@ -330,36 +330,65 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			}
 		};
 		final ProgressSupport progressHelper = getProgressSupport(handler);
-		progressHelper.start(4);
 		final CancelSupport cancelHelper = getCancelSupport(handler, true);
-		cancelHelper.checkCancelled();
-		HgDataFile fileNode = repo.getFileNode(file);
-		// build tree of nodes according to parents in file's revlog
-		final TreeBuildInspector treeBuildInspector = new TreeBuildInspector();
-		final HistoryNode[] completeHistory = treeBuildInspector.go(fileNode);
-		progressHelper.worked(1);
-		cancelHelper.checkCancelled();
-		ElementImpl ei = new ElementImpl(treeBuildInspector.commitRevisions.length);
-		final ProgressSupport ph2;
-		if (treeBuildInspector.commitRevisions.length < 100 /*XXX is it really worth it? */) {
-			ei.initTransform();
-			repo.getChangelog().range(ei, treeBuildInspector.commitRevisions);
-			progressHelper.worked(1);
-			ph2 = new ProgressSupport.Sub(progressHelper, 2);
-		} else {
-			ph2 = new ProgressSupport.Sub(progressHelper, 3);
-		}
-		ph2.start(completeHistory.length);
-		// XXX shall sort completeHistory according to changeset numbers?
-		for (int i = 0; i < completeHistory.length; i++ ) {
-			final HistoryNode n = completeHistory[i];
-			handler.treeElement(ei.init(n));
-			ph2.worked(1);
+
+		LinkedList<HgDataFile> fileRenamesQueue = buildFileRenamesQueue();
+		progressHelper.start(4 * fileRenamesQueue.size());
+		do {
+			HgDataFile fileNode = fileRenamesQueue.removeLast();
 			cancelHelper.checkCancelled();
-		}
+			// build tree of nodes according to parents in file's revlog
+			final TreeBuildInspector treeBuildInspector = new TreeBuildInspector();
+			final HistoryNode[] completeHistory = treeBuildInspector.go(fileNode);
+			progressHelper.worked(1);
+			cancelHelper.checkCancelled();
+			ElementImpl ei = new ElementImpl(treeBuildInspector.commitRevisions.length);
+			final ProgressSupport ph2;
+			if (treeBuildInspector.commitRevisions.length < 100 /*XXX is it really worth it? */) {
+				ei.initTransform();
+				repo.getChangelog().range(ei, treeBuildInspector.commitRevisions);
+				progressHelper.worked(1);
+				ph2 = new ProgressSupport.Sub(progressHelper, 2);
+			} else {
+				ph2 = new ProgressSupport.Sub(progressHelper, 3);
+			}
+			ph2.start(completeHistory.length);
+			// XXX shall sort completeHistory according to changeset numbers?
+			for (int i = 0; i < completeHistory.length; i++ ) {
+				final HistoryNode n = completeHistory[i];
+				handler.treeElement(ei.init(n));
+				ph2.worked(1);
+				cancelHelper.checkCancelled();
+			}
+		} while (!fileRenamesQueue.isEmpty());
 		progressHelper.done();
 	}
 	
+	/**
+	 * Follows file renames and build a list of all corresponding file nodes. If {@link #followHistory} is <code>false</code>, 
+	 * the list contains one element only, file node with the name of the file as it was specified by the user.
+	 * 
+	 * @return list of file renames, with most recent file first
+	 */
+	private LinkedList<HgDataFile> buildFileRenamesQueue() {
+		LinkedList<HgDataFile> rv = new LinkedList<HgDataFile>();
+		if (!followHistory) {
+			rv.add(repo.getFileNode(file));
+			return rv;
+		}
+		HgDataFile fileNode;
+		Path fp = file;
+		boolean isCopy;
+		do {
+			fileNode = repo.getFileNode(fp);
+			rv.addLast(fileNode);
+			if (isCopy = fileNode.isCopy()) {
+				fp = fileNode.getCopySourceName();
+			}
+		} while (isCopy);
+		return rv;
+	}
+
 	//
 	
 	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {

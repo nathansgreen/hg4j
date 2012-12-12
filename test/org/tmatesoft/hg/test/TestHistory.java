@@ -29,14 +29,18 @@ import java.util.List;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetHandler;
+import org.tmatesoft.hg.core.HgChangesetTreeHandler;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
 
@@ -117,6 +121,39 @@ public class TestHistory {
 			}
 		});
 		report(what, sorted, false);
+	}
+	
+	@Test
+	public void testChangesetTree() throws Exception {
+		repo = Configuration.get().find("branches-1");
+		final String fname = "file1";
+		assertTrue("[sanity]", repo.getFileNode(fname).exists());
+		eh.run("hg", "log", "--debug", fname, "--cwd", repo.getLocation());
+		
+		final LinkedList<HgChangeset> cmdResult = new LinkedList<HgChangeset>();
+		new HgLogCommand(repo).file(fname, false).execute(new HgChangesetTreeHandler() {
+
+			public void treeElement(TreeElement entry) throws HgCallbackTargetException {
+				// check consistency
+				Nodeid cset = entry.changeset().getNodeid();
+				errorCollector.assertEquals(entry.changesetRevision(), cset);
+				Pair<HgChangeset, HgChangeset> parents_a = entry.parents();
+				Pair<Nodeid, Nodeid> parents_b = entry.parentRevisions();
+				if (parents_b.first().isNull()) {
+					errorCollector.assertTrue(parents_a.first() == null);
+				} else {
+					errorCollector.assertEquals(parents_b.first(), parents_a.first().getNodeid());
+				}
+				if (parents_b.second().isNull()) {
+					errorCollector.assertTrue(parents_a.second() == null);
+				} else {
+					errorCollector.assertEquals(parents_b.second(), parents_a.second().getNodeid());
+				}
+				//
+				cmdResult.add(entry.changeset());
+			}
+		});
+		report("execute with HgChangesetTreeHandler", cmdResult, true);
 	}
 
 	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResult) {
