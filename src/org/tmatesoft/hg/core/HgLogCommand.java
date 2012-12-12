@@ -300,62 +300,57 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		if (file == null) {
 			throw new IllegalArgumentException("History tree is supported for files only (at least now), please specify file");
 		}
-		if (followHistory) {
-			throw new UnsupportedOperationException("Can't follow file history when building tree (yet?)");
-		}
-		class TreeBuildInspector implements HgChangelog.ParentInspector, HgChangelog.RevisionInspector {
-			HistoryNode[] completeHistory;
-			int[] commitRevisions;
-
-			public void next(int revisionNumber, Nodeid revision, int linkedRevision) {
-				commitRevisions[revisionNumber] = linkedRevision;
-			}
-
-			public void next(int revisionNumber, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
-				HistoryNode p1 = null, p2 = null;
-				if (parent1 != -1) {
-					p1 = completeHistory[parent1];
-				}
-				if (parent2!= -1) {
-					p2 = completeHistory[parent2];
-				}
-				completeHistory[revisionNumber] = new HistoryNode(commitRevisions[revisionNumber], revision, p1, p2);
-			}
-			
-			HistoryNode[] go(HgDataFile fileNode) throws HgInvalidControlFileException {
-				completeHistory = new HistoryNode[fileNode.getRevisionCount()];
-				commitRevisions = new int[completeHistory.length];
-				fileNode.indexWalk(0, TIP, this);
-				return completeHistory;
-			}
-		};
 		final ProgressSupport progressHelper = getProgressSupport(handler);
 		final CancelSupport cancelHelper = getCancelSupport(handler, true);
 
-		LinkedList<HgDataFile> fileRenamesQueue = buildFileRenamesQueue();
+		// builds tree of nodes according to parents in file's revlog
+		final TreeBuildInspector treeBuildInspector = new TreeBuildInspector(followHistory);
+
+		// most recent file is first in the queue
+		LinkedList<Pair<HgDataFile, Nodeid>> fileRenamesQueue = buildFileRenamesQueue();
 		progressHelper.start(4 * fileRenamesQueue.size());
 		do {
-			HgDataFile fileNode = fileRenamesQueue.removeLast();
+			// to maintain iteration order from older to newer, take oldest name (in case of renames) first  
+			Pair<HgDataFile, Nodeid> renameInfo = fileRenamesQueue.removeLast();
 			cancelHelper.checkCancelled();
-			// build tree of nodes according to parents in file's revlog
-			final TreeBuildInspector treeBuildInspector = new TreeBuildInspector();
-			final HistoryNode[] completeHistory = treeBuildInspector.go(fileNode);
+			HgDataFile fileNode = renameInfo.first();
+			Nodeid fileLastRevToVisit = null;
+			if (followHistory) {
+				fileLastRevToVisit = renameInfo.second();
+				if (fileLastRevToVisit == null) {
+					// only recent file name should not have a changeset when rename has happened.
+					assert fileRenamesQueue.isEmpty();
+					// TODO subject to dedicated method either in HgRepository (getWorkingCopyParentRevisionIndex)
+					// or in the HgDataFile (getWorkingCopyOriginRevision)
+					Nodeid wdParentChangeset = repo.getWorkingCopyParents().first();
+					if (!wdParentChangeset.isNull()) {
+						int wdParentRevIndex = repo.getChangelog().getRevisionIndex(wdParentChangeset);
+						fileLastRevToVisit = repo.getManifest().getFileRevision(wdParentRevIndex, fileNode.getPath());
+					}
+					// else fall-through, assume lastRevision() is ok here
+				}
+			}
+			int fileLastRevIndexToVisit = fileLastRevToVisit == null ? fileNode.getLastRevision() : fileNode.getRevisionIndex(fileLastRevToVisit);
+			final HistoryNode[] changeHistory = treeBuildInspector.go(fileNode, fileLastRevIndexToVisit);
+			int[] commitRevisions = treeBuildInspector.getCommitRevisions();
+			assert changeHistory.length == commitRevisions.length;
 			progressHelper.worked(1);
 			cancelHelper.checkCancelled();
-			ElementImpl ei = new ElementImpl(treeBuildInspector.commitRevisions.length);
+			ElementImpl ei = new ElementImpl(commitRevisions.length);
 			final ProgressSupport ph2;
-			if (treeBuildInspector.commitRevisions.length < 100 /*XXX is it really worth it? */) {
+			if (commitRevisions.length < 100 /*XXX is it really worth it? */) {
+				// read bunch of changesets at once and cache 'em
 				ei.initTransform();
-				repo.getChangelog().range(ei, treeBuildInspector.commitRevisions);
+				repo.getChangelog().range(ei, commitRevisions);
 				progressHelper.worked(1);
 				ph2 = new ProgressSupport.Sub(progressHelper, 2);
 			} else {
 				ph2 = new ProgressSupport.Sub(progressHelper, 3);
 			}
-			ph2.start(completeHistory.length);
+			ph2.start(changeHistory.length);
 			// XXX shall sort completeHistory according to changeset numbers?
-			for (int i = 0; i < completeHistory.length; i++ ) {
-				final HistoryNode n = completeHistory[i];
+			for (int i = 0; i < changeHistory.length; i++ ) {
+				final HistoryNode n = changeHistory[i];
 				handler.treeElement(ei.init(n));
 				ph2.worked(1);
 				cancelHelper.checkCancelled();
@@ -365,29 +360,130 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	}
 	
 	/**
-	 * Follows file renames and build a list of all corresponding file nodes. If {@link #followHistory} is <code>false</code>, 
-	 * the list contains one element only, file node with the name of the file as it was specified by the user.
+	 * Follows file renames and build a list of all corresponding file nodes and revisions they were 
+	 * copied/renamed/branched at (IOW, their latest revision to look at).
+	 *  
+	 * If {@link #followHistory} is <code>false</code>, the list contains one element only, 
+	 * file node with the name of the file as it was specified by the user.
+	 * 
+	 * For the most recent file revision is null.
+	 * 
+	 * TODO may use HgFileRevision (after some refactoring to accept HgDataFile and Nodeid) instead of Pair
+	 * and possibly reuse this functionality
 	 * 
 	 * @return list of file renames, with most recent file first
 	 */
-	private LinkedList<HgDataFile> buildFileRenamesQueue() {
-		LinkedList<HgDataFile> rv = new LinkedList<HgDataFile>();
+	private LinkedList<Pair<HgDataFile, Nodeid>> buildFileRenamesQueue() {
+		LinkedList<Pair<HgDataFile, Nodeid>> rv = new LinkedList<Pair<HgDataFile, Nodeid>>();
 		if (!followHistory) {
-			rv.add(repo.getFileNode(file));
+			rv.add(new Pair<HgDataFile, Nodeid>(repo.getFileNode(file), null));
 			return rv;
 		}
-		HgDataFile fileNode;
 		Path fp = file;
+		Nodeid copyRev = null;
 		boolean isCopy;
 		do {
-			fileNode = repo.getFileNode(fp);
-			rv.addLast(fileNode);
+			HgDataFile fileNode = repo.getFileNode(fp);
+			rv.addLast(new Pair<HgDataFile, Nodeid>(fileNode, copyRev));
 			if (isCopy = fileNode.isCopy()) {
 				fp = fileNode.getCopySourceName();
+				copyRev = fileNode.getCopySourceRevision();
 			}
 		} while (isCopy);
 		return rv;
 	}
+	
+	private static class TreeBuildInspector implements HgChangelog.ParentInspector, HgChangelog.RevisionInspector {
+		private final boolean followAncestry;
+
+		private HistoryNode[] completeHistory;
+		private int[] commitRevisions;
+		
+		TreeBuildInspector(boolean _followAncestry) {
+			followAncestry = _followAncestry;
+		}
+
+		public void next(int revisionNumber, Nodeid revision, int linkedRevision) {
+			commitRevisions[revisionNumber] = linkedRevision;
+		}
+
+		public void next(int revisionNumber, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
+			HistoryNode p1 = null, p2 = null;
+			if (parent1 != -1) {
+				p1 = completeHistory[parent1];
+			}
+			if (parent2!= -1) {
+				p2 = completeHistory[parent2];
+			}
+			completeHistory[revisionNumber] = new HistoryNode(commitRevisions[revisionNumber], revision, p1, p2);
+		}
+		
+		/**
+		 * Builds history of file changes (in natural order, from oldest to newest) up to (and including) file revision specified.
+		 * If {@link TreeBuildInspector} follows ancestry, only elements that are on the line of ancestry of the revision at 
+		 * lastRevisionIndex would be included.
+		 */
+		HistoryNode[] go(HgDataFile fileNode, int lastRevisionIndex) throws HgInvalidControlFileException {
+			completeHistory = new HistoryNode[lastRevisionIndex+1];
+			commitRevisions = new int[completeHistory.length];
+			fileNode.indexWalk(0, lastRevisionIndex, this);
+			if (!followAncestry) {
+				return completeHistory;
+			}
+			/*
+			 * Changesets:
+			 * o              <-- cset from working dir parent (as in dirstate), file not changed (file revision recorded points to that from A)  
+			 * |   x          <-- revision with file changed (B')
+			 * x  /           <-- revision with file changed (A)
+			 * | x            <-- revision with file changed (B)
+			 * |/
+			 * o              <-- another changeset, where file wasn't changed
+			 * |
+			 * x              <-- revision with file changed (C)
+			 * 
+			 * File history: B', A, B, C
+			 * 
+			 * When "follow", SHALL NOT report B and B', but A and C
+			 */
+			// strippedHistory: only those HistoryNodes from completeHistory that are on the same
+			// line of descendant, in order from older to newer
+			LinkedList<HistoryNode> strippedHistoryList = new LinkedList<HistoryNode>();
+			LinkedList<HistoryNode> queue = new LinkedList<HistoryNode>();
+			// look for ancestors of the selected history node
+			queue.add(completeHistory[lastRevisionIndex]);
+			do {
+				HistoryNode withFileChange = queue.removeFirst();
+				if (withFileChange.children != null) {
+					withFileChange.children.retainAll(strippedHistoryList);
+				}
+				strippedHistoryList.addFirst(withFileChange);
+				if (withFileChange.parent1 != null) {
+					queue.addLast(withFileChange.parent1);
+				}
+				if (withFileChange.parent2 != null) {
+					queue.addLast(withFileChange.parent2);
+				}
+			} while (!queue.isEmpty());
+			HistoryNode[] strippedHistory = strippedHistoryList.toArray(new HistoryNode[strippedHistoryList.size()]);
+			completeHistory = null;
+			commitRevisions = null;
+			// collected values are no longer valid - shall 
+			// strip off elements for missing HistoryNodes, but it's easier just to re-create the array
+			commitRevisions = new int[strippedHistory.length];
+			for (int i = 0; i < commitRevisions.length; i++) {
+				commitRevisions[i] = strippedHistory[i].changeset;
+			}
+			return strippedHistory;
+		}
+		
+		/**
+		 * handy access to all HistoryNode[i].changeset values
+		 */
+		int[] getCommitRevisions() {
+			return commitRevisions;
+		}
+	};
+
 
 	//
 	

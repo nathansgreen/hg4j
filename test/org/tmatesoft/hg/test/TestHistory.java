@@ -130,30 +130,23 @@ public class TestHistory {
 		assertTrue("[sanity]", repo.getFileNode(fname).exists());
 		eh.run("hg", "log", "--debug", fname, "--cwd", repo.getLocation());
 		
-		final LinkedList<HgChangeset> cmdResult = new LinkedList<HgChangeset>();
-		new HgLogCommand(repo).file(fname, false).execute(new HgChangesetTreeHandler() {
-
-			public void treeElement(TreeElement entry) throws HgCallbackTargetException {
-				// check consistency
-				Nodeid cset = entry.changeset().getNodeid();
-				errorCollector.assertEquals(entry.changesetRevision(), cset);
-				Pair<HgChangeset, HgChangeset> parents_a = entry.parents();
-				Pair<Nodeid, Nodeid> parents_b = entry.parentRevisions();
-				if (parents_b.first().isNull()) {
-					errorCollector.assertTrue(parents_a.first() == null);
-				} else {
-					errorCollector.assertEquals(parents_b.first(), parents_a.first().getNodeid());
-				}
-				if (parents_b.second().isNull()) {
-					errorCollector.assertTrue(parents_a.second() == null);
-				} else {
-					errorCollector.assertEquals(parents_b.second(), parents_a.second().getNodeid());
-				}
-				//
-				cmdResult.add(entry.changeset());
-			}
-		});
-		report("execute with HgChangesetTreeHandler", cmdResult, true);
+		TreeCollectHandler h = new TreeCollectHandler(false);
+		new HgLogCommand(repo).file(fname, false).execute(h);
+		// since we use TreeCollectHandler with natural order (older to newer), shall reverse console result in report()
+		report("execute with HgChangesetTreeHandler(follow == false)", h.getResult(), true);
+	}
+	
+	@Test
+	public void testChangesetTreeFollowRename() throws Exception {
+		// FIXME better test with more than 1 rename, and renames not from the last revision (somewhere from the middle of the origin change history)
+		final String fname = "cmdline/org/tmatesoft/hg/console/Remote.java";
+		assertTrue("[sanity]", repo.getFileNode(fname).exists());
+		eh.run("hg", "log", "--debug", "--follow", fname);
+		
+		TreeCollectHandler h = new TreeCollectHandler(true);
+		new HgLogCommand(repo).file(fname, true).execute(h);
+		
+		report("execute with HgChangesetTreeHandler(follow == true)", h.getResult(), false);
 	}
 
 	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResult) {
@@ -290,5 +283,46 @@ public class TestHistory {
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug", "-b", "default", "-b", "test", "--cwd", repo.getLocation());
 		report("log -b default -b test" , new HgLogCommand(repo).branch("default").branch("test").execute(), true);
+	}
+
+	////
+	
+	private final class TreeCollectHandler implements HgChangesetTreeHandler {
+		private final LinkedList<HgChangeset> cmdResult = new LinkedList<HgChangeset>();
+		private final boolean reverseResult;
+		
+		public TreeCollectHandler(boolean _reverseResult) {
+			this.reverseResult = _reverseResult;
+		}
+
+		public List<HgChangeset> getResult() {
+			return cmdResult;
+		}
+
+		public void treeElement(TreeElement entry) throws HgCallbackTargetException {
+			// check consistency
+			Nodeid cset = entry.changeset().getNodeid();
+			errorCollector.assertEquals(entry.changesetRevision(), cset);
+			Pair<HgChangeset, HgChangeset> parents_a = entry.parents();
+			Pair<Nodeid, Nodeid> parents_b = entry.parentRevisions();
+			if (parents_b.first().isNull()) {
+				errorCollector.assertTrue(parents_a.first() == null);
+			} else {
+				errorCollector.assertEquals(parents_b.first(), parents_a.first().getNodeid());
+			}
+			if (parents_b.second().isNull()) {
+				errorCollector.assertTrue(parents_a.second() == null);
+			} else {
+				errorCollector.assertEquals(parents_b.second(), parents_a.second().getNodeid());
+			}
+			//
+			if (reverseResult) {
+				cmdResult.addFirst(entry.changeset());
+			} else {
+				cmdResult.addLast(entry.changeset());
+			}
+		}
+		
+		
 	}
 }

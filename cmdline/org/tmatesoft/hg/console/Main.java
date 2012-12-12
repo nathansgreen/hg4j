@@ -172,7 +172,7 @@ public class Main {
 	private void buildFileLog() throws Exception {
 		final long start = System.nanoTime();
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
-		cmd.file("file1", false);
+		cmd.file("cmdline/org/tmatesoft/hg/console/Remote.java", true);
 		cmd.execute(new HgChangesetTreeHandler() {
 			public void treeElement(HgChangesetTreeHandler.TreeElement entry) {
 				StringBuilder sb = new StringBuilder();
