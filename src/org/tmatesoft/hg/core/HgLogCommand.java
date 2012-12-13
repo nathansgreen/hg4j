@@ -250,6 +250,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 				if (!fileNode.exists()) {
 					throw new HgPathNotFoundException(String.format("File %s not found in the repository", file), file);
 				}
+				// FIXME startRev and endRev ARE CHANGESET REVISIONS, not that of FILE!!!
 				fileNode.history(startRev, endRev, this);
 				csetTransform.checkFailure();
 				if (fileNode.isCopy()) {
@@ -305,6 +306,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 		// builds tree of nodes according to parents in file's revlog
 		final TreeBuildInspector treeBuildInspector = new TreeBuildInspector(followHistory);
+		// we iterate separate histories of each filename, need to connect
+		// last node of historyA with first node of historyB (A renamed to B case)
+		// to make overall history smooth.
+		HistoryNode lastFromPrevIteration = null;
+		
+		final int CACHE_CSET_IN_ADVANCE_THRESHOLD = 100; /* XXX is it really worth it? */
+		ElementImpl ei = null;
 
 		// most recent file is first in the queue
 		LinkedList<Pair<HgDataFile, Nodeid>> fileRenamesQueue = buildFileRenamesQueue();
@@ -331,14 +339,19 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 				}
 			}
 			int fileLastRevIndexToVisit = fileLastRevToVisit == null ? fileNode.getLastRevision() : fileNode.getRevisionIndex(fileLastRevToVisit);
-			final HistoryNode[] changeHistory = treeBuildInspector.go(fileNode, fileLastRevIndexToVisit);
-			int[] commitRevisions = treeBuildInspector.getCommitRevisions();
-			assert changeHistory.length == commitRevisions.length;
+			final List<HistoryNode> changeHistory = treeBuildInspector.go(fileNode, fileLastRevIndexToVisit);
+			assert changeHistory.size() > 0;
 			progressHelper.worked(1);
 			cancelHelper.checkCancelled();
-			ElementImpl ei = new ElementImpl(commitRevisions.length);
 			final ProgressSupport ph2;
-			if (commitRevisions.length < 100 /*XXX is it really worth it? */) {
+			if (ei == null) {
+				// when follow is true, changeHistory.size() of the first revision might be quite short 
+				// (e.g. bad fname recognized soon), hence ensure at least cache size at once
+				ei = new ElementImpl(Math.max(CACHE_CSET_IN_ADVANCE_THRESHOLD, changeHistory.size()));
+			}
+			if (changeHistory.size() < CACHE_CSET_IN_ADVANCE_THRESHOLD ) {
+				int[] commitRevisions = treeBuildInspector.getCommitRevisions();
+				assert changeHistory.size() == commitRevisions.length;
 				// read bunch of changesets at once and cache 'em
 				ei.initTransform();
 				repo.getChangelog().range(ei, commitRevisions);
@@ -347,10 +360,19 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			} else {
 				ph2 = new ProgressSupport.Sub(progressHelper, 3);
 			}
-			ph2.start(changeHistory.length);
-			// XXX shall sort completeHistory according to changeset numbers?
-			for (int i = 0; i < changeHistory.length; i++ ) {
-				final HistoryNode n = changeHistory[i];
+			ph2.start(changeHistory.size());
+			if (lastFromPrevIteration != null) {
+				// forward, from old to new:
+				lastFromPrevIteration.bindChild(changeHistory.get(0));
+				changeHistory.add(0, lastFromPrevIteration);
+			}
+			if (!fileRenamesQueue.isEmpty()) {
+				lastFromPrevIteration = changeHistory.remove(changeHistory.size()-1);
+			} else {
+				lastFromPrevIteration = null; // just for the sake of no references to old items 
+			}
+			// XXX shall sort changeHistory according to changeset numbers?
+			for (HistoryNode n : changeHistory) {
 				handler.treeElement(ei.init(n));
 				ph2.worked(1);
 				cancelHelper.checkCancelled();
@@ -398,6 +420,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 		private HistoryNode[] completeHistory;
 		private int[] commitRevisions;
+		private List<HistoryNode> resultHistory;
 		
 		TreeBuildInspector(boolean _followAncestry) {
 			followAncestry = _followAncestry;
@@ -422,16 +445,25 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		 * Builds history of file changes (in natural order, from oldest to newest) up to (and including) file revision specified.
 		 * If {@link TreeBuildInspector} follows ancestry, only elements that are on the line of ancestry of the revision at 
 		 * lastRevisionIndex would be included.
+		 * 
+		 * @return list of history elements, from oldest to newest. In case {@link #followAncestry} is <code>true</code>, the list
+		 * is modifiable (to further augment with last/first elements of renamed file histories)
 		 */
-		HistoryNode[] go(HgDataFile fileNode, int lastRevisionIndex) throws HgInvalidControlFileException {
+		List<HistoryNode> go(HgDataFile fileNode, int lastRevisionIndex) throws HgInvalidControlFileException {
+			resultHistory = null;
 			completeHistory = new HistoryNode[lastRevisionIndex+1];
 			commitRevisions = new int[completeHistory.length];
 			fileNode.indexWalk(0, lastRevisionIndex, this);
 			if (!followAncestry) {
-				return completeHistory;
+				// in case when ancestor not followed, it's safe to return unmodifiable list
+				resultHistory = Arrays.asList(completeHistory);
+				completeHistory = null;
+				// keep commitRevisions initialized, no need to recalculate them
+				// as they correspond 1:1 to resultHistory
+				return resultHistory;
 			}
 			/*
-			 * Changesets:
+			 * Changesets, newest at the top:
 			 * o              <-- cset from working dir parent (as in dirstate), file not changed (file revision recorded points to that from A)  
 			 * |   x          <-- revision with file changed (B')
 			 * x  /           <-- revision with file changed (A)
@@ -464,22 +496,25 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					queue.addLast(withFileChange.parent2);
 				}
 			} while (!queue.isEmpty());
-			HistoryNode[] strippedHistory = strippedHistoryList.toArray(new HistoryNode[strippedHistoryList.size()]);
 			completeHistory = null;
 			commitRevisions = null;
 			// collected values are no longer valid - shall 
 			// strip off elements for missing HistoryNodes, but it's easier just to re-create the array
-			commitRevisions = new int[strippedHistory.length];
-			for (int i = 0; i < commitRevisions.length; i++) {
-				commitRevisions[i] = strippedHistory[i].changeset;
-			}
-			return strippedHistory;
+			// from resultHistory later, once (and if) needed
+			return resultHistory = strippedHistoryList;
 		}
 		
 		/**
 		 * handy access to all HistoryNode[i].changeset values
 		 */
 		int[] getCommitRevisions() {
+			if (commitRevisions == null) {
+				commitRevisions = new int[resultHistory.size()];
+				int i = 0;
+				for (HistoryNode n : resultHistory) {
+					commitRevisions[i++] = n.changeset;
+				}
+			}
 			return commitRevisions;
 		}
 	};
@@ -538,7 +573,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	private static class HistoryNode {
 		final int changeset;
 		final Nodeid fileRevision;
-		final HistoryNode parent1, parent2;
+		HistoryNode parent1; // there's special case when we can alter it, see #bindChild()
+		final HistoryNode parent2;
 		List<HistoryNode> children;
 
 		HistoryNode(int cs, Nodeid revision, HistoryNode p1, HistoryNode p2) {
@@ -554,11 +590,25 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			}
 		}
 		
-		void addChild(HistoryNode child) {
+		private void addChild(HistoryNode child) {
 			if (children == null) {
 				children = new ArrayList<HistoryNode>(2);
 			}
 			children.add(child);
+		}
+		
+		/**
+		 * method to merge two history chunks for renamed file so that
+		 * this node's history continues with that of child
+		 * @param child
+		 */
+		public void bindChild(HistoryNode child) {
+			assert child.parent1 == null && child.parent2 == null;
+			// for the last element in history empty children are by construction:
+			// we don't iterate further than last element of interest in TreeBuildInspector#go
+			assert children == null || children.isEmpty();
+			child.parent1 = this;
+			addChild(child);
 		}
 	}
 

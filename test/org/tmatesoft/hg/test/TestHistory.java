@@ -144,6 +144,7 @@ public class TestHistory {
 		eh.run("hg", "log", "--debug", "--follow", fname);
 		
 		TreeCollectHandler h = new TreeCollectHandler(true);
+		h.checkPrevInParents = true;
 		new HgLogCommand(repo).file(fname, true).execute(h);
 		
 		report("execute with HgChangesetTreeHandler(follow == true)", h.getResult(), false);
@@ -290,6 +291,8 @@ public class TestHistory {
 	private final class TreeCollectHandler implements HgChangesetTreeHandler {
 		private final LinkedList<HgChangeset> cmdResult = new LinkedList<HgChangeset>();
 		private final boolean reverseResult;
+		boolean checkPrevInChildren = false;
+		boolean checkPrevInParents = false;
 		
 		public TreeCollectHandler(boolean _reverseResult) {
 			this.reverseResult = _reverseResult;
@@ -298,12 +301,14 @@ public class TestHistory {
 		public List<HgChangeset> getResult() {
 			return cmdResult;
 		}
+		
 
 		public void treeElement(TreeElement entry) throws HgCallbackTargetException {
 			// check consistency
 			Nodeid cset = entry.changeset().getNodeid();
 			errorCollector.assertEquals(entry.changesetRevision(), cset);
-			Pair<HgChangeset, HgChangeset> parents_a = entry.parents();
+			Pair<HgChangeset, HgChangeset> p = entry.parents();
+			Pair<HgChangeset, HgChangeset> parents_a = p;
 			Pair<Nodeid, Nodeid> parents_b = entry.parentRevisions();
 			if (parents_b.first().isNull()) {
 				errorCollector.assertTrue(parents_a.first() == null);
@@ -314,6 +319,17 @@ public class TestHistory {
 				errorCollector.assertTrue(parents_a.second() == null);
 			} else {
 				errorCollector.assertEquals(parents_b.second(), parents_a.second().getNodeid());
+			}
+			//
+			if (checkPrevInChildren && !cmdResult.isEmpty()) {
+				HgChangeset prevChangeset = reverseResult ? cmdResult.getFirst() : cmdResult.getLast();
+				String msg = String.format("No parent-child bind betwee revisions %d and %d", prevChangeset.getRevisionIndex(), entry.changeset().getRevisionIndex());
+				errorCollector.assertTrue(msg, entry.children().contains(prevChangeset));
+			}
+			if (checkPrevInParents && !cmdResult.isEmpty()) {
+				HgChangeset prevChangeset = reverseResult ? cmdResult.getFirst() : cmdResult.getLast();
+				String msg = String.format("No parent-child bind betwee revisions %d and %d", prevChangeset.getRevisionIndex(), entry.changeset().getRevisionIndex());
+				errorCollector.assertTrue(msg, p.first() == prevChangeset || p.second() == prevChangeset);
 			}
 			//
 			if (reverseResult) {
