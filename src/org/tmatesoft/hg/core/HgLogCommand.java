@@ -25,8 +25,10 @@ import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -314,20 +316,21 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		final int CACHE_CSET_IN_ADVANCE_THRESHOLD = 100; /* XXX is it really worth it? */
 		ElementImpl ei = null;
 
-		// most recent file is first in the queue
+		// renamed files in the queue are placed with respect to #iterateDirection
+		// i.e. if we iterate from new to old, recent filenames come first
 		LinkedList<Pair<HgDataFile, Nodeid>> fileRenamesQueue = buildFileRenamesQueue();
 		progressHelper.start(4 * fileRenamesQueue.size());
 		do {
-			// to maintain iteration order from older to newer, take oldest name (in case of renames) first  
-			Pair<HgDataFile, Nodeid> renameInfo = fileRenamesQueue.removeLast();
+ 
+			Pair<HgDataFile, Nodeid> renameInfo = fileRenamesQueue.removeFirst();
 			cancelHelper.checkCancelled();
 			HgDataFile fileNode = renameInfo.first();
 			Nodeid fileLastRevToVisit = null;
 			if (followHistory) {
 				fileLastRevToVisit = renameInfo.second();
 				if (fileLastRevToVisit == null) {
-					// only recent file name should not have a changeset when rename has happened.
-					assert fileRenamesQueue.isEmpty();
+					// it's either first or last item in the queue, depending on iteration order
+					assert fileRenamesQueue.isEmpty() || /*awful way to find out it's first iteration*/ lastFromPrevIteration == null;
 					// TODO subject to dedicated method either in HgRepository (getWorkingCopyParentRevisionIndex)
 					// or in the HgDataFile (getWorkingCopyOriginRevision)
 					Nodeid wdParentChangeset = repo.getWorkingCopyParents().first();
@@ -362,17 +365,44 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			}
 			ph2.start(changeHistory.size());
 			if (lastFromPrevIteration != null) {
-				// forward, from old to new:
-				lastFromPrevIteration.bindChild(changeHistory.get(0));
-				changeHistory.add(0, lastFromPrevIteration);
+				if (iterateDirection == IterateDirection.FromOldToNew) {
+					// forward, from old to new:
+					// A(0..n) -> B(0..m). First, report A(0)..A(n-1)
+					// then A(n).bind(B(0))
+					HistoryNode oldestOfTheNextChunk = changeHistory.get(0);
+					lastFromPrevIteration.bindChild(oldestOfTheNextChunk);
+					changeHistory.add(0, lastFromPrevIteration);
+				} else {
+					assert iterateDirection == IterateDirection.FromNewToOld;
+					// A renamed to B. A(0..n) -> B(0..m). 
+					// First, report B(m), B(m-1)...B(1), then A(n).bind(B(0))
+					HistoryNode newestOfNextChunk = changeHistory.get(changeHistory.size() - 1); // A(n)
+					newestOfNextChunk.bindChild(lastFromPrevIteration);
+					changeHistory.add(lastFromPrevIteration);
+				}
 			}
 			if (!fileRenamesQueue.isEmpty()) {
-				lastFromPrevIteration = changeHistory.remove(changeHistory.size()-1);
+				if (iterateDirection == IterateDirection.FromOldToNew) {
+					// save newest, and exclude it from this iteration (postpone for next)
+					lastFromPrevIteration = changeHistory.remove(changeHistory.size()-1);
+				} else {
+					assert iterateDirection == IterateDirection.FromNewToOld;
+					// save oldest, and exclude it from thi iteration (postpone for next)
+					lastFromPrevIteration = changeHistory.remove(0);
+				}
 			} else {
 				lastFromPrevIteration = null; // just for the sake of no references to old items 
 			}
 			// XXX shall sort changeHistory according to changeset numbers?
-			for (HistoryNode n : changeHistory) {
+			Iterator<HistoryNode> it;
+			if (iterateDirection == IterateDirection.FromOldToNew) {
+				it = changeHistory.listIterator();
+			} else {
+				assert iterateDirection == IterateDirection.FromNewToOld;
+				it = new ReverseIterator<HistoryNode>(changeHistory);
+			}
+			while(it.hasNext()) {
+				HistoryNode n = it.next();
 				handler.treeElement(ei.init(n));
 				ph2.worked(1);
 				cancelHelper.checkCancelled();
@@ -381,6 +411,26 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		progressHelper.done();
 	}
 	
+	private IterateDirection iterateDirection = IterateDirection.FromOldToNew;
+
+	private static class ReverseIterator<E> implements Iterator<E> {
+		private final ListIterator<E> listIterator;
+		
+		public ReverseIterator(List<E> list) {
+			listIterator = list.listIterator(list.size());
+		}
+
+		public boolean hasNext() {
+			return listIterator.hasPrevious();
+		}
+		public E next() {
+			return listIterator.previous();
+		}
+		public void remove() {
+			listIterator.remove();
+		}
+	}
+
 	/**
 	 * Follows file renames and build a list of all corresponding file nodes and revisions they were 
 	 * copied/renamed/branched at (IOW, their latest revision to look at).
@@ -393,7 +443,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * TODO may use HgFileRevision (after some refactoring to accept HgDataFile and Nodeid) instead of Pair
 	 * and possibly reuse this functionality
 	 * 
-	 * @return list of file renames, with most recent file first
+	 * @return list of file renames, ordered with respect to {@link #iterateDirection}
 	 */
 	private LinkedList<Pair<HgDataFile, Nodeid>> buildFileRenamesQueue() {
 		LinkedList<Pair<HgDataFile, Nodeid>> rv = new LinkedList<Pair<HgDataFile, Nodeid>>();
@@ -406,7 +456,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		boolean isCopy;
 		do {
 			HgDataFile fileNode = repo.getFileNode(fp);
-			rv.addLast(new Pair<HgDataFile, Nodeid>(fileNode, copyRev));
+			Pair<HgDataFile, Nodeid> p = new Pair<HgDataFile, Nodeid>(fileNode, copyRev);
+			if (iterateDirection == IterateDirection.FromOldToNew) {
+				rv.addFirst(p);
+			} else {
+				assert iterateDirection == IterateDirection.FromNewToOld;
+				rv.addLast(p);
+			}
 			if (isCopy = fileNode.isCopy()) {
 				fp = fileNode.getCopySourceName();
 				copyRev = fileNode.getCopySourceRevision();
@@ -793,5 +849,9 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 				return repo.getChangelog().getRevision(changelogRevisionNumber);
 			}
 		}
+	}
+
+	private enum IterateDirection {
+		FromOldToNew, FromNewToOld
 	}
 }

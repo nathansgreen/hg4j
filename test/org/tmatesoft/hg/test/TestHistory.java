@@ -138,10 +138,10 @@ public class TestHistory {
 	
 	@Test
 	public void testChangesetTreeFollowRename() throws Exception {
-		// FIXME better test with more than 1 rename, and renames not from the last revision (somewhere from the middle of the origin change history)
-		final String fname = "cmdline/org/tmatesoft/hg/console/Remote.java";
+		repo = Configuration.get().find("log-follow");
+		final String fname = "file1_b";
 		assertTrue("[sanity]", repo.getFileNode(fname).exists());
-		eh.run("hg", "log", "--debug", "--follow", fname);
+		eh.run("hg", "log", "--debug", "--follow", fname, "--cwd", repo.getLocation());
 		
 		TreeCollectHandler h = new TreeCollectHandler(true);
 		h.checkPrevInParents = true;
