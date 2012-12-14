@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -541,6 +542,11 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			queue.add(completeHistory[lastRevisionIndex]);
 			do {
 				HistoryNode withFileChange = queue.removeFirst();
+				if (strippedHistoryList.contains(withFileChange)) {
+					// fork  point for the change that was later merged (and we traced
+					// both lines of development by now.
+					continue;
+				}
 				if (withFileChange.children != null) {
 					withFileChange.children.retainAll(strippedHistoryList);
 				}
@@ -552,6 +558,12 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					queue.addLast(withFileChange.parent2);
 				}
 			} while (!queue.isEmpty());
+			Collections.sort(strippedHistoryList, new Comparator<HistoryNode>() {
+
+				public int compare(HistoryNode o1, HistoryNode o2) {
+					return o1.changeset - o2.changeset;
+				}
+			});
 			completeHistory = null;
 			commitRevisions = null;
 			// collected values are no longer valid - shall 
@@ -665,6 +677,10 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			assert children == null || children.isEmpty();
 			child.parent1 = this;
 			addChild(child);
+		}
+		
+		public String toString() {
+			return String.format("<cset:%d, parents: %s, %s>", changeset, parent1 == null ? "-" : String.valueOf(parent1.changeset), parent2 == null ? "-" : String.valueOf(parent2.changeset));
 		}
 	}
 

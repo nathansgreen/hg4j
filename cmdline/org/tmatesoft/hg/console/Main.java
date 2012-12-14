@@ -172,7 +172,8 @@ public class Main {
 	private void buildFileLog() throws Exception {
 		final long start = System.nanoTime();
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
-		cmd.file("cmdline/org/tmatesoft/hg/console/Remote.java", true);
+		cmd.file("file1b.txt", true);
+		final int[] count = new int[] { 0 };
 		cmd.execute(new HgChangesetTreeHandler() {
 			public void treeElement(HgChangesetTreeHandler.TreeElement entry) {
 				StringBuilder sb = new StringBuilder();
@@ -208,8 +209,10 @@ public class Main {
 				if (isJoin || isFork) {
 					System.out.println();
 				}
+				count[0]++;
 			}
 		});
+		System.out.println(count[0]);
 		final long end = System.nanoTime();
 		System.out.printf("buildFileLog: %,d ms\n", (end-start)/1000);
 	}
