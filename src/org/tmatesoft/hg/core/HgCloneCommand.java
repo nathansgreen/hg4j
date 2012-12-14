@@ -33,6 +33,7 @@ import java.util.zip.DeflaterOutputStream;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
@@ -43,8 +44,10 @@ import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.PathRewrite;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * WORK IN PROGRESS, DO NOT USE
@@ -101,23 +104,29 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		} else {
 			destination.mkdirs();
 		}
+		ProgressSupport progress = getProgressSupport(null);
+		CancelSupport cancel = getCancelSupport(null, true);
+		cancel.checkCancelled();
 		// if cloning remote repo, which can stream and no revision is specified -
 		// can use 'stream_out' wireproto
 		//
 		// pull all changes from the very beginning
-		// XXX consult getContext() if by any chance has a bundle ready, if not, then read and register 
+		// XXX consult getContext() if by any chance has a bundle ready, if not, then read and register
 		HgBundle completeChanges = srcRepo.getChanges(Collections.singletonList(NULL));
-		WriteDownMate mate = new WriteDownMate(srcRepo.getSessionContext(), destination);
+		cancel.checkCancelled();
+		WriteDownMate mate = new WriteDownMate(srcRepo.getSessionContext(), destination, progress, cancel);
 		try {
 			// instantiate new repo in the destdir
 			mate.initEmptyRepository();
 			// pull changes
 			completeChanges.inspectAll(mate);
+			mate.checkFailure();
 			mate.complete();
 		} catch (IOException ex) {
 			throw new HgInvalidFileException(getClass().getName(), ex);
 		} finally {
 			completeChanges.unlink();
+			progress.done();
 		}
 		return new HgLookup().detect(destination);
 	}
@@ -126,9 +135,11 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 	// 1. process changelog, memorize nodeids to index
 	// 2. process manifest, using map from step 3, collect manifest nodeids
 	// 3. process every file, using map from 3, and consult set from step 4 to ensure repo is correct
-	private static class WriteDownMate implements HgBundle.Inspector {
+	private static class WriteDownMate implements HgBundle.Inspector, Lifecycle {
 		private final File hgDir;
 		private final PathRewrite storagePathHelper;
+		private final ProgressSupport progressSupport;
+		private final CancelSupport cancelSupport;
 		private FileOutputStream indexFile;
 		private String filename; // human-readable name of the file being written, for log/exception purposes 
 
@@ -143,12 +154,16 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 		private final LinkedList<String> fncacheFiles = new LinkedList<String>();
 		private RepoInitializer repoInit;
+		private Lifecycle.Callback lifecycleCallback;
+		private CancelledException cancelException;
 
-		public WriteDownMate(SessionContext ctx, File destDir) {
+		public WriteDownMate(SessionContext ctx, File destDir, ProgressSupport progress, CancelSupport cancel) {
 			hgDir = new File(destDir, ".hg");
 			repoInit = new RepoInitializer();
 			repoInit.setRequires(STORE | FNCACHE | DOTENCODE);
 			storagePathHelper = repoInit.buildDataFilesHelper(ctx);
+			progressSupport = progress;
+			cancelSupport = cancel;
 		}
 
 		public void initEmptyRepository() throws IOException {
@@ -347,6 +362,31 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			}
 			return true;
 		}
-	}
 
+		public void start(int count, Callback callback, Object token) {
+			progressSupport.start(count);
+			lifecycleCallback = callback;
+		}
+
+		public void finish(Object token) {
+			progressSupport.done();
+			lifecycleCallback = null;
+		}
+		
+		public void checkFailure() throws CancelledException {
+			if (cancelException != null) {
+				throw cancelException;
+			}
+		}
+		
+		private void stopIfCancelled() {
+			try {
+				cancelSupport.checkCancelled();
+				return;
+			} catch (CancelledException ex) {
+				cancelException = ex;
+				lifecycleCallback.stop();
+			}
+		}
+	}
 }

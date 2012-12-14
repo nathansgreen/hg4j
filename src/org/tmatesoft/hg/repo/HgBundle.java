@@ -18,18 +18,22 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ConcurrentModificationException;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
+import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.InflaterDataAccess;
+import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Patch;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelledException;
 
 /**
@@ -46,6 +50,7 @@ public class HgBundle {
 	private final File bundleFile;
 	private final DataAccessProvider accessProvider;
 //	private final SessionContext sessionContext;
+	private Lifecycle.BasicCallback flowControl;
 
 	HgBundle(SessionContext ctx, DataAccessProvider dap, File bundle) {
 //		sessionContext = ctx;
@@ -186,6 +191,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 	}
 
 	// callback to minimize amount of Strings and Nodeids instantiated
+	@Callback
 	public interface Inspector {
 		void changelogStart();
 
@@ -216,6 +222,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
+		final Lifecycle lifecycle = lifecycleSetUp(inspector);
 		DataAccess da = null;
 		try {
 			da = getDataStream();
@@ -226,6 +233,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			if (da != null) {
 				da.done();
 			}
+			lifecycleTearDown(lifecycle);
 		}
 	}
 
@@ -238,6 +246,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
+		final Lifecycle lifecycle = lifecycleSetUp(inspector);
 		DataAccess da = null;
 		try {
 			da = getDataStream();
@@ -252,6 +261,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			if (da != null) {
 				da.done();
 			}
+			lifecycleTearDown(lifecycle);
 		}
 	}
 
@@ -264,6 +274,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
+		final Lifecycle lifecycle = lifecycleSetUp(inspector);
 		DataAccess da = null;
 		try {
 			da = getDataStream();
@@ -282,6 +293,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			if (da != null) {
 				da.done();
 			}
+			lifecycleTearDown(lifecycle);
 		}
 	}
 
@@ -294,6 +306,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
+		final Lifecycle lifecycle = lifecycleSetUp(inspector);
 		DataAccess da = null;
 		try {
 			da = getDataStream();
@@ -306,7 +319,33 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			if (da != null) {
 				da.done();
 			}
+			lifecycleTearDown(lifecycle);
 		}
+	}
+	
+	// initialize flowControl, check for concurrent usage, starts lifecyle, if any
+	// return non-null only if inspector is interested in lifecycle events
+	private Lifecycle lifecycleSetUp(Inspector inspector) throws ConcurrentModificationException {
+		// Don't need flowControl in case Inspector doesn't implement Lifecycle,
+		// however is handy not to expect it == null inside internalInspect* 
+		// XXX Once there's need to make this class thread-safe,
+		// shall move flowControl to thread-local state.
+		if (flowControl != null) {
+			throw new ConcurrentModificationException("HgBundle is in use and not thread-safe yet");
+		}
+		flowControl = new Lifecycle.BasicCallback();
+		final Lifecycle lifecycle = Adaptable.Factory.getAdapter(inspector, Lifecycle.class, null);
+		if (lifecycle != null) {
+			lifecycle.start(-1, flowControl, flowControl);
+		}
+		return lifecycle;
+	}
+	
+	private void lifecycleTearDown(Lifecycle lifecycle) {
+		if (lifecycle != null) {
+			lifecycle.finish(flowControl);
+		}
+		flowControl = null;
 	}
 
 	private void internalInspectChangelog(DataAccess da, Inspector inspector) throws IOException {
