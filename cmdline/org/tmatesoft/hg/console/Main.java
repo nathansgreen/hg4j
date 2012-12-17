@@ -30,6 +30,7 @@ import java.util.Map;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetTreeHandler;
 import org.tmatesoft.hg.core.HgException;
+import org.tmatesoft.hg.core.HgFileRenameHandlerMixin;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgManifestCommand;
@@ -66,6 +67,7 @@ import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
 import org.tmatesoft.hg.repo.ext.HgExtensionsManager;
 import org.tmatesoft.hg.repo.ext.HgExtensionsManager.HgExt;
 import org.tmatesoft.hg.repo.ext.Rebase;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Pair;
@@ -174,7 +176,7 @@ public class Main {
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
 		cmd.file("file1b.txt", true);
 		final int[] count = new int[] { 0 };
-		cmd.execute(new HgChangesetTreeHandler() {
+		class MyHandler implements HgChangesetTreeHandler, Adaptable {
 			public void treeElement(HgChangesetTreeHandler.TreeElement entry) {
 				StringBuilder sb = new StringBuilder();
 				HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
@@ -211,7 +213,20 @@ public class Main {
 				}
 				count[0]++;
 			}
-		});
+
+			public <T> T getAdapter(Class<T> adapterClass) {
+				if (adapterClass == HgFileRenameHandlerMixin.class) {
+					// in fact, new instance is not very nice, however
+					// getAdapter callers are supposed to understand the risk of new instance
+					// and cache returned value
+					// besides, stateless implementation of RenameDumpHandler
+					// doesn't really care about few instances 
+					return adapterClass.cast(new Log.RenameDumpHandler());
+				}
+				return null;
+			}
+		};
+		cmd.execute(new MyHandler());
 		System.out.println(count[0]);
 		final long end = System.nanoTime();
 		System.out.printf("buildFileLog: %,d ms\n", (end-start)/1000);

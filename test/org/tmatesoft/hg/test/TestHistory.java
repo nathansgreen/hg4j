@@ -18,14 +18,17 @@ package org.tmatesoft.hg.test;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -33,6 +36,7 @@ import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetHandler;
 import org.tmatesoft.hg.core.HgChangesetTreeHandler;
+import org.tmatesoft.hg.core.HgFileRenameHandlerMixin;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
@@ -40,6 +44,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
@@ -142,12 +147,24 @@ public class TestHistory {
 		final String fname = "file1_b";
 		assertTrue("[sanity]", repo.getFileNode(fname).exists());
 		eh.run("hg", "log", "--debug", "--follow", fname, "--cwd", repo.getLocation());
-		
+
+		final Map<Path,Path> renames = new HashMap<Path, Path>();
 		TreeCollectHandler h = new TreeCollectHandler(true);
+		h.attachAdapter(HgFileRenameHandlerMixin.class, new HgFileRenameHandlerMixin() {
+			
+			public void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException {
+				renames.put(from.getPath(), to.getPath());
+			}
+		});
 		h.checkPrevInParents = true;
 		new HgLogCommand(repo).file(fname, true).execute(h);
+
+		assertEquals(1, h.getAdapterUse(HgFileRenameHandlerMixin.class));
 		
 		report("execute with HgChangesetTreeHandler(follow == true)", h.getResult(), false);
+		
+		assertEquals(1, renames.size());
+		assertEquals(Path.create(fname), renames.get(Path.create("file1_a")));
 	}
 
 	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResult) {
@@ -288,7 +305,35 @@ public class TestHistory {
 
 	////
 	
-	private final class TreeCollectHandler implements HgChangesetTreeHandler {
+	private static class AdapterPlug implements Adaptable {
+		private final Map<Class<?>, Object> adapters = new HashMap<Class<?>, Object>();
+		private final List<Class<?>> adapterUses = new ArrayList<Class<?>>();
+		
+		public <T> void attachAdapter(Class<T> adapterClass, T instance) {
+			adapters.put(adapterClass, instance);
+		}
+
+		public <T> T getAdapter(Class<T> adapterClass) {
+			Object instance = adapters.get(adapterClass);
+			if (instance != null) {
+				adapterUses.add(adapterClass);
+				return adapterClass.cast(instance);
+			}
+			return null;
+		}
+		
+		public int getAdapterUse(Class<?> adapterClass) {
+			int uses = 0;
+			for (Class<?> c : adapterUses) {
+				if (c == adapterClass) {
+					uses++;
+				}
+			}
+			return uses;
+		}
+	}
+	
+	private final class TreeCollectHandler extends AdapterPlug implements HgChangesetTreeHandler {
 		private final LinkedList<HgChangeset> cmdResult = new LinkedList<HgChangeset>();
 		private final boolean reverseResult;
 		boolean checkPrevInChildren = false;

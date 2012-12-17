@@ -69,10 +69,18 @@ public final class HgFileRevision {
 		origin = orig; 
 	}
 	
+	public HgFileRevision(HgDataFile fileNode, Nodeid fileRevision, Path origin) {
+		this(fileNode.getRepo(), fileRevision, null, fileNode.getPath(), origin); 
+	}
+	
 	public Path getPath() {
 		return path;
 	}
 
+	/**
+	 * Revision of the file
+	 * @return never <code>null</code>
+	 */
 	public Nodeid getRevision() {
 		return revision;
 	}

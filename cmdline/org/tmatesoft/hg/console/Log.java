@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ import static org.tmatesoft.hg.console.Options.asSet;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgChangesetHandler;
+import org.tmatesoft.hg.core.HgFileRenameHandlerMixin;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -121,11 +122,19 @@ public class Log {
 	}
 
 	private static final class Dump extends ChangesetDumpHandler implements HgChangesetHandler.WithCopyHistory {
+		private final RenameDumpHandler renameHandlerDelegate;
 
 		public Dump(HgRepository hgRepo) {
 			super(hgRepo);
+			renameHandlerDelegate = new RenameDumpHandler();
 		}
 		
+		public void copy(HgFileRevision from, HgFileRevision to) {
+			renameHandlerDelegate.copy(from, to);
+		}
+	}
+	
+	static class RenameDumpHandler implements HgFileRenameHandlerMixin {
 		public void copy(HgFileRevision from, HgFileRevision to) {
 			System.out.printf("Got notified that %s(%s) was originally known as %s(%s)\n", to.getPath(), to.getRevision(), from.getPath(), from.getRevision());
 		}

@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.Callback;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -37,20 +38,17 @@ public interface HgChangesetHandler {
 
 	/**
 	 * When {@link HgLogCommand} is executed against file, handler passed to {@link HgLogCommand#execute(HgChangesetHandler)} may optionally
-	 * implement this interface to get information about file renames. Method {@link #copy(HgFileRevision, HgFileRevision)} would
-	 * get invoked prior any changeset of the original file (if file history being followed) is reported via {@link #cset(HgChangeset)}.
+	 * implement this interface (or make it available through {@link Adaptable#getAdapter(Class)} to get information about file renames. 
+	 * Method {@link #copy(HgFileRevision, HgFileRevision)} would get invoked prior any changeset of the original file 
+	 * (if file history being followed) is reported via {@link #cset(HgChangeset)}.
 	 * 
 	 * For {@link HgLogCommand#file(Path, boolean)} with renamed file path and follow argument set to false, 
 	 * {@link #copy(HgFileRevision, HgFileRevision)} would be invoked for the first copy/rename in the history of the file, but not 
 	 * followed by any changesets. 
+	 * 
+	 * @see HgFileRenameHandlerMixin
 	 */
 	@Callback
-	public interface WithCopyHistory extends HgChangesetHandler {
-		// XXX perhaps, should distinguish copy from rename? And what about merged revisions and following them?
-
-		/**
-		 * @throws HgCallbackTargetException wrapper object for any exception user code may produce 
-		 */
-		void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException;
+	public interface WithCopyHistory extends HgChangesetHandler, HgFileRenameHandlerMixin {
 	}
 }
