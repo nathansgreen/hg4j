@@ -19,6 +19,7 @@ package org.tmatesoft.hg.core;
 import java.util.Collection;
 
 import org.tmatesoft.hg.internal.Callback;
+import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.util.Pair;
 
 /**
@@ -45,6 +46,17 @@ public interface HgChangesetTreeHandler {
 		 * @return revision of the revlog being iterated.
 		 */
 		public Nodeid fileRevision();
+		
+		/**
+		 * File node, provided revlog being iterated is a {@link HgDataFile}; {@link #fileRevision()} 
+		 * references revision from the history of this very {@link HgDataFile file}.
+		 * 
+		 * Comes handy when file history with renames is being followed to find out 
+		 * file name for particular revision in the history.
+		 * 
+		 * @return instance of the file being walked, or <code>null</code> if it's not a file but other revlog.
+		 */
+		public HgDataFile file();
 
 		/**
 		 * @return changeset associated with the current file revision

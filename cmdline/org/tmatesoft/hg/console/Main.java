@@ -191,6 +191,7 @@ public class Main {
 				final boolean isFork = entry.children().size() > 1;
 				final HgChangeset cset = entry.changeset();
 				System.out.printf("%d:%s - %s (%s)\n", cset.getRevisionIndex(), cset.getNodeid().shortNotation(), cset.getComment(), cset.getPhase());
+				System.out.printf("Known as %s (file rev:%s)\n", entry.file().getPath(), entry.fileRevision().shortNotation());
 				if (!isJoin && !isFork && !entry.children().isEmpty()) {
 					System.out.printf("\t=> %s\n", sb);
 				}

@@ -297,16 +297,19 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	}
 	
 	/**
-	 * Tree-wise iteration of a file history, with handy access to parent-child relations between changesets. 
+	 * Tree-wise iteration of a file history, with handy access to parent-child relations between changesets.
+	 * When file history is being followed, handler may additionally implement {@link HgFileRenameHandlerMixin} 
+	 * to get notified about switching between history chunks that belong to different names.   
 	 *  
 	 * @param handler callback to process changesets.
+	 * @see HgFileRenameHandlerMixin
  	 * @throws HgCallbackTargetException propagated exception from the handler
 	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws IllegalArgumentException if command is not satisfied with its arguments 
 	 * @throws ConcurrentModificationException if this log command instance is already running
 	 */
-	public void execute(HgChangesetTreeHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
+	public void execute(final HgChangesetTreeHandler handler) throws HgCallbackTargetException, HgException, CancelledException {
 		if (handler == null) {
 			throw new IllegalArgumentException();
 		}
@@ -326,11 +329,43 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		// last node of historyA with first node of historyB (A renamed to B case)
 		// to make overall history smooth.
 		HistoryNode lastFromPrevIteration = null;
-		HgFileRevision copiedFrom = null, copiedTo = null;
-		boolean shallReportRenameAfter1Step = false;
 		
-		final int CACHE_CSET_IN_ADVANCE_THRESHOLD = 100; /* XXX is it really worth it? */
-		ElementImpl ei = null;
+		class HandlerDispatcher {
+			private final int CACHE_CSET_IN_ADVANCE_THRESHOLD = 100; /* XXX is it really worth it? */
+			private ElementImpl ei = null;
+			private ProgressSupport progress;
+			private HgDataFile currentFileNode;
+
+			public void prepare(ProgressSupport parentProgress, int historyNodeCount, TreeBuildInspector treeBuildInspector) {
+				if (ei == null) {
+					// when follow is true, changeHistory.size() of the first revision might be quite short 
+					// (e.g. bad fname recognized soon), hence ensure at least cache size at once
+					ei = new ElementImpl(Math.max(CACHE_CSET_IN_ADVANCE_THRESHOLD, historyNodeCount));
+				}
+				if (historyNodeCount < CACHE_CSET_IN_ADVANCE_THRESHOLD ) {
+					int[] commitRevisions = treeBuildInspector.getCommitRevisions();
+					// read bunch of changesets at once and cache 'em
+					ei.initTransform();
+					repo.getChangelog().range(ei, commitRevisions);
+					parentProgress.worked(1);
+					progress = new ProgressSupport.Sub(parentProgress, 2);
+				} else {
+					progress = new ProgressSupport.Sub(parentProgress, 3);
+				}
+				progress.start(historyNodeCount);
+			}
+			public void once(HistoryNode n) throws HgCallbackTargetException, CancelledException {
+				handler.treeElement(ei.init(n, currentFileNode));
+				progress.worked(1);
+				cancelHelper.checkCancelled();
+			}
+
+			public void switchTo(HgDataFile df) {
+				// from now on, use df in TreeElement
+				currentFileNode = df;
+			}
+		};
+		final HandlerDispatcher dispatcher = new HandlerDispatcher();
 
 		// renamed files in the queue are placed with respect to #iterateDirection
 		// i.e. if we iterate from new to old, recent filenames come first
@@ -344,24 +379,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			assert changeHistory.size() > 0;
 			progressHelper.worked(1);
 			cancelHelper.checkCancelled();
-			final ProgressSupport ph2;
-			if (ei == null) {
-				// when follow is true, changeHistory.size() of the first revision might be quite short 
-				// (e.g. bad fname recognized soon), hence ensure at least cache size at once
-				ei = new ElementImpl(Math.max(CACHE_CSET_IN_ADVANCE_THRESHOLD, changeHistory.size()));
-			}
-			if (changeHistory.size() < CACHE_CSET_IN_ADVANCE_THRESHOLD ) {
-				int[] commitRevisions = treeBuildInspector.getCommitRevisions();
-				assert changeHistory.size() == commitRevisions.length;
-				// read bunch of changesets at once and cache 'em
-				ei.initTransform();
-				repo.getChangelog().range(ei, commitRevisions);
-				progressHelper.worked(1);
-				ph2 = new ProgressSupport.Sub(progressHelper, 2);
-			} else {
-				ph2 = new ProgressSupport.Sub(progressHelper, 3);
-			}
-			ph2.start(changeHistory.size());
+			dispatcher.prepare(progressHelper, changeHistory.size(), treeBuildInspector);
 			if (lastFromPrevIteration != null) {
 				if (iterateDirection == IterateDirection.FromOldToNew) {
 					// forward, from old to new:
@@ -369,13 +387,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					// then A(n).bind(B(0))
 					HistoryNode oldestOfTheNextChunk = changeHistory.get(0); // B(0)
 					lastFromPrevIteration.bindChild(oldestOfTheNextChunk); // lastFromPrevIteration is A(n)
-					changeHistory.add(0, lastFromPrevIteration);
+					dispatcher.once(lastFromPrevIteration);
 					if (renameHandler != null) { // shall report renames
 						assert namesIndex > 0;
 						HgDataFile lastIterationFileNode = fileRenamesQueue.get(namesIndex-1).first(); // A
-						copiedFrom = new HgFileRevision(lastIterationFileNode, lastFromPrevIteration.fileRevision, null);
-						copiedTo = new HgFileRevision(renameInfo.first(), oldestOfTheNextChunk.fileRevision, copiedFrom.getPath());
-						shallReportRenameAfter1Step = true; // report rename after A(n)
+						HgFileRevision copiedFrom = new HgFileRevision(lastIterationFileNode, lastFromPrevIteration.fileRevision, null);
+						HgFileRevision copiedTo = new HgFileRevision(renameInfo.first(), oldestOfTheNextChunk.fileRevision, copiedFrom.getPath());
+						renameHandler.copy(copiedFrom, copiedTo);
 					}
 				} else {
 					assert iterateDirection == IterateDirection.FromNewToOld;
@@ -383,14 +401,14 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 					// First, report B(m), B(m-1)...B(1), then A(n).bind(B(0)), report B(0), A(n)...
 					HistoryNode newestOfNextChunk = changeHistory.get(changeHistory.size() - 1); // A(n)
 					newestOfNextChunk.bindChild(lastFromPrevIteration);
-					changeHistory.add(lastFromPrevIteration);
+					dispatcher.once(lastFromPrevIteration);
 					if (renameHandler != null) {
 						assert namesIndex > 0;
 						// renameInfo points to chunk of name A now, and lastFromPrevIteration (from namesIndex-1) is B
-						copiedFrom = new HgFileRevision(renameInfo.first(), newestOfNextChunk.fileRevision, null);
+						HgFileRevision copiedFrom = new HgFileRevision(renameInfo.first(), newestOfNextChunk.fileRevision, null);
 						HgDataFile lastIterationFileNode = fileRenamesQueue.get(namesIndex-1).first(); // B
-						copiedTo = new HgFileRevision(lastIterationFileNode, lastFromPrevIteration.fileRevision, copiedFrom.getPath());
-						shallReportRenameAfter1Step = true; // report rename after B(0)
+						HgFileRevision copiedTo = new HgFileRevision(lastIterationFileNode, lastFromPrevIteration.fileRevision, copiedFrom.getPath());
+						renameHandler.copy(copiedFrom, copiedTo);
 					}
 				}
 			}
@@ -409,6 +427,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			} else {
 				lastFromPrevIteration = null; // just for the sake of no references to old items 
 			}
+			dispatcher.switchTo(renameInfo.first());
 			// XXX shall sort changeHistory according to changeset numbers?
 			Iterator<HistoryNode> it;
 			if (iterateDirection == IterateDirection.FromOldToNew) {
@@ -419,17 +438,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			}
 			while(it.hasNext()) {
 				HistoryNode n = it.next();
-				handler.treeElement(ei.init(n));
-				ph2.worked(1);
-				cancelHelper.checkCancelled();
-				if (shallReportRenameAfter1Step) {
-					assert renameHandler != null;
-					assert copiedFrom != null;
-					assert copiedTo != null;
-					renameHandler.copy(copiedFrom, copiedTo);
-					shallReportRenameAfter1Step = false;
-					copiedFrom = copiedTo = null;
-				}
+				dispatcher.once(n);
 			}
 		} // for fileRenamesQueue;
 		progressHelper.done();
@@ -718,6 +727,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 	private class ElementImpl implements HgChangesetTreeHandler.TreeElement, HgChangelog.Inspector {
 		private HistoryNode historyNode;
+		private HgDataFile fileNode;
 		private Pair<HgChangeset, HgChangeset> parents;
 		private List<HgChangeset> children;
 		private IntMap<HgChangeset> cachedChangesets;
@@ -730,8 +740,9 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			cachedChangesets = new IntMap<HgChangeset>(total);
 		}
 
-		ElementImpl init(HistoryNode n) {
+		ElementImpl init(HistoryNode n, HgDataFile df) {
 			historyNode = n;
+			fileNode = df;
 			parents = null;
 			children = null;
 			changesetRevision = null;
@@ -742,6 +753,10 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 		public Nodeid fileRevision() {
 			return historyNode.fileRevision;
+		}
+		
+		public HgDataFile file() {
+			return fileNode;
 		}
 
 		public HgChangeset changeset() {
