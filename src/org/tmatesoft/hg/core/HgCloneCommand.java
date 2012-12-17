@@ -189,6 +189,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
 			}
+			stopIfCancelled();
 		}
 
 		public void changelogEnd() {
@@ -204,6 +205,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
 			}
+			progressSupport.worked(1);
+			stopIfCancelled();
 		}
 
 		public void manifestStart() {
@@ -215,6 +218,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Failed to write manifest", ex, new File(filename));
 			}
+			stopIfCancelled();
 		}
 
 		public void manifestEnd() {
@@ -229,6 +233,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
 			}
+			progressSupport.worked(1);
+			stopIfCancelled();
 		}
 		
 		public void fileStart(String name) {
@@ -245,6 +251,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				String m = String.format("Failed to write file %s", filename);
 				throw new HgInvalidControlFileException(m, ex, new File(filename));
 			}
+			stopIfCancelled();
 		}
 
 		public void fileEnd(String name) {
@@ -260,6 +267,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				String m = String.format("Failed to write file %s", filename);
 				throw new HgInvalidControlFileException(m, ex, new File(filename));
 			}
+			progressSupport.worked(1);
+			stopIfCancelled();
 		}
 
 		private int knownRevision(Nodeid p) {
@@ -360,7 +369,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				String m = String.format("Failed to write revision %s of file %s", ge.node().shortNotation(), filename);
 				throw new HgInvalidControlFileException(m, ex, new File(filename));
 			}
-			return true;
+			return cancelException == null;
 		}
 
 		public void start(int count, Callback callback, Object token) {

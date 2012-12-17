@@ -311,7 +311,13 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		try {
 			da = getDataStream();
 			internalInspectChangelog(da, inspector);
+			if (flowControl.isStopped()) {
+				return;
+			}
 			internalInspectManifest(da, inspector);
+			if (flowControl.isStopped()) {
+				return;
+			}
 			internalInspectFiles(da, inspector);
 		} catch (IOException ex) {
 			throw new HgInvalidFileException("Bundle.inspectAll failed", ex, bundleFile);
@@ -353,7 +359,13 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			return;
 		}
 		inspector.changelogStart();
+		if (flowControl.isStopped()) {
+			return;
+		}
 		readGroup(da, inspector);
+		if (flowControl.isStopped()) {
+			return;
+		}
 		inspector.changelogEnd();
 	}
 
@@ -362,7 +374,13 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			return;
 		}
 		inspector.manifestStart();
+		if (flowControl.isStopped()) {
+			return;
+		}
 		readGroup(da, inspector);
+		if (flowControl.isStopped()) {
+			return;
+		}
 		inspector.manifestEnd();
 	}
 
@@ -376,7 +394,13 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			da.readBytes(fnameBuf, 0, fnameBuf.length);
 			String name = new String(fnameBuf);
 			inspector.fileStart(name);
+			if (flowControl.isStopped()) {
+				return;
+			}
 			readGroup(da, inspector);
+			if (flowControl.isStopped()) {
+				return;
+			}
 			inspector.fileEnd(name);
 		}
 	}
