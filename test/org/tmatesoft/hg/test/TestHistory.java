@@ -157,7 +157,7 @@ public class TestHistory {
 			}
 		});
 		h.checkPrevInParents = true;
-		new HgLogCommand(repo).file(fname, true).execute(h);
+		new HgLogCommand(repo).file(fname, true, true).execute(h);
 
 		assertEquals(1, h.getAdapterUse(HgFileRenameHandlerMixin.class));
 		
@@ -368,12 +368,12 @@ public class TestHistory {
 			//
 			if (checkPrevInChildren && !cmdResult.isEmpty()) {
 				HgChangeset prevChangeset = reverseResult ? cmdResult.getFirst() : cmdResult.getLast();
-				String msg = String.format("No parent-child bind betwee revisions %d and %d", prevChangeset.getRevisionIndex(), entry.changeset().getRevisionIndex());
+				String msg = String.format("No parent-child bind between revisions %d and %d", prevChangeset.getRevisionIndex(), entry.changeset().getRevisionIndex());
 				errorCollector.assertTrue(msg, entry.children().contains(prevChangeset));
 			}
 			if (checkPrevInParents && !cmdResult.isEmpty()) {
 				HgChangeset prevChangeset = reverseResult ? cmdResult.getFirst() : cmdResult.getLast();
-				String msg = String.format("No parent-child bind betwee revisions %d and %d", prevChangeset.getRevisionIndex(), entry.changeset().getRevisionIndex());
+				String msg = String.format("No parent-child bind between revisions %d and %d", prevChangeset.getRevisionIndex(), entry.changeset().getRevisionIndex());
 				errorCollector.assertTrue(msg, p.first() == prevChangeset || p.second() == prevChangeset);
 			}
 			//

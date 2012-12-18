@@ -353,6 +353,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		final HgFileRenameHandlerMixin renameHandler = Adaptable.Factory.getAdapter(handler, HgFileRenameHandlerMixin.class, null);
 
 		
+		// XXX rename. dispatcher is not a proper name (most of the job done - managing history chunk interconnection)
 		final HandlerDispatcher dispatcher = new HandlerDispatcher() {
 
 			@Override
@@ -365,6 +366,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		// renamed files in the queue are placed with respect to #iterateDirection
 		// i.e. if we iterate from new to old, recent filenames come first
 		List<Pair<HgDataFile, Nodeid>> fileRenamesQueue = buildFileRenamesQueue();
+		// XXX perhaps, makes sense to look at selected file's revision when followAncestry is true
+		// to ensure file we attempt to trace is in the WC's parent. Native hg aborts if not.
 		progressHelper.start(4 * fileRenamesQueue.size());
 		for (int namesIndex = 0, renamesQueueSize = fileRenamesQueue.size(); namesIndex < renamesQueueSize; namesIndex++) {
  
@@ -825,14 +828,12 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		
 		/**
 		 * method to merge two history chunks for renamed file so that
-		 * this node's history continues with that of child
+		 * this node's history continues (or forks, if we don't followAncestry)
+		 * with that of child
 		 * @param child
 		 */
 		public void bindChild(HistoryNode child) {
 			assert child.parent1 == null && child.parent2 == null;
-			// for the last element in history empty children are by construction:
-			// we don't iterate further than last element of interest in TreeBuildInspector#go
-			assert children == null || children.isEmpty();
 			child.parent1 = this;
 			addChild(child);
 		}
