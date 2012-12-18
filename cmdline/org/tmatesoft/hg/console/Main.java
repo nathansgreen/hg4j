@@ -174,7 +174,7 @@ public class Main {
 	private void buildFileLog() throws Exception {
 		final long start = System.nanoTime();
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
-		cmd.file("file1b.txt", true);
+		cmd.file("file1b.txt", true, true);
 		final int[] count = new int[] { 0 };
 		class MyHandler implements HgChangesetTreeHandler, Adaptable {
 			public void treeElement(HgChangesetTreeHandler.TreeElement entry) {
@@ -191,8 +191,11 @@ public class Main {
 				final boolean isFork = entry.children().size() > 1;
 				final HgChangeset cset = entry.changeset();
 				System.out.printf("%d:%s - %s (%s)\n", cset.getRevisionIndex(), cset.getNodeid().shortNotation(), cset.getComment(), cset.getPhase());
-				System.out.printf("Known as %s (file rev:%s)\n", entry.file().getPath(), entry.fileRevision().shortNotation());
+				System.out.printf("\tKnown as %s (file rev:%s)\n", entry.file().getPath(), entry.fileRevision().shortNotation());
 				if (!isJoin && !isFork && !entry.children().isEmpty()) {
+					HgChangeset p1 = entry.parents().first();
+					HgChangeset p2 = entry.parents().second();
+					System.out.printf("\tp1:%d, p2:%d\n", p1 == null ? -1 : p1.getRevisionIndex(), p2 == null ? -1 : p2.getRevisionIndex());
 					System.out.printf("\t=> %s\n", sb);
 				}
 				if (isJoin) {

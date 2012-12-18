@@ -188,22 +188,51 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	}
 	
 	/**
-	 * Visit history of a given file only.
-	 * @param file path relative to repository root. Pass <code>null</code> to reset.
-	 * @param followCopyRename true to report changesets of the original file(-s), if copy/rename ever occured to the file. 
+	 * Visit history of a given file only. Note, unlike native <code>hg log</code> command argument <code>--follow</code>, this method doesn't
+	 * follow file ancestry, but reports complete file history (with <code>followCopyRenames == true</code>, for each 
+	 * name of the file known in sequence). To achieve output similar to that of <code>hg log --follow filePath</code>, use
+	 * {@link #file(Path, boolean, boolean) file(filePath, true, true)} alternative.
+	 * 
+	 * @param filePath path relative to repository root. Pass <code>null</code> to reset.
+	 * @param followCopyRename true to report changesets of the original file(-s), if copy/rename ever occured to the file.
+	 * @return <code>this</code> for convenience
 	 */
-	public HgLogCommand file(Path file, boolean followCopyRename) {
-		// multiple? Bad idea, would need to include extra method into Handler to tell start of next file
-		this.file = file;
-		followRenames = followAncestry = followCopyRename;
+	public HgLogCommand file(Path filePath, boolean followCopyRename) {
+		return file(filePath, followCopyRename, false);
+	}
+	
+	/**
+	 * Full control over file history iteration.
+	 * 
+	 * @param filePath path relative to repository root. Pass <code>null</code> to reset.
+	 * @param followCopyRename true to report changesets of the original file(-s), if copy/rename ever occured to the file.
+	 * @param followFileAncestry true to follow file history starting from revision at working copy parent. Note, only revisions 
+	 * accessible (i.e. on direct parent line) from the selected one will be reported. This is how <code>hg log --follow filePath</code>
+	 * behaves, with the difference that this method allows separate control whether to follow renames or not.
+	 * 
+	 * @return <code>this</code> for convenience
+	 */
+	public HgLogCommand file(Path filePath, boolean followCopyRename, boolean followFileAncestry) {
+		file = filePath;
+		followRenames = followCopyRename;
+		followAncestry = followFileAncestry;
 		return this;
 	}
 	
 	/**
-	 * Handy analog of {@link #file(Path, boolean)} when clients' paths come from filesystem and need conversion to repository's 
+	 * Handy analog to {@link #file(Path, boolean)} when clients' paths come from filesystem and need conversion to repository's 
+	 * @return <code>this</code> for convenience
 	 */
 	public HgLogCommand file(String file, boolean followCopyRename) {
 		return file(Path.create(repo.getToRepoPathHelper().rewrite(file)), followCopyRename);
+	}
+
+	/**
+	 * Handy analog to {@link #file(Path, boolean, boolean)} when clients' paths come from filesystem and need conversion to repository's 
+	 * @return <code>this</code> for convenience
+	 */
+	public HgLogCommand file(String file, boolean followCopyRename, boolean followFileAncestry) {
+		return file(Path.create(repo.getToRepoPathHelper().rewrite(file)), followCopyRename, followFileAncestry);
 	}
 
 	/**
@@ -323,49 +352,15 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		final CancelSupport cancelHelper = getCancelSupport(handler, true);
 		final HgFileRenameHandlerMixin renameHandler = Adaptable.Factory.getAdapter(handler, HgFileRenameHandlerMixin.class, null);
 
-		// builds tree of nodes according to parents in file's revlog
-		final TreeBuildInspector treeBuildInspector = new TreeBuildInspector(followRenames);
-		// we iterate separate histories of each filename, need to connect
-		// last node of historyA with first node of historyB (A renamed to B case)
-		// to make overall history smooth.
-		HistoryNode lastFromPrevIteration = null;
 		
-		class HandlerDispatcher {
-			private final int CACHE_CSET_IN_ADVANCE_THRESHOLD = 100; /* XXX is it really worth it? */
-			private ElementImpl ei = null;
-			private ProgressSupport progress;
-			private HgDataFile currentFileNode;
+		final HandlerDispatcher dispatcher = new HandlerDispatcher() {
 
-			public void prepare(ProgressSupport parentProgress, int historyNodeCount, TreeBuildInspector treeBuildInspector) {
-				if (ei == null) {
-					// when follow is true, changeHistory.size() of the first revision might be quite short 
-					// (e.g. bad fname recognized soon), hence ensure at least cache size at once
-					ei = new ElementImpl(Math.max(CACHE_CSET_IN_ADVANCE_THRESHOLD, historyNodeCount));
-				}
-				if (historyNodeCount < CACHE_CSET_IN_ADVANCE_THRESHOLD ) {
-					int[] commitRevisions = treeBuildInspector.getCommitRevisions();
-					// read bunch of changesets at once and cache 'em
-					ei.initTransform();
-					repo.getChangelog().range(ei, commitRevisions);
-					parentProgress.worked(1);
-					progress = new ProgressSupport.Sub(parentProgress, 2);
-				} else {
-					progress = new ProgressSupport.Sub(parentProgress, 3);
-				}
-				progress.start(historyNodeCount);
-			}
-			public void once(HistoryNode n) throws HgCallbackTargetException, CancelledException {
+			@Override
+			protected void once(HistoryNode n) throws HgCallbackTargetException, CancelledException {
 				handler.treeElement(ei.init(n, currentFileNode));
-				progress.worked(1);
 				cancelHelper.checkCancelled();
 			}
-
-			public void switchTo(HgDataFile df) {
-				// from now on, use df in TreeElement
-				currentFileNode = df;
-			}
 		};
-		final HandlerDispatcher dispatcher = new HandlerDispatcher();
 
 		// renamed files in the queue are placed with respect to #iterateDirection
 		// i.e. if we iterate from new to old, recent filenames come first
@@ -374,72 +369,18 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		for (int namesIndex = 0, renamesQueueSize = fileRenamesQueue.size(); namesIndex < renamesQueueSize; namesIndex++) {
  
 			final Pair<HgDataFile, Nodeid> renameInfo = fileRenamesQueue.get(namesIndex);
+			dispatcher.prepare(progressHelper, renameInfo);
 			cancelHelper.checkCancelled();
-			final List<HistoryNode> changeHistory = treeBuildInspector.go(renameInfo.first(), renameInfo.second());
-			assert changeHistory.size() > 0;
-			progressHelper.worked(1);
-			cancelHelper.checkCancelled();
-			dispatcher.prepare(progressHelper, changeHistory.size(), treeBuildInspector);
-			if (lastFromPrevIteration != null) {
-				if (iterateDirection == IterateDirection.FromOldToNew) {
-					// forward, from old to new:
-					// A(0..n) -> B(0..m). First, report A(0)..A(n-1)
-					// then A(n).bind(B(0))
-					HistoryNode oldestOfTheNextChunk = changeHistory.get(0); // B(0)
-					lastFromPrevIteration.bindChild(oldestOfTheNextChunk); // lastFromPrevIteration is A(n)
-					dispatcher.once(lastFromPrevIteration);
-					if (renameHandler != null) { // shall report renames
-						assert namesIndex > 0;
-						HgDataFile lastIterationFileNode = fileRenamesQueue.get(namesIndex-1).first(); // A
-						HgFileRevision copiedFrom = new HgFileRevision(lastIterationFileNode, lastFromPrevIteration.fileRevision, null);
-						HgFileRevision copiedTo = new HgFileRevision(renameInfo.first(), oldestOfTheNextChunk.fileRevision, copiedFrom.getPath());
-						renameHandler.copy(copiedFrom, copiedTo);
-					}
-				} else {
-					assert iterateDirection == IterateDirection.FromNewToOld;
-					// A renamed to B. A(0..n) -> B(0..m). 
-					// First, report B(m), B(m-1)...B(1), then A(n).bind(B(0)), report B(0), A(n)...
-					HistoryNode newestOfNextChunk = changeHistory.get(changeHistory.size() - 1); // A(n)
-					newestOfNextChunk.bindChild(lastFromPrevIteration);
-					dispatcher.once(lastFromPrevIteration);
-					if (renameHandler != null) {
-						assert namesIndex > 0;
-						// renameInfo points to chunk of name A now, and lastFromPrevIteration (from namesIndex-1) is B
-						HgFileRevision copiedFrom = new HgFileRevision(renameInfo.first(), newestOfNextChunk.fileRevision, null);
-						HgDataFile lastIterationFileNode = fileRenamesQueue.get(namesIndex-1).first(); // B
-						HgFileRevision copiedTo = new HgFileRevision(lastIterationFileNode, lastFromPrevIteration.fileRevision, copiedFrom.getPath());
-						renameHandler.copy(copiedFrom, copiedTo);
-					}
-				}
+			if (namesIndex > 0) {
+				dispatcher.connectWithLastJunctionPoint(renameInfo, fileRenamesQueue.get(namesIndex - 1), renameHandler);
 			}
 			if (namesIndex + 1 < renamesQueueSize) {
-				// there's at least one more name we are going to look at, save
-				// one element for later binding
-				//
-				if (iterateDirection == IterateDirection.FromOldToNew) {
-					// save newest, and exclude it from this iteration (postpone for next)
-					lastFromPrevIteration = changeHistory.remove(changeHistory.size()-1);
-				} else {
-					assert iterateDirection == IterateDirection.FromNewToOld;
-					// save oldest, and exclude it from this iteration (postpone for next)
-					lastFromPrevIteration = changeHistory.remove(0);
-				}
+				// there's at least one more name we are going to look at
+				dispatcher.updateJunctionPoint(renameInfo, fileRenamesQueue.get(namesIndex+1));
 			} else {
-				lastFromPrevIteration = null; // just for the sake of no references to old items 
+				dispatcher.clearJunctionPoint();
 			}
-			dispatcher.switchTo(renameInfo.first());
-			// XXX shall sort changeHistory according to changeset numbers?
-			Iterator<HistoryNode> it;
-			if (iterateDirection == IterateDirection.FromOldToNew) {
-				it = changeHistory.listIterator();
-			} else {
-				assert iterateDirection == IterateDirection.FromNewToOld;
-				it = new ReverseIterator<HistoryNode>(changeHistory);
-			}
-			while(it.hasNext()) {
-				HistoryNode n = it.next();
-				dispatcher.once(n);
-			}
+			dispatcher.dispatchAllChanges();
 		} // for fileRenamesQueue;
 		progressHelper.done();
 	}
@@ -529,6 +470,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 		public void next(int revisionNumber, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) {
 			HistoryNode p1 = null, p2 = null;
+			// IMPORTANT: method #one(), below, doesn't expect this code expects reasonable values at parent indexes
 			if (parent1 != -1) {
 				p1 = completeHistory[parent1];
 			}
@@ -536,6 +478,29 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 				p2 = completeHistory[parent2];
 			}
 			completeHistory[revisionNumber] = new HistoryNode(commitRevisions[revisionNumber], revision, p1, p2);
+		}
+		
+		HistoryNode one(HgDataFile fileNode, Nodeid fileRevision) throws HgInvalidControlFileException {
+			int fileRevIndexToVisit = fileNode.getRevisionIndex(fileRevision);
+			return one(fileNode, fileRevIndexToVisit);
+		}
+
+		HistoryNode one(HgDataFile fileNode, int fileRevIndexToVisit) throws HgInvalidControlFileException {
+			resultHistory = null;
+			if (fileRevIndexToVisit == HgRepository.TIP) {
+				fileRevIndexToVisit = fileNode.getLastRevision();
+			}
+			// still, allocate whole array, for #next to be able to get null parent values
+			completeHistory = new HistoryNode[fileRevIndexToVisit+1];
+			commitRevisions = new int[completeHistory.length];
+			fileNode.indexWalk(fileRevIndexToVisit, fileRevIndexToVisit, this);
+			// it's only single revision, no need to care about followAncestry
+			// but won't hurt to keep resultHistory != null and commitRevisions initialized just in case
+			HistoryNode rv = completeHistory[fileRevIndexToVisit];
+			commitRevisions = new int[] { commitRevisions[fileRevIndexToVisit] };
+			completeHistory = null; // no need to keep almost empty array in memory
+			resultHistory = Collections.singletonList(rv);
+			return rv;
 		}
 		
 		/**
@@ -627,6 +592,158 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			return commitRevisions;
 		}
 	};
+
+	private abstract class HandlerDispatcher {
+		private final int CACHE_CSET_IN_ADVANCE_THRESHOLD = 100; /* XXX is it really worth it? */
+		// builds tree of nodes according to parents in file's revlog
+		private final TreeBuildInspector treeBuildInspector = new TreeBuildInspector(followAncestry);
+		private List<HistoryNode> changeHistory;
+		protected ElementImpl ei = null;
+		private ProgressSupport progress;
+		protected HgDataFile currentFileNode;
+		// node where current file history chunk intersects with same file under other name history
+		// either mock of B(0) or A(k), depending on iteration order
+		private HistoryNode junctionNode;
+
+		// parentProgress shall be initialized with 4 XXX refactor all this stuff with parentProgress 
+		public void prepare(ProgressSupport parentProgress, Pair<HgDataFile, Nodeid> renameInfo) {
+			// if we don't followAncestry, take complete history
+			// XXX treeBuildInspector knows followAncestry, perhaps the logic 
+			// whether to take specific revision or the last one shall be there?
+			changeHistory = treeBuildInspector.go(renameInfo.first(), followAncestry ? renameInfo.second() : null);
+			assert changeHistory.size() > 0;
+			parentProgress.worked(1);
+			int historyNodeCount = changeHistory.size();
+			if (ei == null) {
+				// when follow is true, changeHistory.size() of the first revision might be quite short 
+				// (e.g. bad fname recognized soon), hence ensure at least cache size at once
+				ei = new ElementImpl(Math.max(CACHE_CSET_IN_ADVANCE_THRESHOLD, historyNodeCount));
+			}
+			if (historyNodeCount < CACHE_CSET_IN_ADVANCE_THRESHOLD ) {
+				int[] commitRevisions = treeBuildInspector.getCommitRevisions();
+				assert commitRevisions.length == changeHistory.size();
+				// read bunch of changesets at once and cache 'em
+				ei.initTransform();
+				repo.getChangelog().range(ei, commitRevisions);
+				parentProgress.worked(1);
+				progress = new ProgressSupport.Sub(parentProgress, 2);
+			} else {
+				progress = new ProgressSupport.Sub(parentProgress, 3);
+			}
+			progress.start(historyNodeCount);
+			// switch to present chunk's file node 
+			switchTo(renameInfo.first());
+		}
+
+		public void updateJunctionPoint(Pair<HgDataFile, Nodeid> curRename, Pair<HgDataFile, Nodeid> nextRename) {
+			// A (old) renamed to B(new).  A(0..k..n) -> B(0..m). If followAncestry, k == n
+			// curRename.second() points to A(k)
+			if (iterateDirection == IterateDirection.FromOldToNew) {
+				// looking at A chunk (curRename), nextRename points to B
+				HistoryNode junctionSrc = findJunctionPointInCurrentChunk(curRename.second()); // A(k)
+				HistoryNode junctionDestMock = treeBuildInspector.one(nextRename.first(), 0); // B(0)
+				// junstionDestMock is mock object, once we iterate next rename, there'd be different HistoryNode
+				// for B's first revision. This means we read it twice, but this seems to be reasonable
+				// price for simplicity of the code (and opportunity to follow renames while not following ancestry)
+				junctionSrc.bindChild(junctionDestMock);
+				// Save mock A(k) 1) not to keep whole A history in memory 2) Don't need it's parent and children once get to B
+				// moreover, children of original A(k) (junctionSrc) would list mock B(0) which is undesired once we iterate over real B
+				junctionNode = new HistoryNode(junctionSrc.changeset, junctionSrc.fileRevision, null, null);
+			} else {
+				assert iterateDirection == IterateDirection.FromNewToOld;
+				// looking at B chunk (curRename), nextRename points at A
+				HistoryNode junctionDest = changeHistory.get(0); // B(0)
+				// prepare mock A(k)
+				HistoryNode junctionSrcMock = treeBuildInspector.one(nextRename.first(), nextRename.second()); // A(k)
+				// B(0) to list A(k) as its parent
+				// NOTE, A(k) would be different when we reach A chunk on the next iteration,
+				// but we do not care as long as TreeElement needs only parent/child changesets
+				// and not other TreeElements; so that it's enough to have mock parent node (just 
+				// for the sake of parent cset revisions). We have to, indeed, update real A(k),
+				// once we get to iteration over A, with B(0) (junctionDest) as one more child.
+				junctionSrcMock.bindChild(junctionDest);
+				// Save mock B(0), for reasons see above for opposite direction
+				junctionNode = new HistoryNode(junctionDest.changeset, junctionDest.fileRevision, null, null);
+			}
+		}
+		
+		public void clearJunctionPoint() {
+			junctionNode = null;
+		}
+		
+		public void connectWithLastJunctionPoint(Pair<HgDataFile, Nodeid> curRename, Pair<HgDataFile, Nodeid> prevRename, HgFileRenameHandlerMixin renameHandler) throws HgCallbackTargetException {
+			assert junctionNode != null;
+			// A renamed to B. A(0..k..n) -> B(0..m). If followAncestry: k == n  
+			if (iterateDirection == IterateDirection.FromOldToNew) {
+				// forward, from old to new:
+				// changeHistory points to B 
+				// Already reported: A(0)..A(n), A(k) is in junctionNode
+				// Shall connect histories: A(k).bind(B(0))
+				HistoryNode junctionDest = changeHistory.get(0); // B(0)
+				// junctionNode is A(k)
+				junctionNode.bindChild(junctionDest); 
+				if (renameHandler != null) { // shall report renames
+					HgFileRevision copiedFrom = new HgFileRevision(prevRename.first(), junctionNode.fileRevision, null); // "A", A(k)
+					HgFileRevision copiedTo = new HgFileRevision(curRename.first(), junctionDest.fileRevision, copiedFrom.getPath()); // "B", B(0)
+					renameHandler.copy(copiedFrom, copiedTo);
+				}
+			} else {
+				assert iterateDirection == IterateDirection.FromNewToOld;
+				// changeHistory points to A
+				// Already reported B(m), B(m-1)...B(0), B(0) is in junctionNode
+				// Shall connect histories A(k).bind(B(0))
+				// if followAncestry: A(k) is latest in changeHistory (k == n)
+				HistoryNode junctionSrc = findJunctionPointInCurrentChunk(curRename.second()); // A(k)
+				junctionSrc.bindChild(junctionNode);
+				if (renameHandler != null) {
+					HgFileRevision copiedFrom = new HgFileRevision(curRename.first(), junctionSrc.fileRevision, null); // "A", A(k)
+					HgFileRevision copiedTo = new HgFileRevision(prevRename.first(), junctionNode.fileRevision, copiedFrom.getPath()); // "B", B(0)
+					renameHandler.copy(copiedFrom, copiedTo);
+				}
+			}
+		}
+		
+		private HistoryNode findJunctionPointInCurrentChunk(Nodeid fileRevision) {
+			if (followAncestry) {
+				// use the fact we don't go past junction point when followAncestry == true
+				HistoryNode rv = changeHistory.get(changeHistory.size() - 1);
+				assert rv.fileRevision.equals(fileRevision);
+				return rv;
+			}
+			for (HistoryNode n : changeHistory) {
+				if (n.fileRevision.equals(fileRevision)) {
+					return n;
+				}
+			}
+			int csetStart = changeHistory.get(0).changeset;
+			int csetEnd = changeHistory.get(changeHistory.size() - 1).changeset;
+			throw new HgInvalidStateException(String.format("For change history (cset[%d..%d]) could not find node for file change %s", csetStart, csetEnd, fileRevision.shortNotation()));
+		}
+
+		protected abstract void once(HistoryNode n) throws HgCallbackTargetException, CancelledException;
+		
+		public void dispatchAllChanges() throws HgCallbackTargetException, CancelledException {
+			// XXX shall sort changeHistory according to changeset numbers?
+			Iterator<HistoryNode> it;
+			if (iterateDirection == IterateDirection.FromOldToNew) {
+				it = changeHistory.listIterator();
+			} else {
+				assert iterateDirection == IterateDirection.FromNewToOld;
+				it = new ReverseIterator<HistoryNode>(changeHistory);
+			}
+			while(it.hasNext()) {
+				HistoryNode n = it.next();
+				once(n);
+				progress.worked(1);
+			}
+			changeHistory = null;
+		}
+
+		public void switchTo(HgDataFile df) {
+			// from now on, use df in TreeElement
+			currentFileNode = df;
+		}
+	}
 
 
 	//
