@@ -102,5 +102,10 @@ public class LogOutputParser implements OutputParser {
 		public String user;
 		public String date;
 		public String description;
+		
+		@Override
+		public String toString() {
+			return String.format("R(%d:%s)", changesetIndex, changesetNodeid.substring(0, 7));
+		}
 	}
 }

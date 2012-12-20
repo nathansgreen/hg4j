@@ -150,6 +150,11 @@ public final class HgFileRevision {
 		int revisionIndex = fn.getRevisionIndex(revision);
 		fn.contentWithFilters(revisionIndex, sink);
 	}
+	
+	@Override
+	public String toString() {
+		return String.format("HgFileRevision(%s, %s)", getPath().toString(), revision.shortNotation());
+	}
 
 	private void checkCopy() throws HgException {
 		HgDataFile fn = repo.getFileNode(path);

@@ -286,6 +286,12 @@ public class HgChangeset implements Cloneable {
 		}
 	}
 	
+	@Override
+	public String toString() {
+		return String.format("HgChangeset(%d:%s)", revNumber, nodeid.shortNotation());
+
+	}
+	
 	private HgRepository getRepo() {
 		return shared.statusHelper.getRepo();
 	}
