@@ -16,6 +16,7 @@ s * Copyright (c) 2011-2012 TMate Software Ltd
  */
 package org.tmatesoft.hg.core;
 
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
@@ -35,6 +36,7 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
+import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -65,7 +67,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgChangelog.Inspector {
+public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 
 	private final HgRepository repo;
 	private Set<String> users;
@@ -276,6 +278,14 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 		if (csetTransform != null) {
 			throw new ConcurrentModificationException();
 		}
+		final int lastCset = endRev == TIP ? repo.getChangelog().getLastRevision() : endRev;
+		// XXX pretty much like HgInternals.checkRevlogRange
+		if (lastCset < 0 || lastCset > repo.getChangelog().getLastRevision()) {
+			throw new HgBadArgumentException(String.format("Bad value %d for end revision", endRev), null);
+		}
+		if (startRev < 0 || startRev > lastCset) {
+			throw new HgBadArgumentException(String.format("Bad value %d for start revision for range [%1$d..%d]", startRev, lastCset), null);
+		}
 		final ProgressSupport progressHelper = getProgressSupport(handler);
 		try {
 			count = 0;
@@ -283,46 +293,102 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 			// ChangesetTransfrom creates a blank PathPool, and #file(String, boolean) above 
 			// may utilize it as well. CommandContext? How about StatusCollector there as well?
 			csetTransform = new ChangesetTransformer(repo, handler, pw, progressHelper, getCancelSupport(handler, true));
+			FilteringInspector filterInsp = new FilteringInspector();
+			filterInsp.changesets(startRev, lastCset);
 			if (file == null) {
 				progressHelper.start(endRev - startRev + 1);
-				repo.getChangelog().range(startRev, endRev, this);
+				repo.getChangelog().range(startRev, endRev, filterInsp);
 				csetTransform.checkFailure();
 			} else {
-				progressHelper.start(-1/*XXX enum const, or a dedicated method startUnspecified(). How about startAtLeast(int)?*/);
-				HgDataFile fileNode = repo.getFileNode(file);
-				if (!fileNode.exists()) {
-					throw new HgPathNotFoundException(String.format("File %s not found in the repository", file), file);
-				}
-				// FIXME startRev and endRev ARE CHANGESET REVISIONS, not that of FILE!!!
-				fileNode.history(startRev, endRev, this);
-				csetTransform.checkFailure();
 				final HgFileRenameHandlerMixin withCopyHandler = Adaptable.Factory.getAdapter(handler, HgFileRenameHandlerMixin.class, null);
-				if (fileNode.isCopy()) {
-					// even if we do not follow history, report file rename
-					do {
-						if (withCopyHandler != null) {
-							HgFileRevision src = new HgFileRevision(repo, fileNode.getCopySourceRevision(), null, fileNode.getCopySourceName());
-							HgFileRevision dst = new HgFileRevision(repo, fileNode.getRevision(0), null, fileNode.getPath(), src.getPath());
-							withCopyHandler.copy(src, dst);
+				List<Pair<HgDataFile, Nodeid>> fileRenames = buildFileRenamesQueue();
+				progressHelper.start(-1/*XXX enum const, or a dedicated method startUnspecified(). How about startAtLeast(int)?*/);
+
+				for (int nameIndex = 0, fileRenamesSize = fileRenames.size(); nameIndex < fileRenamesSize; nameIndex++) {
+					Pair<HgDataFile, Nodeid> curRename = fileRenames.get(nameIndex);
+					HgDataFile fileNode = curRename.first();
+					if (followAncestry) {
+						TreeBuildInspector treeBuilder = new TreeBuildInspector(followAncestry);
+						List<HistoryNode> fileAncestry = treeBuilder.go(fileNode, curRename.second());
+						int[] commitRevisions = narrowChangesetRange(treeBuilder.getCommitRevisions(), startRev, lastCset);
+						if (iterateDirection == IterateDirection.FromOldToNew) {
+							repo.getChangelog().range(filterInsp, commitRevisions);
+						} else {
+							assert iterateDirection == IterateDirection.FromNewToOld;
+							// visit one by one in the opposite direction
+							for (int i = commitRevisions.length-1; i >= 0; i--) {
+								int csetWithFileChange = commitRevisions[i];
+								repo.getChangelog().range(csetWithFileChange, csetWithFileChange, filterInsp);
+							}
 						}
-						if (limit > 0 && count >= limit) {
-							// if limit reach, follow is useless.
-							break;
+					} else {
+						// report complete file history (XXX may narrow range with [startRev, endRev], but need to go from file rev to link rev)
+						int fileStartRev = 0; //fileNode.getChangesetRevisionIndex(0) >= startRev
+						int fileEndRev = fileNode.getLastRevision();
+						fileNode.history(fileStartRev, fileEndRev, filterInsp);
+						csetTransform.checkFailure();
+					}
+					if (followRenames && withCopyHandler != null && nameIndex + 1 < fileRenamesSize) {
+						Pair<HgDataFile, Nodeid> nextRename = fileRenames.get(nameIndex+1);
+						HgFileRevision src, dst;
+						// A -> B
+						if (iterateDirection == IterateDirection.FromOldToNew) {
+							// curRename: A, nextRename: B
+							src = new HgFileRevision(fileNode, curRename.second(), null);
+							dst = new HgFileRevision(nextRename.first(), nextRename.first().getRevision(0), src.getPath());
+						} else {
+							assert iterateDirection == IterateDirection.FromNewToOld;
+							// curRename: B, nextRename: A
+							src = new HgFileRevision(nextRename.first(), nextRename.second(), null);
+							dst = new HgFileRevision(fileNode, fileNode.getRevision(0), src.getPath());
 						}
-						if (followRenames) {
-							fileNode = repo.getFileNode(fileNode.getCopySourceName());
-							fileNode.history(this);
-							csetTransform.checkFailure();
-						}
-					} while (followRenames && fileNode.isCopy());
-				}
-			}
+						withCopyHandler.copy(src, dst);
+					}
+				} // for renames
+			} // file != null
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
 		} finally {
 			csetTransform = null;
 			progressHelper.done();
 		}
+	}
+	
+//	public static void main(String[] args) {
+//		int[] r = new int[] {17, 19, 21, 23, 25, 29};
+//		System.out.println(Arrays.toString(narrowChangesetRange(r, 0, 45)));
+//		System.out.println(Arrays.toString(narrowChangesetRange(r, 0, 25)));
+//		System.out.println(Arrays.toString(narrowChangesetRange(r, 5, 26)));
+//		System.out.println(Arrays.toString(narrowChangesetRange(r, 20, 26)));
+//		System.out.println(Arrays.toString(narrowChangesetRange(r, 26, 28)));
+//	}
+
+	private static int[] narrowChangesetRange(int[] csetRange, int startCset, int endCset) {
+		int lastInRange = csetRange[csetRange.length-1];
+		assert csetRange.length < 2 || csetRange[0] < lastInRange; // sorted
+		assert startCset >= 0 && startCset <= endCset;
+		if (csetRange[0] >= startCset && lastInRange <= endCset) {
+			// completely fits in
+			return csetRange;
+		}
+		if (csetRange[0] > endCset || lastInRange < startCset) {
+			return new int[0]; // trivial
+		}
+		int i = 0;
+		while (i < csetRange.length && csetRange[i] < startCset) {
+			i++;
+		}
+		int j = csetRange.length - 1;
+		while (j > i && csetRange[j] > endCset) {
+			j--;
+		}
+		if (i == j) {
+			// no values in csetRange fit into [startCset, endCset]
+			return new int[0];
+		}
+		int[] rv = new int[j-i+1];
+		System.arraycopy(csetRange, i, rv, 0, rv.length);
+		return rv;
 	}
 	
 	/**
@@ -423,10 +489,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 	 * 
 	 * @return list of file renames, ordered with respect to {@link #iterateDirection}
 	 */
-	private List<Pair<HgDataFile, Nodeid>> buildFileRenamesQueue() {
+	private List<Pair<HgDataFile, Nodeid>> buildFileRenamesQueue() throws HgPathNotFoundException {
 		LinkedList<Pair<HgDataFile, Nodeid>> rv = new LinkedList<Pair<HgDataFile, Nodeid>>();
 		Nodeid startRev = null;
 		HgDataFile fileNode = repo.getFileNode(file);
+		if (!fileNode.exists()) {
+			throw new HgPathNotFoundException(String.format("File %s not found in the repository", file), file);
+		}
 		if (followAncestry) {
 			// TODO subject to dedicated method either in HgRepository (getWorkingCopyParentRevisionIndex)
 			// or in the HgDataFile (getWorkingCopyOriginRevision)
@@ -751,31 +820,62 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> implements HgC
 
 	//
 	
-	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-		if (limit > 0 && count >= limit) {
-			return;
+	private class FilteringInspector implements HgChangelog.Inspector, Lifecycle {
+	
+		private Callback lifecycle;
+		private int firstCset = BAD_REVISION, lastCset = BAD_REVISION;
+		
+		// limit to changesets in this range only
+		public void changesets(int start, int end) {
+			firstCset = start;
+			lastCset = end;
 		}
-		if (branches != null && !branches.contains(cset.branch())) {
-			return;
-		}
-		if (users != null) {
-			String csetUser = cset.user().toLowerCase();
-			boolean found = false;
-			for (String u : users) {
-				if (csetUser.indexOf(u) != -1) {
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
+
+		public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+			if (limit > 0 && count >= limit) {
 				return;
 			}
+			// XXX may benefit from optional interface with #isInterested(int csetRev) - to avoid
+			// RawChangeset instantiation
+			if (firstCset != BAD_REVISION && revisionNumber < firstCset) {
+				return;
+			}
+			if (lastCset != BAD_REVISION && revisionNumber > lastCset) {
+				return;
+			}
+			if (branches != null && !branches.contains(cset.branch())) {
+				return;
+			}
+			if (users != null) {
+				String csetUser = cset.user().toLowerCase();
+				boolean found = false;
+				for (String u : users) {
+					if (csetUser.indexOf(u) != -1) {
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					return;
+				}
+			}
+			if (date != null) {
+				// TODO post-1.0 implement date support for log
+			}
+			csetTransform.next(revisionNumber, nodeid, cset);
+			if (++count >= limit) {
+				if (lifecycle != null) { // FIXME support Lifecycle delegation
+				lifecycle.stop();
+				}
+			}
 		}
-		if (date != null) {
-			// TODO post-1.0 implement date support for log
+
+		public void start(int count, Callback callback, Object token) {
+			lifecycle = callback;
 		}
-		count++;
-		csetTransform.next(revisionNumber, nodeid, cset);
+
+		public void finish(Object token) {
+		}
 	}
 	
 	private HgParentChildMap<HgChangelog> getParentHelper(boolean create) throws HgInvalidControlFileException {

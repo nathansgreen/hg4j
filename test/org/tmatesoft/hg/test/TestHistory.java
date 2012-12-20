@@ -30,6 +30,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
@@ -102,19 +103,14 @@ public class TestHistory {
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug", "--follow", f.toString());
 		
-		class H extends CollectHandler implements HgChangesetHandler.WithCopyHistory {
-			boolean copyReported = false;
-			boolean fromMatched = false;
-			public void copy(HgFileRevision from, HgFileRevision to) {
-				copyReported = true;
-				fromMatched = "src/com/tmate/hgkit/console/Remote.java".equals(from.getPath().toString());
-			}
-		};
-		H h = new H();
+		CollectWithRenameHandler h = new CollectWithRenameHandler();
 		new HgLogCommand(repo).file(f, true).execute(h);
+		errorCollector.assertEquals(1, h.renames.size());
+		HgFileRevision from = h.renames.get(0).first();
+		boolean fromMatched = "src/com/tmate/hgkit/console/Remote.java".equals(from.getPath().toString());
 		String what = "hg log - FOLLOW FILE HISTORY";
 		errorCollector.checkThat(what + "#copyReported ", h.copyReported, is(true));
-		errorCollector.checkThat(what + "#copyFromMatched", h.fromMatched, is(true));
+		errorCollector.checkThat(what + "#copyFromMatched", fromMatched, is(true));
 		//
 		// cmdline always gives in changesets in order from newest (bigger rev number) to oldest.
 		// LogCommand does other way round, from oldest to newest, follewed by revisions of copy source, if any
@@ -142,7 +138,7 @@ public class TestHistory {
 	}
 	
 	@Test
-	public void testChangesetTreeFollowRename() throws Exception {
+	public void testChangesetTreeFollowRenameAndAncestry() throws Exception {
 		repo = Configuration.get().find("log-follow");
 		final String fname = "file1_b";
 		assertTrue("[sanity]", repo.getFileNode(fname).exists());
@@ -166,6 +162,103 @@ public class TestHistory {
 		assertEquals(1, renames.size());
 		assertEquals(Path.create(fname), renames.get(Path.create("file1_a")));
 	}
+	
+	/**
+	 * Few tests  to check newly introduced followAncestry parameter to HgLogCommand:
+	 * followRename: true,	followAncestry: false
+	 * followRename: false,	followAncestry: true
+	 * followRename: true,	followAncestry: true
+	 * Perhaps, shall be merged with {@link #testFollowHistory()}
+	 */
+	@Test
+	public void testFollowRenamesNotAncestry() throws Exception {
+		repo = Configuration.get().find("log-follow");
+		final String fname1 = "file1_a";
+		final String fname2 = "file1_b";
+		assertTrue("[sanity]", repo.getFileNode(fname2).exists());
+		// no --follow, but two names we know have been the same file (fname1 renamed to fname2)
+		// sequentially gives follow rename semantics without ancestry
+		eh.run("hg", "log", "--debug", fname2, fname1, "--cwd", repo.getLocation());
+		
+		CollectWithRenameHandler h = new CollectWithRenameHandler();
+		new HgLogCommand(repo).file(fname2, true, false).execute(h);
+		errorCollector.assertEquals(1, h.renames.size());
+		Pair<HgFileRevision, HgFileRevision> rename = h.renames.get(0);
+		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
+		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
+		// Ensure rename info came in the right moment
+		errorCollector.assertEquals(1, h.lastChangesetReportedAtRename.size());
+		// Command iterates old to new, rename comes after last fname1 revision. Since we don't follow
+		// ancestry, it's the very last revision in fname1 history
+		String lastRevOfFname1 = "369c0882d477c11424a62eb4b791e86d1d4b6769";
+		errorCollector.assertEquals(lastRevOfFname1, h.lastChangesetReportedAtRename.get(0).getNodeid().toString());
+		report("HgChangesetHandler(renames: true, ancestry:false)", h.getChanges(), true);
+		
+		// TODO direction
+		// TODO TreeChangeHandler
+	}
+		
+	@Test
+	public void testFollowAncestryNotRenames() throws Exception {
+		repo = Configuration.get().find("log-follow");
+		final String fname2 = "file1_b";
+		assertTrue("[sanity]", repo.getFileNode(fname2).exists());
+		// to get "followed" history of fname2 only (without fname1 origin),
+		// get the complete history and keep there only elements that match fname2 own history 
+		eh.run("hg", "log", "--debug", "--follow", fname2, "--cwd", repo.getLocation());
+		final List<Record> fname2Follow = new LinkedList<LogOutputParser.Record>(changelogParser.getResult());
+		changelogParser.reset();
+		eh.run("hg", "log", "--debug", fname2, "--cwd", repo.getLocation());
+		// fname2Follow.retainAll(changelogParser.getResult());
+		for (Iterator<Record> it = fname2Follow.iterator(); it.hasNext();) {
+			Record r = it.next();
+			boolean belongsToSoleFname2History = false;
+			for (Record d : changelogParser.getResult()) {
+				if (d.changesetIndex == r.changesetIndex) {
+					assert d.changesetNodeid.equals(r.changesetNodeid) : "[sanity]";
+					belongsToSoleFname2History = true;
+					break;
+				}
+			}
+			if (!belongsToSoleFname2History) {
+				it.remove();
+			}
+		}
+		CollectWithRenameHandler h = new CollectWithRenameHandler();
+		new HgLogCommand(repo).file(fname2, false, true).execute(h);
+		errorCollector.assertEquals(0, h.renames.size());
+		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, true, errorCollector);
+
+		// TODO direction
+		// TODO TreeChangeHandler
+	}
+
+	/**
+	 * output identical to that of "hg log --follow"
+	 */
+	@Test
+	public void testFollowBothRenameAndAncestry() throws Exception {
+		repo = Configuration.get().find("log-follow");
+		final String fname1 = "file1_a";
+		final String fname2 = "file1_b";
+		assertTrue("[sanity]", repo.getFileNode(fname2).exists());
+		eh.run("hg", "log", "--debug", "--follow", fname2, "--cwd", repo.getLocation());
+		
+		CollectWithRenameHandler h = new CollectWithRenameHandler();
+		new HgLogCommand(repo).file(fname2, true, true).execute(h);
+		errorCollector.assertEquals(1, h.renames.size());
+		Pair<HgFileRevision, HgFileRevision> rename = h.renames.get(0);
+		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
+		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
+		// Ensure rename info came in the right moment
+		errorCollector.assertEquals(1, h.lastChangesetReportedAtRename.size());
+		String fname1BranchRevision = "6e668ff2940acb250c8627843f8116166fe5d5cd";
+		errorCollector.assertEquals(fname1BranchRevision, h.lastChangesetReportedAtRename.get(0).getNodeid().toString());
+		// finally, match output
+		report("HgChangesetHandler(renames: true, ancestry:true)", h.getChanges(), true);
+		// TODO direction
+		// TreeChangeHandler in #testChangesetTreeFollowRenameAndAncestry
+	}
 
 	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResult) {
 		final List<Record> consoleResult = changelogParser.getResult();
@@ -177,7 +270,7 @@ public class TestHistory {
 		if (reverseConsoleResult) {
 			Collections.reverse(consoleResult);
 		}
-		errorCollector.checkThat(what + ". Number of changeset reported didn't match", consoleResult.size(), equalTo(hg4jResult.size()));
+		errorCollector.checkThat(what + ". Number of changeset reported didn't match", hg4jResult.size(), equalTo(consoleResult.size()));
 		Iterator<Record> consoleResultItr = consoleResult.iterator();
 		for (HgChangeset cs : hg4jResult) {
 			if (!consoleResultItr.hasNext()) {
@@ -235,7 +328,7 @@ public class TestHistory {
 		//
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug", "-f", "e", "--cwd", repo.getLocation());
-		report("log -f e", cmd.file("e", true).execute(), false /*#1, below*/);
+		report("log -f e", cmd.file("e", true).execute(), true);
 		//
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug", "dir/b", "--cwd", repo.getLocation());
@@ -261,7 +354,7 @@ public class TestHistory {
 		report("log -f a", r, true);
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug", "-f", "dir/b", "--cwd", repo.getLocation());
-		report("log -f dir/b", cmd.file("dir/b", true).execute(), false /*#1, below*/);
+		report("log -f dir/b", cmd.file("dir/b", true).execute(), true);
 		//
 		// get repo back into clear state, up to the tip
 		eh.run("hg", "update", "-q", "--cwd", repo.getLocation());
@@ -383,7 +476,19 @@ public class TestHistory {
 				cmdResult.addLast(entry.changeset());
 			}
 		}
-		
-		
 	}
+
+	private static class CollectWithRenameHandler extends CollectHandler implements HgChangesetHandler.WithCopyHistory {
+		public boolean copyReported = false;
+		public List<Pair<HgFileRevision, HgFileRevision>> renames = new LinkedList<Pair<HgFileRevision,HgFileRevision>>();
+		public List<HgChangeset> lastChangesetReportedAtRename = new LinkedList<HgChangeset>(); 
+
+		public void copy(HgFileRevision from, HgFileRevision to) {
+			copyReported = true;
+			Assert.assertTrue("Renames couldn't be reported prior to any change", getChanges().size() > 0);
+			HgChangeset lastKnown = getChanges().get(getChanges().size() - 1);
+			lastChangesetReportedAtRename.add(lastKnown);
+			renames.add(new Pair<HgFileRevision, HgFileRevision>(from, to));
+		}
+	};
 }
