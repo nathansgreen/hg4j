@@ -147,83 +147,81 @@ public class TestAuxUtilities {
 			}
 		}
 	}
+	
+	static class CancelAtValue {
+		public int lastSeen;
+		public final int stopValue;
+		protected final CancelImpl cancelImpl = new CancelImpl();
+
+		protected CancelAtValue(int value) {
+			stopValue = value;
+		}
+		
+		protected void nextValue(int value) {
+			lastSeen = value;
+			if (value == stopValue) {
+				cancelImpl.stop();
+			}
+		}
+	}
 
 	@Test
 	public void testChangelogCancelSupport() throws Exception {
 		HgRepository repository = Configuration.get().find("branches-1"); // any repo with more revisions
-		class InspectorImplementsCancel implements HgChangelog.Inspector, CancelSupport {
-			public final int when2stop;
-			public int lastVisitet = 0;
-			private final CancelImpl cancelImpl = new CancelImpl(); 
+		class InspectorImplementsCancel extends CancelAtValue implements HgChangelog.Inspector, CancelSupport {
 
 			public InspectorImplementsCancel(int limit) {
-				when2stop = limit;
+				super(limit);
 			}
 			
 			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-				lastVisitet = revisionNumber;
-				if (revisionNumber == when2stop) {
-					cancelImpl.stop();
-				}
+				nextValue(revisionNumber);
 			}
 
 			public void checkCancelled() throws CancelledException {
 				cancelImpl.checkCancelled();
 			}
 		};
-		class InspectorImplementsAdaptable implements HgChangelog.Inspector, Adaptable {
-			public final int when2stop;
-			public int lastVisitet = 0;
-			private final CancelImpl cancelImpl = new CancelImpl();
-			
+		class InspectorImplementsAdaptable extends CancelAtValue implements HgChangelog.Inspector, Adaptable {
 			public InspectorImplementsAdaptable(int limit) {
-				when2stop = limit;
+				super(limit);
 			}
 			
 			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
-				lastVisitet = revisionNumber;
-				if (revisionNumber == when2stop) {
-					cancelImpl.stop();
-				}
+				nextValue(revisionNumber);
 			}
+
 			public <T> T getAdapter(Class<T> adapterClass) {
 				if (CancelSupport.class == adapterClass) {
 					return adapterClass.cast(cancelImpl);
 				}
 				return null;
 			}
-			
 		}
 		//
 		InspectorImplementsCancel insp1;
 		repository.getChangelog().all(insp1= new InspectorImplementsCancel(2));
-		Assert.assertEquals(insp1.when2stop, insp1.lastVisitet);
+		Assert.assertEquals(insp1.stopValue, insp1.lastSeen);
 		repository.getChangelog().all(insp1 = new InspectorImplementsCancel(12));
-		Assert.assertEquals(insp1.when2stop, insp1.lastVisitet);
+		Assert.assertEquals(insp1.stopValue, insp1.lastSeen);
 		//
 		InspectorImplementsAdaptable insp2;
 		repository.getChangelog().all(insp2= new InspectorImplementsAdaptable(3));
-		Assert.assertEquals(insp2.when2stop, insp2.lastVisitet);
+		Assert.assertEquals(insp2.stopValue, insp2.lastSeen);
 		repository.getChangelog().all(insp2 = new InspectorImplementsAdaptable(10));
-		Assert.assertEquals(insp2.when2stop, insp2.lastVisitet);
+		Assert.assertEquals(insp2.stopValue, insp2.lastSeen);
 	}
 	
 	@Test
 	public void testManifestCancelSupport() throws Exception {
 		HgRepository repository = Configuration.get().find("branches-1"); // any repo with as many revisions as possible
-		class InspectorImplementsAdaptable implements HgManifest.Inspector, Adaptable {
-			public final int when2stop;
-			public int lastVisitet = 0;
-			private final CancelImpl cancelImpl = new CancelImpl(); 
-
+		class InspectorImplementsAdaptable extends CancelAtValue implements HgManifest.Inspector, Adaptable {
 			public InspectorImplementsAdaptable(int limit) {
-				when2stop = limit;
+				super(limit);
 			}
 
 			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
-				if (++lastVisitet == when2stop) {
-					cancelImpl.stop();
-				}
+				nextValue(lastSeen+1);
 				return true;
 			}
 
@@ -244,9 +242,9 @@ public class TestAuxUtilities {
 		}
 		InspectorImplementsAdaptable insp1;
 		repository.getManifest().walk(0, TIP, insp1= new InspectorImplementsAdaptable(3));
-		Assert.assertEquals(insp1.when2stop, insp1.lastVisitet);
+		Assert.assertEquals(insp1.stopValue, insp1.lastSeen);
 		repository.getManifest().walk(0, TIP, insp1 = new InspectorImplementsAdaptable(10));
-		Assert.assertEquals(insp1.when2stop, insp1.lastVisitet);
+		Assert.assertEquals(insp1.stopValue, insp1.lastSeen);
 	}
 	
 	@Test

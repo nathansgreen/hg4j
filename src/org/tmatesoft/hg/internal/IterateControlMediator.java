@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,8 @@ import org.tmatesoft.hg.util.CancelledException;
 public class IterateControlMediator {
 
 	private final CancelSupport src;
-	private Callback receiver;
+	private final Callback receiver;
+	private CancelledException cancellation;
 
 	public IterateControlMediator(CancelSupport source, Lifecycle.Callback target) {
 		assert target != null;
@@ -40,16 +41,24 @@ public class IterateControlMediator {
 		if (src == null) {
 			return false;
 		}
+		if (cancellation != null) {
+			return true;
+		}
 		try {
 			src.checkCancelled();
 			return false;
 		} catch (CancelledException ex) {
 			receiver.stop();
+			cancellation = ex;
 			return true;
 		}
 	}
 	
 	public void stop() {
 		receiver.stop();
+	}
+	
+	public CancelledException getCancelException() {
+		return cancellation;
 	}
 }

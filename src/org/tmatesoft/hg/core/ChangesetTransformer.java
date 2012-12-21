@@ -18,6 +18,8 @@ package org.tmatesoft.hg.core;
 
 import java.util.Set;
 
+import org.tmatesoft.hg.internal.Lifecycle;
+import org.tmatesoft.hg.internal.LifecycleBridge;
 import org.tmatesoft.hg.internal.PathPool;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -37,14 +39,12 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-/*package-local*/ class ChangesetTransformer implements HgChangelog.Inspector, Adaptable, CancelSupport {
+/*package-local*/ class ChangesetTransformer implements HgChangelog.Inspector, Adaptable {
 	private final HgChangesetHandler handler;
-	private final ProgressSupport progressHelper;
-	private final CancelSupport cancelHelper;
+	private final LifecycleBridge lifecycleBridge;
 	private final Transformation t;
 	private Set<String> branches;
 	private HgCallbackTargetException failure;
-	private CancelledException cancellation;
 
 	// repo and delegate can't be null, parent walker can
 	// ps and cs can't be null
@@ -58,11 +58,9 @@ import org.tmatesoft.hg.util.ProgressSupport;
 		HgStatusCollector statusCollector = new HgStatusCollector(hgRepo);
 		t = new Transformation(statusCollector, pw);
 		handler = delegate;
-		// we let HgChangelog#range deal with progress (pipe through getAdapter)
-		// but use own cancellation (which involves CallbackTargetException as well, and preserves original cancellation 
-		// exception in case clients care)
-		cancelHelper = cs;
-		progressHelper = ps;
+		// lifecycleBridge takes care of progress and cancellation, plus
+		// gives us explicit way to stop iteration (once HgCallbackTargetException) comes.
+		lifecycleBridge = new LifecycleBridge(ps, cs);
 	}
 	
 	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
@@ -73,23 +71,21 @@ import org.tmatesoft.hg.util.ProgressSupport;
 		HgChangeset changeset = t.handle(revisionNumber, nodeid, cset);
 		try {
 			handler.cset(changeset);
-			cancelHelper.checkCancelled();
+			lifecycleBridge.nextStep();
 		} catch (HgCallbackTargetException ex) {
 			failure = ex.setRevision(nodeid).setRevisionIndex(revisionNumber);
-		} catch (CancelledException ex) {
-			cancellation = ex;
+			lifecycleBridge.stop();
 		}
 	}
 	
 	public void checkFailure() throws HgCallbackTargetException, CancelledException {
 		if (failure != null) {
 			HgCallbackTargetException toThrow = failure;
-			failure = null; // just in (otherwise unexpected) case this instance would get reused
 			throw toThrow;
 		}
-		if (cancellation != null) {
-			CancelledException toThrow = cancellation;
-			cancellation = null;
+		if (lifecycleBridge.isCancelled()) {
+			CancelledException toThrow = lifecycleBridge.getCancelOrigin();
+			assert toThrow != null;
 			throw toThrow;
 		}
 	}
@@ -121,18 +117,11 @@ import org.tmatesoft.hg.util.ProgressSupport;
 		}
 	}
 
-	public void checkCancelled() throws CancelledException {
-		if (failure != null || cancellation != null) {
-			// stop HgChangelog.Iterator. Our exception is for the purposes of cancellation only,
-			// the one we have stored (this.cancellation) is for user
-			throw new CancelledException(); 
-		}
-	}
-
 	public <T> T getAdapter(Class<T> adapterClass) {
-		if (adapterClass == ProgressSupport.class) {
-			return adapterClass.cast(progressHelper);
+		if (adapterClass == Lifecycle.class) {
+			return adapterClass.cast(lifecycleBridge);
 		}
-		return null;
+		// just in case there are more adapters in future
+		return Adaptable.Factory.getAdapter(handler, adapterClass, null);
 	}
 }

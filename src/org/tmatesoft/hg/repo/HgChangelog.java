@@ -33,10 +33,11 @@ import java.util.TimeZone;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
-import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
+import org.tmatesoft.hg.internal.LifecycleBridge;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -357,19 +358,33 @@ public final class HgChangelog extends Revlog {
 		}
 	}
 
-	private static class RawCsetParser implements RevlogStream.Inspector, Lifecycle {
+	private static class RawCsetParser implements RevlogStream.Inspector, Adaptable {
 		
 		private final Inspector inspector;
 		private final Pool<String> usersPool;
 		private final RawChangeset cset = new RawChangeset();
-		private final ProgressSupport progressHelper;
-		private IterateControlMediator iterateControl;
+		// non-null when inspector uses high-level lifecycle entities (progress and/or cancel supports)
+		private final LifecycleBridge lifecycleStub;
+		// non-null when inspector relies on low-level lifecycle and is responsible
+		// to proceed any possible high-level entities himself.
+		private final Lifecycle inspectorLifecycle;
 
 		public RawCsetParser(HgChangelog.Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
 			usersPool = new Pool<String>();
-			progressHelper = ProgressSupport.Factory.get(delegate);
+			inspectorLifecycle = Adaptable.Factory.getAdapter(delegate, Lifecycle.class, null);
+			if (inspectorLifecycle == null) {
+				ProgressSupport ph = Adaptable.Factory.getAdapter(delegate, ProgressSupport.class, null);
+				CancelSupport cs = Adaptable.Factory.getAdapter(delegate, CancelSupport.class, null);
+				if (cs != null || ph != null) {
+					lifecycleStub = new LifecycleBridge(ph, cs);
+				} else {
+					lifecycleStub = null;
+				}
+			} else {
+				lifecycleStub = null;
+			}
 		}
 
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
@@ -378,26 +393,30 @@ public final class HgChangelog extends Revlog {
 				cset.init(data, 0, data.length, usersPool);
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
-				progressHelper.worked(1);
+				if (lifecycleStub != null) {
+					lifecycleStub.nextStep();
+				}
 			} catch (HgInvalidDataFormatException ex) {
 				throw ex.setRevisionIndex(revisionNumber);  
 			} catch (IOException ex) {
 				// XXX need better exception, perhaps smth like HgChangelogException (extends HgInvalidControlFileException)
 				throw new HgInvalidControlFileException("Failed reading changelog", ex, null).setRevisionIndex(revisionNumber);  
 			}
-			if (iterateControl != null) {
-				iterateControl.checkCancelled();
+		}
+		
+		public <T> T getAdapter(Class<T> adapterClass) {
+			if (adapterClass == Lifecycle.class) {
+				if (inspectorLifecycle != null) {
+					return adapterClass.cast(inspectorLifecycle);
+				}
+				// reveal interest in lifecycle only when either progress or cancel support is there
+				// and inspector itself doesn't respond to lifecycle request
+				// lifecycleStub may still be null here (no progress and cancel), it's ok to cast(null) 
+				return adapterClass.cast(lifecycleStub);
+				
 			}
+			return Adaptable.Factory.getAdapter(inspector, adapterClass, null);
 		}
 
-		public void start(int count, Callback callback, Object token) {
-			CancelSupport cs = CancelSupport.Factory.get(inspector, null);
-			iterateControl = cs == null ? null : new IterateControlMediator(cs, callback);
-			progressHelper.start(count);
-		}
-
-		public void finish(Object token) {
-			progressHelper.done();
-		}
 	}
 }

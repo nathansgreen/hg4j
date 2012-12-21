@@ -42,10 +42,13 @@ import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.AdapterPlug;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
 import org.tmatesoft.hg.util.Adaptable;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
@@ -93,7 +96,10 @@ public class TestHistory {
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug");
 		List<HgChangeset> r = new HgLogCommand(repo).execute();
-		report("hg log - COMPLETE REPO HISTORY", r, true); 
+		report("hg log - COMPLETE REPO HISTORY", r, true);
+		
+		r = new HgLogCommand(repo).debugSwitch1().execute();
+		report("hg log - COMPLETE REPO HISTORY, FROM NEW TO OLD", r, false);
 	}
 	
 	@Test
@@ -193,8 +199,21 @@ public class TestHistory {
 		String lastRevOfFname1 = "369c0882d477c11424a62eb4b791e86d1d4b6769";
 		errorCollector.assertEquals(lastRevOfFname1, h.lastChangesetReportedAtRename.get(0).getNodeid().toString());
 		report("HgChangesetHandler(renames: true, ancestry:false)", h.getChanges(), true);
-		
-		// TODO direction
+		//
+		// Direction
+		h = new CollectWithRenameHandler();
+		new HgLogCommand(repo).file(fname2, true, false).debugSwitch1().execute(h);
+		// Identical rename shall be reported, at the same moment 
+		errorCollector.assertEquals(1, h.renames.size());
+		rename = h.renames.get(0);
+		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
+		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
+		errorCollector.assertEquals(1, h.lastChangesetReportedAtRename.size());
+		// new to old, recently reported would be the very first revision fname2 pops up
+		String firstRevOfFname2 = "27e7a69373b74d42e75f3211e56510ff17d01370";
+		errorCollector.assertEquals(firstRevOfFname2, h.lastChangesetReportedAtRename.get(0).getNodeid().toString());
+		report("HgChangesetHandler(renames: true, ancestry:false)", h.getChanges(), false);
+		//
 		// TODO TreeChangeHandler
 	}
 		
@@ -228,8 +247,12 @@ public class TestHistory {
 		new HgLogCommand(repo).file(fname2, false, true).execute(h);
 		errorCollector.assertEquals(0, h.renames.size());
 		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, true, errorCollector);
-
-		// TODO direction
+		//
+		// Direction
+		h = new CollectWithRenameHandler();
+		new HgLogCommand(repo).file(fname2, false, true).debugSwitch1().execute(h);
+		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, false/*!!!*/, errorCollector);
+		//
 		// TODO TreeChangeHandler
 	}
 
@@ -256,8 +279,78 @@ public class TestHistory {
 		errorCollector.assertEquals(fname1BranchRevision, h.lastChangesetReportedAtRename.get(0).getNodeid().toString());
 		// finally, match output
 		report("HgChangesetHandler(renames: true, ancestry:true)", h.getChanges(), true);
-		// TODO direction
+		//
+		// Switch direction and compare, order shall match that from console
+		h = new CollectWithRenameHandler();
+		new HgLogCommand(repo).file(fname2, true, true).debugSwitch1().execute(h);
+		// Identical rename event shall be reported
+		errorCollector.assertEquals(1, h.renames.size());
+		rename = h.renames.get(0);
+		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
+		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
+		// new to old, recently reported would be the very first revision fname2 pops up
+		String firstRevOfFname2 = "27e7a69373b74d42e75f3211e56510ff17d01370";
+		errorCollector.assertEquals(firstRevOfFname2, h.lastChangesetReportedAtRename.get(0).getNodeid().toString());
+		report("HgChangesetHandler(renames: true, ancestry:true)", h.getChanges(), false /*do not reorder console results !!!*/);
+		//
 		// TreeChangeHandler in #testChangesetTreeFollowRenameAndAncestry
+	}
+
+	/**
+	 * @see TestAuxUtilities#testChangelogCancelSupport()
+	 */
+	@Test
+	public void testLogCommandCancelSupport() throws Exception {
+		repo  = Configuration.get().find("branches-1"); // any repo with more revisions
+		class BaseCancel extends TestAuxUtilities.CancelAtValue implements HgChangesetHandler {
+			BaseCancel(int limit) {
+				super(limit);
+			}
+			public void cset(HgChangeset changeset) throws HgCallbackTargetException {
+				nextValue(changeset.getRevisionIndex());
+			}
+		};
+		class ImplementsCancel extends BaseCancel implements CancelSupport {
+			ImplementsCancel(int limit) {
+				super(limit);
+			}
+			public void checkCancelled() throws CancelledException {
+				cancelImpl.checkCancelled();
+			}
+		};
+		class AdaptsToCancel extends BaseCancel implements Adaptable {
+			AdaptsToCancel(int limit) {
+				super(limit);
+			}
+			public <T> T getAdapter(Class<T> adapterClass) {
+				if (adapterClass == CancelSupport.class) {
+					return adapterClass.cast(cancelImpl);
+				}
+				return null;
+			}
+		}
+
+		BaseCancel insp = new ImplementsCancel(3);
+		try {
+			new HgLogCommand(repo).execute(insp);
+			errorCollector.fail("CancelSupport as implemented iface");
+		} catch (CancelledException ex) {
+			errorCollector.assertEquals("CancelSupport as implemented iface", insp.stopValue, insp.lastSeen);
+		}
+		insp = new AdaptsToCancel(5);
+		try {
+			new HgLogCommand(repo).execute(insp);
+			errorCollector.fail("Adaptable to CancelSupport");
+		} catch (CancelledException ex) { 
+			errorCollector.assertEquals("Adaptable to CancelSupport", insp.stopValue, insp.lastSeen);
+		}
+		insp = new BaseCancel(9);
+		try {
+			new HgLogCommand(repo).set(insp.cancelImpl).execute(insp);
+			errorCollector.fail("cmd#set(CancelSupport)");
+		} catch (CancelledException e) {
+			errorCollector.assertEquals("cmd#set(CancelSupport)", insp.stopValue, insp.lastSeen);
+		}
 	}
 
 	private void report(String what, List<HgChangeset> r, boolean reverseConsoleResult) {
@@ -278,6 +371,8 @@ public class TestHistory {
 				break;
 			}
 			Record cr = consoleResultItr.next();
+			// flags, not separate checkThat() because when lists are large, and do not match,
+			// number of failures may slow down test process significantly
 			int x = cs.getRevisionIndex() == cr.changesetIndex ? 0x1 : 0;
 			x |= cs.getDate().toString().equals(cr.date) ? 0x2 : 0;
 			x |= cs.getNodeid().toString().equals(cr.changesetNodeid) ? 0x4 : 0;
@@ -397,34 +492,6 @@ public class TestHistory {
 	}
 
 	////
-	
-	private static class AdapterPlug implements Adaptable {
-		private final Map<Class<?>, Object> adapters = new HashMap<Class<?>, Object>();
-		private final List<Class<?>> adapterUses = new ArrayList<Class<?>>();
-		
-		public <T> void attachAdapter(Class<T> adapterClass, T instance) {
-			adapters.put(adapterClass, instance);
-		}
-
-		public <T> T getAdapter(Class<T> adapterClass) {
-			Object instance = adapters.get(adapterClass);
-			if (instance != null) {
-				adapterUses.add(adapterClass);
-				return adapterClass.cast(instance);
-			}
-			return null;
-		}
-		
-		public int getAdapterUse(Class<?> adapterClass) {
-			int uses = 0;
-			for (Class<?> c : adapterUses) {
-				if (c == adapterClass) {
-					uses++;
-				}
-			}
-			return uses;
-		}
-	}
 	
 	private final class TreeCollectHandler extends AdapterPlug implements HgChangesetTreeHandler {
 		private final LinkedList<HgChangeset> cmdResult = new LinkedList<HgChangeset>();

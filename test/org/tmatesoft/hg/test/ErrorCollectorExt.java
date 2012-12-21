@@ -59,7 +59,7 @@ final class ErrorCollectorExt extends ErrorCollector {
 	public void assertTrue(final boolean value) {
 		assertTrue(null, value);
 	}
-
+	
 	public void assertTrue(final String reason, final boolean value) {
 		checkSucceeds(new Callable<Object>() {
 			public Object call() throws Exception {
@@ -71,5 +71,13 @@ final class ErrorCollectorExt extends ErrorCollector {
 	
 	public <T> void assertEquals(T expected, T actual) {
 		checkThat(null, actual, CoreMatchers.equalTo(expected));
+	}
+
+	public <T> void assertEquals(String reason, T expected, T actual) {
+		checkThat(reason, actual, CoreMatchers.equalTo(expected));
+	}
+
+	public void fail(String reason) {
+		addError(new AssertionError(reason));
 	}
 }

@@ -34,9 +34,13 @@ import java.util.ListIterator;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.internal.AdapterPlug;
+import org.tmatesoft.hg.internal.BatchRangeHelper;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.Lifecycle;
+import org.tmatesoft.hg.internal.LifecycleProxy;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -287,19 +291,41 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			throw new HgBadArgumentException(String.format("Bad value %d for start revision for range [%1$d..%d]", startRev, lastCset), null);
 		}
 		final ProgressSupport progressHelper = getProgressSupport(handler);
+		final int BATCH_SIZE = 100;
 		try {
 			count = 0;
 			HgParentChildMap<HgChangelog> pw = getParentHelper(file == null); // leave it uninitialized unless we iterate whole repo
 			// ChangesetTransfrom creates a blank PathPool, and #file(String, boolean) above 
 			// may utilize it as well. CommandContext? How about StatusCollector there as well?
 			csetTransform = new ChangesetTransformer(repo, handler, pw, progressHelper, getCancelSupport(handler, true));
+			// FilteringInspector is responsible to check command arguments: users, branches, limit, etc.
+			// prior to passing cset to next Inspector, which is either (a) collector to reverse cset order, then invokes 
+			// transformer from (b), below, with alternative cset order or (b) transformer to hi-level csets. 
 			FilteringInspector filterInsp = new FilteringInspector();
 			filterInsp.changesets(startRev, lastCset);
 			if (file == null) {
-				progressHelper.start(endRev - startRev + 1);
-				repo.getChangelog().range(startRev, endRev, filterInsp);
-				csetTransform.checkFailure();
+				progressHelper.start(lastCset - startRev + 1);
+				if (iterateDirection == IterateDirection.FromOldToNew) {
+					filterInsp.delegateTo(csetTransform);
+					repo.getChangelog().range(startRev, lastCset, filterInsp);
+					csetTransform.checkFailure();
+				} else {
+					assert iterateDirection == IterateDirection.FromNewToOld;
+					BatchRangeHelper brh = new BatchRangeHelper(startRev, lastCset, BATCH_SIZE, true);
+					BatchChangesetInspector batchInspector = new BatchChangesetInspector(Math.min(lastCset-startRev+1, BATCH_SIZE));
+					filterInsp.delegateTo(batchInspector);
+					while (brh.hasNext()) {
+						brh.next();
+						repo.getChangelog().range(brh.start(), brh.end(), filterInsp);
+						for (BatchChangesetInspector.BatchRecord br : batchInspector.iterate(true)) {
+							csetTransform.next(br.csetIndex, br.csetRevision, br.cset);
+							csetTransform.checkFailure();
+						}
+						batchInspector.reset();
+					}
+				}
 			} else {
+				filterInsp.delegateTo(csetTransform);
 				final HgFileRenameHandlerMixin withCopyHandler = Adaptable.Factory.getAdapter(handler, HgFileRenameHandlerMixin.class, null);
 				List<Pair<HgDataFile, Nodeid>> fileRenames = buildFileRenamesQueue();
 				progressHelper.start(-1/*XXX enum const, or a dedicated method startUnspecified(). How about startAtLeast(int)?*/);
@@ -309,10 +335,12 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 					HgDataFile fileNode = curRename.first();
 					if (followAncestry) {
 						TreeBuildInspector treeBuilder = new TreeBuildInspector(followAncestry);
+						@SuppressWarnings("unused")
 						List<HistoryNode> fileAncestry = treeBuilder.go(fileNode, curRename.second());
 						int[] commitRevisions = narrowChangesetRange(treeBuilder.getCommitRevisions(), startRev, lastCset);
 						if (iterateDirection == IterateDirection.FromOldToNew) {
 							repo.getChangelog().range(filterInsp, commitRevisions);
+							csetTransform.checkFailure();
 						} else {
 							assert iterateDirection == IterateDirection.FromNewToOld;
 							// visit one by one in the opposite direction
@@ -325,8 +353,24 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 						// report complete file history (XXX may narrow range with [startRev, endRev], but need to go from file rev to link rev)
 						int fileStartRev = 0; //fileNode.getChangesetRevisionIndex(0) >= startRev
 						int fileEndRev = fileNode.getLastRevision();
-						fileNode.history(fileStartRev, fileEndRev, filterInsp);
-						csetTransform.checkFailure();
+						if (iterateDirection == IterateDirection.FromOldToNew) {
+							fileNode.history(fileStartRev, fileEndRev, filterInsp);
+							csetTransform.checkFailure();
+						} else {
+							assert iterateDirection == IterateDirection.FromNewToOld;
+							BatchRangeHelper brh = new BatchRangeHelper(fileStartRev, fileEndRev, BATCH_SIZE, true);
+							BatchChangesetInspector batchInspector = new BatchChangesetInspector(Math.min(fileEndRev-fileStartRev+1, BATCH_SIZE));
+							filterInsp.delegateTo(batchInspector);
+							while (brh.hasNext()) {
+								brh.next();
+								fileNode.history(brh.start(), brh.end(), filterInsp);
+								for (BatchChangesetInspector.BatchRecord br : batchInspector.iterate(true /*iterateDirection == IterateDirection.FromNewToOld*/)) {
+									csetTransform.next(br.csetIndex, br.csetRevision, br.cset);
+									csetTransform.checkFailure();
+								}
+								batchInspector.reset();
+							}
+						}
 					}
 					if (followRenames && withCopyHandler != null && nameIndex + 1 < fileRenamesSize) {
 						Pair<HgDataFile, Nodeid> nextRename = fileRenames.get(nameIndex+1);
@@ -352,6 +396,46 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			csetTransform = null;
 			progressHelper.done();
 		}
+	}
+	
+	private static class BatchChangesetInspector extends AdapterPlug implements HgChangelog.Inspector {
+		private static class BatchRecord {
+			public final int csetIndex;
+			public final Nodeid csetRevision;
+			public final RawChangeset cset;
+			
+			public BatchRecord(int index, Nodeid nodeid, RawChangeset changeset) {
+				csetIndex = index;
+				csetRevision = nodeid;
+				cset = changeset;
+			}
+		}
+		private final ArrayList<BatchRecord> batch;
+
+		public BatchChangesetInspector(int batchSizeHint) {
+			batch = new ArrayList<BatchRecord>(batchSizeHint);
+		}
+
+		public BatchChangesetInspector reset() {
+			batch.clear();
+			return this;
+		}
+		
+		public void next(int revisionIndex, Nodeid nodeid, RawChangeset cset) {
+			batch.add(new BatchRecord(revisionIndex, nodeid, cset.clone()));
+		}
+		
+		public Iterable<BatchRecord> iterate(final boolean reverse) {
+			return new Iterable<BatchRecord>() {
+				
+				public Iterator<BatchRecord> iterator() {
+					return reverse ? new ReverseIterator<BatchRecord>(batch) : batch.iterator();
+				}
+			};
+		}
+		
+		// alternative would be dispatch(HgChangelog.Inspector) and dispatchReverse()
+		// methods, but progress and cancellation might get messy then
 	}
 	
 //	public static void main(String[] args) {
@@ -452,6 +536,21 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			dispatcher.dispatchAllChanges();
 		} // for fileRenamesQueue;
 		progressHelper.done();
+	}
+	
+	/**
+	 * DO NOT USE THIS METHOD, DEBUG PURPOSES ONLY!!!
+	 */
+	@Experimental(reason="Work in progress")
+	public HgLogCommand debugSwitch1() {
+		// FIXME can't expose iteration direction unless general iteration (changelog, not a file) supports it, too.
+		// however, need to test the code already there, hence this debug switch
+		if (iterateDirection == IterateDirection.FromOldToNew) {
+			iterateDirection = IterateDirection.FromNewToOld;
+		} else {
+			iterateDirection = IterateDirection.FromOldToNew;
+		}
+		return this;
 	}
 	
 	private IterateDirection iterateDirection = IterateDirection.FromOldToNew;
@@ -820,15 +919,28 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 
 	//
 	
-	private class FilteringInspector implements HgChangelog.Inspector, Lifecycle {
+	private class FilteringInspector extends AdapterPlug implements HgChangelog.Inspector, Adaptable {
 	
-		private Callback lifecycle;
 		private int firstCset = BAD_REVISION, lastCset = BAD_REVISION;
+		private HgChangelog.Inspector delegate;
+		// we use lifecycle to stop when limit is reached.
+		// delegate, however, may use lifecycle, too, so give it a chance
+		private LifecycleProxy lifecycleProxy;
 		
 		// limit to changesets in this range only
 		public void changesets(int start, int end) {
 			firstCset = start;
 			lastCset = end;
+		}
+		
+		public void delegateTo(HgChangelog.Inspector inspector) {
+			delegate = inspector;
+			// let delegate control life cycle, too
+			if (lifecycleProxy == null) {
+				super.attachAdapter(Lifecycle.class, lifecycleProxy = new LifecycleProxy(inspector));
+			} else {
+				lifecycleProxy.init(inspector);
+			}
 		}
 
 		public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
@@ -862,22 +974,14 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			if (date != null) {
 				// TODO post-1.0 implement date support for log
 			}
-			csetTransform.next(revisionNumber, nodeid, cset);
-			if (++count >= limit) {
-				if (lifecycle != null) { // FIXME support Lifecycle delegation
-				lifecycle.stop();
-				}
+			delegate.next(revisionNumber, nodeid, cset);
+			count++;
+			if (limit > 0 && count >= limit) {
+				lifecycleProxy.stop();
 			}
 		}
-
-		public void start(int count, Callback callback, Object token) {
-			lifecycle = callback;
-		}
-
-		public void finish(Object token) {
-		}
 	}
-	
+
 	private HgParentChildMap<HgChangelog> getParentHelper(boolean create) throws HgInvalidControlFileException {
 		if (parentHelper == null && create) {
 			parentHelper = new HgParentChildMap<HgChangelog>(repo.getChangelog());
@@ -885,8 +989,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		}
 		return parentHelper;
 	}
-
-
+	
 	public static class CollectHandler implements HgChangesetHandler {
 		private final List<HgChangeset> result = new LinkedList<HgChangeset>();
 

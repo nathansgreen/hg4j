@@ -29,6 +29,7 @@ import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Adaptable;
 
 
 /**
@@ -382,6 +383,7 @@ public class RevlogStream {
 		private final boolean needData;
 		private DataAccess daIndex = null, daData = null;
 		private Lifecycle.BasicCallback cb = null;
+		private Lifecycle lifecycleListener = null;
 		private int lastRevisionRead = BAD_REVISION;
 		private DataAccess lastUserData;
 		// next are to track two major bottlenecks - patch application and actual time spent in inspector 
@@ -399,28 +401,35 @@ public class RevlogStream {
 			if (needData && !inline) {
 				daData = getDataStream();
 			}
-			if (inspector instanceof Lifecycle) {
+			lifecycleListener = Adaptable.Factory.getAdapter(inspector, Lifecycle.class, null);
+			if (lifecycleListener != null) {
 				cb = new Lifecycle.BasicCallback();
-				((Lifecycle) inspector).start(totalWork, cb, cb);
+				lifecycleListener.start(totalWork, cb, cb);
 			}
 //			applyTime = inspectorTime = 0; // TIMING
 		}
 
+		// invoked only once per instance
 		public void finish() {
 			if (lastUserData != null) {
 				lastUserData.done();
 				lastUserData = null;
 			}
-			if (inspector instanceof Lifecycle) {
-				((Lifecycle) inspector).finish(cb);
+			if (lifecycleListener != null) {
+				lifecycleListener.finish(cb);
+				lifecycleListener = null;
+				cb = null;
+				
 			}
 			daIndex.done();
 			if (daData != null) {
 				daData.done();
+				daData = null;
 			}
 //			System.out.printf("applyTime:%d ms, inspectorTime: %d ms\n", applyTime, inspectorTime); // TIMING
 		}
 
+		// may be invoked few times per instance life
 		public boolean range(int start, int end) throws IOException {
 			byte[] nodeidBuf = new byte[20];
 			int i;
