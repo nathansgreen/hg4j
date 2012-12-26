@@ -24,11 +24,9 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Rule;
@@ -111,11 +109,11 @@ public class TestHistory {
 		
 		CollectWithRenameHandler h = new CollectWithRenameHandler();
 		new HgLogCommand(repo).file(f, true).execute(h);
-		errorCollector.assertEquals(1, h.renames.size());
-		HgFileRevision from = h.renames.get(0).first();
+		errorCollector.assertEquals(1, h.rh.renames.size());
+		HgFileRevision from = h.rh.renames.get(0).first();
 		boolean fromMatched = "src/com/tmate/hgkit/console/Remote.java".equals(from.getPath().toString());
 		String what = "hg log - FOLLOW FILE HISTORY";
-		errorCollector.checkThat(what + "#copyReported ", h.copyReported, is(true));
+		errorCollector.checkThat(what + "#copyReported ", h.rh.copyReported, is(true));
 		errorCollector.checkThat(what + "#copyFromMatched", fromMatched, is(true));
 		//
 		// cmdline always gives in changesets in order from newest (bigger rev number) to oldest.
@@ -143,32 +141,6 @@ public class TestHistory {
 		report("execute with HgChangesetTreeHandler(follow == false)", h.getResult(), true);
 	}
 	
-	@Test
-	public void testChangesetTreeFollowRenameAndAncestry() throws Exception {
-		repo = Configuration.get().find("log-follow");
-		final String fname = "file1_b";
-		assertTrue("[sanity]", repo.getFileNode(fname).exists());
-		eh.run("hg", "log", "--debug", "--follow", fname, "--cwd", repo.getLocation());
-
-		final Map<Path,Path> renames = new HashMap<Path, Path>();
-		TreeCollectHandler h = new TreeCollectHandler(true);
-		h.attachAdapter(HgFileRenameHandlerMixin.class, new HgFileRenameHandlerMixin() {
-			
-			public void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException {
-				renames.put(from.getPath(), to.getPath());
-			}
-		});
-		h.checkPrevInParents = true;
-		new HgLogCommand(repo).file(fname, true, true).execute(h);
-
-		assertEquals(1, h.getAdapterUse(HgFileRenameHandlerMixin.class));
-		
-		report("execute with HgChangesetTreeHandler(follow == true)", h.getResult(), false);
-		
-		assertEquals(1, renames.size());
-		assertEquals(Path.create(fname), renames.get(Path.create("file1_a")));
-	}
-	
 	/**
 	 * Few tests  to check newly introduced followAncestry parameter to HgLogCommand:
 	 * followRename: true,	followAncestry: false
@@ -188,8 +160,8 @@ public class TestHistory {
 		
 		CollectWithRenameHandler h = new CollectWithRenameHandler();
 		new HgLogCommand(repo).file(fname2, true, false).execute(h);
-		errorCollector.assertEquals(1, h.renames.size());
-		Pair<HgFileRevision, HgFileRevision> rename = h.renames.get(0);
+		errorCollector.assertEquals(1, h.rh.renames.size());
+		Pair<HgFileRevision, HgFileRevision> rename = h.rh.renames.get(0);
 		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
 		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
 		// Ensure rename info came in the right moment
@@ -204,8 +176,8 @@ public class TestHistory {
 		h = new CollectWithRenameHandler();
 		new HgLogCommand(repo).file(fname2, true, false).debugSwitch1().execute(h);
 		// Identical rename shall be reported, at the same moment 
-		errorCollector.assertEquals(1, h.renames.size());
-		rename = h.renames.get(0);
+		errorCollector.assertEquals(1, h.rh.renames.size());
+		rename = h.rh.renames.get(0);
 		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
 		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
 		errorCollector.assertEquals(1, h.lastChangesetReportedAtRename.size());
@@ -214,7 +186,42 @@ public class TestHistory {
 		errorCollector.assertEquals(firstRevOfFname2, h.lastChangesetReportedAtRename.get(0).getNodeid().toString());
 		report("HgChangesetHandler(renames: true, ancestry:false)", h.getChanges(), false);
 		//
-		// TODO TreeChangeHandler
+		// TreeChangeHandler - in #testChangesetTreeFollowRenamesNotAncestry
+	}
+	
+	@Test
+	public void testChangesetTreeFollowRenamesNotAncestry() throws Exception {
+		repo = Configuration.get().find("log-follow");
+		final String fname1 = "file1_a";
+		final String fname2 = "file1_b";
+		assertTrue("[sanity]", repo.getFileNode(fname2).exists());
+		// no --follow, but two names we know have been the same file (fname1 renamed to fname2)
+		// sequentially gives follow rename semantics without ancestry
+		eh.run("hg", "log", "--debug", fname2, fname1, "--cwd", repo.getLocation());
+		
+		TreeCollectHandler h = new TreeCollectHandler(true);
+		RenameCollector rh = new RenameCollector(h);
+		// can't check that prev revision is in parent because there are forks in
+		// file history (e.g. rev2 and rev3 (that comes next) both have rev0 as their parent
+		// and followAncestry is false
+		// h.checkPrevInParents = true; 
+		new HgLogCommand(repo).file(fname2, true, false).execute(h);
+		errorCollector.assertEquals(1, rh.renames.size());
+		Pair<HgFileRevision, HgFileRevision> rename = rh.renames.get(0);
+		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
+		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
+		report("HgChangesetTreeHandler(renames: true, ancestry:false)", h.getResult(), false);
+		
+		// Direction
+		h = new TreeCollectHandler(false);
+		rh = new RenameCollector(h);
+		// h.checkPrevInChildren = true; see above
+		new HgLogCommand(repo).file(fname2, true, false).debugSwitch1().execute(h);
+		errorCollector.assertEquals(1, rh.renames.size());
+		rename = rh.renames.get(0);
+		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
+		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
+		report("HgChangesetTreeHandler(renames: true, ancestry:false)", h.getResult(), false);
 	}
 		
 	@Test
@@ -222,6 +229,44 @@ public class TestHistory {
 		repo = Configuration.get().find("log-follow");
 		final String fname2 = "file1_b";
 		assertTrue("[sanity]", repo.getFileNode(fname2).exists());
+		final List<Record> fname2Follow = getAncestryWithoutRenamesFromCmdline(fname2);
+		
+		CollectWithRenameHandler h = new CollectWithRenameHandler();
+		new HgLogCommand(repo).file(fname2, false, true).execute(h);
+		errorCollector.assertEquals(0, h.rh.renames.size());
+		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, true, errorCollector);
+		//
+		// Direction
+		h = new CollectWithRenameHandler();
+		new HgLogCommand(repo).file(fname2, false, true).debugSwitch1().execute(h);
+		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, false/*!!!*/, errorCollector);
+		//
+		// TreeChangeHandler - in #testChangesetTreeFollowAncestryNotRenames
+	}
+
+	@Test
+	public void testChangesetTreeFollowAncestryNotRenames() throws Exception {
+		repo = Configuration.get().find("log-follow");
+		final String fname2 = "file1_b";
+		final List<Record> fname2Follow = getAncestryWithoutRenamesFromCmdline(fname2);
+		
+		TreeCollectHandler h = new TreeCollectHandler(false);
+		RenameCollector rh = new RenameCollector(h);
+		h.checkPrevInParents = true;
+		new HgLogCommand(repo).file(fname2, false, true).execute(h);
+		errorCollector.assertEquals(0, rh.renames.size());
+		report("HgChangesetTreeHandler(renames: false, ancestry:true)", h.getResult(), fname2Follow, true, errorCollector);
+		
+		// Direction
+		h = new TreeCollectHandler(false);
+		rh = new RenameCollector(h);
+		h.checkPrevInChildren = true;
+		new HgLogCommand(repo).file(fname2, false, true).debugSwitch1().execute(h);
+		report("HgChangesetTreeHandler(renames: false, ancestry:true)", h.getResult(), fname2Follow, false, errorCollector);
+	}
+
+	
+	private List<Record> getAncestryWithoutRenamesFromCmdline(String fname2) throws Exception {
 		// to get "followed" history of fname2 only (without fname1 origin),
 		// get the complete history and keep there only elements that match fname2 own history 
 		eh.run("hg", "log", "--debug", "--follow", fname2, "--cwd", repo.getLocation());
@@ -243,17 +288,7 @@ public class TestHistory {
 				it.remove();
 			}
 		}
-		CollectWithRenameHandler h = new CollectWithRenameHandler();
-		new HgLogCommand(repo).file(fname2, false, true).execute(h);
-		errorCollector.assertEquals(0, h.renames.size());
-		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, true, errorCollector);
-		//
-		// Direction
-		h = new CollectWithRenameHandler();
-		new HgLogCommand(repo).file(fname2, false, true).debugSwitch1().execute(h);
-		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, false/*!!!*/, errorCollector);
-		//
-		// TODO TreeChangeHandler
+		return fname2Follow;
 	}
 
 	/**
@@ -269,8 +304,8 @@ public class TestHistory {
 		
 		CollectWithRenameHandler h = new CollectWithRenameHandler();
 		new HgLogCommand(repo).file(fname2, true, true).execute(h);
-		errorCollector.assertEquals(1, h.renames.size());
-		Pair<HgFileRevision, HgFileRevision> rename = h.renames.get(0);
+		errorCollector.assertEquals(1, h.rh.renames.size());
+		Pair<HgFileRevision, HgFileRevision> rename = h.rh.renames.get(0);
 		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
 		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
 		// Ensure rename info came in the right moment
@@ -284,8 +319,8 @@ public class TestHistory {
 		h = new CollectWithRenameHandler();
 		new HgLogCommand(repo).file(fname2, true, true).debugSwitch1().execute(h);
 		// Identical rename event shall be reported
-		errorCollector.assertEquals(1, h.renames.size());
-		rename = h.renames.get(0);
+		errorCollector.assertEquals(1, h.rh.renames.size());
+		rename = h.rh.renames.get(0);
 		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
 		errorCollector.assertEquals(fname2, rename.second().getPath().toString());
 		// new to old, recently reported would be the very first revision fname2 pops up
@@ -294,6 +329,26 @@ public class TestHistory {
 		report("HgChangesetHandler(renames: true, ancestry:true)", h.getChanges(), false /*do not reorder console results !!!*/);
 		//
 		// TreeChangeHandler in #testChangesetTreeFollowRenameAndAncestry
+	}
+	
+	@Test
+	public void testChangesetTreeFollowRenameAndAncestry() throws Exception {
+		repo = Configuration.get().find("log-follow");
+		final String fname = "file1_b";
+		assertTrue("[sanity]", repo.getFileNode(fname).exists());
+		eh.run("hg", "log", "--debug", "--follow", fname, "--cwd", repo.getLocation());
+
+		TreeCollectHandler h = new TreeCollectHandler(true);
+		RenameCollector rh = new RenameCollector(h);
+		h.checkPrevInParents = true;
+		new HgLogCommand(repo).file(fname, true, true).execute(h);
+
+		assertEquals(1, h.getAdapterUse(HgFileRenameHandlerMixin.class));
+		
+		report("execute with HgChangesetTreeHandler(follow == true)", h.getResult(), false);
+		
+		assertEquals(1, rh.renames.size());
+		assertEquals(Path.create(fname), rh.renames.get(0).second().getPath());
 	}
 
 	/**
@@ -496,8 +551,8 @@ public class TestHistory {
 	private final class TreeCollectHandler extends AdapterPlug implements HgChangesetTreeHandler {
 		private final LinkedList<HgChangeset> cmdResult = new LinkedList<HgChangeset>();
 		private final boolean reverseResult;
-		boolean checkPrevInChildren = false;
-		boolean checkPrevInParents = false;
+		boolean checkPrevInChildren = false; // true when iterating new to old
+		boolean checkPrevInParents = false; // true when iterating old to new
 		
 		public TreeCollectHandler(boolean _reverseResult) {
 			this.reverseResult = _reverseResult;
@@ -546,16 +601,31 @@ public class TestHistory {
 	}
 
 	private static class CollectWithRenameHandler extends CollectHandler implements HgChangesetHandler.WithCopyHistory {
-		public boolean copyReported = false;
-		public List<Pair<HgFileRevision, HgFileRevision>> renames = new LinkedList<Pair<HgFileRevision,HgFileRevision>>();
-		public List<HgChangeset> lastChangesetReportedAtRename = new LinkedList<HgChangeset>(); 
+		public final RenameCollector rh = new RenameCollector();
+		public List<HgChangeset> lastChangesetReportedAtRename = new LinkedList<HgChangeset>();
 
-		public void copy(HgFileRevision from, HgFileRevision to) {
-			copyReported = true;
+		public void copy(HgFileRevision from, HgFileRevision to) throws HgCallbackTargetException {
 			Assert.assertTrue("Renames couldn't be reported prior to any change", getChanges().size() > 0);
 			HgChangeset lastKnown = getChanges().get(getChanges().size() - 1);
 			lastChangesetReportedAtRename.add(lastKnown);
-			renames.add(new Pair<HgFileRevision, HgFileRevision>(from, to));
+			rh.copy(from, to);
 		}
 	};
+	
+	private static class RenameCollector implements HgFileRenameHandlerMixin {
+		public boolean copyReported = false;
+		public List<Pair<HgFileRevision, HgFileRevision>> renames = new LinkedList<Pair<HgFileRevision,HgFileRevision>>();
+		
+		public RenameCollector() {
+		}
+		
+		public RenameCollector(AdapterPlug ap) {
+			ap.attachAdapter(HgFileRenameHandlerMixin.class, this);
+		}
+
+		public void copy(HgFileRevision from, HgFileRevision to) {
+			copyReported = true;
+			renames.add(new Pair<HgFileRevision, HgFileRevision>(from, to));
+		}
+	}
 }
