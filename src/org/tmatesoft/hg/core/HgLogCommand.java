@@ -36,7 +36,6 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.internal.AdapterPlug;
 import org.tmatesoft.hg.internal.BatchRangeHelper;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.Lifecycle;
@@ -91,6 +90,9 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 	 * Note, 'hg log --follow' combines both #followHistory and #followAncestry
 	 */
 	private boolean followAncestry;
+
+	private HgIterateDirection iterateDirection = HgIterateDirection.OldToNew;
+
 	private ChangesetTransformer csetTransform;
 	private HgParentChildMap<HgChangelog> parentHelper;
 	
@@ -240,6 +242,19 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 	public HgLogCommand file(String file, boolean followCopyRename, boolean followFileAncestry) {
 		return file(Path.create(repo.getToRepoPathHelper().rewrite(file)), followCopyRename, followFileAncestry);
 	}
+	
+	/**
+	 * Specifies order for changesets reported through #execute(...) methods.
+	 * By default, command reports changeset in their natural repository order, older first, 
+	 * newer last (i.e. {@link HgIterateDirection#OldToNew}
+	 * 
+	 * @param order {@link HgIterateDirection#NewToOld} to get newer revisions first
+	 * @return <code>this</code> for convenience
+	 */
+	public HgLogCommand order(HgIterateDirection order) {
+		iterateDirection = order;
+		return this;
+	}
 
 	/**
 	 * Similar to {@link #execute(HgChangesetHandler)}, collects and return result as a list.
@@ -305,12 +320,12 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			filterInsp.changesets(startRev, lastCset);
 			if (file == null) {
 				progressHelper.start(lastCset - startRev + 1);
-				if (iterateDirection == IterateDirection.FromOldToNew) {
+				if (iterateDirection == HgIterateDirection.OldToNew) {
 					filterInsp.delegateTo(csetTransform);
 					repo.getChangelog().range(startRev, lastCset, filterInsp);
 					csetTransform.checkFailure();
 				} else {
-					assert iterateDirection == IterateDirection.FromNewToOld;
+					assert iterateDirection == HgIterateDirection.NewToOld;
 					BatchRangeHelper brh = new BatchRangeHelper(startRev, lastCset, BATCH_SIZE, true);
 					BatchChangesetInspector batchInspector = new BatchChangesetInspector(Math.min(lastCset-startRev+1, BATCH_SIZE));
 					filterInsp.delegateTo(batchInspector);
@@ -338,11 +353,11 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 						@SuppressWarnings("unused")
 						List<HistoryNode> fileAncestry = treeBuilder.go(fileNode, curRename.second());
 						int[] commitRevisions = narrowChangesetRange(treeBuilder.getCommitRevisions(), startRev, lastCset);
-						if (iterateDirection == IterateDirection.FromOldToNew) {
+						if (iterateDirection == HgIterateDirection.OldToNew) {
 							repo.getChangelog().range(filterInsp, commitRevisions);
 							csetTransform.checkFailure();
 						} else {
-							assert iterateDirection == IterateDirection.FromNewToOld;
+							assert iterateDirection == HgIterateDirection.NewToOld;
 							// visit one by one in the opposite direction
 							for (int i = commitRevisions.length-1; i >= 0; i--) {
 								int csetWithFileChange = commitRevisions[i];
@@ -353,11 +368,11 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 						// report complete file history (XXX may narrow range with [startRev, endRev], but need to go from file rev to link rev)
 						int fileStartRev = 0; //fileNode.getChangesetRevisionIndex(0) >= startRev
 						int fileEndRev = fileNode.getLastRevision();
-						if (iterateDirection == IterateDirection.FromOldToNew) {
+						if (iterateDirection == HgIterateDirection.OldToNew) {
 							fileNode.history(fileStartRev, fileEndRev, filterInsp);
 							csetTransform.checkFailure();
 						} else {
-							assert iterateDirection == IterateDirection.FromNewToOld;
+							assert iterateDirection == HgIterateDirection.NewToOld;
 							BatchRangeHelper brh = new BatchRangeHelper(fileStartRev, fileEndRev, BATCH_SIZE, true);
 							BatchChangesetInspector batchInspector = new BatchChangesetInspector(Math.min(fileEndRev-fileStartRev+1, BATCH_SIZE));
 							filterInsp.delegateTo(batchInspector);
@@ -376,12 +391,12 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 						Pair<HgDataFile, Nodeid> nextRename = fileRenames.get(nameIndex+1);
 						HgFileRevision src, dst;
 						// A -> B
-						if (iterateDirection == IterateDirection.FromOldToNew) {
+						if (iterateDirection == HgIterateDirection.OldToNew) {
 							// curRename: A, nextRename: B
 							src = new HgFileRevision(fileNode, curRename.second(), null);
 							dst = new HgFileRevision(nextRename.first(), nextRename.first().getRevision(0), src.getPath());
 						} else {
-							assert iterateDirection == IterateDirection.FromNewToOld;
+							assert iterateDirection == HgIterateDirection.NewToOld;
 							// curRename: B, nextRename: A
 							src = new HgFileRevision(nextRename.first(), nextRename.second(), null);
 							dst = new HgFileRevision(fileNode, fileNode.getRevision(0), src.getPath());
@@ -538,23 +553,6 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		progressHelper.done();
 	}
 	
-	/**
-	 * DO NOT USE THIS METHOD, DEBUG PURPOSES ONLY!!!
-	 */
-	@Experimental(reason="Work in progress")
-	public HgLogCommand debugSwitch1() {
-		// FIXME can't expose iteration direction unless general iteration (changelog, not a file) supports it, too.
-		// however, need to test the code already there, hence this debug switch
-		if (iterateDirection == IterateDirection.FromOldToNew) {
-			iterateDirection = IterateDirection.FromNewToOld;
-		} else {
-			iterateDirection = IterateDirection.FromOldToNew;
-		}
-		return this;
-	}
-	
-	private IterateDirection iterateDirection = IterateDirection.FromOldToNew;
-
 	private static class ReverseIterator<E> implements Iterator<E> {
 		private final ListIterator<E> listIterator;
 		
@@ -614,10 +612,10 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			Nodeid copyRev = fileNode.getCopySourceRevision();
 			fileNode = repo.getFileNode(fp);
 			Pair<HgDataFile, Nodeid> p = new Pair<HgDataFile, Nodeid>(fileNode, copyRev);
-			if (iterateDirection == IterateDirection.FromOldToNew) {
+			if (iterateDirection == HgIterateDirection.OldToNew) {
 				rv.addFirst(p);
 			} else {
-				assert iterateDirection == IterateDirection.FromNewToOld;
+				assert iterateDirection == HgIterateDirection.NewToOld;
 				rv.addLast(p);
 			}
 		};
@@ -809,7 +807,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		public void updateJunctionPoint(Pair<HgDataFile, Nodeid> curRename, Pair<HgDataFile, Nodeid> nextRename) {
 			// A (old) renamed to B(new).  A(0..k..n) -> B(0..m). If followAncestry, k == n
 			// curRename.second() points to A(k)
-			if (iterateDirection == IterateDirection.FromOldToNew) {
+			if (iterateDirection == HgIterateDirection.OldToNew) {
 				// looking at A chunk (curRename), nextRename points to B
 				HistoryNode junctionSrc = findJunctionPointInCurrentChunk(curRename.second()); // A(k)
 				HistoryNode junctionDestMock = treeBuildInspector.one(nextRename.first(), 0); // B(0)
@@ -821,7 +819,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 				// moreover, children of original A(k) (junctionSrc) would list mock B(0) which is undesired once we iterate over real B
 				junctionNode = new HistoryNode(junctionSrc.changeset, junctionSrc.fileRevision, null, null);
 			} else {
-				assert iterateDirection == IterateDirection.FromNewToOld;
+				assert iterateDirection == HgIterateDirection.NewToOld;
 				// looking at B chunk (curRename), nextRename points at A
 				HistoryNode junctionDest = changeHistory.get(0); // B(0)
 				// prepare mock A(k)
@@ -845,7 +843,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		public void connectWithLastJunctionPoint(Pair<HgDataFile, Nodeid> curRename, Pair<HgDataFile, Nodeid> prevRename, HgFileRenameHandlerMixin renameHandler) throws HgCallbackTargetException {
 			assert junctionNode != null;
 			// A renamed to B. A(0..k..n) -> B(0..m). If followAncestry: k == n  
-			if (iterateDirection == IterateDirection.FromOldToNew) {
+			if (iterateDirection == HgIterateDirection.OldToNew) {
 				// forward, from old to new:
 				// changeHistory points to B 
 				// Already reported: A(0)..A(n), A(k) is in junctionNode
@@ -859,7 +857,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 					renameHandler.copy(copiedFrom, copiedTo);
 				}
 			} else {
-				assert iterateDirection == IterateDirection.FromNewToOld;
+				assert iterateDirection == HgIterateDirection.NewToOld;
 				// changeHistory points to A
 				// Already reported B(m), B(m-1)...B(0), B(0) is in junctionNode
 				// Shall connect histories A(k).bind(B(0))
@@ -896,10 +894,10 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		public void dispatchAllChanges() throws HgCallbackTargetException, CancelledException {
 			// XXX shall sort changeHistory according to changeset numbers?
 			Iterator<HistoryNode> it;
-			if (iterateDirection == IterateDirection.FromOldToNew) {
+			if (iterateDirection == HgIterateDirection.OldToNew) {
 				it = changeHistory.listIterator();
 			} else {
-				assert iterateDirection == IterateDirection.FromNewToOld;
+				assert iterateDirection == HgIterateDirection.NewToOld;
 				it = new ReverseIterator<HistoryNode>(changeHistory);
 			}
 			while(it.hasNext()) {
@@ -1233,9 +1231,5 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 				return repo.getChangelog().getRevision(changelogRevisionNumber);
 			}
 		}
-	}
-
-	private enum IterateDirection {
-		FromOldToNew, FromNewToOld
 	}
 }

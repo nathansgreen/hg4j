@@ -20,6 +20,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.tmatesoft.hg.core.HgIterateDirection.NewToOld;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -96,7 +97,7 @@ public class TestHistory {
 		List<HgChangeset> r = new HgLogCommand(repo).execute();
 		report("hg log - COMPLETE REPO HISTORY", r, true);
 		
-		r = new HgLogCommand(repo).debugSwitch1().execute();
+		r = new HgLogCommand(repo).order(NewToOld).execute();
 		report("hg log - COMPLETE REPO HISTORY, FROM NEW TO OLD", r, false);
 	}
 	
@@ -174,7 +175,7 @@ public class TestHistory {
 		//
 		// Direction
 		h = new CollectWithRenameHandler();
-		new HgLogCommand(repo).file(fname2, true, false).debugSwitch1().execute(h);
+		new HgLogCommand(repo).file(fname2, true, false).order(NewToOld).execute(h);
 		// Identical rename shall be reported, at the same moment 
 		errorCollector.assertEquals(1, h.rh.renames.size());
 		rename = h.rh.renames.get(0);
@@ -216,7 +217,7 @@ public class TestHistory {
 		h = new TreeCollectHandler(false);
 		rh = new RenameCollector(h);
 		// h.checkPrevInChildren = true; see above
-		new HgLogCommand(repo).file(fname2, true, false).debugSwitch1().execute(h);
+		new HgLogCommand(repo).file(fname2, true, false).order(NewToOld).execute(h);
 		errorCollector.assertEquals(1, rh.renames.size());
 		rename = rh.renames.get(0);
 		errorCollector.assertEquals(fname1, rename.first().getPath().toString());
@@ -238,7 +239,7 @@ public class TestHistory {
 		//
 		// Direction
 		h = new CollectWithRenameHandler();
-		new HgLogCommand(repo).file(fname2, false, true).debugSwitch1().execute(h);
+		new HgLogCommand(repo).file(fname2, false, true).order(NewToOld).execute(h);
 		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, false/*!!!*/, errorCollector);
 		//
 		// TreeChangeHandler - in #testChangesetTreeFollowAncestryNotRenames
@@ -261,7 +262,7 @@ public class TestHistory {
 		h = new TreeCollectHandler(false);
 		rh = new RenameCollector(h);
 		h.checkPrevInChildren = true;
-		new HgLogCommand(repo).file(fname2, false, true).debugSwitch1().execute(h);
+		new HgLogCommand(repo).file(fname2, false, true).order(NewToOld).execute(h);
 		report("HgChangesetTreeHandler(renames: false, ancestry:true)", h.getResult(), fname2Follow, false, errorCollector);
 	}
 
@@ -317,7 +318,7 @@ public class TestHistory {
 		//
 		// Switch direction and compare, order shall match that from console
 		h = new CollectWithRenameHandler();
-		new HgLogCommand(repo).file(fname2, true, true).debugSwitch1().execute(h);
+		new HgLogCommand(repo).file(fname2, true, true).order(NewToOld).execute(h);
 		// Identical rename event shall be reported
 		errorCollector.assertEquals(1, h.rh.renames.size());
 		rename = h.rh.renames.get(0);
