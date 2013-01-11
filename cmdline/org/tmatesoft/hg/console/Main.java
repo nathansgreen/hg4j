@@ -29,6 +29,7 @@ import java.util.Map;
 
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgChangesetTreeHandler;
+import org.tmatesoft.hg.core.HgCheckoutCommand;
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgFileRenameHandlerMixin;
 import org.tmatesoft.hg.core.HgFileRevision;
@@ -98,11 +99,12 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
+		m.testCheckout();
 //		m.tryExtensions();
 //		m.dumpBookmarks();
 //		m.readConfigFile();
 //		m.dumpCommitLastMessage();
-		m.buildFileLog();
+//		m.buildFileLog();
 //		m.testConsoleLog();
 //		m.testTreeTraversal();
 //		m.testRevisionMap();
@@ -121,6 +123,11 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void testCheckout() throws Exception {
+		HgCheckoutCommand coCmd = new HgCheckoutCommand(hgRepo);
+		coCmd.changeset(17).execute();
 	}
 	
 	private void tryExtensions() throws Exception {
@@ -174,7 +181,7 @@ public class Main {
 	private void buildFileLog() throws Exception {
 		final long start = System.nanoTime();
 		HgLogCommand cmd = new HgLogCommand(hgRepo);
-		cmd.file("file1b.txt", true, true);
+		cmd.file("a2.txt", true, false);
 		final int[] count = new int[] { 0 };
 		class MyHandler implements HgChangesetTreeHandler, Adaptable {
 			public void treeElement(HgChangesetTreeHandler.TreeElement entry) {

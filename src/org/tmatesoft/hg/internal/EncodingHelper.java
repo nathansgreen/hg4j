@@ -65,18 +65,7 @@ public class EncodingHelper {
 			// perhaps, can return byte[0] in this case?
 			throw new IllegalArgumentException();
 		}
-		try {
-			// synchonized(encoder) {
-			ByteBuffer bb = encoder.encode(CharBuffer.wrap(s));
-			// }
-			byte[] rv = new byte[bb.remaining()];
-			bb.get(rv, 0, rv.length);
-			return rv;
-		} catch (CharacterCodingException ex) {
-			sessionContext.getLog().dump(getClass(), Error, ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
-			// resort to system-default
-			return s.getBytes();
-		}
+		return encodeWithSystemDefaultFallback(s);
 	}
 
 	/**
@@ -84,6 +73,13 @@ public class EncodingHelper {
 	 */
 	public String fromDirstate(byte[] data, int start, int length) {
 		return decodeWithSystemDefaultFallback(data, start, length);
+	}
+	
+	public byte[] toDirstate(String fname) {
+		if (fname == null) {
+			throw new IllegalArgumentException();
+		}
+		return encodeWithSystemDefaultFallback(fname);
 	}
 
 	private String decodeWithSystemDefaultFallback(byte[] data, int start, int length) {
@@ -93,6 +89,21 @@ public class EncodingHelper {
 			sessionContext.getLog().dump(getClass(), Error, ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
 			// resort to system-default
 			return new String(data, start, length);
+		}
+	}
+	
+	private byte[] encodeWithSystemDefaultFallback(String s) {
+		try {
+			// synchronized(encoder) {
+			ByteBuffer bb = encoder.encode(CharBuffer.wrap(s));
+			// }
+			byte[] rv = new byte[bb.remaining()];
+			bb.get(rv, 0, rv.length);
+			return rv;
+		} catch (CharacterCodingException ex) {
+			sessionContext.getLog().dump(getClass(), Error, ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
+			// resort to system-default
+			return s.getBytes();
 		}
 	}
 

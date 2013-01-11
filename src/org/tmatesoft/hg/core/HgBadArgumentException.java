@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2012 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,6 +38,12 @@ public class HgBadArgumentException extends HgException {
 	@Override
 	public HgBadArgumentException setRevision(Nodeid r) {
 		super.setRevision(r);
+		return this;
+	}
+
+	@Override
+	public HgBadArgumentException setRevisionIndex(int rev) {
+		super.setRevisionIndex(rev);
 		return this;
 	}
 }

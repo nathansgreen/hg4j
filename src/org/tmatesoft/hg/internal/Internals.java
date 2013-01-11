@@ -31,6 +31,7 @@ import java.util.StringTokenizer;
 
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -408,6 +409,10 @@ public final class Internals implements SessionContext.Source {
 
 	public boolean shallCacheRevlogs() {
 		return shallCacheRevlogsInRepo;
+	}
+	
+	public static Internals getInstance(HgRepository repo) {
+		return HgInternals.getImplementationRepo(repo);
 	}
 	
 	public static <T> CharSequence join(Iterable<T> col, CharSequence separator) {

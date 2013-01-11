@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -325,7 +325,7 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		// Thus, can't compare directly to HgDataFile.length()
 		private final Path name1, name2;
 
-		/*package-local*/ Record(int fmode, int fsize, int ftime, Path name1, Path name2) {
+		public Record(int fmode, int fsize, int ftime, Path name1, Path name2) {
 			mode = fmode;
 			size = fsize;
 			time = ftime;
