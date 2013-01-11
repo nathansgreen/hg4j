@@ -20,6 +20,7 @@ package org.tmatesoft.hg.core;
 /**
  * Change order changesets are reported to handler
  * 
+ * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
