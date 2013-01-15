@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.core;
 
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.Dirstate;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -27,11 +29,10 @@ import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.WorkingDirFileWriter;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
-import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
-import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 
@@ -93,61 +94,83 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 	 * @throws CancelledException
 	 */
 	public void execute() throws HgException, CancelledException {
-		Internals internalRepo = Internals.getInstance(repo);
-		// remove tracked files from wd (perhaps, just forget 'Added'?)
-		// TODO
-		final DirstateBuilder dirstateBuilder = new DirstateBuilder(internalRepo.buildFileNameEncodingHelper());
-		final Exception[] failure = new Exception[1];
-		HgManifest.Inspector worker = new HgManifest.Inspector() {
-			
-			public boolean next(Nodeid nid, Path fname, Flags flags) {
-				try {
-					HgDataFile df = repo.getFileNode(fname);
-					int fileRevIndex = df.getRevisionIndex(nid);
-					// check out files based on manifest
-					// FIXME links!
-					WorkingDirFileWriter workingDirWriter = new WorkingDirFileWriter(repo);
-					workingDirWriter.processFile(df, fileRevIndex);
-					// new dirstate based on manifest
-					dirstateBuilder.recordNormal(fname, flags, workingDirWriter.bytesWritten());
-					return true;
-				} catch (IOException ex) {
-					failure[0] = ex;
-				} catch (HgRuntimeException ex) {
-					failure[0] = ex;
-				}
-				return false;
-			}
-			
-			public boolean end(int manifestRevision) {
-				return false;
-			}
-			
-			public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
-				return true;
-			}
-		};
-		dirstateBuilder.parents(repo.getChangelog().getRevision(revisionToCheckout), null);
-		repo.getManifest().walk(revisionToCheckout, revisionToCheckout, worker);
-		if (failure[0] != null) {
-			if (failure[0] instanceof IOException) {
-				throw new HgIOException("Failed to write down file revision", failure[0], /*FIXME file*/null);
-			}
-			if (failure[0] instanceof HgRuntimeException) {
-				throw new HgLibraryFailureException((HgRuntimeException) failure[0]);
-			}
-			HgInvalidStateException e = new HgInvalidStateException("Unexpected exception");
-			e.initCause(failure[0]);
-			throw e;
-		}
-		File dirstateFile = internalRepo.getFileFromRepoDir("dirstate");
 		try {
-			FileChannel dirstate = new FileOutputStream(dirstateFile).getChannel();
-			dirstateBuilder.serialize(dirstate);
-			dirstate.close();
-		} catch (IOException ex) {
-			throw new HgIOException("Can't write down new directory state", ex, dirstateFile);
+			Internals internalRepo = Internals.getInstance(repo);
+			// FIXME remove tracked files from wd (perhaps, just forget 'Added'?)
+			// TODO
+			final DirstateBuilder dirstateBuilder = new DirstateBuilder(internalRepo);
+			final CheckoutWorker worker = new CheckoutWorker(internalRepo);
+			HgManifest.Inspector insp = new HgManifest.Inspector() {
+				
+				public boolean next(Nodeid nid, Path fname, Flags flags) {
+					if (worker.next(nid, fname, flags)) {
+						// new dirstate based on manifest
+						dirstateBuilder.recordNormal(fname, flags, worker.getLastWrittenFileSize());
+						return true;
+					}
+					return false;
+				}
+				
+				public boolean end(int manifestRevision) {
+					return false;
+				}
+				
+				public boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision) {
+					return true;
+				}
+			};
+			dirstateBuilder.parents(repo.getChangelog().getRevision(revisionToCheckout), null);
+			repo.getManifest().walk(revisionToCheckout, revisionToCheckout, insp);
+			worker.checkFailed();
+			File dirstateFile = internalRepo.getRepositoryFile(Dirstate);
+			try {
+				FileChannel dirstate = new FileOutputStream(dirstateFile).getChannel();
+				dirstateBuilder.serialize(dirstate);
+				dirstate.close();
+			} catch (IOException ex) {
+				throw new HgIOException("Can't write down new directory state", ex, dirstateFile);
+			}
+			// FIXME write down branch file
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		}
-		// FIXME write down branch file
 	}
+
+	static class CheckoutWorker {
+		private final Internals hgRepo;
+		private HgException failure;
+		private int lastWrittenFileSize;
+		
+		CheckoutWorker(Internals implRepo) {
+			hgRepo = implRepo;
+		}
+		
+		public boolean next(Nodeid nid, Path fname, Flags flags) {
+			try {
+				HgDataFile df = hgRepo.getRepo().getFileNode(fname);
+				int fileRevIndex = df.getRevisionIndex(nid);
+				// check out files based on manifest
+				// FIXME links!
+				WorkingDirFileWriter workingDirWriter = new WorkingDirFileWriter(hgRepo);
+				workingDirWriter.processFile(df, fileRevIndex);
+				lastWrittenFileSize = workingDirWriter.bytesWritten();
+				return true;
+			} catch (IOException ex) {
+				failure = new HgIOException("Failed to write down file revision", ex, /*FIXME file*/null);
+			} catch (HgRuntimeException ex) {
+				failure = new HgLibraryFailureException(ex);
+			}
+			return false;
+		}
+		
+		public int getLastWrittenFileSize() {
+			return lastWrittenFileSize;
+		}
+		
+		public void checkFailed() throws HgException {
+			if (failure != null) {
+				throw failure;
+			}
+		}
+	};
 }

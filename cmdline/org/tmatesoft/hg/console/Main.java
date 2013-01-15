@@ -36,6 +36,7 @@ import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgManifestCommand;
 import org.tmatesoft.hg.core.HgManifestHandler;
+import org.tmatesoft.hg.core.HgRevertCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -99,7 +100,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testCheckout();
+		m.testRevert();
+//		m.testCheckout();
 //		m.tryExtensions();
 //		m.dumpBookmarks();
 //		m.readConfigFile();
@@ -123,6 +125,11 @@ public class Main {
 //		m.dumpCompleteManifestLow();
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
+	}
+	
+	private void testRevert() throws Exception {
+		HgRevertCommand cmd = new HgRevertCommand(hgRepo);
+		cmd.file(Path.create("a.txt")).execute();
 	}
 	
 	private void testCheckout() throws Exception {

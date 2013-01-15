@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,11 @@ import java.util.StringTokenizer;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
-import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRepositoryFiles;
+import org.tmatesoft.hg.repo.HgRepositoryLock;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.PathRewrite;
 
 /**
@@ -117,6 +119,10 @@ public final class Internals implements SessionContext.Source {
 		return !repoDir.exists() || !repoDir.isDirectory();
 	}
 	
+	public File getRepositoryFile(HgRepositoryFiles f) {
+		return f.residesUnderRepositoryRoot() ? getFileFromRepoDir(f.getName()) : getFileFromDataDir(f.getName());
+	}
+
 	/**
 	 * Access files under ".hg/".
 	 * File not necessarily exists, this method is merely a factory for Files at specific, configuration-dependent location. 
@@ -222,7 +228,7 @@ public final class Internals implements SessionContext.Source {
 		return dataPathHelper.rewrite(df.getPath().toString());
 	}
 
-
+	
 	public static boolean runningOnWindows() {
 		return System.getProperty("os.name").indexOf("Windows") != -1;
 	}
@@ -411,6 +417,11 @@ public final class Internals implements SessionContext.Source {
 		return shallCacheRevlogsInRepo;
 	}
 	
+	// marker method
+	public static IllegalStateException notImplemented() {
+		return new IllegalStateException("Not implemented");
+	}
+
 	public static Internals getInstance(HgRepository repo) {
 		return HgInternals.getImplementationRepo(repo);
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
+import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
@@ -93,11 +94,6 @@ public final class HgRepository implements SessionContext.Source {
 	 */
 	public static final String DEFAULT_BRANCH_NAME = "default";
 
-	// temp aux marker method
-	public static IllegalStateException notImplemented() {
-		return new IllegalStateException("Not implemented");
-	}
-	
 	private final File repoDir; // .hg folder
 	private final File workingDir; // .hg/../
 	private final String repoLocation;
@@ -299,7 +295,7 @@ public final class HgRepository implements SessionContext.Source {
 	 * @throws HgInvalidControlFileException if attempt to read information about working copy parents from dirstate failed 
 	 */
 	public Pair<Nodeid,Nodeid> getWorkingCopyParents() throws HgInvalidControlFileException {
-		return HgDirstate.readParents(impl);
+		return DirstateReader.readParents(impl);
 	}
 	
 	/**
@@ -308,7 +304,7 @@ public final class HgRepository implements SessionContext.Source {
 	 */
 	public String getWorkingCopyBranchName() throws HgInvalidControlFileException {
 		if (wcBranch == null) {
-			wcBranch = HgDirstate.readBranch(impl);
+			wcBranch = DirstateReader.readBranch(impl);
 		}
 		return wcBranch;
 	}
@@ -350,8 +346,8 @@ public final class HgRepository implements SessionContext.Source {
 		return repoConfig;
 	}
 
-	// XXX package-local, unless there are cases when required from outside (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
-	// XXX consider passing Path pool or factory to produce (shared) Path instead of Strings
+	// There seem to be no cases when access to HgDirstate is required from outside 
+	// (guess, working dir/revision walkers may hide dirstate access and no public visibility needed)
 	/*package-local*/ final HgDirstate loadDirstate(Path.Source pathFactory) throws HgInvalidControlFileException {
 		PathRewrite canonicalPath = null;
 		if (!impl.isCaseSensitiveFileSystem()) {

@@ -16,15 +16,6 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.core.Nodeid.NULL;
-import static org.tmatesoft.hg.repo.HgRepositoryFiles.Dirstate;
-import static org.tmatesoft.hg.util.LogFacility.Severity.Debug;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -32,13 +23,11 @@ import java.util.Map;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.DataAccess;
-import org.tmatesoft.hg.internal.EncodingHelper;
+import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
-import org.tmatesoft.hg.util.LogFacility.Severity;
 
 
 /**
@@ -75,7 +64,6 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 	}
 
 	/*package-local*/ void read() throws HgInvalidControlFileException {
-		EncodingHelper encodingHelper = repo.buildFileNameEncodingHelper();
 		normal = added = removed = merged = Collections.<Path, Record>emptyMap();
 		parents = new Pair<Nodeid,Nodeid>(Nodeid.NULL, Nodeid.NULL);
 		if (canonicalPathRewrite != null) {
@@ -83,87 +71,45 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		} else {
 			canonical2dirstateName = Collections.emptyMap();
 		}
-		File dirstateFile = getDirstateFile(repo);
-		if (dirstateFile == null || !dirstateFile.exists()) {
-			return;
-		}
-		DataAccess da = repo.getDataAccess().create(dirstateFile);
-		try {
-			if (da.isEmpty()) {
-				return;
-			}
-			// not sure linked is really needed here, just for ease of debug
-			normal = new LinkedHashMap<Path, Record>();
-			added = new LinkedHashMap<Path, Record>();
-			removed = new LinkedHashMap<Path, Record>();
-			merged = new LinkedHashMap<Path, Record>();
+		// not sure linked is really needed here, just for ease of debug
+		normal = new LinkedHashMap<Path, Record>();
+		added = new LinkedHashMap<Path, Record>();
+		removed = new LinkedHashMap<Path, Record>();
+		merged = new LinkedHashMap<Path, Record>();
+
+		DirstateReader dirstateReader = new DirstateReader(repo, pathPool);
+		dirstateReader.readInto(new Inspector() {
 			
-			parents = internalReadParents(da);
-			// hg init; hg up produces an empty repository where dirstate has parents (40 bytes) only
-			while (!da.isEmpty()) {
-				final byte state = da.readByte();
-				final int fmode = da.readInt();
-				final int size = da.readInt();
-				final int time = da.readInt();
-				final int nameLen = da.readInt();
-				String fn1 = null, fn2 = null;
-				byte[] name = new byte[nameLen];
-				da.readBytes(name, 0, nameLen);
-				for (int i = 0; i < nameLen; i++) {
-					if (name[i] == 0) {
-						fn1 = encodingHelper.fromDirstate(name, 0, i);
-						fn2 = encodingHelper.fromDirstate(name, i+1, nameLen - i - 1);
-						break;
-					}
-				}
-				if (fn1 == null) {
-					fn1 = encodingHelper.fromDirstate(name, 0, nameLen);
-				}
-				Record r = new Record(fmode, size, time, pathPool.path(fn1), fn2 == null ? null : pathPool.path(fn2));
+			public boolean next(EntryKind kind, Record r) {
 				if (canonicalPathRewrite != null) {
-					Path canonicalPath = pathPool.path(canonicalPathRewrite.rewrite(fn1).toString());
+					Path canonicalPath = pathPool.path(canonicalPathRewrite.rewrite(r.name()));
 					if (canonicalPath != r.name()) { // == as they come from the same pool
 						assert !canonical2dirstateName.containsKey(canonicalPath); // otherwise there's already a file with same canonical name
 						// which can't happen for case-insensitive file system (or there's erroneous PathRewrite, perhaps doing smth else)
 						canonical2dirstateName.put(canonicalPath, r.name());
 					}
-					if (fn2 != null) {
+					if (r.copySource() != null) {
 						// not sure I need copy origin in the map, I don't seem to use it anywhere,
 						// but I guess I'll have to use it some day.
-						canonicalPath = pathPool.path(canonicalPathRewrite.rewrite(fn2).toString());
+						canonicalPath = pathPool.path(canonicalPathRewrite.rewrite(r.copySource()));
 						if (canonicalPath != r.copySource()) {
 							canonical2dirstateName.put(canonicalPath, r.copySource());
 						}
 					}
 				}
-				if (state == 'n') {
-					normal.put(r.name1, r);
-				} else if (state == 'a') {
-					added.put(r.name1, r);
-				} else if (state == 'r') {
-					removed.put(r.name1, r);
-				} else if (state == 'm') {
-					merged.put(r.name1, r);
-				} else {
-					repo.getSessionContext().getLog().dump(getClass(), Severity.Warn, "Dirstate record for file %s (size: %d, tstamp:%d) has unknown state '%c'", r.name1, r.size(), r.time, state);
+				switch (kind) {
+				case Normal : normal.put(r.name(), r); break;
+				case Added :  added.put(r.name(), r); break;
+				case Removed : removed.put(r.name(), r); break;
+				case Merged : merged.put(r.name1, r); break;
+				default: throw new HgInvalidStateException(String.format("Unexpected entry in the dirstate: %s", kind));
 				}
+				return true;
 			}
-		} catch (IOException ex) {
-			throw new HgInvalidControlFileException("Dirstate read failed", ex, dirstateFile); 
-		} finally {
-			da.done();
-		}
+		});
+		parents = dirstateReader.parents();
 	}
 
-	private static Pair<Nodeid, Nodeid> internalReadParents(DataAccess da) throws IOException {
-		byte[] parents = new byte[40];
-		da.readBytes(parents, 0, 40);
-		Nodeid n1 = Nodeid.fromBinary(parents, 0);
-		Nodeid n2 = Nodeid.fromBinary(parents, 20);
-		parents = null;
-		return new Pair<Nodeid, Nodeid>(n1, n2);
-	}
-	
 	/**
 	 * @return pair of working copy parents, with {@link Nodeid#NULL} for missing values.
 	 */
@@ -172,58 +118,6 @@ public final class HgDirstate /* XXX RepoChangeListener */{
 		return parents;
 	}
 	
-	private static File getDirstateFile(Internals repo) {
-		return repo.getFileFromRepoDir(Dirstate.getName());
-	}
-
-	/**
-	 * @return pair of parents, both {@link Nodeid#NULL} if dirstate is not available
-	 */
-	/*package-local*/ static Pair<Nodeid, Nodeid> readParents(Internals internalRepo) throws HgInvalidControlFileException {
-		// do not read whole dirstate if all we need is WC parent information
-		File dirstateFile = getDirstateFile(internalRepo);
-		if (dirstateFile == null || !dirstateFile.exists()) {
-			return new Pair<Nodeid,Nodeid>(NULL, NULL);
-		}
-		DataAccess da = internalRepo.getDataAccess().create(dirstateFile);
-		try {
-			if (da.isEmpty()) {
-				return new Pair<Nodeid,Nodeid>(NULL, NULL);
-			}
-			return internalReadParents(da);
-		} catch (IOException ex) {
-			throw new HgInvalidControlFileException("Error reading working copy parents from dirstate", ex, dirstateFile);
-		} finally {
-			da.done();
-		}
-	}
-	
-	/**
-	 * TODO [post-1.0] it's really not a proper place for the method, need WorkingCopyContainer or similar
-	 * @return branch associated with the working directory
-	 */
-	/*package-local*/ static String readBranch(Internals internalRepo) throws HgInvalidControlFileException {
-		File branchFile = internalRepo.getFileFromRepoDir("branch");
-		String branch = HgRepository.DEFAULT_BRANCH_NAME;
-		if (branchFile.exists()) {
-			try {
-				BufferedReader r = new BufferedReader(new FileReader(branchFile));
-				String b = r.readLine();
-				if (b != null) {
-					b = b.trim().intern();
-				}
-				branch = b == null || b.length() == 0 ? HgRepository.DEFAULT_BRANCH_NAME : b;
-				r.close();
-			} catch (FileNotFoundException ex) {
-				internalRepo.getSessionContext().getLog().dump(HgDirstate.class, Debug, ex, null); // log verbose debug, exception might be legal here 
-				// IGNORE
-			} catch (IOException ex) {
-				throw new HgInvalidControlFileException("Error reading file with branch information", ex, branchFile);
-			}
-		}
-		return branch;
-	}
-
 	// new, modifiable collection
 	/*package-local*/ TreeSet<Path> all() {
 		assert normal != null;

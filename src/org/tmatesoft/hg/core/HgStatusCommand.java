@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.ConcurrentModificationException;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
@@ -156,7 +157,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	}
 
 	public HgStatusCommand subrepo(boolean visit) {
-		throw HgRepository.notImplemented();
+		throw Internals.notImplemented();
 	}
 
 	/**

@@ -28,6 +28,7 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgRepoConfig.PathsSection;
 
 /**
@@ -129,7 +130,7 @@ public class HgLookup {
 			throw new IllegalArgumentException();
 		}
 		if (Boolean.FALSE.booleanValue()) {
-			throw HgRepository.notImplemented();
+			throw Internals.notImplemented();
 		}
 		return new HgRemoteRepository(getContext(), url);
 	}

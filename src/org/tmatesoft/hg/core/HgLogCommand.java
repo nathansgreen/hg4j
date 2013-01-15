@@ -38,6 +38,7 @@ import org.tmatesoft.hg.internal.AdapterPlug;
 import org.tmatesoft.hg.internal.BatchRangeHelper;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.LifecycleProxy;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -143,7 +144,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		this.date = date;
 		// TODO post-1.0 implement
 		// isSet(field) - false => don't use in detection of 'same date'
-		throw HgRepository.notImplemented();
+		throw Internals.notImplemented();
 	}
 	
 	/**

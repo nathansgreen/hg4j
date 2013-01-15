@@ -101,6 +101,8 @@
 			<test name="org.tmatesoft.hg.test.TestMqExtension" />
 			<test name="org.tmatesoft.hg.test.TestFileFlags" />
 			<test name="org.tmatesoft.hg.test.TestCatCommand" />
+			<test name="org.tmatesoft.hg.test.TestRevert" />
+			<test name="org.tmatesoft.hg.test.TestCheckout" />
 		</junit>
 	</target>
 

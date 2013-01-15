@@ -16,15 +16,23 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgDirstate;
+import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
+import org.tmatesoft.hg.repo.HgDirstate.Record;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
+import org.tmatesoft.hg.repo.HgRepositoryFiles;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -36,12 +44,17 @@ import org.tmatesoft.hg.util.Path;
  * @author TMate Software Ltd.
  */
 public class DirstateBuilder {
-	private List<HgDirstate.Record> normal = new ArrayList<HgDirstate.Record>();
+	private Map<Path, HgDirstate.Record> normal = new TreeMap<Path, HgDirstate.Record>();
+	private Map<Path, HgDirstate.Record> added = new TreeMap<Path, HgDirstate.Record>();
+	private Map<Path, HgDirstate.Record> removed = new TreeMap<Path, HgDirstate.Record>();
+	private Map<Path, HgDirstate.Record> merged = new TreeMap<Path, HgDirstate.Record>();
 	private Nodeid parent1, parent2;
+	private final Internals hgRepo;
 	private final EncodingHelper encodingHelper;
 	
-	public DirstateBuilder(EncodingHelper encHelper) {
-		encodingHelper = encHelper;
+	public DirstateBuilder(Internals internalRepo) {
+		hgRepo = internalRepo;
+		encodingHelper = internalRepo.buildFileNameEncodingHelper();
 	}
 	
 	public void parents(Nodeid p1, Nodeid p2) {
@@ -60,8 +73,21 @@ public class DirstateBuilder {
 		// right away.
 		int fmode = flags == Flags.RegularFile ? 0666 : 0777; // FIXME actual unix flags
 		int mtime = (int) (System.currentTimeMillis() / 1000);
-		normal.add(new HgDirstate.Record(fmode, bytesWritten, mtime,fname, null));
-		
+		forget(fname);
+		normal.put(fname, new HgDirstate.Record(fmode, bytesWritten, mtime, fname, null));
+	}
+	
+	public void recordUncertain(Path fname) {
+		// `hg revert` puts "n 0 -1 unset" for the reverted file, so shall we
+		forget(fname);
+		normal.put(fname, new HgDirstate.Record(0, -1, -1, fname, null));
+	}
+	
+	private void forget(Path fname) {
+		normal.remove(fname);
+		added.remove(fname);
+		removed.remove(fname);
+		merged.remove(fname);
 	}
 
 	public void serialize(WritableByteChannel dest) throws IOException {
@@ -77,24 +103,65 @@ public class DirstateBuilder {
 		}
 		bb.clear();
 		// entries
-		for (HgDirstate.Record r : normal) {
-			// normal entry is 1+4+4+4+4+fname.length bytes
-			byte[] fname = encodingHelper.toDirstate(r.name().toString());
-			bb = ensureCapacity(bb, 17 + fname.length);
-			bb.put((byte) 'n');
-			bb.putInt(r.mode());
-			bb.putInt(r.size());
-			bb.putInt(r.modificationTime());
-			bb.putInt(fname.length);
-			bb.put(fname);
-			bb.flip();
-			written = dest.write(bb);
-			if (written != bb.limit()) {
-				throw new IOException("Incomplete write");
+		@SuppressWarnings("unchecked")
+		Map<Path, HgDirstate.Record>[] all = new Map[] {normal, added, removed, merged};
+		for (Map<Path, HgDirstate.Record> m : all) {
+			for (HgDirstate.Record r : m.values()) {
+				// regular entry is 1+4+4+4+4+fname.length bytes
+				// it might get extended with copy origin, prepended with 0 byte 
+				byte[] fname = encodingHelper.toDirstate(r.name());
+				byte[] copyOrigin = r.copySource() == null ? null : encodingHelper.toDirstate(r.copySource());
+				int length = fname.length + (copyOrigin == null ? 0 : (1 + copyOrigin.length)); 
+				bb = ensureCapacity(bb, 17 + length);
+				bb.put((byte) 'n');
+				bb.putInt(r.mode());
+				bb.putInt(r.size());
+				bb.putInt(r.modificationTime());
+				bb.putInt(length);
+				bb.put(fname);
+				if (copyOrigin != null) {
+					bb.put((byte) 0);
+					bb.put(copyOrigin);
+				}
+				bb.flip();
+				written = dest.write(bb);
+				if (written != bb.limit()) {
+					throw new IOException("Incomplete write");
+				}
+				bb.clear();
 			}
-			bb.clear();
 		}
 	}
+	
+	public void serialize() throws HgIOException {
+		File dirstateFile = hgRepo.getRepositoryFile(HgRepositoryFiles.Dirstate);
+		try {
+			FileChannel dirstate = new FileOutputStream(dirstateFile).getChannel();
+			serialize(dirstate);
+			dirstate.close();
+		} catch (IOException ex) {
+			throw new HgIOException("Can't write down new directory state", ex, dirstateFile);
+		}
+	}
+	
+	public void fillFrom(DirstateReader dirstate) {
+		// TODO preserve order, if reasonable and possible 
+		dirstate.readInto(new HgDirstate.Inspector() {
+			
+			public boolean next(EntryKind kind, Record entry) {
+				switch (kind) {
+				case Normal: normal.put(entry.name(), entry); break;
+				case Added : added.put(entry.name(), entry); break;
+				case Removed : removed.put(entry.name(), entry); break;
+				case Merged : merged.put(entry.name(), entry); break;
+				default: throw new HgInvalidStateException(String.format("Unexpected entry in the dirstate: %s", kind));
+				}
+				return true;
+			}
+		});
+		parents(dirstate.parents().first(), dirstate.parents().second());
+	}
+
 
 	private static ByteBuffer ensureCapacity(ByteBuffer buf, int cap) {
 		if (buf.capacity() >= cap) {

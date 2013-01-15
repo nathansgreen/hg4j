@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
@@ -88,7 +89,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	 */
 	public HgOutgoingCommand subrepo(boolean include) {
 		includeSubrepo = include;
-		throw HgRepository.notImplemented();
+		throw Internals.notImplemented();
 	}
 
 	/**

@@ -20,6 +20,7 @@ import java.io.File;
 
 import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -109,7 +110,7 @@ public class HgSubrepoLocation {
 	 * @return <code>true</code> if it's dirty
 	 */
 	public boolean hasChanges() {
-		throw HgRepository.notImplemented();
+		throw Internals.notImplemented();
 	}
 
 	/**

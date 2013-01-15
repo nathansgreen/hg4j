@@ -23,11 +23,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
-import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.LogFacility.Severity;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * 
@@ -37,13 +36,13 @@ import org.tmatesoft.hg.util.LogFacility.Severity;
 public class WorkingDirFileWriter implements ByteChannel {
 
 	
-	private final HgRepository repo;
+	private final Internals hgRepo;
 	private File dest;
 	private FileChannel destChannel;
 	private int totalBytesWritten;
 
-	public WorkingDirFileWriter(HgRepository hgRepo) {
-		repo = hgRepo;
+	public WorkingDirFileWriter(Internals internalRepo) {
+		hgRepo = internalRepo;
 	}
 	
 	public void processFile(HgDataFile df, int fileRevIndex) throws IOException {
@@ -51,14 +50,14 @@ public class WorkingDirFileWriter implements ByteChannel {
 			prepare(df.getPath());
 			df.contentWithFilters(fileRevIndex, this);
 		} catch (CancelledException ex) {
-			repo.getSessionContext().getLog().dump(getClass(), Severity.Error, ex, "Our impl doesn't throw cancellation");
+			hgRepo.getSessionContext().getLog().dump(getClass(), Severity.Error, ex, "Our impl doesn't throw cancellation");
 		}
 		finish();
 	}
 
 	public void prepare(Path fname) throws IOException {
 		String fpath = fname.toString();
-		dest = new File(repo.getWorkingDir(), fpath);
+		dest = new File(hgRepo.getRepo().getWorkingDir(), fpath);
 		if (fpath.indexOf('/') != -1) {
 			dest.getParentFile().mkdirs();
 		}

@@ -30,6 +30,7 @@ import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.InflaterDataAccess;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Patch;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -68,7 +69,7 @@ public class HgBundle {
 					return new InflaterDataAccess(da, 6, da.length() - 6);
 				}
 				if (signature[4] == 'B' && signature[5] == 'Z') {
-					throw HgRepository.notImplemented();
+					throw Internals.notImplemented();
 				}
 				if (signature[4] != 'U' || signature[5] != 'N') {
 					throw new HgInvalidStateException(String.format("Bad bundle signature: %s",  String.valueOf(signature)));

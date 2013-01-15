@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.internal.Internals;
 
 
 /**
@@ -46,7 +46,7 @@ public class LogOutputParser implements OutputParser {
 			pattern5 = Pattern.compile("\\n\\n");
 			//p = "^manifest:\\s+(\\d+):([a-f0-9]{40})\nuser:(.+)$";
 		} else {
-			throw HgRepository.notImplemented();
+			throw Internals.notImplemented();
 		}
 	}
 	

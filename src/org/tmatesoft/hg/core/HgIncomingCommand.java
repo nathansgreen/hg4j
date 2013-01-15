@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
 import org.tmatesoft.hg.repo.HgBundle;
@@ -95,7 +96,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 	 */
 	public HgIncomingCommand subrepo(boolean include) {
 		includeSubrepo = include;
-		throw HgRepository.notImplemented();
+		throw Internals.notImplemented();
 	}
 
 	/**

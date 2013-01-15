@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ public class EncodingHelper {
 	/**
 	 * @return byte representation of the string directly comparable to bytes in manifest
 	 */
-	public byte[] toManifest(String s) {
+	public byte[] toManifest(CharSequence s) {
 		if (s == null) {
 			// perhaps, can return byte[0] in this case?
 			throw new IllegalArgumentException();
@@ -75,7 +75,7 @@ public class EncodingHelper {
 		return decodeWithSystemDefaultFallback(data, start, length);
 	}
 	
-	public byte[] toDirstate(String fname) {
+	public byte[] toDirstate(CharSequence fname) {
 		if (fname == null) {
 			throw new IllegalArgumentException();
 		}
@@ -92,7 +92,7 @@ public class EncodingHelper {
 		}
 	}
 	
-	private byte[] encodeWithSystemDefaultFallback(String s) {
+	private byte[] encodeWithSystemDefaultFallback(CharSequence s) {
 		try {
 			// synchronized(encoder) {
 			ByteBuffer bb = encoder.encode(CharBuffer.wrap(s));
@@ -103,7 +103,7 @@ public class EncodingHelper {
 		} catch (CharacterCodingException ex) {
 			sessionContext.getLog().dump(getClass(), Error, ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
 			// resort to system-default
-			return s.getBytes();
+			return s.toString().getBytes();
 		}
 	}
 
