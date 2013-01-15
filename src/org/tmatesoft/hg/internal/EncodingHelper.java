@@ -111,4 +111,7 @@ public class EncodingHelper {
 		return encoder.charset();
 	}
 
+	public static Charset getUTF8() {
+		return Charset.forName("UTF-8");
+	}
 }

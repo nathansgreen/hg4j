@@ -16,14 +16,17 @@
  */
 package org.tmatesoft.hg.core;
 
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.Branch;
 import static org.tmatesoft.hg.repo.HgRepositoryFiles.Dirstate;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.internal.DirstateBuilder;
+import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.WorkingDirFileWriter;
@@ -130,7 +133,19 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 			} catch (IOException ex) {
 				throw new HgIOException("Can't write down new directory state", ex, dirstateFile);
 			}
-			// FIXME write down branch file
+			String branchName = repo.getChangelog().range(revisionToCheckout, revisionToCheckout).get(0).branch();
+			assert branchName != null;
+			if (!HgRepository.DEFAULT_BRANCH_NAME.equals(branchName)) {
+				File branchFile = internalRepo.getRepositoryFile(Branch);
+				try {
+					// branch file is UTF-8, see http://mercurial.selenic.com/wiki/EncodingStrategy#UTF-8_strings
+					OutputStreamWriter ow = new OutputStreamWriter(new FileOutputStream(branchFile), EncodingHelper.getUTF8());
+					ow.write(branchName);
+					ow.close();
+				} catch (IOException ex) {
+					throw new HgIOException("Can't write down branch information", ex, branchFile);
+				}
+			}
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
 		}

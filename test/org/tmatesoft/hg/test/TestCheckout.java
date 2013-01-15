@@ -16,8 +16,20 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.junit.Assert.assertEquals;
+
+import java.io.File;
+import java.io.FileFilter;
+
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.core.HgCheckoutCommand;
+import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Pair;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * 
@@ -26,10 +38,42 @@ import org.junit.Test;
  */
 public class TestCheckout {
 
+	@Rule
+	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
+
+	private HgRepository repo;
+	private ExecHelper eh;
+
 
 	@Test
-	public void testCleanCheckoutInEmptyDir() {
-		Assert.fail("clone without update, checkout, status");
+	public void testCleanCheckoutInEmptyDir() throws Exception {
+		File testRepoLoc = TestRevert.cloneRepoToTempLocation(Configuration.get().find("log-1"), "test-checkoutClean", true);
+		repo = new HgLookup().detect(testRepoLoc);
+		// nothing but .hg dir
+		assertEquals("[sanity]", 0, testRepoLoc.listFiles(new FilesOnlyFilter()).length);
+		
+		new HgCheckoutCommand(repo).changeset(1).execute();
+		errorCollector.assertEquals(2, testRepoLoc.listFiles(new FilesOnlyFilter()).length);
+
+		Pair<Nodeid, Nodeid> workingCopyParents = repo.getWorkingCopyParents();
+		errorCollector.assertEquals("da3461cd828dae8eb5fd11189d40e9df1961f191", workingCopyParents.first().toString());
+		errorCollector.assertEquals(Nodeid.NULL, workingCopyParents.second());
+		errorCollector.assertEquals(HgRepository.DEFAULT_BRANCH_NAME, repo.getWorkingCopyBranchName());
+
+		StatusOutputParser statusOutputParser = new StatusOutputParser();
+		eh = new ExecHelper(statusOutputParser, testRepoLoc);
+		eh.run("hg", "status", "-A");
+		errorCollector.assertEquals(2, statusOutputParser.getClean().size());
+		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("a")));
+		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("b")));
+		
+		new HgCheckoutCommand(repo).changeset(3).execute();
+		statusOutputParser.reset();
+		eh.run("hg", "status", "-A");
+		errorCollector.assertEquals(3, statusOutputParser.getClean().size());
+		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("b")));
+		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("d")));
+		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("dir/b")));
 	}
 
 	@Test
@@ -38,7 +82,26 @@ public class TestCheckout {
 	}
 
 	@Test
-	public void testBranchCheckout() {
-		Assert.fail("Make sure branch file is written");
+	public void testBranchCheckout() throws Exception {
+		File testRepoLoc = TestRevert.cloneRepoToTempLocation(Configuration.get().find("log-branches"), "test-checkoutBranch", true);
+		repo = new HgLookup().detect(testRepoLoc);
+		
+		new HgCheckoutCommand(repo).changeset(3 /*branch test*/).execute();
+
+		StatusOutputParser statusOutputParser = new StatusOutputParser();
+		eh = new ExecHelper(statusOutputParser, testRepoLoc);
+		eh.run("hg", "status", "-A");
+		errorCollector.assertEquals(3, statusOutputParser.getClean().size());
+		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("a")));
+		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("b")));
+		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("c")));
+		
+		errorCollector.assertEquals("test", repo.getWorkingCopyBranchName());
+	}
+
+	private static final class FilesOnlyFilter implements FileFilter {
+		public boolean accept(File f) {
+			return f.isFile();
+		}
 	}
 }

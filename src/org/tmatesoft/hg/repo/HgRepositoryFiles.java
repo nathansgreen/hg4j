@@ -29,7 +29,8 @@ public enum HgRepositoryFiles {
 	Dirstate(false, "dirstate"), HgLocalTags(false, "localtags"),
 	HgSub(".hgsub"), HgSubstate(".hgsubstate"),
 	LastMessage(false, "last-message.txt"),
-	Bookmarks(false, "bookmarks"), BookmarksCurrent(false, "bookmarks.current");
+	Bookmarks(false, "bookmarks"), BookmarksCurrent(false, "bookmarks.current"),
+	Branch(false, "branch");
 
 	private final String fname;
 	private final boolean livesInWC; 

@@ -17,14 +17,16 @@
 package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.Branch;
 import static org.tmatesoft.hg.repo.HgRepositoryFiles.Dirstate;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Debug;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgDirstate;
@@ -158,11 +160,17 @@ public final class DirstateReader {
 	 * @return branch associated with the working directory
 	 */
 	public static String readBranch(Internals internalRepo) throws HgInvalidControlFileException {
-		File branchFile = internalRepo.getFileFromRepoDir("branch"); // FIXME constant in the HgRepositoryFiles
+		File branchFile = internalRepo.getRepositoryFile(Branch);
 		String branch = HgRepository.DEFAULT_BRANCH_NAME;
 		if (branchFile.exists()) {
 			try {
-				BufferedReader r = new BufferedReader(new FileReader(branchFile));
+				// branch file is UTF-8 encoded, see http://mercurial.selenic.com/wiki/EncodingStrategy#UTF-8_strings
+				// shall not use system-default encoding (FileReader) when reading it!
+				// Perhaps, shall use EncodingHelper.fromBranch and InputStream instead, for uniformity?
+				// Since whole file is in UTF8, InputStreamReader is a convenience over InputStream,
+				// which we use elsewhere (together with EncodingHelper) - other files are usually a mix of binary data 
+				// and encoded text (hence, InputStreamReader with charset is not an option there)
+				BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(branchFile), EncodingHelper.getUTF8()));
 				String b = r.readLine();
 				if (b != null) {
 					b = b.trim().intern();

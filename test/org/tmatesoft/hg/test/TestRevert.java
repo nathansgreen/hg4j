@@ -21,6 +21,8 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -39,6 +41,7 @@ public class TestRevert {
 
 	@Rule
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
+
 	private HgRepository repo;
 	private ExecHelper eh;
 
@@ -48,13 +51,8 @@ public class TestRevert {
 	
 	@Test
 	public void testCommand() throws Exception {
-		File tmpDir = Configuration.get().getTempDir();
-		tmpDir.mkdirs();
-		eh = new ExecHelper(new OutputParser.Stub(), tmpDir);
-		File testRepoLoc = TestIncoming.createEmptyDir("test-revert");
 		// get a copy of a repository
-		eh.run("hg", "clone", Configuration.get().find("log-1").getWorkingDir().toString(), testRepoLoc.getName());
-		assertEquals("[sanity]", 0, eh.getExitValue());
+		File testRepoLoc = cloneRepoToTempLocation(Configuration.get().find("log-1"), "test-revert", false);
 		
 		repo = new HgLookup().detect(testRepoLoc);
 		Path targetFile = Path.create("b");
@@ -72,10 +70,10 @@ public class TestRevert {
 		statusParser.reset();
 		eh.run("hg", "status", "-A");
 
-		assertEquals(3, statusParser.getClean().size());
-		assertTrue(statusParser.getClean().contains(targetFile));
-		assertEquals(1, statusParser.getUnknown().size());
-		assertEquals(targetFile.toString() + ".orig", statusParser.getUnknown().get(0).toString());
+		errorCollector.assertEquals(3, statusParser.getClean().size());
+		errorCollector.assertTrue(statusParser.getClean().contains(targetFile));
+		errorCollector.assertEquals(1, statusParser.getUnknown().size());
+		errorCollector.assertEquals(targetFile.toString() + ".orig", statusParser.getUnknown().get(0).toString());
 	}
 
 	private static void modifyFileAppend(File f) throws Exception {
@@ -83,5 +81,20 @@ public class TestRevert {
 		FileOutputStream fos = new FileOutputStream(f, true);
 		fos.write("XXX".getBytes());
 		fos.close();
+	}
+
+	static File cloneRepoToTempLocation(HgRepository repo, String name, boolean noupdate) throws IOException, InterruptedException {
+		File testRepoLoc = TestIncoming.createEmptyDir(name);
+		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), testRepoLoc.getParentFile());
+		ArrayList<String> cmd = new ArrayList<String>();
+		cmd.add("hg"); cmd.add("clone");
+		if (noupdate) {
+			cmd.add("--noupdate");
+		}
+		cmd.add(repo.getWorkingDir().toString());
+		cmd.add(testRepoLoc.getName());
+		eh.run(cmd.toArray(new String[cmd.size()]));
+		assertEquals("[sanity]", 0, eh.getExitValue());
+		return testRepoLoc;
 	}
 }
