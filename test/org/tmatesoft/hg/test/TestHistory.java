@@ -38,6 +38,7 @@ import org.tmatesoft.hg.core.HgChangesetHandler;
 import org.tmatesoft.hg.core.HgChangesetTreeHandler;
 import org.tmatesoft.hg.core.HgFileRenameHandlerMixin;
 import org.tmatesoft.hg.core.HgFileRevision;
+import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgLogCommand.CollectHandler;
 import org.tmatesoft.hg.core.Nodeid;
@@ -234,7 +235,9 @@ public class TestHistory {
 		
 		CollectWithRenameHandler h = new CollectWithRenameHandler();
 		new HgLogCommand(repo).file(fname2, false, true).execute(h);
-		errorCollector.assertEquals(0, h.rh.renames.size());
+		// renames are reported regardless of followRenames parameter, but 
+		// solely based on HgFileRenameHandlerMixin
+		errorCollector.assertEquals(1, h.rh.renames.size());
 		report("HgChangesetHandler(renames: false, ancestry:true)", h.getChanges(), fname2Follow, true, errorCollector);
 		//
 		// Direction
@@ -252,15 +255,12 @@ public class TestHistory {
 		final List<Record> fname2Follow = getAncestryWithoutRenamesFromCmdline(fname2);
 		
 		TreeCollectHandler h = new TreeCollectHandler(false);
-		RenameCollector rh = new RenameCollector(h);
 		h.checkPrevInParents = true;
 		new HgLogCommand(repo).file(fname2, false, true).execute(h);
-		errorCollector.assertEquals(0, rh.renames.size());
 		report("HgChangesetTreeHandler(renames: false, ancestry:true)", h.getResult(), fname2Follow, true, errorCollector);
 		
 		// Direction
 		h = new TreeCollectHandler(false);
-		rh = new RenameCollector(h);
 		h.checkPrevInChildren = true;
 		new HgLogCommand(repo).file(fname2, false, true).order(NewToOld).execute(h);
 		report("HgChangesetTreeHandler(renames: false, ancestry:true)", h.getResult(), fname2Follow, false, errorCollector);
@@ -350,6 +350,68 @@ public class TestHistory {
 		
 		assertEquals(1, rh.renames.size());
 		assertEquals(Path.create(fname), rh.renames.get(0).second().getPath());
+	}
+	
+	/**
+	 * Ensure {@link HgFileRenameHandlerMixin} is always notified, even
+	 * if followRename is false.
+	 * Shall check: 
+	 *  both {@link HgLogCommand#execute(HgChangesetHandler)} and {@link HgLogCommand#execute(HgChangesetTreeHandler)}
+	 *  and for both iteration directions in each case
+	 */
+	@Test
+	public void testRenameHandlerNotifiedEvenIfNotFollowRename() throws Exception {
+		repo = Configuration.get().find("log-follow");
+		final String fname1 = "file1_a";
+		final String fname2 = "file1_b";
+		final String fnameNoRename = "file2";
+		assertTrue("[sanity]", repo.getFileNode(fnameNoRename).exists());
+		
+		// first, check that file without renames doesn't report any accidentally
+		CollectWithRenameHandler h1 = new CollectWithRenameHandler();
+		HgLogCommand cmd = new HgLogCommand(repo).file(fnameNoRename, false, false);
+		cmd.execute(h1);
+		errorCollector.assertEquals(0, h1.rh.renames.size());
+		TreeCollectHandler h2 = new TreeCollectHandler(false);
+		RenameCollector rh = new RenameCollector(h2);
+		cmd.execute(h2);
+		errorCollector.assertEquals(0, rh.renames.size());
+		
+		// check default iterate direction
+		cmd = new HgLogCommand(repo).file(fname2, false, false);
+		cmd.execute(h1 = new CollectWithRenameHandler());
+		errorCollector.assertEquals(1, h1.rh.renames.size());
+		assertRename(fname1, fname2, h1.rh.renames.get(0));
+		
+		h2 = new TreeCollectHandler(false);
+		rh = new RenameCollector(h2);
+		cmd.execute(h2);
+		errorCollector.assertEquals(1, rh.renames.size());
+		assertRename(fname1, fname2, rh.renames.get(0));
+		
+		eh.run("hg", "log", "--debug", fname2, "--cwd", repo.getLocation());
+		report("HgChangesetHandler+RenameHandler with followRenames = false, default iteration order", h1.getChanges(), true);
+		report("HgChangesetTreeHandler+RenameHandler with followRenames = false, default iteration order", h2.getResult(), true);
+		
+		//
+		// Now, check that iteration in opposite direction (new to old)
+		// still reports renames (and correct revisions, too)
+		cmd.order(HgIterateDirection.NewToOld);
+		cmd.execute(h1 = new CollectWithRenameHandler());
+		errorCollector.assertEquals(1, h1.rh.renames.size());
+		assertRename(fname1, fname2, h1.rh.renames.get(0));
+		h2 = new TreeCollectHandler(false);
+		rh = new RenameCollector(h2);
+		cmd.execute(h2);
+		errorCollector.assertEquals(1, rh.renames.size());
+		assertRename(fname1, fname2, rh.renames.get(0));
+		report("HgChangesetHandler+RenameHandler with followRenames = false, new2old iteration order", h1.getChanges(), false);
+		report("HgChangesetTreeHandler+RenameHandler with followRenames = false, new2old iteration order", h2.getResult(), false);
+	}
+	
+	private void assertRename(String fnameFrom, String fnameTo, Pair<HgFileRevision, HgFileRevision> rename) {
+		errorCollector.assertEquals(fnameFrom, rename.first().getPath().toString());
+		errorCollector.assertEquals(fnameTo, rename.second().getPath().toString());
 	}
 
 	/**
@@ -623,7 +685,7 @@ public class TestHistory {
 		public RenameCollector(AdapterPlug ap) {
 			ap.attachAdapter(HgFileRenameHandlerMixin.class, this);
 		}
-
+		
 		public void copy(HgFileRevision from, HgFileRevision to) {
 			copyReported = true;
 			renames.add(new Pair<HgFileRevision, HgFileRevision>(from, to));
