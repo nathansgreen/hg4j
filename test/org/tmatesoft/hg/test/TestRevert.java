@@ -76,11 +76,15 @@ public class TestRevert {
 		errorCollector.assertEquals(targetFile.toString() + ".orig", statusParser.getUnknown().get(0).toString());
 	}
 
-	private static void modifyFileAppend(File f) throws Exception {
+	private static void modifyFileAppend(File f) throws IOException {
 		assertTrue(f.isFile());
 		FileOutputStream fos = new FileOutputStream(f, true);
 		fos.write("XXX".getBytes());
 		fos.close();
+	}
+	
+	static File cloneRepoToTempLocation(String configRepoName, String name, boolean noupdate) throws Exception, InterruptedException {
+		return cloneRepoToTempLocation(Configuration.get().find(configRepoName), name, noupdate);
 	}
 
 	static File cloneRepoToTempLocation(HgRepository repo, String name, boolean noupdate) throws IOException, InterruptedException {

@@ -103,6 +103,7 @@
 			<test name="org.tmatesoft.hg.test.TestCatCommand" />
 			<test name="org.tmatesoft.hg.test.TestRevert" />
 			<test name="org.tmatesoft.hg.test.TestCheckout" />
+			<test name="org.tmatesoft.hg.test.TestAddRemove" />
 		</junit>
 	</target>
 

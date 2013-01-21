@@ -83,11 +83,34 @@ public class DirstateBuilder {
 		normal.put(fname, new HgDirstate.Record(0, -1, -1, fname, null));
 	}
 	
-	private void forget(Path fname) {
-		normal.remove(fname);
-		added.remove(fname);
-		removed.remove(fname);
-		merged.remove(fname);
+	public void recordAdded(Path fname, Flags flags, int size) {
+		forget(fname);
+		added.put(fname, new HgDirstate.Record(0, -1, -1, fname, null));
+	}
+	
+	public void recordRemoved(Path fname) {
+		HgDirstate.Record r = forget(fname);
+		HgDirstate.Record n;
+		if (r == null) {
+			n = new HgDirstate.Record(0, -1, -1, fname, null);
+		} else {
+			n = new HgDirstate.Record(r.mode(), r.size(), r.modificationTime(), fname, r.copySource());
+		}
+		removed.put(fname, n);
+	}
+	
+	private HgDirstate.Record forget(Path fname) {
+		HgDirstate.Record r;
+		if ((r = normal.remove(fname)) != null) {
+			return r;
+		}
+		if ((r = added.remove(fname)) != null) {
+			return r;
+		}
+		if ((r = removed.remove(fname)) != null) {
+			return r;
+		}
+		return merged.remove(fname);
 	}
 
 	public void serialize(WritableByteChannel dest) throws IOException {
@@ -105,7 +128,10 @@ public class DirstateBuilder {
 		// entries
 		@SuppressWarnings("unchecked")
 		Map<Path, HgDirstate.Record>[] all = new Map[] {normal, added, removed, merged};
+		ByteBuffer recordTypes = ByteBuffer.allocate(4);
+		recordTypes.put((byte) 'n').put((byte) 'a').put((byte) 'r').put((byte) 'm').flip();
 		for (Map<Path, HgDirstate.Record> m : all) {
+			final byte recordType = recordTypes.get();
 			for (HgDirstate.Record r : m.values()) {
 				// regular entry is 1+4+4+4+4+fname.length bytes
 				// it might get extended with copy origin, prepended with 0 byte 
@@ -113,7 +139,7 @@ public class DirstateBuilder {
 				byte[] copyOrigin = r.copySource() == null ? null : encodingHelper.toDirstate(r.copySource());
 				int length = fname.length + (copyOrigin == null ? 0 : (1 + copyOrigin.length)); 
 				bb = ensureCapacity(bb, 17 + length);
-				bb.put((byte) 'n');
+				bb.put(recordType);
 				bb.putInt(r.mode());
 				bb.putInt(r.size());
 				bb.putInt(r.modificationTime());
