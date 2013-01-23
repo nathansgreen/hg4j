@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,6 +43,12 @@ public class HgInvalidFileException extends HgRuntimeException {
 		super(message, th);
 	}
 
+	/**
+	 * 
+	 * @param message description of the trouble, may (although should not) be <code>null</code>
+	 * @param th cause, optional
+	 * @param file where the trouble is, may be <code>null</code>, can be altered later with {@link #setFile(File)}
+	 */
 	public HgInvalidFileException(String message, Throwable th, File file) {
 		super(message, th);
 		details.setFile(file); // allows null

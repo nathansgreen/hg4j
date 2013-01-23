@@ -298,8 +298,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				byte[] calculated = dh.sha1(p1, p2, content).asBinary();
 				final Nodeid node = ge.node();
 				if (!node.equalsTo(calculated)) {
-					// TODO post-1.0 custom exception ChecksumCalculationFailed?
-					throw new HgInvalidStateException(String.format("Checksum failed: expected %s, calculated %s. File %s", node, calculated, filename));
+					String m = String.format("Checksum failed: expected %s, calculated %s. File %s", node, calculated, filename);
+					throw new HgRevisionIntegrityException(m, null, new File(hgDir, filename));
 				}
 				revlogHeader.nodeid(node);
 				if (collectChangelogIndexes) {
@@ -348,7 +348,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				prevRevContent = new ByteArrayDataAccess(content);
 			} catch (IOException ex) {
 				String m = String.format("Failed to write revision %s of file %s", ge.node().shortNotation(), filename);
-				throw new HgInvalidControlFileException(m, ex, new File(filename));
+				throw new HgInvalidControlFileException(m, ex, new File(hgDir, filename));
 			}
 			return cancelException == null;
 		}
