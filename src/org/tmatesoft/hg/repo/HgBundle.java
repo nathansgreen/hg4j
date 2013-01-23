@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -409,6 +409,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 	private static void readGroup(DataAccess da, Inspector inspector) throws IOException {
 		int len = da.readInt();
 		boolean good2go = true;
+		Nodeid prevNodeid = Nodeid.NULL;
 		while (len > 4 && !da.isEmpty() && good2go) {
 			byte[] nb = new byte[80];
 			da.readBytes(nb, 0, 80);
@@ -418,11 +419,12 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			DataAccess slice = new ByteArrayDataAccess(data); // XXX in fact, may pass a slicing DataAccess.
 			// Just need to make sure that we seek to proper location afterwards (where next GroupElement starts),
 			// regardless whether that slice has read it or not.
-			GroupElement ge = new GroupElement(nb, slice);
+			GroupElement ge = new GroupElement(nb, prevNodeid, slice);
 			good2go = inspector.element(ge);
 			slice.done(); // BADA doesn't implement done(), but it could (e.g. free array) 
 			/// and we'd better tell it we are not going to use it any more. However, it's important to ensure Inspector
 			// implementations out there do not retain GroupElement.rawData()
+			prevNodeid = ge.node();
 			len = da.isEmpty() ? 0 : da.readInt();
 		}
 		// need to skip up to group end if inspector told he don't want to continue with the group, 
@@ -446,10 +448,12 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		private final byte[] header; // byte[80] takes 120 bytes, 4 Nodeids - 192
 		private final DataAccess dataAccess;
 		private Patch patches;
+		private final Nodeid deltaBase;
 
-		GroupElement(byte[] fourNodeids, DataAccess rawDataAccess) {
+		GroupElement(byte[] fourNodeids, Nodeid deltaBaseRev, DataAccess rawDataAccess) {
 			assert fourNodeids != null && fourNodeids.length == 80;
 			header = fourNodeids;
+			deltaBase = deltaBaseRev;
 			dataAccess = rawDataAccess;
 		}
 
@@ -483,6 +487,14 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		 */
 		public Nodeid cset() {
 			return Nodeid.fromBinary(header, 60);
+		}
+		
+		/**
+		 * Revision this element keeps patches against. For the patches of the very first revision returns {@link Nodeid#NULL}.
+		 * @return revision of delta base, never <code>null</code>
+		 */
+		public Nodeid patchBase() {
+			return deltaBase;
 		}
 		
 		public byte[] rawDataByteArray() throws IOException { // XXX IOException or HgInvalidFileException?

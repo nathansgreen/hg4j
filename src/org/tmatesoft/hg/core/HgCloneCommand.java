@@ -147,7 +147,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 		private DataAccess prevRevContent;
 		private final DigestHelper dh = new DigestHelper();
-		private final ArrayList<Nodeid> revisionSequence = new ArrayList<Nodeid>(); // last visited nodes first
+		// recently processed nodes last, so that index in the array may be used as a linkRevision or baseRevision
+		private final ArrayList<Nodeid> revisionSequence = new ArrayList<Nodeid>();
 
 		private final LinkedList<String> fncacheFiles = new LinkedList<String>();
 		private RepoInitializer repoInit;
@@ -183,23 +184,18 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00changelog.i"));
 				collectChangelogIndexes = true;
 			} catch (IOException ex) {
-				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
+				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(hgDir, filename));
 			}
 			stopIfCancelled();
 		}
 
 		public void changelogEnd() {
 			try {
-				if (prevRevContent != null) {
-					prevRevContent.done();
-					prevRevContent = null;
-				}
+				clearPreviousContent();
 				collectChangelogIndexes = false;
-				indexFile.close();
-				indexFile = null;
-				filename = null;
+				closeIndexFile();
 			} catch (IOException ex) {
-				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
+				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(hgDir, filename));
 			}
 			progressSupport.worked(1);
 			stopIfCancelled();
@@ -211,22 +207,17 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				revisionSequence.clear();
 				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00manifest.i"));
 			} catch (IOException ex) {
-				throw new HgInvalidControlFileException("Failed to write manifest", ex, new File(filename));
+				throw new HgInvalidControlFileException("Failed to write manifest", ex, new File(hgDir, filename));
 			}
 			stopIfCancelled();
 		}
 
 		public void manifestEnd() {
 			try {
-				if (prevRevContent != null) {
-					prevRevContent.done();
-					prevRevContent = null;
-				}
-				indexFile.close();
-				indexFile = null;
-				filename = null;
+				clearPreviousContent();
+				closeIndexFile();
 			} catch (IOException ex) {
-				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(filename));
+				throw new HgInvalidControlFileException("Failed to write manifest", ex, new File(hgDir, filename));
 			}
 			progressSupport.worked(1);
 			stopIfCancelled();
@@ -250,19 +241,27 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 		public void fileEnd(String name) {
 			try {
-				if (prevRevContent != null) {
-					prevRevContent.done();
-					prevRevContent = null;
-				}
-				indexFile.close();
-				indexFile = null;
-				filename = null;
+				clearPreviousContent();
+				closeIndexFile();
 			} catch (IOException ex) {
 				String m = String.format("Failed to write file %s", filename);
 				throw new HgInvalidControlFileException(m, ex, new File(filename));
 			}
 			progressSupport.worked(1);
 			stopIfCancelled();
+		}
+		
+		private void clearPreviousContent() {
+			if (prevRevContent != null) {
+				prevRevContent.done();
+				prevRevContent = null;
+			}
+		}
+		
+		private void closeIndexFile() throws IOException {
+			indexFile.close();
+			indexFile = null;
+			filename = null;
 		}
 
 		private int knownRevision(Nodeid p) {
@@ -276,7 +275,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				}
 			}
 			String m = String.format("Can't find index of %s for file %s", p.shortNotation(), filename);
-			throw new HgInvalidControlFileException(m, null, null).setRevision(p);
+			throw new HgInvalidControlFileException(m, null, new File(hgDir, filename)).setRevision(p);
 		}
 		
 		private RevlogStreamWriter.HeaderWriter revlogHeader = new RevlogStreamWriter.HeaderWriter(true);
@@ -286,15 +285,29 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			try {
 				assert indexFile != null;
 				boolean writeComplete = false;
+				Nodeid deltaBase = ge.patchBase();
+				if (deltaBase.isNull()) {
+					// NOTE, can't use both parents isNull == true to empty prevRevContent
+					// see build.gradle sample below why.
+					prevRevContent = new DataAccess(); // empty data
+					writeComplete = true;
+					// if (writeComplete) would set baseRevision correctly,
+				} else {
+					Nodeid prevRevision = revisionSequence.size() > 0 ? revisionSequence.get(revisionSequence.size()-1) : Nodeid.NULL;
+					if (!prevRevision.equals(deltaBase)) {
+						// presently, bundle group elements always patch previous, see
+						// (a) changegroup.py#builddeltaheader(): # do nothing with basenode, it is implicitly the previous one in HG10
+						// (b) revlog.py#group(): prev, curr = revs[r], revs[r + 1]
+						//               for c in bundler.revchunk(self, curr, prev):
+						// so there's no reason to have code here to extract contents of deltaBase revision
+						String m = String.format("Revision %s import failed: delta base %s is not the last node we've handled (and know content for) %s", ge.node(), deltaBase, prevRevision);
+						throw new HgInvalidStateException(m);
+					}
+				}
+				//
+				byte[] content = ge.apply(prevRevContent.byteArray());
 				Nodeid p1 = ge.firstParent();
 				Nodeid p2 = ge.secondParent();
-				if (p1.isNull() && p2.isNull() /* or forced flag, does REVIDX_PUNCHED_FLAG indicate that? */) {
-					// FIXME NOTE, both parents isNull == true doesn't necessarily mean
-					// empty prevContent, see build.gradle sample below
-					prevRevContent = new ByteArrayDataAccess(new byte[0]);
-					writeComplete = true;
-				}
-				byte[] content = ge.apply(prevRevContent.byteArray());
 				byte[] calculated = dh.sha1(p1, p2, content).asBinary();
 				final Nodeid node = ge.node();
 				if (!node.equalsTo(calculated)) {
@@ -302,6 +315,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 					throw new HgRevisionIntegrityException(m, null, new File(hgDir, filename));
 				}
 				revlogHeader.nodeid(node);
+				//
 				if (collectChangelogIndexes) {
 					changelogIndexes.put(node, revisionSequence.size());
 					revlogHeader.linkRevision(revisionSequence.size());
@@ -312,12 +326,19 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 					}
 					revlogHeader.linkRevision(csRev.intValue());
 				}
+				//
 				revlogHeader.parents(knownRevision(p1), knownRevision(p2));
+				//
 				byte[] patchContent = ge.rawDataByteArray();
+				// no reason to keep patch if it's close (here, >75%) in size to the complete contents,
+				// save patching effort in this case
 				writeComplete = writeComplete || patchContent.length >= (/* 3/4 of actual */content.length - (content.length >>> 2));
+
 				if (writeComplete) {
 					revlogHeader.baseRevision(revisionSequence.size());
 				}
+				assert revlogHeader.baseRevision() >= 0;
+
 				final byte[] sourceData = writeComplete ? content : patchContent;
 				revlogDataZip.reset(sourceData);
 				final int compressedLen;
@@ -378,12 +399,7 @@ d0be588453068787dcb3ee05f8edfe47fdd5ae78 4011d52141cd717c92cbf350a93522d2f3ee415
 a3f374fbf33aba1cc3b4f472db022b5185880f5d 3ddd456244a08f81779163d9faf922a6dcd9e53e 0000000000000000000000000000000000000000 3ca4ae7bdd3890b8ed89bfea1b42af593e04b373 3ddd456244a08f81779163d9faf922a6dcd9e53e 195
 0227d28e0db69afebee34cd5a4151889fb6271da a3f374fbf33aba1cc3b4f472db022b5185880f5d 0000000000000000000000000000000000000000 31bd09da0dcfe48e1fc662143f91ff402238aa84 a3f374fbf33aba1cc3b4f472db022b5185880f5d 145
 
-but there's no delta base information in the bundle file, it's merely a hard-coded convention (always patches previous version, see 
-(a) changegroup.py#builddeltaheader(): # do nothing with basenode, it is implicitly the previous one in HG10
-(b) revlog.py#group(): prev, curr = revs[r], revs[r + 1]
-                           for c in bundler.revchunk(self, curr, prev):
-)
-
+but there's no delta base information in the bundle file, it's merely a hard-coded convention 
 
 It's unclear where the first chunk (identified 62a101b7...) comes from (by the way, there's no such changeset as 6ec4af... as specified in the chunk, while 7dcc920e.. IS changeset 454)
 

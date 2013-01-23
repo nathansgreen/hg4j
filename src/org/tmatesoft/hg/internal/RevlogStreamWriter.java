@@ -26,6 +26,8 @@ import org.tmatesoft.hg.core.Nodeid;
 
 /**
  * 
+ * TODO check if index is too big and split into index+data
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -48,6 +50,10 @@ public class RevlogStreamWriter {
 		public HeaderWriter offset(long offset) {
 			this.offset = offset;
 			return this;
+		}
+		
+		public int baseRevision() {
+			return baseRev;
 		}
 		
 		public HeaderWriter baseRevision(int baseRevision) {
