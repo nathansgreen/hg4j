@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,22 +19,21 @@ package org.tmatesoft.hg.core;
 import static org.tmatesoft.hg.core.Nodeid.NULL;
 import static org.tmatesoft.hg.internal.RequiresFile.*;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.TreeMap;
-import java.util.zip.DeflaterOutputStream;
 
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.RepoInitializer;
+import org.tmatesoft.hg.internal.RevlogCompressor;
+import org.tmatesoft.hg.internal.RevlogStreamWriter;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
@@ -99,7 +98,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			if (!destination.isDirectory()) {
 				throw new HgBadArgumentException(String.format("%s is not a directory", destination), null);
 			} else if (destination.list().length > 0) {
-				throw new HgBadArgumentException(String.format("% shall be empty", destination), null);
+				throw new HgBadArgumentException(String.format("%s shall be empty", destination), null);
 			}
 		} else {
 			destination.mkdirs();
@@ -146,8 +145,6 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		private final TreeMap<Nodeid, Integer> changelogIndexes = new TreeMap<Nodeid, Integer>();
 		private boolean collectChangelogIndexes = false;
 
-		private int base = -1;
-		private long offset = 0;
 		private DataAccess prevRevContent;
 		private final DigestHelper dh = new DigestHelper();
 		private final ArrayList<Nodeid> revisionSequence = new ArrayList<Nodeid>(); // last visited nodes first
@@ -181,8 +178,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 		public void changelogStart() {
 			try {
-				base = -1;
-				offset = 0;
+				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
 				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00changelog.i"));
 				collectChangelogIndexes = true;
@@ -211,8 +207,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 		public void manifestStart() {
 			try {
-				base = -1;
-				offset = 0;
+				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
 				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00manifest.i"));
 			} catch (IOException ex) {
@@ -239,8 +234,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		
 		public void fileStart(String name) {
 			try {
-				base = -1;
-				offset = 0;
+				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
 				fncacheFiles.add("data/" + name + ".i"); // TODO post-1.0 this is pure guess, 
 				// need to investigate more how filenames are kept in fncache
@@ -284,6 +278,9 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			String m = String.format("Can't find index of %s for file %s", p.shortNotation(), filename);
 			throw new HgInvalidControlFileException(m, null, null).setRevision(p);
 		}
+		
+		private RevlogStreamWriter.HeaderWriter revlogHeader = new RevlogStreamWriter.HeaderWriter(true);
+		private RevlogCompressor revlogDataZip = new RevlogCompressor();
 
 		public boolean element(GroupElement ge) {
 			try {
@@ -292,6 +289,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				Nodeid p1 = ge.firstParent();
 				Nodeid p2 = ge.secondParent();
 				if (p1.isNull() && p2.isNull() /* or forced flag, does REVIDX_PUNCHED_FLAG indicate that? */) {
+					// FIXME NOTE, both parents isNull == true doesn't necessarily mean
+					// empty prevContent, see build.gradle sample below
 					prevRevContent = new ByteArrayDataAccess(new byte[0]);
 					writeComplete = true;
 				}
@@ -302,66 +301,48 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 					// TODO post-1.0 custom exception ChecksumCalculationFailed?
 					throw new HgInvalidStateException(String.format("Checksum failed: expected %s, calculated %s. File %s", node, calculated, filename));
 				}
-				final int link;
+				revlogHeader.nodeid(node);
 				if (collectChangelogIndexes) {
 					changelogIndexes.put(node, revisionSequence.size());
-					link = revisionSequence.size();
+					revlogHeader.linkRevision(revisionSequence.size());
 				} else {
 					Integer csRev = changelogIndexes.get(ge.cset());
 					if (csRev == null) {
 						throw new HgInvalidStateException(String.format("Changelog doesn't contain revision %s of %s", ge.cset().shortNotation(), filename));
 					}
-					link = csRev.intValue();
+					revlogHeader.linkRevision(csRev.intValue());
 				}
-				final int p1Rev = knownRevision(p1), p2Rev = knownRevision(p2);
+				revlogHeader.parents(knownRevision(p1), knownRevision(p2));
 				byte[] patchContent = ge.rawDataByteArray();
 				writeComplete = writeComplete || patchContent.length >= (/* 3/4 of actual */content.length - (content.length >>> 2));
 				if (writeComplete) {
-					base = revisionSequence.size();
+					revlogHeader.baseRevision(revisionSequence.size());
 				}
 				final byte[] sourceData = writeComplete ? content : patchContent;
-				final byte[] data;
-				ByteArrayOutputStream bos = new ByteArrayOutputStream(content.length);
-				DeflaterOutputStream dos = new DeflaterOutputStream(bos);
-				dos.write(sourceData);
-				dos.close();
-				final byte[] compressedData = bos.toByteArray();
-				dos = null;
-				bos = null;
-				final Byte dataPrefix;
-				if (compressedData.length >= (sourceData.length - (sourceData.length >>> 2))) {
+				revlogDataZip.reset(sourceData);
+				final int compressedLen;
+				final boolean useUncompressedData = revlogDataZip.getCompressedLengthEstimate() >= (sourceData.length - (sourceData.length >>> 2));
+				if (useUncompressedData) {
 					// compression wasn't too effective,
-					data = sourceData;
-					dataPrefix = 'u';
+					compressedLen = sourceData.length + 1 /*1 byte for 'u' - uncompressed prefix byte*/;
 				} else {
-					data = compressedData;
-					dataPrefix = null;
+					compressedLen= revlogDataZip.getCompressedLengthEstimate();
 				}
+		
+				revlogHeader.length(content.length, compressedLen);
+				
+				revlogHeader.write(indexFile);
 
-				ByteBuffer header = ByteBuffer.allocate(64 /* REVLOGV1_RECORD_SIZE */);
-				if (offset == 0) {
-					final int INLINEDATA = 1 << 16;
-					header.putInt(1 /* RevlogNG */ | INLINEDATA);
-					header.putInt(0);
+				if (useUncompressedData) {
+					indexFile.write((byte) 'u');
+					indexFile.write(sourceData);
 				} else {
-					header.putLong(offset << 16);
+					int actualCompressedLenWritten = revlogDataZip.writeCompressedData(indexFile);
+					if (actualCompressedLenWritten != compressedLen) {
+						throw new HgInvalidStateException(String.format("Expected %d bytes of compressed data, but actually wrote %d in %s", compressedLen, actualCompressedLenWritten, filename));
+					}
 				}
-				final int compressedLen = data.length + (dataPrefix == null ? 0 : 1);
-				header.putInt(compressedLen);
-				header.putInt(content.length);
-				header.putInt(base);
-				header.putInt(link);
-				header.putInt(p1Rev);
-				header.putInt(p2Rev);
-				header.put(node.toByteArray());
-				// assume 12 bytes left are zeros
-				indexFile.write(header.array());
-				if (dataPrefix != null) {
-					indexFile.write(dataPrefix.byteValue());
-				}
-				indexFile.write(data);
 				//
-				offset += compressedLen;
 				revisionSequence.add(node);
 				prevRevContent.done();
 				prevRevContent = new ByteArrayDataAccess(content);
@@ -371,6 +352,56 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			}
 			return cancelException == null;
 		}
+/*
+ $ hg debugindex build.gradle
+   rev    offset  length   base linkrev nodeid       p1           p2
+     0         0     857      0     454 b2a1b20d1933 000000000000 000000000000
+     1       857     319      0     455 5324c8f2b550 b2a1b20d1933 000000000000
+     2      1176     533      0     460 4011d52141cd 5324c8f2b550 000000000000
+     3      1709      85      0     463 d0be58845306 4011d52141cd 000000000000
+     4      1794     105      0     464 3ddd456244a0 d0be58845306 000000000000
+     5      1899     160      0     466 a3f374fbf33a 3ddd456244a0 000000000000
+     6      2059     133      0     468 0227d28e0db6 a3f374fbf33a 000000000000
+
+once we get a bundle for this repository and look into it for the same file:
+
+ $hg debugbundle -a /tmp/hg-bundle-4418325145435980614.tmp
+format: id, p1, p2, cset, delta base, len(delta)
+
+build.gradle
+62a101b7994c6c5b0423ba6c802f8c64d24ef784 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000 6ec4af642ba8024edd636af15e672c97cc3294e4 0000000000000000000000000000000000000000 1368
+b2a1b20d1933d0605aab6780ee52fe5ab3073832 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000 7dcc920e2d57d5850ee9f08ac863251460565bd3 62a101b7994c6c5b0423ba6c802f8c64d24ef784 2373
+5324c8f2b5503a4d1ead3ac40a9851c27572166b b2a1b20d1933d0605aab6780ee52fe5ab3073832 0000000000000000000000000000000000000000 7b883bf03b14ccea8ee74db0a34f9f66ca644a3c b2a1b20d1933d0605aab6780ee52fe5ab3073832 579
+4011d52141cd717c92cbf350a93522d2f3ee415e 5324c8f2b5503a4d1ead3ac40a9851c27572166b 0000000000000000000000000000000000000000 55e9588b84b83aa96fe76a06ee8bf067c5d3c90e 5324c8f2b5503a4d1ead3ac40a9851c27572166b 1147
+d0be588453068787dcb3ee05f8edfe47fdd5ae78 4011d52141cd717c92cbf350a93522d2f3ee415e 0000000000000000000000000000000000000000 ad0322a4af204547c400e1846b2b83d446ab8da5 4011d52141cd717c92cbf350a93522d2f3ee415e 85
+3ddd456244a08f81779163d9faf922a6dcd9e53e d0be588453068787dcb3ee05f8edfe47fdd5ae78 0000000000000000000000000000000000000000 3ace1fc95d0a1a941b6427c60b6e624f96dd71ad d0be588453068787dcb3ee05f8edfe47fdd5ae78 151
+a3f374fbf33aba1cc3b4f472db022b5185880f5d 3ddd456244a08f81779163d9faf922a6dcd9e53e 0000000000000000000000000000000000000000 3ca4ae7bdd3890b8ed89bfea1b42af593e04b373 3ddd456244a08f81779163d9faf922a6dcd9e53e 195
+0227d28e0db69afebee34cd5a4151889fb6271da a3f374fbf33aba1cc3b4f472db022b5185880f5d 0000000000000000000000000000000000000000 31bd09da0dcfe48e1fc662143f91ff402238aa84 a3f374fbf33aba1cc3b4f472db022b5185880f5d 145
+
+but there's no delta base information in the bundle file, it's merely a hard-coded convention (always patches previous version, see 
+(a) changegroup.py#builddeltaheader(): # do nothing with basenode, it is implicitly the previous one in HG10
+(b) revlog.py#group(): prev, curr = revs[r], revs[r + 1]
+                           for c in bundler.revchunk(self, curr, prev):
+)
+
+
+It's unclear where the first chunk (identified 62a101b7...) comes from (by the way, there's no such changeset as 6ec4af... as specified in the chunk, while 7dcc920e.. IS changeset 454)
+
+EXPLANATION:
+if cloned repository comes from svnkit repo (where's the gradle branch):
+$hg debugindex build.gradle
+   rev    offset  length   base linkrev nodeid       p1           p2
+     0         0     590      0     213 62a101b7994c 000000000000 000000000000
+     1       590     872      0     452 b2a1b20d1933 000000000000 000000000000
+     2      1462     319      0     453 5324c8f2b550 b2a1b20d1933 000000000000
+     3      1781     533      0     459 4011d52141cd 5324c8f2b550 000000000000
+     4      2314      85      0     462 d0be58845306 4011d52141cd 000000000000
+     5      2399     105      0     466 3ddd456244a0 d0be58845306 000000000000
+     6      2504     160      0     468 a3f374fbf33a 3ddd456244a0 000000000000
+     7      2664     133      0     470 0227d28e0db6 a3f374fbf33a 000000000000
+
+and the aforementioned bundle was result of hg incoming svnkit!!! 
+ */
 
 		public void start(int count, Callback callback, Object token) {
 			progressSupport.start(count);

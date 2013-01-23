@@ -88,7 +88,9 @@ public final class Internals implements SessionContext.Source {
 	 * Integer value, use negative for attempts to acquire lock until success, and zero to try once and fail immediately. 
 	 */
 	public static final String CFG_PROPERTY_FS_LOCK_TIMEOUT = "hg4j.fs.lock.timeout";
-	
+
+	public static final int REVLOGV1_RECORD_SIZE = 64;
+
 	private List<Filter.Factory> filterFactories;
 	private final HgRepository repo;
 	private final File repoDir;

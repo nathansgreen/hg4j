@@ -114,7 +114,11 @@ public final class Patch {
 			destIndex += start - prevEnd;
 			// insert new data from the patch, if any
 			byte[] d = data.get(i);
-			System.arraycopy(d, 0, rv, destIndex, d.length);
+			try {
+				System.arraycopy(d, 0, rv, destIndex, d.length);
+			} catch (ArrayIndexOutOfBoundsException ex) {
+				ex.printStackTrace();
+			}
 			destIndex += d.length;
 			prevEnd = ends.get(i);
 		}

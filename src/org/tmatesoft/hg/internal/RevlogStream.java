@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@ package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.internal.Internals.REVLOGV1_RECORD_SIZE;
 
 import java.io.File;
 import java.io.IOException;
@@ -201,8 +202,6 @@ public class RevlogStream {
 		return BAD_REVISION;
 	}
 
-
-	private final int REVLOGV1_RECORD_SIZE = 64;
 
 	// should be possible to use TIP, ALL, or -1, -2, -n notation of Hg
 	// ? boolean needsNodeid
