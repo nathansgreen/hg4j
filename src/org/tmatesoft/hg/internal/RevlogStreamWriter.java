@@ -113,6 +113,23 @@ public class RevlogStreamWriter {
 		}
 	}
 	
-	public void addRevision(String text, int baseRevision, int linkRevision, int p1, int p2) {
+	
+	private final DigestHelper dh = new DigestHelper();
+	
+	public void addRevision(byte[] content, int linkRevision, int p1, int p2) {
+		Nodeid p1Rev = parent(p1);
+		Nodeid p2Rev = parent(p2);
+		byte[] revisionBytes = dh.sha1(p1Rev, p2Rev, content).asBinary();
+		//final Nodeid revision = Nodeid.fromBinary(revisionBytes, 0);
+		// cache last revision (its delta and baseRev)
+		PatchGenerator pg = new PatchGenerator();
+		byte[] prev = null;
+		Patch patch = pg.delta(prev, content);
+		byte[] patchContent;
+		// rest as in HgCloneCommand
+	}
+	
+	private Nodeid parent(int parentIndex) {
+		return null;
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@ import java.util.Formatter;
  * @see http://mercurial.selenic.com/wiki/BundleFormat
  * in Changelog group description
  * 
- * range [start..end] in original source gets replaced with data of length (do not keep, use data.length instead)
- * range [end(i)..start(i+1)] is copied from the source
+ * range [start..end) in original source gets replaced with data of length (do not keep, use data.length instead)
+ * range [end(i)..start(i+1)) is copied from the source
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -159,7 +159,7 @@ public final class Patch {
 		add(p.starts.get(i), p.ends.get(i), p.data.get(i));
 	}
 
-	private void add(int start, int end, byte[] d) {
+	/*package-local*/ void add(int start, int end, byte[] d) {
 		starts.add(start);
 		ends.add(end);
 		data.add(d);

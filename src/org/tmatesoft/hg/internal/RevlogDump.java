@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,8 @@ import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.Inflater;
 
 /**
@@ -48,6 +50,7 @@ public class RevlogDump {
 		String filename = "store/00changelog.i";
 //		String filename = "store/data/hello.c.i";
 //		String filename = "store/data/docs/readme.i";
+		System.out.println(escape("abc\0def\nzxc\tmnb"));
 		boolean dumpDataFull = true;
 		boolean dumpDataStats = false;
 		if (args.length > 1) {
@@ -140,7 +143,7 @@ public class RevlogDump {
 					byte[] src = new byte[l];
 					dis.read(src, 0, l);
 					sb.append(":");
-					sb.append(new String(src, 0, l, "UTF-8"));
+					sb.append(escape(new String(src, 0, l, "UTF-8")));
 				} else {
 					dis.skipBytes(l);
 				}
@@ -149,9 +152,38 @@ public class RevlogDump {
 			return sb.toString();
 		} else {
 			if (completeDataDump) {
-				return new String(data, offset, len, "UTF-8");
+				return escape(new String(data, offset, len, "UTF-8"));
 			}
 			return String.format("<DATA>:%d bytes", len-offset);
 		}
+	}
+	
+	private static Pattern controlCharPattern = Pattern.compile("\\p{Cntrl}");
+	// \p{Cntrl}	A control character: [\x00-\x1F\x7F]
+	private static String[] replacements = new String[33];
+	static {
+		for (int i = 0; i < 32; i++) {
+			// no idea why need FOUR backslashes to get only one in printout
+			replacements[i] = String.format("\\\\%X", i);
+		}
+		replacements[32] = String.format("\\\\%X", 127);
+	}
+	// handy to get newline-separated data printed on newlines.
+	// set to false for non-printable data (e.g. binaries, where \n doesn't make sense)
+	private static boolean leaveNewlineInData = true;
+	
+	private static String escape(CharSequence possiblyWithBinary) {
+		Matcher m = controlCharPattern.matcher(possiblyWithBinary);
+		StringBuffer rv = new StringBuffer();
+		while (m.find()) {
+			char c = m.group().charAt(0);
+			if (leaveNewlineInData && c == '\n') {
+				continue;
+			}
+			int x = (int) c;
+			m.appendReplacement(rv, replacements[x == 127 ? 32 : x]);
+		}
+		m.appendTail(rv);
+		return rv.toString();
 	}
 }
