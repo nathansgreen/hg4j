@@ -21,7 +21,10 @@ import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -72,7 +75,7 @@ public class DataAccessProvider {
 		return mapioBoundary == 0 ? Integer.MAX_VALUE : mapioBoundary;
 	}
 
-	public DataAccess create(File f) {
+	public DataAccess createReader(File f) {
 		if (!f.exists()) {
 			return new DataAccess();
 		}
@@ -95,6 +98,22 @@ public class DataAccessProvider {
 			context.getLog().dump(getClass(), Error, ex, null);
 		}
 		return new DataAccess(); // non-null, empty.
+	}
+	
+	public DataSerializer createWriter(File f, boolean createNewIfDoesntExist) {
+		if (!f.exists() && !createNewIfDoesntExist) {
+			return new DataSerializer();
+		}
+		try {
+			return new StreamDataSerializer(context.getLog(), new FileOutputStream(f));
+		} catch (final FileNotFoundException ex) {
+			context.getLog().dump(getClass(), Error, ex, null);
+			return new DataSerializer() {
+				public void write(byte[] data, int offset, int length) throws IOException {
+					throw ex;
+				}
+			};
+		}
 	}
 
 	private static class MemoryMapFileAccess extends DataAccess {
@@ -371,6 +390,59 @@ public class DataAccessProvider {
 					logFacility.dump(getClass(), Warn, ex, null);
 				}
 				fileChannel = null;
+			}
+		}
+	}
+
+	public/*XXX, private, once HgCloneCommand stops using it */ static class StreamDataSerializer extends DataSerializer {
+		private final OutputStream out;
+		private final LogFacility log;
+		private byte[] buffer;
+	
+		public StreamDataSerializer(LogFacility logFacility, OutputStream os) {
+			assert os != null;
+			out = os;
+			log = logFacility;
+		}
+		
+		@Override
+		public void write(byte[] data, int offset, int length) throws IOException {
+			out.write(data, offset, length);
+		}
+	
+		@Override
+		public void writeInt(int... values) throws IOException {
+			ensureBufferSize(4*values.length); // sizeof(int)
+			int idx = 0;
+			for (int v : values) {
+				DataSerializer.bigEndian(v, buffer, idx);
+				idx += 4;
+			}
+			out.write(buffer, 0, idx);
+		}
+		
+		@Override
+		public void writeByte(byte... values) throws IOException {
+			if (values.length == 1) {
+				out.write(values[0]);
+			} else {
+				out.write(values, 0, values.length);
+			}
+		}
+		
+		private void ensureBufferSize(int bytesNeeded) {
+			if (buffer == null || buffer.length < bytesNeeded) {
+				buffer = new byte[bytesNeeded];
+			}
+		}
+	
+		@Override
+		public void done() {
+			try {
+				out.flush();
+				out.close();
+			} catch (IOException ex) {
+				log.dump(getClass(), Error, ex, "Failure to close stream");
 			}
 		}
 	}

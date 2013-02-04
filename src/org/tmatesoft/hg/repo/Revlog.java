@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -84,11 +84,14 @@ abstract class Revlog {
 	}
 	
 	/**
-	 * @return index of last known revision, a.k.a. {@link HgRepository#TIP}
+	 * @return index of last known revision, a.k.a. {@link HgRepository#TIP}, or {@link HgRepository#NO_REVISION} if revlog is empty
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public final int getLastRevision() throws HgRuntimeException {
-		return content.revisionCount() - 1;
+		// although old code gives correct result when revlog is empty (NO_REVISION deliberately == -1), 
+		// it's still better to be explicit
+		int revCount = content.revisionCount();
+		return revCount == 0 ? NO_REVISION : revCount - 1;
 	}
 
 	/**

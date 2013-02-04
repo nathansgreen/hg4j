@@ -17,9 +17,10 @@
 package org.tmatesoft.hg.internal;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.zip.Deflater;
-import java.util.zip.DeflaterOutputStream;
+
+import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * 
@@ -27,45 +28,59 @@ import java.util.zip.DeflaterOutputStream;
  * @author TMate Software Ltd.
  */
 public class RevlogCompressor {
+	private final SessionContext ctx;
 	private final Deflater zip;
-	private byte[] sourceData;
-	private int compressedLenEstimate;
+	private DataSerializer.DataSource sourceData;
+	private int compressedLen;
 	
-	public RevlogCompressor() {
+	public RevlogCompressor(SessionContext sessionCtx) {
+		ctx = sessionCtx;
 		zip = new Deflater();
 	}
 
-	public void reset(byte[] source) {
+	public void reset(DataSerializer.DataSource source) {
 		sourceData = source;
-		compressedLenEstimate = -1;
+		compressedLen = -1;
 	}
 	
-	public int writeCompressedData(OutputStream out) throws IOException {
+	// out stream is not closed!
+	public int writeCompressedData(DataSerializer out) throws IOException {
 		zip.reset();
-		DeflaterOutputStream dos = new DeflaterOutputStream(out, zip, Math.min(2048, sourceData.length));
-		dos.write(sourceData);
-		dos.finish();
+		DeflaterDataSerializer dds = new DeflaterDataSerializer(out, zip, sourceData.serializeLength());
+		sourceData.serialize(dds);
+		dds.finish();
 		return zip.getTotalOut();
 	}
 
-	public int getCompressedLengthEstimate() {
-		if (compressedLenEstimate != -1) {
-			return compressedLenEstimate;
+	public int getCompressedLength() {
+		if (compressedLen != -1) {
+			return compressedLen;
 		}
-		zip.reset();
-		int rv = 0;
-		// from DeflaterOutputStream:
-		byte[] buffer = new byte[Math.min(2048, sourceData.length)];
-        for (int i = 0, stride = buffer.length; i < sourceData.length; i+= stride) {
-            zip.setInput(sourceData, i, Math.min(stride, sourceData.length - i));
-            while (!zip.needsInput()) {
-            	rv += zip.deflate(buffer, 0, buffer.length);
-            }
-        }
-        zip.finish();
-        while (!zip.finished()) {
-        	rv += zip.deflate(buffer, 0, buffer.length);
-        }
-        return compressedLenEstimate = rv;
+		Counter counter = new Counter();
+		try {
+			compressedLen = writeCompressedData(counter);
+			assert counter.totalWritten == compressedLen;
+	        return compressedLen;
+		} catch (IOException ex) {
+			// can't happen provided we write to our stream that does nothing but byte counting
+			ctx.getLog().dump(getClass(), Severity.Error, ex, "Failed estimating compressed length of revlog data");
+			return counter.totalWritten; // use best known value so far
+		}
+	}
+
+	private static class Counter extends DataSerializer {
+		public int totalWritten = 0;
+
+		public void writeByte(byte... values) throws IOException {
+			totalWritten += values.length;
+		}
+
+		public void writeInt(int... values) throws IOException {
+			totalWritten += 4 * values.length;
+		}
+
+		public void write(byte[] data, int offset, int length) throws IOException {
+			totalWritten += length;
+		}
 	}
 }

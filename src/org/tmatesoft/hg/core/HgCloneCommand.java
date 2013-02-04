@@ -18,6 +18,8 @@ package org.tmatesoft.hg.core;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
 import static org.tmatesoft.hg.internal.RequiresFile.*;
+import static org.tmatesoft.hg.internal.RevlogStreamWriter.preferCompleteOverPatch;
+import static org.tmatesoft.hg.internal.RevlogStreamWriter.preferCompressedOverComplete;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -29,6 +31,8 @@ import java.util.TreeMap;
 
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.internal.DataSerializer;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.RepoInitializer;
@@ -139,6 +143,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		private final PathRewrite storagePathHelper;
 		private final ProgressSupport progressSupport;
 		private final CancelSupport cancelSupport;
+		private final SessionContext ctx;
 		private FileOutputStream indexFile;
 		private String filename; // human-readable name of the file being written, for log/exception purposes 
 
@@ -155,13 +160,18 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		private Lifecycle.Callback lifecycleCallback;
 		private CancelledException cancelException;
 
-		public WriteDownMate(SessionContext ctx, File destDir, ProgressSupport progress, CancelSupport cancel) {
+		private RevlogStreamWriter.HeaderWriter revlogHeader = new RevlogStreamWriter.HeaderWriter(true);
+		private RevlogCompressor revlogDataZip;
+
+		public WriteDownMate(SessionContext sessionCtx, File destDir, ProgressSupport progress, CancelSupport cancel) {
+			ctx = sessionCtx;
 			hgDir = new File(destDir, ".hg");
 			repoInit = new RepoInitializer();
 			repoInit.setRequires(STORE | FNCACHE | DOTENCODE);
-			storagePathHelper = repoInit.buildDataFilesHelper(ctx);
+			storagePathHelper = repoInit.buildDataFilesHelper(sessionCtx);
 			progressSupport = progress;
 			cancelSupport = cancel;
+			revlogDataZip = new RevlogCompressor(sessionCtx);
 		}
 
 		public void initEmptyRepository() throws IOException {
@@ -278,9 +288,6 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			throw new HgInvalidControlFileException(m, null, new File(hgDir, filename)).setRevision(p);
 		}
 		
-		private RevlogStreamWriter.HeaderWriter revlogHeader = new RevlogStreamWriter.HeaderWriter(true);
-		private RevlogCompressor revlogDataZip = new RevlogCompressor();
-
 		public boolean element(GroupElement ge) {
 			try {
 				assert indexFile != null;
@@ -332,7 +339,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				byte[] patchContent = ge.rawDataByteArray();
 				// no reason to keep patch if it's close (here, >75%) in size to the complete contents,
 				// save patching effort in this case
-				writeComplete = writeComplete || patchContent.length >= (/* 3/4 of actual */content.length - (content.length >>> 2));
+				writeComplete = writeComplete || preferCompleteOverPatch(patchContent.length, content.length);
 
 				if (writeComplete) {
 					revlogHeader.baseRevision(revisionSequence.size());
@@ -340,29 +347,37 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				assert revlogHeader.baseRevision() >= 0;
 
 				final byte[] sourceData = writeComplete ? content : patchContent;
-				revlogDataZip.reset(sourceData);
+				revlogDataZip.reset(new DataSerializer.ByteArrayDataSource(sourceData));
 				final int compressedLen;
-				final boolean useUncompressedData = revlogDataZip.getCompressedLengthEstimate() >= (sourceData.length - (sourceData.length >>> 2));
+				final boolean useUncompressedData = preferCompressedOverComplete(revlogDataZip.getCompressedLength(), sourceData.length);
 				if (useUncompressedData) {
 					// compression wasn't too effective,
 					compressedLen = sourceData.length + 1 /*1 byte for 'u' - uncompressed prefix byte*/;
 				} else {
-					compressedLen= revlogDataZip.getCompressedLengthEstimate();
+					compressedLen= revlogDataZip.getCompressedLength();
 				}
 		
 				revlogHeader.length(content.length, compressedLen);
 				
-				revlogHeader.write(indexFile);
+				// XXX may be wise not to create DataSerializer for each revision, but for a file
+				DataAccessProvider.StreamDataSerializer sds = new DataAccessProvider.StreamDataSerializer(ctx.getLog(), indexFile) {
+					@Override
+					public void done() {
+						// override parent behavior not to close stream in use
+					}
+				};
+				revlogHeader.serialize(sds);
 
 				if (useUncompressedData) {
 					indexFile.write((byte) 'u');
 					indexFile.write(sourceData);
 				} else {
-					int actualCompressedLenWritten = revlogDataZip.writeCompressedData(indexFile);
+					int actualCompressedLenWritten = revlogDataZip.writeCompressedData(sds);
 					if (actualCompressedLenWritten != compressedLen) {
 						throw new HgInvalidStateException(String.format("Expected %d bytes of compressed data, but actually wrote %d in %s", compressedLen, actualCompressedLenWritten, filename));
 					}
 				}
+				sds.done();
 				//
 				revisionSequence.add(node);
 				prevRevContent.done();

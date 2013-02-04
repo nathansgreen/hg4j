@@ -154,7 +154,29 @@ public final class Patch {
 		ends.add(e);
 		data.add(src);
 	}
-
+	
+	/**
+	 * @return how many bytes the patch would take if written down using BundleFormat structure (start, end, length, data)
+	 */
+	public int serializedLength() {
+		int totalDataLen = 0;
+		for (byte[] d : data) {
+			totalDataLen += d.length;
+		}
+		int prefix = 3 * 4 * count(); // 3 integer fields per entry * sizeof(int) * number of entries
+		return prefix + totalDataLen;
+	}
+	
+	/*package-local*/ void serialize(DataSerializer out) throws IOException {
+		for (int i = 0, x = data.size(); i < x; i++) {
+			final int start = starts.get(i);
+			final int end = ends.get(i);
+			byte[] d = data.get(i);
+			out.writeInt(start, end, d.length);
+			out.write(d, 0, d.length);
+		}
+	}
+	
 	private void add(Patch p, int i) {
 		add(p.starts.get(i), p.ends.get(i), p.data.get(i));
 	}
@@ -362,5 +384,16 @@ L1:			while (p1 < p1Max) {
 			p1++;
 		};
 		return r;
+	}
+
+	public class PatchDataSource implements DataSerializer.DataSource {
+
+		public void serialize(DataSerializer out) throws IOException {
+			Patch.this.serialize(out);
+		}
+
+		public int serializeLength() {
+			return Patch.this.serializedLength();
+		}
 	}
 }

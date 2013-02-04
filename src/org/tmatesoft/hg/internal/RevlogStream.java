@@ -67,13 +67,21 @@ public class RevlogStream {
 	}
 
 	/*package*/ DataAccess getIndexStream() {
-		// TODO post 1.0 may supply a hint that I'll need really few bytes of data (perhaps, at some offset) 
+		// FIXME post 1.0 must supply a hint that I'll need really few bytes of data (perhaps, at some offset) 
 		// to avoid mmap files when only few bytes are to be read (i.e. #dataLength())
-		return dataAccess.create(indexFile);
+		return dataAccess.createReader(indexFile);
 	}
 
 	/*package*/ DataAccess getDataStream() {
-		return dataAccess.create(getDataFile());
+		return dataAccess.createReader(getDataFile());
+	}
+	
+	/*package*/ DataSerializer getIndexStreamWriter() {
+		return dataAccess.createWriter(indexFile, true);
+	}
+	
+	/*package*/ DataSerializer getDataStreamWriter() {
+		return dataAccess.createWriter(getDataFile(), true);
 	}
 	
 	/**
@@ -99,7 +107,21 @@ public class RevlogStream {
 		// although honest approach is to call #initOutline() first
 		return ex.setFile(inline ? indexFile : getDataFile());
 	}
+	
+	/*package-private*/String getDataFileName() {
+		// XXX a temporary solution to provide more info to fill in exceptions other than 
+		// HgInvalidControlFileException (those benefit from initWith* methods above)
+		//
+		// Besides, since RevlogStream represents both revlogs with user data (those with WC representative and 
+		// system data under store/data) and system-only revlogs (like changelog and manifest), there's no
+		// easy way to supply human-friendly name of the active file (independent from whether it's index of data)
+		return inline ? indexFile.getPath() : getDataFile().getPath();
+	}
 
+	public boolean isInlineData() {
+		initOutline();
+		return inline;
+	}
 	
 	public int revisionCount() {
 		initOutline();
