@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,10 +17,8 @@
 package org.tmatesoft.hg.test;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.tmatesoft.hg.internal.RequiresFile.*;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -32,7 +30,6 @@ import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgIncomingCommand;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -63,7 +60,7 @@ public class TestIncoming {
 		int x = 0;
 		HgLookup lookup = new HgLookup();
 		for (HgRemoteRepository hgRemote : Configuration.get().allRemote()) {
-			File dest = initEmptyTempRepo("test-incoming-" + x++);
+			File dest = RepoUtils.initEmptyTempRepo("test-incoming-" + x++);
 			HgRepository localRepo = lookup.detect(dest);
 			// Idea:
 			// hg in, hg4j in, compare
@@ -121,22 +118,5 @@ public class TestIncoming {
 			errorCollector.checkThat(what + " Missing " +  nid.shortNotation() + " in HgIncomingCommand.execLite result", removed, equalTo(true));
 		}
 		errorCollector.checkThat(what + " Superfluous cset reported by HgIncomingCommand.execLite", set.isEmpty(), equalTo(true));
-	}
-	
-	static File createEmptyDir(String dirName) throws IOException {
-		File dest = new File(Configuration.get().getTempDir(), dirName);
-		if (dest.exists()) {
-			TestClone.rmdir(dest);
-		}
-		dest.mkdirs();
-		return dest;
-	}
-
-	static File initEmptyTempRepo(String dirName) throws IOException {
-		File dest = createEmptyDir(dirName);
-		RepoInitializer ri = new RepoInitializer();
-		ri.setRequires(STORE | FNCACHE | DOTENCODE);
-		ri.initEmptyRepository(new File(dest, ".hg"));
-		return dest;
 	}
 }

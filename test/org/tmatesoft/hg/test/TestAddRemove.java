@@ -47,7 +47,7 @@ public class TestAddRemove {
 	
 	@Test
 	public void testScheduleAddition() throws Exception {
-		File testRepoLoc = TestRevert.cloneRepoToTempLocation("log-1", "test-addremove-1", false);
+		File testRepoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-addremove-1", false);
 		repo = new HgLookup().detect(testRepoLoc);
 		
 		StatusOutputParser statusParser = new StatusOutputParser();
@@ -72,7 +72,7 @@ public class TestAddRemove {
 	
 	@Test
 	public void testScheduleRemoval() throws Exception {
-		File testRepoLoc = TestRevert.cloneRepoToTempLocation("log-1", "test-addremove-2", false);
+		File testRepoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-addremove-2", false);
 		repo = new HgLookup().detect(testRepoLoc);
 
 		StatusOutputParser statusParser = new StatusOutputParser();

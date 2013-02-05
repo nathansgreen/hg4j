@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.tmatesoft.hg.test.RepoUtils.cloneRepoToTempLocation;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -47,7 +48,7 @@ public class TestCheckout {
 
 	@Test
 	public void testCleanCheckoutInEmptyDir() throws Exception {
-		File testRepoLoc = TestRevert.cloneRepoToTempLocation(Configuration.get().find("log-1"), "test-checkoutClean", true);
+		File testRepoLoc = cloneRepoToTempLocation("log-1", "test-checkoutClean", true);
 		repo = new HgLookup().detect(testRepoLoc);
 		// nothing but .hg dir
 		assertEquals("[sanity]", 0, testRepoLoc.listFiles(new FilesOnlyFilter()).length);
@@ -83,7 +84,7 @@ public class TestCheckout {
 
 	@Test
 	public void testBranchCheckout() throws Exception {
-		File testRepoLoc = TestRevert.cloneRepoToTempLocation(Configuration.get().find("log-branches"), "test-checkoutBranch", true);
+		File testRepoLoc = cloneRepoToTempLocation("log-branches", "test-checkoutBranch", true);
 		repo = new HgLookup().detect(testRepoLoc);
 		
 		new HgCheckoutCommand(repo).changeset(3 /*branch test*/).execute();

@@ -17,12 +17,8 @@
 package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -52,11 +48,11 @@ public class TestRevert {
 	@Test
 	public void testCommand() throws Exception {
 		// get a copy of a repository
-		File testRepoLoc = cloneRepoToTempLocation(Configuration.get().find("log-1"), "test-revert", false);
+		File testRepoLoc = RepoUtils.cloneRepoToTempLocation(Configuration.get().find("log-1"), "test-revert", false);
 		
 		repo = new HgLookup().detect(testRepoLoc);
 		Path targetFile = Path.create("b");
-		modifyFileAppend(new File(testRepoLoc, targetFile.toString()));
+		RepoUtils.modifyFileAppend(new File(testRepoLoc, targetFile.toString()));
 		
 		StatusOutputParser statusParser = new StatusOutputParser();
 		eh = new ExecHelper(statusParser, testRepoLoc);
@@ -74,31 +70,5 @@ public class TestRevert {
 		errorCollector.assertTrue(statusParser.getClean().contains(targetFile));
 		errorCollector.assertEquals(1, statusParser.getUnknown().size());
 		errorCollector.assertEquals(targetFile.toString() + ".orig", statusParser.getUnknown().get(0).toString());
-	}
-
-	private static void modifyFileAppend(File f) throws IOException {
-		assertTrue(f.isFile());
-		FileOutputStream fos = new FileOutputStream(f, true);
-		fos.write("XXX".getBytes());
-		fos.close();
-	}
-	
-	static File cloneRepoToTempLocation(String configRepoName, String name, boolean noupdate) throws Exception, InterruptedException {
-		return cloneRepoToTempLocation(Configuration.get().find(configRepoName), name, noupdate);
-	}
-
-	static File cloneRepoToTempLocation(HgRepository repo, String name, boolean noupdate) throws IOException, InterruptedException {
-		File testRepoLoc = TestIncoming.createEmptyDir(name);
-		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), testRepoLoc.getParentFile());
-		ArrayList<String> cmd = new ArrayList<String>();
-		cmd.add("hg"); cmd.add("clone");
-		if (noupdate) {
-			cmd.add("--noupdate");
-		}
-		cmd.add(repo.getWorkingDir().toString());
-		cmd.add(testRepoLoc.getName());
-		eh.run(cmd.toArray(new String[cmd.size()]));
-		assertEquals("[sanity]", 0, eh.getExitValue());
-		return testRepoLoc;
 	}
 }

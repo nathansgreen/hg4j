@@ -55,7 +55,7 @@ public class TestOutgoing {
 		int x = 0;
 		HgLookup lookup = new HgLookup();
 		for (HgRemoteRepository hgRemote : Configuration.get().allRemote()) {
-			File dest = TestIncoming.createEmptyDir("test-outgoing-" + x++);
+			File dest = RepoUtils.createEmptyDir("test-outgoing-" + x++);
 			ExecHelper eh0 = new ExecHelper(new OutputParser.Stub(false), null);
 			eh0.run("hg", "clone", hgRemote.getLocation(), dest.toString());
 			eh0.cwd(dest);

@@ -96,7 +96,7 @@ public class TestByteChannel {
 
 	@Test
 	public void testWorkingCopyFileAccess() throws Exception {
-		final File repoDir = TestIncoming.initEmptyTempRepo("testWorkingCopyFileAccess");
+		final File repoDir = RepoUtils.initEmptyTempRepo("testWorkingCopyFileAccess");
 		final Map<String, ?> props = Collections.singletonMap(Internals.CFG_PROPERTY_REVLOG_STREAM_CACHE, false);
 		repo = new HgLookup(new BasicSessionContext(props, null)).detect(repoDir);
 		File f1 = new File(repoDir, "file1");

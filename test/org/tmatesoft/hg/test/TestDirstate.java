@@ -55,7 +55,7 @@ public class TestDirstate {
 	@Test
 	public void testParentsEmptyRepo() throws Exception {
 		// check contract return values for empty/nonexistent dirstate
-		repo = new HgLookup().detect(TestIncoming.initEmptyTempRepo("testParentsEmptyRepo"));
+		repo = new HgLookup().detect(RepoUtils.initEmptyTempRepo("testParentsEmptyRepo"));
 		final Pair<Nodeid, Nodeid> wcParents = repo.getWorkingCopyParents();
 		Assert.assertTrue(wcParents.first().isNull());
 		Assert.assertTrue(wcParents.second().isNull());
