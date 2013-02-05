@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -198,7 +198,7 @@ public class HgWorkingCopyStatusCollector {
 			// as long as no nodeids can be provided for WC, seems reasonable to report
 			// latest known nodeid change (although at the moment this is not used and
 			// is done mostly not to leave stale initialization in the Record)
-			int rev1,rev2 = getDirstateParentManifest().changesetLocalRev();
+			int rev1,rev2 = getDirstateParentManifest().changesetRevisionIndex();
 			if (baseRevision == TIP || baseRevision == WORKING_COPY) {
 				rev1 = rev2 - 1; // just use revision prior to dirstate's parent
 			} else {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@ import org.tmatesoft.hg.util.Path;
 
 /**
  * Specific revision of the manifest. 
- * Note, suited to keep single revision only ({@link #changeset()}).
+ * Note, suited to keep single revision only ({@link #revision()}), which is linked to changeset {@link #changesetRevisionIndex()}.
  *
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -36,8 +36,8 @@ public final class ManifestRevision implements HgManifest.Inspector {
 	private final TreeMap<Path, HgManifest.Flags> flagsMap;
 	private final Convertor<Nodeid> idsPool;
 	private final Convertor<Path> namesPool;
-	private Nodeid changeset;
-	private int changelogRev; 
+	private Nodeid manifestRev;
+	private int changelogRevIndex, manifestRevIndex;
 
 	// optional pools for effective management of nodeids and filenames (they are likely
 	// to be duplicated among different manifest revisions
@@ -62,14 +62,21 @@ public final class ManifestRevision implements HgManifest.Inspector {
 	}
 
 	/**
-	 * @return identifier of the changeset this manifest revision corresponds to.
+	 * @return identifier of this manifest revision
 	 */
-	public Nodeid changeset() {
-		return changeset;
+	public Nodeid revision() {
+		return manifestRev;
 	}
 	
-	public int changesetLocalRev() {
-		return changelogRev;
+	public int revisionIndex() {
+		return manifestRevIndex;
+	}
+	
+	/**
+	 * @return revision index for the changelog this manifest revision is linked to
+	 */
+	public int changesetRevisionIndex() {
+		return changelogRevIndex;
 	}
 	
 	//
@@ -100,13 +107,14 @@ public final class ManifestRevision implements HgManifest.Inspector {
 		return false; 
 	}
 
-	public boolean begin(int revision, Nodeid nid, int changelogRevision) {
-		if (changeset != null) {
+	public boolean begin(int revisionIndex, Nodeid revision, int changelogRevisionIndex) {
+		if (manifestRev != null) {
 			idsMap.clear();
 			flagsMap.clear();
 		}
-		changeset = nid;
-		changelogRev = changelogRevision;
+		manifestRev = revision;
+		manifestRevIndex = revisionIndex;
+		changelogRevIndex = changelogRevisionIndex;
 		return true;
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -354,15 +354,35 @@ public final class HgManifest extends Revlog {
 
 	@Callback
 	public interface Inspector {
-		boolean begin(int mainfestRevision, Nodeid nid, int changelogRevision);
 		/**
+		 * Denotes entering specific manifest revision, separate entries are
+		 * reported with subsequence {@link #next(Nodeid, Path, Flags)} calls.
+		 * 
+		 * @param mainfestRevisionIndex  local revision index of the inspected revision
+		 * @param manifestRevision revision of the manifest we're about to iterate through
+		 * @param changelogRevisionIndex local revision index of changelog this manifest points to 
+		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
+		 */
+		boolean begin(int mainfestRevisionIndex, Nodeid manifestRevision, int changelogRevisionIndex);
+
+		
+		/**
+		 * Reports each manifest entry
+		 *  
 		 * @param nid file revision
 		 * @param fname file name
 		 * @param flags one of {@link HgManifest.Flags} constants, not <code>null</code>
 		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
 		 */
 		boolean next(Nodeid nid, Path fname, Flags flags);
-		boolean end(int manifestRevision);
+
+		/**
+		 * Denotes leaving specific manifest revision, after all entries were reported using {@link #next(Nodeid, Path, Flags)}
+		 *   
+		 * @param manifestRevisionIndex indicates manifest revision, corresponds to opening {@link #begin(int, Nodeid, int)}
+		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
+		 */
+		boolean end(int manifestRevisionIndex);
 	}
 	
 	/**
