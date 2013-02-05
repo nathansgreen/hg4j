@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -166,7 +166,7 @@ public final class Nodeid implements Comparable<Nodeid> {
 	 * @return object representation
 	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass when argument doesn't match encoded form of 20-bytes sha1 digest. 
 	 */
-	public static Nodeid fromAscii(String asciiRepresentation) {
+	public static Nodeid fromAscii(String asciiRepresentation) throws HgBadNodeidFormatException {
 		if (asciiRepresentation.length() != 40) {
 			throw new HgBadNodeidFormatException(String.format("Bad value: %s", asciiRepresentation));
 		}
@@ -178,9 +178,9 @@ public final class Nodeid implements Comparable<Nodeid> {
 	 * Parse encoded representation. Similar to {@link #fromAscii(String)}.
 	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass when bytes are not hex digits or number of bytes != 40 (160 bits) 
 	 */
-	public static Nodeid fromAscii(byte[] asciiRepresentation, int offset, int length) {
+	public static Nodeid fromAscii(byte[] asciiRepresentation, int offset, int length) throws HgBadNodeidFormatException {
 		if (length != 40) {
-			throw new IllegalArgumentException();
+			throw new HgBadNodeidFormatException(String.format("Expected 40 hex characters for nodeid, not %d", length));
 		}
 		try {
 			byte[] data = new byte[20];
@@ -189,6 +189,8 @@ public final class Nodeid implements Comparable<Nodeid> {
 				return NULL;
 			}
 			return new Nodeid(data, false);
+		} catch (HgBadNodeidFormatException ex) {
+			throw ex;
 		} catch (IllegalArgumentException ex) {
 			throw new HgBadNodeidFormatException(ex.getMessage());
 		}

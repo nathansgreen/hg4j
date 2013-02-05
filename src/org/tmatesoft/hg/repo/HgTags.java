@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.BufferedReader;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.tmatesoft.hg.core.HgBadNodeidFormatException;
 import org.tmatesoft.hg.core.Nodeid;
 
 /**
@@ -108,12 +110,12 @@ public class HgTags {
 			if (line.length() == 0) {
 				continue;
 			}
-			if (line.length() < 40+2 /*nodeid, space and at least single-char tagname*/) {
+			final int spacePos = line.indexOf(' ');
+			if (line.length() < 40+2 /*nodeid, space and at least single-char tagname*/ || spacePos != 40) {
 				repo.getSessionContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line); 
 				continue;
 			}
-			int spacePos = line.indexOf(' ');
-			if (spacePos != -1) {
+			try {
 				assert spacePos == 40;
 				final byte[] nodeidBytes = line.substring(0, spacePos).getBytes();
 				Nodeid nid = Nodeid.fromAscii(nodeidBytes, 0, nodeidBytes.length);
@@ -151,9 +153,8 @@ public class HgTags {
 					// !contains because we don't care about order of the tags per revision
 					revTags.add(tagName);
 				}
-				
-			} else {
-				repo.getSessionContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line);
+			} catch (HgBadNodeidFormatException ex) {
+				repo.getSessionContext().getLog().dump(getClass(), Error, "Bad revision '%s' in line '%s':%s", line.substring(0, spacePos), line, ex.getMessage()); 
 			}
 		}
 	}
