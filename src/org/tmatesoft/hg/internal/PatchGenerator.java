@@ -25,7 +25,7 @@ import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
- * Mercurial cares about changes only up to the line level, e.g. a simple file version bump in manifest looks like (RevlogDump output):
+ * Mercurial cares about changes only up to the line level, e.g. a simple file version dump in manifest looks like (RevlogDump output):
  * 
  *   522:        233748      0        103      17438        433        522      521       -1     756073cf2321df44d3ed0585f2a5754bc8a1b2f6
  *   <PATCH>:
@@ -177,6 +177,12 @@ public class PatchGenerator {
 	}
 	
 	public static void main(String[] args) throws Exception {
+		PatchGenerator pg1 = new PatchGenerator();
+		pg1.init("hello".getBytes(), "hello\nworld".getBytes());
+		pg1.findMatchingBlocks();
+		if (Boolean.TRUE.booleanValue()) {
+			return;
+		}
 		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		HgDataFile df = repo.getFileNode("cmdline/org/tmatesoft/hg/console/Main.java");
 		ByteArrayChannel bac1, bac2;
@@ -223,6 +229,8 @@ public class PatchGenerator {
 			if (lastStart < input.length) {
 				lines.add(new ByteChain(lastStart, input.length));
 			}
+			// empty chunk to keep offset of input end
+			lines.add(new ByteChain(input.length, input.length));
 		}
 		
 		public ByteChain chunk(int index) {

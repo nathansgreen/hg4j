@@ -36,7 +36,157 @@ import org.tmatesoft.hg.repo.HgInvalidStateException;
  */
 public class RevlogStreamWriter {
 
+	private final DigestHelper dh = new DigestHelper();
+	private final RevlogCompressor revlogDataZip;
+	private int lastEntryBase, lastEntryIndex;
+	private byte[] lastEntryContent;
+	private Nodeid lastEntryRevision;
+	private IntMap<Nodeid> revisionCache = new IntMap<Nodeid>(32);
+	private RevlogStream revlogStream;
 	
+	public RevlogStreamWriter(SessionContext ctx, RevlogStream stream) {
+		assert ctx != null;
+		assert stream != null;
+				
+		revlogDataZip = new RevlogCompressor(ctx);
+		revlogStream = stream;
+	}
+	
+	/**
+	 * @return nodeid of added revision
+	 */
+	public Nodeid addRevision(byte[] content, int linkRevision, int p1, int p2) {
+		lastEntryRevision = Nodeid.NULL;
+		int revCount = revlogStream.revisionCount();
+		lastEntryIndex = revCount == 0 ? NO_REVISION : revCount - 1;
+		populateLastEntry();
+		//
+		PatchGenerator pg = new PatchGenerator();
+		Patch patch = pg.delta(lastEntryContent, content);
+		int patchSerializedLength = patch.serializedLength();
+		
+		final boolean writeComplete = preferCompleteOverPatch(patchSerializedLength, content.length);
+		DataSerializer.DataSource dataSource = writeComplete ? new DataSerializer.ByteArrayDataSource(content) : patch.new PatchDataSource();
+		revlogDataZip.reset(dataSource);
+		final int compressedLen;
+		final boolean useCompressedData = preferCompressedOverComplete(revlogDataZip.getCompressedLength(), dataSource.serializeLength());
+		if (useCompressedData) {
+			compressedLen= revlogDataZip.getCompressedLength();
+		} else {
+			// compression wasn't too effective,
+			compressedLen = dataSource.serializeLength() + 1 /*1 byte for 'u' - uncompressed prefix byte*/;
+		}
+		//
+		Nodeid p1Rev = revision(p1);
+		Nodeid p2Rev = revision(p2);
+		byte[] revisionNodeidBytes = dh.sha1(p1Rev, p2Rev, content).asBinary();
+		//
+
+		DataSerializer indexFile, dataFile, activeFile;
+		indexFile = dataFile = activeFile = null;
+		try {
+			//
+			activeFile = indexFile = revlogStream.getIndexStreamWriter();
+			final boolean isInlineData = revlogStream.isInlineData();
+			HeaderWriter revlogHeader = new HeaderWriter(isInlineData);
+			revlogHeader.length(content.length, compressedLen);
+			revlogHeader.nodeid(revisionNodeidBytes);
+			revlogHeader.linkRevision(linkRevision);
+			revlogHeader.parents(p1, p2);
+			revlogHeader.baseRevision(writeComplete ? lastEntryIndex+1 : lastEntryBase);
+			revlogHeader.offset(revlogStream.newEntryOffset());
+			//
+			revlogHeader.serialize(indexFile);
+			
+			if (isInlineData) {
+				dataFile = indexFile;
+			} else {
+				dataFile = revlogStream.getDataStreamWriter();
+			}
+			activeFile = dataFile;
+			if (useCompressedData) {
+				int actualCompressedLenWritten = revlogDataZip.writeCompressedData(dataFile);
+				if (actualCompressedLenWritten != compressedLen) {
+					throw new HgInvalidStateException(String.format("Expected %d bytes of compressed data, but actually wrote %d in %s", compressedLen, actualCompressedLenWritten, revlogStream.getDataFileName()));
+				}
+			} else {
+				dataFile.writeByte((byte) 'u');
+				dataSource.serialize(dataFile);
+			}
+			
+			lastEntryContent = content;
+			lastEntryBase = revlogHeader.baseRevision();
+			lastEntryIndex++;
+			lastEntryRevision = Nodeid.fromBinary(revisionNodeidBytes, 0);
+			revisionCache.put(lastEntryIndex, lastEntryRevision);
+		} catch (IOException ex) {
+			String m = String.format("Failed to write revision %d", lastEntryIndex+1, null);
+			HgInvalidControlFileException t = new HgInvalidControlFileException(m, ex, null);
+			if (activeFile == dataFile) {
+				throw revlogStream.initWithDataFile(t);
+			} else {
+				throw revlogStream.initWithIndexFile(t);
+			}
+		} finally {
+			indexFile.done();
+			if (dataFile != null && dataFile != indexFile) {
+				dataFile.done();
+			}
+		}
+		return lastEntryRevision;
+	}
+	
+	private Nodeid revision(int revisionIndex) {
+		if (revisionIndex == NO_REVISION) {
+			return Nodeid.NULL;
+		}
+		Nodeid n = revisionCache.get(revisionIndex);
+		if (n == null) {
+			n = Nodeid.fromBinary(revlogStream.nodeid(revisionIndex), 0);
+			revisionCache.put(revisionIndex, n);
+		}
+		return n;
+	}
+	
+	private void populateLastEntry() throws HgInvalidControlFileException {
+		if (lastEntryIndex != NO_REVISION && lastEntryContent == null) {
+			assert lastEntryIndex >= 0;
+			final IOException[] failure = new IOException[1];
+			revlogStream.iterate(lastEntryIndex, lastEntryIndex, true, new RevlogStream.Inspector() {
+				
+				public void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+					try {
+						lastEntryBase = baseRevision;
+						lastEntryRevision = Nodeid.fromBinary(nodeid, 0);
+						lastEntryContent = data.byteArray();
+					} catch (IOException ex) {
+						failure[0] = ex;
+					}
+				}
+			});
+			if (failure[0] != null) {
+				String m = String.format("Failed to get content of most recent revision %d", lastEntryIndex);
+				throw revlogStream.initWithDataFile(new HgInvalidControlFileException(m, failure[0], null));
+			}
+		}
+	}
+	
+	public static boolean preferCompleteOverPatch(int patchLength, int fullContentLength) {
+		return !decideWorthEffort(patchLength, fullContentLength);
+	}
+	
+	public static boolean preferCompressedOverComplete(int compressedLen, int fullContentLength) {
+		if (compressedLen <= 0) { // just in case, meaningless otherwise
+			return false;
+		}
+		return decideWorthEffort(compressedLen, fullContentLength);
+	}
+
+	// true if length obtained with effort is worth it 
+	private static boolean decideWorthEffort(int lengthWithExtraEffort, int lengthWithoutEffort) {
+		return lengthWithExtraEffort < (/* 3/4 of original */lengthWithoutEffort - (lengthWithoutEffort >>> 2));
+	}
+
 	/*XXX public because HgCloneCommand uses it*/
 	public static class HeaderWriter implements DataSerializer.DataSource {
 		private final ByteBuffer header;
@@ -124,148 +274,5 @@ public class RevlogStreamWriter {
 		public int serializeLength() {
 			return header.capacity();
 		}
-	}
-
-	private final DigestHelper dh = new DigestHelper();
-	private final RevlogCompressor revlogDataZip;
-	
-	
-	public RevlogStreamWriter(SessionContext ctx, RevlogStream stream) {
-		revlogDataZip = new RevlogCompressor(ctx);
-	}
-	
-	private int lastEntryBase, lastEntryIndex;
-	private byte[] lastEntryContent;
-	private Nodeid lastEntryRevision;
-	private IntMap<Nodeid> revisionCache = new IntMap<Nodeid>(32);
-	
-	public void addRevision(byte[] content, int linkRevision, int p1, int p2) {
-		int revCount = revlogStream.revisionCount();
-		lastEntryIndex = revCount == 0 ? NO_REVISION : revCount - 1;
-		populateLastEntry();
-		//
-		PatchGenerator pg = new PatchGenerator();
-		Patch patch = pg.delta(lastEntryContent, content);
-		int patchSerializedLength = patch.serializedLength();
-		
-		final boolean writeComplete = preferCompleteOverPatch(patchSerializedLength, content.length);
-		DataSerializer.DataSource dataSource = writeComplete ? new DataSerializer.ByteArrayDataSource(content) : patch.new PatchDataSource();
-		revlogDataZip.reset(dataSource);
-		final int compressedLen;
-		final boolean useUncompressedData = preferCompressedOverComplete(revlogDataZip.getCompressedLength(), dataSource.serializeLength());
-		if (useUncompressedData) {
-			// compression wasn't too effective,
-			compressedLen = dataSource.serializeLength() + 1 /*1 byte for 'u' - uncompressed prefix byte*/;
-		} else {
-			compressedLen= revlogDataZip.getCompressedLength();
-		}
-		//
-		Nodeid p1Rev = revision(p1);
-		Nodeid p2Rev = revision(p2);
-		byte[] revisionNodeidBytes = dh.sha1(p1Rev, p2Rev, content).asBinary();
-		//
-
-		DataSerializer indexFile, dataFile, activeFile;
-		indexFile = dataFile = activeFile = null;
-		try {
-			//
-			activeFile = indexFile = revlogStream.getIndexStreamWriter();
-			final boolean isInlineData = revlogStream.isInlineData();
-			HeaderWriter revlogHeader = new HeaderWriter(isInlineData);
-			revlogHeader.length(content.length, compressedLen);
-			revlogHeader.nodeid(revisionNodeidBytes);
-			revlogHeader.linkRevision(linkRevision);
-			revlogHeader.parents(p1, p2);
-			revlogHeader.baseRevision(writeComplete ? lastEntryIndex+1 : lastEntryBase);
-			//
-			revlogHeader.serialize(indexFile);
-			
-			if (isInlineData) {
-				dataFile = indexFile;
-			} else {
-				dataFile = revlogStream.getDataStreamWriter();
-			}
-			activeFile = dataFile;
-			if (useUncompressedData) {
-				dataFile.writeByte((byte) 'u');
-				dataSource.serialize(dataFile);
-			} else {
-				int actualCompressedLenWritten = revlogDataZip.writeCompressedData(dataFile);
-				if (actualCompressedLenWritten != compressedLen) {
-					throw new HgInvalidStateException(String.format("Expected %d bytes of compressed data, but actually wrote %d in %s", compressedLen, actualCompressedLenWritten, revlogStream.getDataFileName()));
-				}
-			}
-			
-			lastEntryContent = content;
-			lastEntryBase = revlogHeader.baseRevision();
-			lastEntryIndex++;
-			lastEntryRevision = Nodeid.fromBinary(revisionNodeidBytes, 0);
-			revisionCache.put(lastEntryIndex, lastEntryRevision);
-		} catch (IOException ex) {
-			String m = String.format("Failed to write revision %d", lastEntryIndex+1, null);
-			HgInvalidControlFileException t = new HgInvalidControlFileException(m, ex, null);
-			if (activeFile == dataFile) {
-				throw revlogStream.initWithDataFile(t);
-			} else {
-				throw revlogStream.initWithIndexFile(t);
-			}
-		} finally {
-			indexFile.done();
-			if (dataFile != null && dataFile != indexFile) {
-				dataFile.done();
-			}
-		}
-	}
-	
-	private RevlogStream revlogStream;
-	private Nodeid revision(int revisionIndex) {
-		if (revisionIndex == NO_REVISION) {
-			return Nodeid.NULL;
-		}
-		Nodeid n = revisionCache.get(revisionIndex);
-		if (n == null) {
-			n = Nodeid.fromBinary(revlogStream.nodeid(revisionIndex), 0);
-			revisionCache.put(revisionIndex, n);
-		}
-		return n;
-	}
-	
-	private void populateLastEntry() throws HgInvalidControlFileException {
-		if (lastEntryIndex != NO_REVISION && lastEntryContent == null) {
-			assert lastEntryIndex >= 0;
-			final IOException[] failure = new IOException[1];
-			revlogStream.iterate(lastEntryIndex, lastEntryIndex, true, new RevlogStream.Inspector() {
-				
-				public void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
-					try {
-						lastEntryBase = baseRevision;
-						lastEntryRevision = Nodeid.fromBinary(nodeid, 0);
-						lastEntryContent = data.byteArray();
-					} catch (IOException ex) {
-						failure[0] = ex;
-					}
-				}
-			});
-			if (failure[0] != null) {
-				String m = String.format("Failed to get content of most recent revision %d", lastEntryIndex);
-				throw revlogStream.initWithDataFile(new HgInvalidControlFileException(m, failure[0], null));
-			}
-		}
-	}
-	
-	public static boolean preferCompleteOverPatch(int patchLength, int fullContentLength) {
-		return !decideWorthEffort(patchLength, fullContentLength);
-	}
-	
-	public static boolean preferCompressedOverComplete(int compressedLen, int fullContentLength) {
-		if (compressedLen <= 0) { // just in case, meaningless otherwise
-			return false;
-		}
-		return decideWorthEffort(compressedLen, fullContentLength);
-	}
-
-	// true if length obtained with effort is worth it 
-	private static boolean decideWorthEffort(int lengthWithExtraEffort, int lengthWithoutEffort) {
-		return lengthWithExtraEffort < (/* 3/4 of original */lengthWithoutEffort - (lengthWithoutEffort >>> 2));
 	}
 }

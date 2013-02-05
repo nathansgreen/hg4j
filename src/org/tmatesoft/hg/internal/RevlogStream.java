@@ -223,6 +223,27 @@ public class RevlogStream {
 		}
 		return BAD_REVISION;
 	}
+	
+	public long newEntryOffset() {
+		if (revisionCount() == 0) {
+			return 0;
+		}
+		DataAccess daIndex = getIndexStream();
+		int lastRev = revisionCount() - 1;
+		try {
+			int recordOffset = getIndexOffsetInt(lastRev);
+			daIndex.seek(recordOffset);
+			long value = daIndex.readLong();
+			value = value >>> 16;
+			int compressedLen = daIndex.readInt();
+			return lastRev == 0 ? compressedLen : value + compressedLen;
+		} catch (IOException ex) {
+			throw new HgInvalidControlFileException("Linked revision lookup failed", ex, indexFile).setRevisionIndex(lastRev);
+		} finally {
+			daIndex.done();
+		}
+	}
+
 
 
 	// should be possible to use TIP, ALL, or -1, -2, -n notation of Hg

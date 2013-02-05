@@ -14,7 +14,7 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.tools;
+package org.tmatesoft.hg.internal;
 
 import java.io.ByteArrayOutputStream;
 

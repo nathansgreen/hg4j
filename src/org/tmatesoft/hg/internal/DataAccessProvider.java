@@ -105,7 +105,7 @@ public class DataAccessProvider {
 			return new DataSerializer();
 		}
 		try {
-			return new StreamDataSerializer(context.getLog(), new FileOutputStream(f));
+			return new StreamDataSerializer(context.getLog(), new FileOutputStream(f, true));
 		} catch (final FileNotFoundException ex) {
 			context.getLog().dump(getClass(), Error, ex, null);
 			return new DataSerializer() {

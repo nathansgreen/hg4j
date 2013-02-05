@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+
 import java.util.Collection;
 import java.util.TreeMap;
 
@@ -36,8 +38,8 @@ public final class ManifestRevision implements HgManifest.Inspector {
 	private final TreeMap<Path, HgManifest.Flags> flagsMap;
 	private final Convertor<Nodeid> idsPool;
 	private final Convertor<Path> namesPool;
-	private Nodeid manifestRev;
-	private int changelogRevIndex, manifestRevIndex;
+	private Nodeid manifestRev = Nodeid.NULL;
+	private int changelogRevIndex = NO_REVISION, manifestRevIndex = NO_REVISION;
 
 	// optional pools for effective management of nodeids and filenames (they are likely
 	// to be duplicated among different manifest revisions

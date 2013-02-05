@@ -14,9 +14,10 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.tools;
+package org.tmatesoft.hg.internal;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -26,6 +27,7 @@ import java.util.TimeZone;
 import java.util.Map.Entry;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.util.Path;
 
 /**
  *
@@ -35,7 +37,7 @@ import org.tmatesoft.hg.core.Nodeid;
 public class ChangelogEntryBuilder {
 
 	private String user;
-	private List<String> modifiedFiles;
+	private List<Path> modifiedFiles;
 	private final Map<String, String> extrasMap = new LinkedHashMap<String, String>();
 	private Integer tzOffset;
 	private Long csetTime;
@@ -53,12 +55,12 @@ public class ChangelogEntryBuilder {
 		return user;
 	}
 	
-	public ChangelogEntryBuilder setModified(List<String> files) {
-		modifiedFiles = new ArrayList<String>(files == null ? Collections.<String>emptyList() : files);
+	public ChangelogEntryBuilder setModified(Collection<Path> files) {
+		modifiedFiles = new ArrayList<Path>(files == null ? Collections.<Path>emptyList() : files);
 		return this;
 	}
 
-	public ChangelogEntryBuilder addModified(List<String> files) {
+	public ChangelogEntryBuilder addModified(Collection<Path> files) {
 		if (modifiedFiles == null) {
 			return setModified(files);
 		}
@@ -115,7 +117,7 @@ public class ChangelogEntryBuilder {
 		}
 		StringBuilder files = new StringBuilder();
 		if (modifiedFiles != null) {
-			for (Iterator<String> it = modifiedFiles.iterator(); it.hasNext(); ) {
+			for (Iterator<Path> it = modifiedFiles.iterator(); it.hasNext(); ) {
 				files.append(it.next());
 				if (it.hasNext()) {
 					files.append('\n');

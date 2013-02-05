@@ -392,7 +392,7 @@ abstract class Revlog {
 		pw.init();
 		return pw;
 	}
-
+	
 	/*
 	 * class with cancel and few other exceptions support. TODO consider general superclass to share with e.g. HgManifestCommand.Mediator
 	 */
