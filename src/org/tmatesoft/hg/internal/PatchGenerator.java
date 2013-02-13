@@ -47,8 +47,8 @@ public class PatchGenerator {
 
 	// get filled by #longestMatch, track start of common sequence in seq1 and seq2, respectively
 	private int matchStartS1, matchStartS2;
-	// get filled by #findMatchingBlocks, track start of changed/unknown sequence in seq1 and seq2
-	private int changeStartS1, changeStartS2;
+
+	private MatchInspector matchInspector; 
 
 	public void init(byte[] data1, byte[] data2) {
 		seq1 = new ChunkSequence(data1);
@@ -81,12 +81,11 @@ public class PatchGenerator {
 //		}
 	}
 	
-	public void findMatchingBlocks() {
-		changeStartS1 = changeStartS2 = 0;
+	public void findMatchingBlocks(MatchInspector insp) {
+		insp.begin(seq1, seq2);
+		matchInspector = insp;
 		findMatchingBlocks(0, seq1.chunkCount(), 0, seq2.chunkCount());
-		if (changeStartS1 < seq1.chunkCount() || changeStartS2 < seq2.chunkCount()) {
-			reportDeltaElement(seq1.chunkCount(), seq2.chunkCount());
-		}
+		insp.end();
 	}
 	
 	/**
@@ -127,60 +126,113 @@ public class PatchGenerator {
 		return maxLength;
 	}
 	
-	public void findMatchingBlocks(int startS1, int endS1, int startS2, int endS2) {
+	private void findMatchingBlocks(int startS1, int endS1, int startS2, int endS2) {
 		int matchLength = longestMatch(startS1, endS1, startS2, endS2);
 		if (matchLength > 0) {
 			final int saveStartS1 = matchStartS1, saveStartS2 = matchStartS2;
 			if (startS1 < matchStartS1 && startS2 < matchStartS2) {
 				findMatchingBlocks(startS1, matchStartS1, startS2, matchStartS2);
 			}
-			reportDeltaElement(saveStartS1, saveStartS2);
-			changeStartS1 = saveStartS1 + matchLength;
-			changeStartS2 = saveStartS2 + matchLength;
-//			System.out.printf("match: from line #%d  and line #%d of length %d\n", saveStartS1, saveStartS2, matchLength);
+			matchInspector.match(saveStartS1, saveStartS2, matchLength);
 			if (saveStartS1+matchLength < endS1 && saveStartS2+matchLength < endS2) {
 				findMatchingBlocks(saveStartS1 + matchLength, endS1, saveStartS2 + matchLength, endS2);
 			}
 		}
 	}
 	
-	private Patch deltaCollector;
+	interface MatchInspector {
+		void begin(ChunkSequence s1, ChunkSequence s2);
+		void match(int startSeq1, int startSeq2, int matchLength);
+		void end();
+	}
 	
-	private void reportDeltaElement(int i, int j) {
-		if (changeStartS1 < i) {
-			if (changeStartS2 < j) {
-				System.out.printf("changed [%d..%d) with [%d..%d)\n", changeStartS1, i, changeStartS2, j);
-			} else {
-				assert changeStartS2 == j;
-				System.out.printf("deleted [%d..%d)\n", changeStartS1, i);
+	static class MatchDumpInspector implements MatchInspector {
+		public void begin(ChunkSequence s1, ChunkSequence s2) {
+		}
+
+		public void match(int startSeq1, int startSeq2, int matchLength) {
+			System.out.printf("match: from line #%d  and line #%d of length %d\n", startSeq1, startSeq2, matchLength);
+		}
+
+		public void end() {
+		}
+	}
+	
+	static class DeltaDumpInspector implements MatchInspector {
+		protected int changeStartS1, changeStartS2;
+		protected ChunkSequence seq1, seq2;
+		
+
+		public void begin(ChunkSequence s1, ChunkSequence s2) {
+			seq1 = s1;
+			seq2 = s2;
+			changeStartS1 = changeStartS2 = 0;
+		}
+
+		public void match(int startSeq1, int startSeq2, int matchLength) {
+			reportDeltaElement(startSeq1, startSeq2);
+			changeStartS1 = startSeq1 + matchLength;
+			changeStartS2 = startSeq2 + matchLength;
+		}
+
+		public void end() {
+			if (changeStartS1 < seq1.chunkCount() || changeStartS2 < seq2.chunkCount()) {
+				reportDeltaElement(seq1.chunkCount(), seq2.chunkCount());
 			}
-			if (deltaCollector != null) {
+		}
+
+		protected void reportDeltaElement(int matchStartSeq1, int matchStartSeq2) {
+			if (changeStartS1 < matchStartSeq1) {
+				if (changeStartS2 < matchStartSeq2) {
+					System.out.printf("changed [%d..%d) with [%d..%d)\n", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
+				} else {
+					assert changeStartS2 == matchStartSeq2;
+					System.out.printf("deleted [%d..%d)\n", changeStartS1, matchStartSeq1);
+				}
+			} else {
+				assert changeStartS1 == matchStartSeq1;
+				if(changeStartS2 < matchStartSeq2) {
+					System.out.printf("added [%d..%d)\n", changeStartS2, matchStartSeq2);
+				} else {
+					assert changeStartS2 == matchStartSeq2;
+					System.out.printf("adjustent equal blocks %d, %d and %d,%d\n", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
+				}
+			}
+		}
+	}
+	
+	static class PatchFillInspector extends DeltaDumpInspector {
+		private final Patch deltaCollector;
+		
+		PatchFillInspector(Patch p) {
+			assert p != null;
+			deltaCollector = p;
+		}
+		
+		@Override
+		protected void reportDeltaElement(int matchStartSeq1, int matchStartSeq2) {
+			if (changeStartS1 < matchStartSeq1) {
 				int from = seq1.chunk(changeStartS1).getOffset();
-				int to = seq1.chunk(i).getOffset();
-				byte[] data = seq2.data(changeStartS2, j);
+				int to = seq1.chunk(matchStartSeq1).getOffset();
+				byte[] data = seq2.data(changeStartS2, matchStartSeq2);
 				deltaCollector.add(from, to, data);
-			}
-		} else {
-			assert changeStartS1 == i;
-			if(changeStartS2 < j) {
-				System.out.printf("added [%d..%d)\n", changeStartS2, j);
 			} else {
-				assert changeStartS2 == j;
-				System.out.printf("adjustent equal blocks %d, %d and %d,%d\n", changeStartS1, i, changeStartS2, j);
-			}
-			if (deltaCollector != null) {
+				assert changeStartS1 == matchStartSeq1;
 				int insPoint = seq1.chunk(changeStartS1).getOffset();
-				byte[] data = seq2.data(changeStartS2, j);
+				byte[] data = seq2.data(changeStartS2, matchStartSeq2);
 				deltaCollector.add(insPoint, insPoint, data);
 			}
 		}
 	}
 	
+	
+	
 	public static void main(String[] args) throws Exception {
 		PatchGenerator pg1 = new PatchGenerator();
 		pg1.init("hello".getBytes(), "hello\nworld".getBytes());
-		pg1.findMatchingBlocks();
-		if (Boolean.TRUE.booleanValue()) {
+		pg1.findMatchingBlocks(new MatchDumpInspector());
+		pg1.findMatchingBlocks(new DeltaDumpInspector());
+		if (Boolean.FALSE.booleanValue()) {
 			return;
 		}
 		HgRepository repo = new HgLookup().detectFromWorkingDir();
@@ -192,14 +244,17 @@ public class PatchGenerator {
 //		String s2 = "abc\ncdef\r\nline 2\r\nline 3\nline 2";
 		PatchGenerator pg = new PatchGenerator();
 		pg.init(bac1.toArray(), bac2.toArray());
-		pg.findMatchingBlocks();
+		System.out.println("Matches:");
+		pg.findMatchingBlocks(new MatchDumpInspector());
+		System.out.println("Deltas:");
+		pg.findMatchingBlocks(new DeltaDumpInspector());
 	}
 	
 	public Patch delta(byte[] prev, byte[] content) {
-		deltaCollector = new Patch();
+		Patch rv = new Patch();
 		init(prev, content);
-		findMatchingBlocks();
-		return deltaCollector;
+		findMatchingBlocks(new PatchFillInspector(rv));
+		return rv;
 	}
 	
 	private static class ChunkSequence {
