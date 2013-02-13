@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,12 @@ import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.Charset;
 import java.util.Collection;
 
 import org.tmatesoft.hg.repo.HgInvalidFileException;
@@ -52,13 +56,19 @@ public final class LineReader {
 
 		private final File file;
 		private final LogFacility log;
+		private final Charset encoding;
 		private boolean trimLines = true;
 		private boolean skipEmpty = true;
 		private String ignoreThatStarts = null;
 
 		public LineReader(File f, LogFacility logFacility) {
+			this(f, logFacility, null);
+		}
+
+		public LineReader(File f, LogFacility logFacility, Charset lineEncoding) {
 			file = f;
 			log = logFacility;
+			encoding = lineEncoding;
 		}
 		
 		/**
@@ -92,7 +102,13 @@ public final class LineReader {
 			BufferedReader statusFileReader = null;
 			try {
 //				consumer.begin(file, paramObj);
-				statusFileReader = new BufferedReader(new FileReader(file));
+				Reader fileReader;
+				if (encoding == null) {
+					fileReader = new FileReader(file);
+				} else {
+					fileReader = new InputStreamReader(new FileInputStream(file));
+				}
+				statusFileReader = new BufferedReader(fileReader);
 				String line;
 				boolean ok = true;
 				while (ok && (line = statusFileReader.readLine()) != null) {

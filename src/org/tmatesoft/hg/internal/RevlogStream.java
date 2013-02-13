@@ -224,6 +224,10 @@ public class RevlogStream {
 		return BAD_REVISION;
 	}
 	
+	/**
+	 * @return value suitable for the corresponding field in the new revision's header, not physical offset in the file 
+	 * (which is different in case of inline revlogs)
+	 */
 	public long newEntryOffset() {
 		if (revisionCount() == 0) {
 			return 0;
@@ -324,6 +328,31 @@ public class RevlogStream {
 		}
 	}
 
+	void revisionAdded(int revisionIndex, Nodeid revision, int baseRevisionIndex, long revisionOffset) throws HgInvalidControlFileException {
+		if (!outlineCached()) {
+			return;
+		}
+		if (baseRevisions.length != revisionIndex) {
+			throw new HgInvalidControlFileException(String.format("New entry's index shall be %d, not %d", baseRevisions.length, revisionIndex), null, indexFile);
+		}
+		if (baseRevisionIndex < 0 || baseRevisionIndex > baseRevisions.length) {
+			// baseRevisionIndex MAY be == to baseRevisions.length, it's when new revision is based on itself
+			throw new HgInvalidControlFileException(String.format("Base revision index %d doesn't fit [0..%d] range", baseRevisionIndex, baseRevisions.length), null, indexFile);
+		}
+		assert revision != null;
+		assert !revision.isNull();
+		int[] baseRevisionsCopy = new int[baseRevisions.length + 1];
+		System.arraycopy(baseRevisions, 0, baseRevisionsCopy, 0, baseRevisions.length);
+		baseRevisionsCopy[baseRevisions.length] = baseRevisionIndex;
+		baseRevisions = baseRevisionsCopy;
+		if (inline && indexRecordOffset != null) {
+			assert indexRecordOffset.length == revisionIndex;
+			int[] indexRecordOffsetCopy = new int[indexRecordOffset.length + 1];
+			indexRecordOffsetCopy[indexRecordOffset.length] = offsetFieldToInlineFileOffset(revisionOffset, revisionIndex);
+			indexRecordOffset = indexRecordOffsetCopy;
+		}
+	}
+	
 	private int getBaseRevision(int revision) {
 		return baseRevisions[revision];
 	}
@@ -347,9 +376,25 @@ public class RevlogStream {
 		}
 		return revisionIndex;
 	}
+	
+	private boolean outlineCached() {
+		return baseRevisions != null && baseRevisions.length > 0;
+	}
+	
+	// translate 6-byte offset field value to pysical file offset for inline revlogs
+	// DOESN'T MAKE SENSE if revlog with data is separate
+	private static int offsetFieldToInlineFileOffset(long offset, int recordIndex) throws HgInvalidStateException {
+		int o = Internals.ltoi(offset);
+		if (o != offset) {
+			// just in case, can't happen, ever, unless HG (or some other bad tool) produces index file 
+			// with inlined data of size greater than 2 Gb.
+			throw new HgInvalidStateException("Data too big, offset didn't fit to sizeof(int)");
+		}
+		return o + REVLOGV1_RECORD_SIZE * recordIndex;
+	}
 
 	private void initOutline() throws HgInvalidControlFileException {
-		if (baseRevisions != null && baseRevisions.length > 0) {
+		if (outlineCached()) {
 			return;
 		}
 		DataAccess da = getIndexStream();
@@ -357,6 +402,8 @@ public class RevlogStream {
 			if (da.isEmpty()) {
 				// do not fail with exception if stream is empty, it's likely intentional
 				baseRevisions = new int[0];
+				// empty revlog, likely to be populated, indicate we start with a single file
+				inline = true;
 				return;
 			}
 			int versionField = da.readInt();
@@ -385,13 +432,8 @@ public class RevlogStream {
 //				byte[] nodeid = new byte[32];
 				resBases.add(baseRevision);
 				if (inline) {
-					int o = Internals.ltoi(offset);
-					if (o != offset) {
-						// just in case, can't happen, ever, unless HG (or some other bad tool) produces index file 
-						// with inlined data of size greater than 2 Gb.
-						throw new HgInvalidStateException("Data too big, offset didn't fit to sizeof(int)");
-					}
-					resOffsets.add(o + REVLOGV1_RECORD_SIZE * resOffsets.size());
+					int o = offsetFieldToInlineFileOffset(offset, resOffsets.size());
+					resOffsets.add(o);
 					da.skip(3*4 + 32 + compressedLen); // Check: 44 (skip) + 20 (read) = 64 (total RevlogNG record size)
 				} else {
 					da.skip(3*4 + 32);
@@ -611,4 +653,5 @@ public class RevlogStream {
 		// implementers shall not invoke DataAccess.done(), it's accomplished by #iterate at appropraite moment
 		void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data);
 	}
+
 }

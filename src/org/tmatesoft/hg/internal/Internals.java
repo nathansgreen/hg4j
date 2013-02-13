@@ -98,7 +98,6 @@ public final class Internals implements SessionContext.Source {
 	private final boolean shallCacheRevlogsInRepo;
 	private final DataAccessProvider dataAccess;
 	
-	@SuppressWarnings("unused")
 	private final int requiresFlags;
 
 	private final PathRewrite dataPathHelper; // access to file storage area (usually under .hg/store/data/), with filenames mangled  
@@ -200,8 +199,11 @@ public final class Internals implements SessionContext.Source {
 	}
 	
 	public EncodingHelper buildFileNameEncodingHelper() {
-		SessionContext ctx = repo.getSessionContext();
-		return new EncodingHelper(getFileEncoding(ctx), ctx);
+		return new EncodingHelper(getFilenameEncoding(), repo.getSessionContext());
+	}
+	
+	/*package-local*/ Charset getFilenameEncoding() {
+		return getFileEncoding(getSessionContext());
 	}
 	
 	/*package-local*/ static Charset getFileEncoding(SessionContext ctx) {
@@ -230,6 +232,9 @@ public final class Internals implements SessionContext.Source {
 		return dataPathHelper.rewrite(df.getPath().toString());
 	}
 
+	public int getRequiresFlags() {
+		return requiresFlags;
+	}
 	
 	public static boolean runningOnWindows() {
 		return System.getProperty("os.name").indexOf("Windows") != -1;

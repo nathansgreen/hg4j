@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.nio.ByteBuffer;
@@ -41,15 +43,32 @@ public class TestCommit {
 		new ExecHelper(new OutputParser.Stub(true), repoLoc).run("hg", "commit", "--addremove", "-m", "FIRST");
 		//
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
-		CommitFacility cf = new CommitFacility(hgRepo, 0 /*NO_REVISION*/);
+		CommitFacility cf = new CommitFacility(hgRepo, 0);
 		// FIXME test diff for processing changed newlines - if a whole line or just changed endings are in the patch!
 		cf.add(hgRepo.getFileNode("file1"), new ByteArraySupplier("hello\nworld".getBytes()));
-		cf.commit("commit 1");
+		cf.commit("SECOND");
 		// /tmp/test-commit2non-empty/.hg/ store/data/file1.i dumpData
 	}
 	
+	@Test
+	public void testCommitToEmpty() throws Exception {
+		File repoLoc = RepoUtils.initEmptyTempRepo("test-commit2empty");
+		FileWriter fw = new FileWriter(new File(repoLoc, "file1"));
+		fw.write("hello");
+		fw.close();
+		//
+		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		CommitFacility cf = new CommitFacility(hgRepo, NO_REVISION);
+		// FIXME test diff for processing changed newlines - if a whole line or just changed endings are in the patch!
+		cf.add(hgRepo.getFileNode("file1"), new ByteArraySupplier("hello\nworld".getBytes()));
+		cf.commit("commit 1");
+	}
+
 	public static void main(String[] args) throws Exception {
-		new TestCommit().testCommitToNonEmpty();
+		new TestCommit().testCommitToEmpty();
+		if (Boolean.TRUE.booleanValue()) {
+			return;
+		}
 		String input = "abcdefghijklmnopqrstuvwxyz";
 		ByteArraySupplier bas = new ByteArraySupplier(input.getBytes());
 		ByteBuffer bb = ByteBuffer.allocate(7);

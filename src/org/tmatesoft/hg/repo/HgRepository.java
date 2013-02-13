@@ -184,10 +184,6 @@ public final class HgRepository implements SessionContext.Source {
 	public HgChangelog getChangelog() {
 		if (changelog == null) {
 			File chlogFile = impl.getFileFromStoreDir("00changelog.i");
-			if (!chlogFile.exists()) {
-				// fake its existence
-				chlogFile = fakeNonExistentFile(chlogFile);
-			}
 			RevlogStream content = new RevlogStream(impl.getDataAccess(), chlogFile);
 			changelog = new HgChangelog(this, content);
 		}
@@ -197,9 +193,6 @@ public final class HgRepository implements SessionContext.Source {
 	public HgManifest getManifest() {
 		if (manifest == null) {
 			File manifestFile = impl.getFileFromStoreDir("00manifest.i");
-			if (!manifestFile.exists()) {
-				manifestFile = fakeNonExistentFile(manifestFile);
-			}
 			RevlogStream content = new RevlogStream(impl.getDataAccess(), manifestFile);
 			manifest = new HgManifest(this, content, impl.buildFileNameEncodingHelper());
 		}
@@ -512,14 +505,20 @@ public final class HgRepository implements SessionContext.Source {
 		return null;
 	}
 	
-	private File fakeNonExistentFile(File expected) throws HgInvalidFileException {
+	/*package-local*/ RevlogStream createStoreFile(Path path) throws HgInvalidControlFileException {
+		File f = impl.getFileFromDataDir(path);
 		try {
-			File fake = File.createTempFile(expected.getName(), null);
-			fake.deleteOnExit();
-			return fake;
+			if (!f.exists()) {
+				f.getParentFile().mkdirs();
+				f.createNewFile();
+			}
+			RevlogStream s = new RevlogStream(impl.getDataAccess(), f);
+			if (impl.shallCacheRevlogs()) {
+				streamsCache.put(path, new SoftReference<RevlogStream>(s));
+			}
+			return s;
 		} catch (IOException ex) {
-			getSessionContext().getLog().dump(getClass(), Info, ex, null);
-			throw new HgInvalidFileException(String.format("Failed to fake existence of file %s", expected), ex);
+			throw new HgInvalidControlFileException("Can't create a file in the storage", ex, f);
 		}
 	}
 	

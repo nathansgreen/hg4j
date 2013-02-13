@@ -18,7 +18,9 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,11 +31,15 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ChangelogEntryBuilder;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.FNCacheFile;
 import org.tmatesoft.hg.internal.ManifestEntryBuilder;
 import org.tmatesoft.hg.internal.ManifestRevision;
+import org.tmatesoft.hg.internal.RequiresFile;
+import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.RevlogStreamWriter;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * WORK IN PROGRESS
@@ -81,6 +87,16 @@ public class CommitFacility {
 		if (p2Commit != NO_REVISION) {
 			repo.getManifest().walk(p2Commit, p2Commit, c2Manifest);
 		}
+		FNCacheFile fncache = null;
+		if ((repo.getImplHelper().getRequiresFlags() & RequiresFile.FNCACHE) != 0) {
+			fncache = new FNCacheFile(repo.getImplHelper());
+			try {
+				fncache.read(new Path.SimpleSource());
+			} catch (IOException ex) {
+				// fncache may be restored using native client, so do not treat failure to read it as severe enough to stop
+				repo.getSessionContext().getLog().dump(getClass(), Severity.Error, ex, "Failed to read fncache, attempt commit nevertheless");
+			}
+		}
 //		Pair<Integer, Integer> manifestParents = getManifestParents();
 		Pair<Integer, Integer> manifestParents = new Pair<Integer, Integer>(c1Manifest.revisionIndex(), c2Manifest.revisionIndex());
 		TreeMap<Path, Nodeid> newManifestRevision = new TreeMap<Path, Nodeid>();
@@ -88,13 +104,21 @@ public class CommitFacility {
 		for (Path f : c1Manifest.files()) {
 			HgDataFile df = repo.getFileNode(f);
 			Nodeid fileKnownRev = c1Manifest.nodeid(f);
-			int fileRevIndex = df.getRevisionIndex(fileKnownRev);
-			// FIXME merged files?!
-			fileParents.put(f, new Pair<Integer, Integer>(fileRevIndex, NO_REVISION));
+			final int fileRevIndex1 = df.getRevisionIndex(fileKnownRev);
+			final int fileRevIndex2;
+			if ((fileKnownRev = c2Manifest.nodeid(f)) != null) {
+				// merged files
+				fileRevIndex2 = df.getRevisionIndex(fileKnownRev);
+			} else {
+				fileRevIndex2 = NO_REVISION;
+			}
+				
+			fileParents.put(f, new Pair<Integer, Integer>(fileRevIndex1, fileRevIndex2));
 			newManifestRevision.put(f, fileKnownRev);
 		}
 		//
 		// Files
+		ArrayList<Path> newlyAddedFiles = new ArrayList<Path>();
 		for (Pair<HgDataFile, ByteDataSupplier> e : files.values()) {
 			HgDataFile df = e.first();
 			Pair<Integer, Integer> fp = fileParents.get(df.getPath());
@@ -111,7 +135,14 @@ public class CommitFacility {
 				bac.write(bb);
 				bb.clear();
 			}
-			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo.getSessionContext(), df.content);
+			RevlogStream contentStream;
+			if (df.exists()) {
+				contentStream = df.content;
+			} else {
+				contentStream = repo.createStoreFile(df.getPath());
+				newlyAddedFiles.add(df.getPath());
+			}
+			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo.getSessionContext(), contentStream);
 			Nodeid fileRev = fileWriter.addRevision(bac.toArray(), clogRevisionIndex, fp.first(), fp.second());
 			newManifestRevision.put(df.getPath(), fileRev);
 		}
@@ -130,6 +161,17 @@ public class CommitFacility {
 		byte[] clogContent = changelogBuilder.build(manifestRev, message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo.getSessionContext(), clog.content);
 		Nodeid changesetRev = changelogWriter.addRevision(clogContent, clogRevisionIndex, p1Commit, p2Commit);
+		if (!newlyAddedFiles.isEmpty() && fncache != null) {
+			for (Path p : newlyAddedFiles) {
+				fncache.add(p);
+			}
+			try {
+				fncache.write();
+			} catch (IOException ex) {
+				// see comment above for fnchache.read()
+				repo.getSessionContext().getLog().dump(getClass(), Severity.Error, ex, "Failed to write fncache, error ignored");
+			}
+		}
 		return changesetRev;
 	}
 /*

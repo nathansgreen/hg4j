@@ -94,7 +94,8 @@ public class RevlogStreamWriter {
 			revlogHeader.linkRevision(linkRevision);
 			revlogHeader.parents(p1, p2);
 			revlogHeader.baseRevision(writeComplete ? lastEntryIndex+1 : lastEntryBase);
-			revlogHeader.offset(revlogStream.newEntryOffset());
+			long lastEntryOffset = revlogStream.newEntryOffset();
+			revlogHeader.offset(lastEntryOffset);
 			//
 			revlogHeader.serialize(indexFile);
 			
@@ -114,11 +115,14 @@ public class RevlogStreamWriter {
 				dataSource.serialize(dataFile);
 			}
 			
+			
 			lastEntryContent = content;
 			lastEntryBase = revlogHeader.baseRevision();
 			lastEntryIndex++;
 			lastEntryRevision = Nodeid.fromBinary(revisionNodeidBytes, 0);
 			revisionCache.put(lastEntryIndex, lastEntryRevision);
+
+			revlogStream.revisionAdded(lastEntryIndex, lastEntryRevision, lastEntryBase, lastEntryOffset);
 		} catch (IOException ex) {
 			String m = String.format("Failed to write revision %d", lastEntryIndex+1, null);
 			HgInvalidControlFileException t = new HgInvalidControlFileException(m, ex, null);
@@ -149,7 +153,10 @@ public class RevlogStreamWriter {
 	}
 	
 	private void populateLastEntry() throws HgInvalidControlFileException {
-		if (lastEntryIndex != NO_REVISION && lastEntryContent == null) {
+		if (lastEntryContent != null) {
+			return;
+		}
+		if (lastEntryIndex != NO_REVISION) {
 			assert lastEntryIndex >= 0;
 			final IOException[] failure = new IOException[1];
 			revlogStream.iterate(lastEntryIndex, lastEntryIndex, true, new RevlogStream.Inspector() {
@@ -168,6 +175,8 @@ public class RevlogStreamWriter {
 				String m = String.format("Failed to get content of most recent revision %d", lastEntryIndex);
 				throw revlogStream.initWithDataFile(new HgInvalidControlFileException(m, failure[0], null));
 			}
+		} else {
+			lastEntryContent = new byte[0];
 		}
 	}
 	
@@ -267,7 +276,7 @@ public class RevlogStreamWriter {
 
 			// regardless whether it's inline or separate data,
 			// offset field always represent cumulative compressedLength 
-			// (while offset in the index file with inline==true differs by n*sizeof(header), where n is entry's position in the file) 
+			// (while physical offset in the index file with inline==true differs by n*sizeof(header), where n is entry's position in the file) 
 			offset += compressedLength;
 		}
 		

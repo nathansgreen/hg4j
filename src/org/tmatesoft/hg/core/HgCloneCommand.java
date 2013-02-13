@@ -26,7 +26,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.TreeMap;
 
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
@@ -34,6 +33,8 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DataSerializer;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.FNCacheFile;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.internal.RevlogCompressor;
@@ -49,6 +50,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -155,7 +157,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		// recently processed nodes last, so that index in the array may be used as a linkRevision or baseRevision
 		private final ArrayList<Nodeid> revisionSequence = new ArrayList<Nodeid>();
 
-		private final LinkedList<String> fncacheFiles = new LinkedList<String>();
+		private FNCacheFile fncacheFile;
 		private RepoInitializer repoInit;
 		private Lifecycle.Callback lifecycleCallback;
 		private CancelledException cancelException;
@@ -176,15 +178,19 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 		public void initEmptyRepository() throws IOException {
 			repoInit.initEmptyRepository(hgDir);
+			try {
+				assert (repoInit.getRequires() & FNCACHE) != 0;
+				fncacheFile = new FNCacheFile(Internals.getInstance(new HgLookup(ctx).detect(hgDir)));
+			} catch (HgRepositoryNotFoundException ex) {
+				// SHALL NOT HAPPEN provided we initialized empty repository successfully
+				// TODO perhaps, with WriteDownMate moving to a more appropriate location,
+				// we could instantiate HgRepository (or Internals) by other means, without exception?
+				throw new IOException("Can't access fncache for newly created repository", ex);
+			}
 		}
 
 		public void complete() throws IOException {
-			FileOutputStream fncacheFile = new FileOutputStream(new File(hgDir, "store/fncache"));
-			for (String s : fncacheFiles) {
-				fncacheFile.write(s.getBytes());
-				fncacheFile.write(0x0A); // http://mercurial.selenic.com/wiki/fncacheRepoFormat
-			}
-			fncacheFile.close();
+			fncacheFile.write();
 		}
 
 		public void changelogStart() {
@@ -237,8 +243,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			try {
 				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
-				fncacheFiles.add("data/" + name + ".i"); // TODO post-1.0 this is pure guess, 
-				// need to investigate more how filenames are kept in fncache
+				fncacheFile.add(Path.create(name)); 
 				File file = new File(hgDir, filename = storagePathHelper.rewrite(name).toString());
 				file.getParentFile().mkdirs();
 				indexFile = new FileOutputStream(file);
