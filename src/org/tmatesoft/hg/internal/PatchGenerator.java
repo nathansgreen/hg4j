@@ -158,7 +158,7 @@ public class PatchGenerator {
 		}
 	}
 	
-	static class DeltaDumpInspector implements MatchInspector {
+	static class DeltaInspector implements MatchInspector {
 		protected int changeStartS1, changeStartS2;
 		protected ChunkSequence seq1, seq2;
 		
@@ -170,38 +170,79 @@ public class PatchGenerator {
 		}
 
 		public void match(int startSeq1, int startSeq2, int matchLength) {
-			reportDeltaElement(startSeq1, startSeq2);
+			reportDeltaElement(startSeq1, startSeq2, matchLength);
 			changeStartS1 = startSeq1 + matchLength;
 			changeStartS2 = startSeq2 + matchLength;
 		}
 
 		public void end() {
 			if (changeStartS1 < seq1.chunkCount() || changeStartS2 < seq2.chunkCount()) {
-				reportDeltaElement(seq1.chunkCount(), seq2.chunkCount());
+				reportDeltaElement(seq1.chunkCount(), seq2.chunkCount(), 0);
 			}
 		}
 
-		protected void reportDeltaElement(int matchStartSeq1, int matchStartSeq2) {
+		protected void reportDeltaElement(int matchStartSeq1, int matchStartSeq2, int matchLength) {
 			if (changeStartS1 < matchStartSeq1) {
 				if (changeStartS2 < matchStartSeq2) {
-					System.out.printf("changed [%d..%d) with [%d..%d)\n", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
+					changed(changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
 				} else {
 					assert changeStartS2 == matchStartSeq2;
-					System.out.printf("deleted [%d..%d)\n", changeStartS1, matchStartSeq1);
+					deleted(changeStartS1, matchStartSeq1);
 				}
 			} else {
 				assert changeStartS1 == matchStartSeq1;
 				if(changeStartS2 < matchStartSeq2) {
-					System.out.printf("added [%d..%d)\n", changeStartS2, matchStartSeq2);
+					added(matchStartSeq1, changeStartS2, matchStartSeq2);
 				} else {
 					assert changeStartS2 == matchStartSeq2;
 					System.out.printf("adjustent equal blocks %d, %d and %d,%d\n", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
 				}
 			}
+			if (matchLength > 0) {
+				unchanged(matchStartSeq1, matchStartSeq2, matchLength);
+			}
+		}
+
+		/**
+		 * [s1From..s1To) replaced with [s2From..s2To)
+		 */
+		protected void changed(int s1From, int s1To, int s2From, int s2To) {
+			// NO-OP
+		}
+
+		protected void deleted(int s1From, int s1To) {
+			// NO-OP
+		}
+
+		protected void added(int s1InsertPoint, int s2From, int s2To) {
+			// NO-OP
+		}
+
+		protected void unchanged(int s1From, int s2From, int length) {
+			// NO-OP
 		}
 	}
 	
-	static class PatchFillInspector extends DeltaDumpInspector {
+	static class DeltaDumpInspector extends DeltaInspector {
+
+		@Override
+		protected void changed(int s1From, int s1To, int s2From, int s2To) {
+			System.out.printf("changed [%d..%d) with [%d..%d)\n", s1From, s1To, s2From, s2To);
+		}
+		
+		@Override
+		protected void deleted(int s1From, int s1To) {
+			System.out.printf("deleted [%d..%d)\n", s1From, s1To);
+		}
+		
+		@Override
+		protected void added(int s1InsertPoint, int s2From, int s2To) {
+			System.out.printf("added [%d..%d) at %d\n", s2From, s2To, s1InsertPoint);
+		}
+		
+	}
+	
+	static class PatchFillInspector extends DeltaInspector {
 		private final Patch deltaCollector;
 		
 		PatchFillInspector(Patch p) {
@@ -210,18 +251,25 @@ public class PatchGenerator {
 		}
 		
 		@Override
-		protected void reportDeltaElement(int matchStartSeq1, int matchStartSeq2) {
-			if (changeStartS1 < matchStartSeq1) {
-				int from = seq1.chunk(changeStartS1).getOffset();
-				int to = seq1.chunk(matchStartSeq1).getOffset();
-				byte[] data = seq2.data(changeStartS2, matchStartSeq2);
-				deltaCollector.add(from, to, data);
-			} else {
-				assert changeStartS1 == matchStartSeq1;
-				int insPoint = seq1.chunk(changeStartS1).getOffset();
-				byte[] data = seq2.data(changeStartS2, matchStartSeq2);
-				deltaCollector.add(insPoint, insPoint, data);
-			}
+		protected void changed(int s1From, int s1To, int s2From, int s2To) {
+			int from = seq1.chunk(s1From).getOffset();
+			int to = seq1.chunk(s1To).getOffset();
+			byte[] data = seq2.data(s2From, s2To);
+			deltaCollector.add(from, to, data);
+		}
+		
+		@Override
+		protected void deleted(int s1From, int s1To) {
+			int from = seq1.chunk(s1From).getOffset();
+			int to = seq1.chunk(s1To).getOffset();
+			deltaCollector.add(from, to, new byte[0]);
+		}
+		
+		@Override
+		protected void added(int s1InsertPoint, int s2From, int s2To) {
+			int insPoint = seq1.chunk(s1InsertPoint).getOffset();
+			byte[] data = seq2.data(s2From, s2To);
+			deltaCollector.add(insPoint, insPoint, data);
 		}
 	}
 	
@@ -257,7 +305,11 @@ public class PatchGenerator {
 		return rv;
 	}
 	
-	private static class ChunkSequence {
+	/*
+	 * TODO shall be parameterized (template?) and refacctored to facilitate matching non lines only
+	 * (sequence diff algorithm above doesn't care about sequence nature)
+	 */
+	static final class ChunkSequence {
 		
 		private final byte[] input;
 		private ArrayList<ByteChain> lines;
