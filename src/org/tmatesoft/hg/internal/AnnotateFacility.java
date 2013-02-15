@@ -83,11 +83,13 @@ public class AnnotateFacility {
 	}
 	
 	public interface AddBlock extends Block {
+		int insertedAt(); // line index in the old file 
 		int firstAddedLine();
 		int totalAddedLines();
 		String[] addedLines();
 	}
 	public interface DeleteBlock extends Block {
+		int removedAt(); // line index in the new file
 		int firstRemovedLine();
 		int totalRemovedLines();
 		String[] removedLines();
@@ -105,17 +107,17 @@ public class AnnotateFacility {
 
 		@Override
 		protected void changed(int s1From, int s1To, int s2From, int s2To) {
-			insp.changed(new BlockImpl2(seq1, seq2, s1From, s1To-s1From, s2From, s2To - s2From));
+			insp.changed(new BlockImpl2(seq1, seq2, s1From, s1To-s1From, s2From, s2To - s2From, s1From, s2From));
 		}
 		
 		@Override
 		protected void added(int s1InsertPoint, int s2From, int s2To) {
-			insp.added(new BlockImpl2(null, seq2, -1, -1, s2From, s2To - s2From));
+			insp.added(new BlockImpl2(null, seq2, -1, -1, s2From, s2To - s2From, s1InsertPoint, -1));
 		}
 		
 		@Override
-		protected void deleted(int s1From, int s1To) {
-			insp.deleted(new BlockImpl2(seq1, null, s1From, s1To - s1From, -1, -1));
+		protected void deleted(int s2DeletePoint, int s1From, int s1To) {
+			insp.deleted(new BlockImpl2(seq1, null, s1From, s1To - s1From, -1, -1, -1, s2DeletePoint));
 		}
 
 		@Override
@@ -151,14 +153,22 @@ public class AnnotateFacility {
 		private final int s1Len;
 		private final int s2Start;
 		private final int s2Len;
+		private final int s1InsertPoint;
+		private final int s2DeletePoint;
 
-		public BlockImpl2(ChunkSequence s1, ChunkSequence s2, int s1Start, int s1Len, int s2Start, int s2Len) {
+		public BlockImpl2(ChunkSequence s1, ChunkSequence s2, int s1Start, int s1Len, int s2Start, int s2Len, int s1InsertPoint, int s2DeletePoint) {
 			oldSeq = s1;
 			newSeq = s2;
 			this.s1Start = s1Start;
 			this.s1Len = s1Len;
 			this.s2Start = s2Start;
 			this.s2Len = s2Len;
+			this.s1InsertPoint = s1InsertPoint;
+			this.s2DeletePoint = s2DeletePoint;
+		}
+		
+		public int insertedAt() {
+			return s1InsertPoint;
 		}
 
 		public int firstAddedLine() {
@@ -171,6 +181,10 @@ public class AnnotateFacility {
 
 		public String[] addedLines() {
 			return generateLines(totalAddedLines(), firstAddedLine());
+		}
+		
+		public int removedAt() {
+			return s2DeletePoint;
 		}
 
 		public int firstRemovedLine() {
@@ -188,7 +202,7 @@ public class AnnotateFacility {
 		private String[] generateLines(int count, int startFrom) {
 			String[] rv = new String[count];
 			for (int i = 0; i < count; i++) {
-				rv[i] = String.format("LINE %d", startFrom + i);
+				rv[i] = String.format("LINE %d", startFrom + i+1);
 			}
 			return rv;
 		}

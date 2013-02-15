@@ -187,7 +187,7 @@ public class PatchGenerator {
 					changed(changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
 				} else {
 					assert changeStartS2 == matchStartSeq2;
-					deleted(changeStartS1, matchStartSeq1);
+					deleted(matchStartSeq2, changeStartS1, matchStartSeq1);
 				}
 			} else {
 				assert changeStartS1 == matchStartSeq1;
@@ -210,7 +210,7 @@ public class PatchGenerator {
 			// NO-OP
 		}
 
-		protected void deleted(int s1From, int s1To) {
+		protected void deleted(int s2DeletePoint, int s1From, int s1To) {
 			// NO-OP
 		}
 
@@ -231,7 +231,7 @@ public class PatchGenerator {
 		}
 		
 		@Override
-		protected void deleted(int s1From, int s1To) {
+		protected void deleted(int s2DeletionPoint, int s1From, int s1To) {
 			System.out.printf("deleted [%d..%d)\n", s1From, s1To);
 		}
 		
@@ -259,7 +259,7 @@ public class PatchGenerator {
 		}
 		
 		@Override
-		protected void deleted(int s1From, int s1To) {
+		protected void deleted(int s2DeletionPoint, int s1From, int s1To) {
 			int from = seq1.chunk(s1From).getOffset();
 			int to = seq1.chunk(s1To).getOffset();
 			deltaCollector.add(from, to, new byte[0]);
