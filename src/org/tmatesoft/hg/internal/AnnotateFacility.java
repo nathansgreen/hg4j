@@ -20,6 +20,7 @@ import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.PatchGenerator.ChunkSequence;
+import org.tmatesoft.hg.internal.PatchGenerator.LineSequence;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -33,7 +34,10 @@ import org.tmatesoft.hg.util.CancelledException;
 @Experimental(reason="work in progress")
 public class AnnotateFacility {
 	
-	public void annotate(HgDataFile df, int changestRevisionIndex, Inspector insp) {
+	/**
+	 * Annotates changes of the file against its parent(s)
+	 */
+	public void annotateChange(HgDataFile df, int changestRevisionIndex, Inspector insp) {
 		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(changestRevisionIndex, df.getPath());
 		int fileRevIndex = df.getRevisionIndex(fileRev);
 		int[] fileRevParents = new int[2];
@@ -53,8 +57,8 @@ public class AnnotateFacility {
 				df.content(soleParent, c1 = new ByteArrayChannel());
 				df.content(fileRevIndex, c2 = new ByteArrayChannel());
 				int parentChangesetRevIndex = df.getChangesetRevisionIndex(soleParent);
-				PatchGenerator pg = new PatchGenerator();
-				pg.init(c1.toArray(), c2.toArray());
+				PatchGenerator<LineSequence> pg = new PatchGenerator<LineSequence>();
+				pg.init(LineSequence.newlines(c1.toArray()), LineSequence.newlines(c2.toArray()));
 				pg.findMatchingBlocks(new BlameBlockInspector(insp));
 			} catch (CancelledException ex) {
 				// TODO likely it was bad idea to throw cancelled exception from content()
@@ -97,7 +101,7 @@ public class AnnotateFacility {
 	public interface ChangeBlock extends AddBlock, DeleteBlock {
 	}
 
-	static class BlameBlockInspector extends PatchGenerator.DeltaInspector {
+	static class BlameBlockInspector extends PatchGenerator.DeltaInspector<LineSequence> {
 		private final Inspector insp;
 
 		public BlameBlockInspector(Inspector inspector) {

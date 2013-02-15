@@ -40,28 +40,27 @@ import org.tmatesoft.hg.repo.HgRepository;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class PatchGenerator {
+public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 
-	private Map<ChunkSequence.ByteChain, IntVector> chunk2UseIndex;
-	private ChunkSequence seq1, seq2;
+	private Map<Chunk, IntVector> chunk2UseIndex;
+	private T seq1, seq2;
 
 	// get filled by #longestMatch, track start of common sequence in seq1 and seq2, respectively
 	private int matchStartS1, matchStartS2;
 
-	private MatchInspector matchInspector; 
+	private MatchInspector<T> matchInspector; 
 
-	public void init(byte[] data1, byte[] data2) {
-		seq1 = new ChunkSequence(data1);
-		seq1.splitByNewlines();
-		seq2 = new ChunkSequence(data2);
-		seq2.splitByNewlines();
-		prepare(seq2);
+	public void init(T s1, T s2) {
+		seq1 = s1;
+		seq2 = s2;
+		prepare(s2);
 	}
 
-	private void prepare(ChunkSequence s2) {
-		chunk2UseIndex = new HashMap<ChunkSequence.ByteChain, IntVector>();
+
+	private void prepare(T s2) {
+		chunk2UseIndex = new HashMap<Chunk, IntVector>();
 		for (int i = 0, len = s2.chunkCount(); i < len; i++) {
-			ChunkSequence.ByteChain bc = s2.chunk(i);
+			Chunk bc = s2.chunk(i);
 			IntVector loc = chunk2UseIndex.get(bc);
 			if (loc == null) {
 				chunk2UseIndex.put(bc, loc = new IntVector());
@@ -81,7 +80,7 @@ public class PatchGenerator {
 //		}
 	}
 	
-	public void findMatchingBlocks(MatchInspector insp) {
+	public void findMatchingBlocks(MatchInspector<T> insp) {
 		insp.begin(seq1, seq2);
 		matchInspector = insp;
 		findMatchingBlocks(0, seq1.chunkCount(), 0, seq2.chunkCount());
@@ -96,7 +95,7 @@ public class PatchGenerator {
 		int maxLength = 0;
 		IntMap<Integer> chunkIndex2MatchCount = new IntMap<Integer>(8);
 		for (int i = startS1; i < endS1; i++) {
-			ChunkSequence.ByteChain bc = seq1.chunk(i);
+			Chunk bc = seq1.chunk(i);
 			IntMap<Integer> newChunkIndex2MatchCount = new IntMap<Integer>(8);
 			IntVector occurencesInS2 = chunk2UseIndex.get(bc);
 			if (occurencesInS2 == null) {
@@ -140,14 +139,14 @@ public class PatchGenerator {
 		}
 	}
 	
-	interface MatchInspector {
-		void begin(ChunkSequence s1, ChunkSequence s2);
+	interface MatchInspector<T extends ChunkSequence<?>> {
+		void begin(T s1, T s2);
 		void match(int startSeq1, int startSeq2, int matchLength);
 		void end();
 	}
 	
-	static class MatchDumpInspector implements MatchInspector {
-		public void begin(ChunkSequence s1, ChunkSequence s2) {
+	static class MatchDumpInspector<T extends ChunkSequence<?>> implements MatchInspector<T> {
+		public void begin(T s1, T s2) {
 		}
 
 		public void match(int startSeq1, int startSeq2, int matchLength) {
@@ -158,12 +157,11 @@ public class PatchGenerator {
 		}
 	}
 	
-	static class DeltaInspector implements MatchInspector {
+	static class DeltaInspector<T extends ChunkSequence<?>> implements MatchInspector<T> {
 		protected int changeStartS1, changeStartS2;
-		protected ChunkSequence seq1, seq2;
-		
+		protected T seq1, seq2;
 
-		public void begin(ChunkSequence s1, ChunkSequence s2) {
+		public void begin(T s1, T s2) {
 			seq1 = s1;
 			seq2 = s2;
 			changeStartS1 = changeStartS2 = 0;
@@ -223,7 +221,7 @@ public class PatchGenerator {
 		}
 	}
 	
-	static class DeltaDumpInspector extends DeltaInspector {
+	static class DeltaDumpInspector<T extends ChunkSequence<?>> extends DeltaInspector<T> {
 
 		@Override
 		protected void changed(int s1From, int s1To, int s2From, int s2To) {
@@ -242,44 +240,11 @@ public class PatchGenerator {
 		
 	}
 	
-	static class PatchFillInspector extends DeltaInspector {
-		private final Patch deltaCollector;
-		
-		PatchFillInspector(Patch p) {
-			assert p != null;
-			deltaCollector = p;
-		}
-		
-		@Override
-		protected void changed(int s1From, int s1To, int s2From, int s2To) {
-			int from = seq1.chunk(s1From).getOffset();
-			int to = seq1.chunk(s1To).getOffset();
-			byte[] data = seq2.data(s2From, s2To);
-			deltaCollector.add(from, to, data);
-		}
-		
-		@Override
-		protected void deleted(int s2DeletionPoint, int s1From, int s1To) {
-			int from = seq1.chunk(s1From).getOffset();
-			int to = seq1.chunk(s1To).getOffset();
-			deltaCollector.add(from, to, new byte[0]);
-		}
-		
-		@Override
-		protected void added(int s1InsertPoint, int s2From, int s2To) {
-			int insPoint = seq1.chunk(s1InsertPoint).getOffset();
-			byte[] data = seq2.data(s2From, s2To);
-			deltaCollector.add(insPoint, insPoint, data);
-		}
-	}
-	
-	
-	
 	public static void main(String[] args) throws Exception {
-		PatchGenerator pg1 = new PatchGenerator();
-		pg1.init("hello".getBytes(), "hello\nworld".getBytes());
-		pg1.findMatchingBlocks(new MatchDumpInspector());
-		pg1.findMatchingBlocks(new DeltaDumpInspector());
+		PatchGenerator<LineSequence> pg1 = new PatchGenerator<LineSequence>();
+		pg1.init(LineSequence.newlines("hello".getBytes()), LineSequence.newlines("hello\nworld".getBytes()));
+		pg1.findMatchingBlocks(new MatchDumpInspector<LineSequence>());
+		pg1.findMatchingBlocks(new DeltaDumpInspector<LineSequence>());
 		if (Boolean.FALSE.booleanValue()) {
 			return;
 		}
@@ -290,35 +255,45 @@ public class PatchGenerator {
 		df.content(81, bac2 = new ByteArrayChannel());
 //		String s1 = "line 1\nline 2\r\nline 3\n\nline 1\nline 2";
 //		String s2 = "abc\ncdef\r\nline 2\r\nline 3\nline 2";
-		PatchGenerator pg = new PatchGenerator();
-		pg.init(bac1.toArray(), bac2.toArray());
+		PatchGenerator<LineSequence> pg = new PatchGenerator<LineSequence>();
+		byte[] data1 = bac1.toArray();
+		byte[] data2 = bac2.toArray();
+		pg.init(new LineSequence(data1).splitByNewlines(), new LineSequence(data2).splitByNewlines());
 		System.out.println("Matches:");
-		pg.findMatchingBlocks(new MatchDumpInspector());
+		pg.findMatchingBlocks(new MatchDumpInspector<LineSequence>());
 		System.out.println("Deltas:");
-		pg.findMatchingBlocks(new DeltaDumpInspector());
+		pg.findMatchingBlocks(new DeltaDumpInspector<LineSequence>());
 	}
-	
-	public Patch delta(byte[] prev, byte[] content) {
-		Patch rv = new Patch();
-		init(prev, content);
-		findMatchingBlocks(new PatchFillInspector(rv));
-		return rv;
-	}
-	
-	/*
-	 * TODO shall be parameterized (template?) and refacctored to facilitate matching non lines only
-	 * (sequence diff algorithm above doesn't care about sequence nature)
+
+	/**
+	 * Unsure if this marker interface worth presence
 	 */
-	static final class ChunkSequence {
+	public interface Chunk {
+	}
+	
+	/**
+	 * Generic sequence of chunk, where chunk is anything comparable to another chunk, e.g. a string or a single char
+	 * Sequence diff algorithm above doesn't care about sequence nature.
+	 */
+	public interface ChunkSequence<T extends Chunk> {
+		public T chunk(int index);
+		public int chunkCount();
+	}
+	
+	static final class LineSequence implements ChunkSequence<LineSequence.ByteChain> {
 		
 		private final byte[] input;
 		private ArrayList<ByteChain> lines;
 
-		public ChunkSequence(byte[] data) {
+		public LineSequence(byte[] data) {
 			input = data;
 		}
 		
-		public void splitByNewlines() {
+		public static LineSequence newlines(byte[] array) {
+			return new LineSequence(array).splitByNewlines();
+		}
+
+		public LineSequence splitByNewlines() {
 			lines = new ArrayList<ByteChain>();
 			int lastStart = 0;
 			for (int i = 0; i < input.length; i++) {
@@ -338,6 +313,7 @@ public class PatchGenerator {
 			}
 			// empty chunk to keep offset of input end
 			lines.add(new ByteChain(input.length, input.length));
+			return this;
 		}
 		
 		public ByteChain chunk(int index) {
@@ -359,7 +335,7 @@ public class PatchGenerator {
 		}
 
 		
-		final class ByteChain {
+		final class ByteChain implements Chunk {
 			private final int start, end;
 			private final int hash;
 			
@@ -396,7 +372,7 @@ public class PatchGenerator {
 			
 			private boolean match(byte[] oi, int from) {
 				for (int i = start, j = from; i < end; i++, j++) {
-					if (ChunkSequence.this.input[i] != oi[j]) {
+					if (LineSequence.this.input[i] != oi[j]) {
 						return false;
 					}
 				}

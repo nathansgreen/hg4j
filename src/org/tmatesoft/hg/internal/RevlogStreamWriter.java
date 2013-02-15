@@ -61,8 +61,7 @@ public class RevlogStreamWriter {
 		lastEntryIndex = revCount == 0 ? NO_REVISION : revCount - 1;
 		populateLastEntry();
 		//
-		PatchGenerator pg = new PatchGenerator();
-		Patch patch = pg.delta(lastEntryContent, content);
+		Patch patch = GeneratePatchInspector.delta(lastEntryContent, content);
 		int patchSerializedLength = patch.serializedLength();
 		
 		final boolean writeComplete = preferCompleteOverPatch(patchSerializedLength, content.length);

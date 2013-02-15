@@ -48,7 +48,7 @@ public class TestBlame {
 		final int checkChangeset = 539;
 		HgDataFile df = repo.getFileNode(fname);
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		new AnnotateFacility().annotate(df, checkChangeset, new DiffOutInspector(new PrintStream(bos)));
+		new AnnotateFacility().annotateChange(df, checkChangeset, new DiffOutInspector(new PrintStream(bos)));
 		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
 		ExecHelper eh = new ExecHelper(gp, null);
 		eh.run("hg", "diff", "-c", String.valueOf(checkChangeset), "-U", "0", fname);
