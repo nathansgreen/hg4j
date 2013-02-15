@@ -146,14 +146,21 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 	}
 	
 	static class MatchDumpInspector<T extends ChunkSequence<?>> implements MatchInspector<T> {
+		private int matchCount;
+
 		public void begin(T s1, T s2) {
+			matchCount = 0;
 		}
 
 		public void match(int startSeq1, int startSeq2, int matchLength) {
-			System.out.printf("match: from line #%d  and line #%d of length %d\n", startSeq1, startSeq2, matchLength);
+			matchCount++;
+			System.out.printf("match #%d: from line #%d  and line #%d of length %d\n", matchCount, startSeq1, startSeq2, matchLength);
 		}
 
 		public void end() {
+			if (matchCount == 0) {
+				System.out.println("NO MATCHES FOUND!");
+			}
 		}
 	}
 	
@@ -174,8 +181,8 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		}
 
 		public void end() {
-			if (changeStartS1 < seq1.chunkCount() || changeStartS2 < seq2.chunkCount()) {
-				reportDeltaElement(seq1.chunkCount(), seq2.chunkCount(), 0);
+			if (changeStartS1 < seq1.chunkCount()-1 || changeStartS2 < seq2.chunkCount()-1) {
+				reportDeltaElement(seq1.chunkCount()-1, seq2.chunkCount()-1, 0);
 			}
 		}
 
@@ -190,7 +197,7 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 			} else {
 				assert changeStartS1 == matchStartSeq1;
 				if(changeStartS2 < matchStartSeq2) {
-					added(matchStartSeq1, changeStartS2, matchStartSeq2);
+					added(changeStartS1, changeStartS2, matchStartSeq2);
 				} else {
 					assert changeStartS2 == matchStartSeq2;
 					System.out.printf("adjustent equal blocks %d, %d and %d,%d\n", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
@@ -237,12 +244,18 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		protected void added(int s1InsertPoint, int s2From, int s2To) {
 			System.out.printf("added [%d..%d) at %d\n", s2From, s2To, s1InsertPoint);
 		}
-		
+
+		@Override
+		protected void unchanged(int s1From, int s2From, int length) {
+			System.out.printf("same [%d..%d) and [%d..%d)\n", s1From, s1From + length, s2From, s2From + length);
+		}
 	}
 	
 	public static void main(String[] args) throws Exception {
 		PatchGenerator<LineSequence> pg1 = new PatchGenerator<LineSequence>();
-		pg1.init(LineSequence.newlines("hello".getBytes()), LineSequence.newlines("hello\nworld".getBytes()));
+//		pg1.init(LineSequence.newlines("hello\nabc".getBytes()), LineSequence.newlines("hello\nworld".getBytes()));
+//		pg1.init(LineSequence.newlines("".getBytes()), LineSequence.newlines("hello\nworld".getBytes()));
+		pg1.init(LineSequence.newlines("hello\nworld".getBytes()), LineSequence.newlines("".getBytes()));
 		pg1.findMatchingBlocks(new MatchDumpInspector<LineSequence>());
 		pg1.findMatchingBlocks(new DeltaDumpInspector<LineSequence>());
 		if (Boolean.FALSE.booleanValue()) {
@@ -293,6 +306,7 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 			return new LineSequence(array).splitByNewlines();
 		}
 
+		// sequence ends with fake, empty line chunk
 		public LineSequence splitByNewlines() {
 			lines = new ArrayList<ByteChain>();
 			int lastStart = 0;
@@ -312,7 +326,7 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 				lines.add(new ByteChain(lastStart, input.length));
 			}
 			// empty chunk to keep offset of input end
-			lines.add(new ByteChain(input.length, input.length));
+			lines.add(new ByteChain(input.length));
 			return this;
 		}
 		
@@ -338,6 +352,16 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		final class ByteChain implements Chunk {
 			private final int start, end;
 			private final int hash;
+			
+			/**
+			 * construct a chunk with a sole purpose to keep 
+			 * offset of the data end
+			 */
+			ByteChain(int offset) {
+				start = end = offset;
+				// ensure this chunk doesn't match trailing chunk of another sequence
+				hash = System.identityHashCode(this);
+			}
 			
 			ByteChain(int s, int e) {
 				start = s;

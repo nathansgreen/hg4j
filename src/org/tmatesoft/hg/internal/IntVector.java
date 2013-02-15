@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,8 +54,19 @@ public class IntVector {
 		return data[i];
 	}
 	
+	public void set(int i, int v) {
+		if (i < 0 || i >= count) {
+			throw new IndexOutOfBoundsException(String.format("Index: %d, size: %d", i, count));
+		}
+		data[i] = v;
+	}
+	
 	public int size() {
 		return count;
+	}
+	
+	public boolean isEmpty() {
+		return count == 0;
 	}
 	
 	public void clear() {
