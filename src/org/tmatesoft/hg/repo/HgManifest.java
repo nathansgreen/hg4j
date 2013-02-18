@@ -256,9 +256,9 @@ public final class HgManifest extends Revlog {
 		// there's no need for HgDataFile to own this method, or get a delegate
 		// as most of HgDataFile API is using file revision indexes, and there's easy step from file revision index to
 		// both file revision and changeset revision index. But there's no easy way to go from changesetRevisionIndex to
-		// file revision (the task this method solves), exept for HgFileInformer
+		// file revision (the task this method solves), except for HgFileInformer
 		// I feel methods dealing with changeset indexes shall be more exposed in HgChangelog and HgManifest API.
-		// TODO need tests
+		// TODO need tests (e.g. pass TIP here to see resMap.get(-1) doesn't fail)
 		int manifestRevIndex = fromChangelog(changelogRevisionIndex);
 		if (manifestRevIndex == BAD_REVISION) {
 			return null;
@@ -266,7 +266,9 @@ public final class HgManifest extends Revlog {
 		IntMap<Nodeid> resMap = new IntMap<Nodeid>(3);
 		FileLookupInspector parser = new FileLookupInspector(encodingHelper, file, resMap, null);
 		parser.walk(manifestRevIndex, content);
-		return resMap.get(changelogRevisionIndex);
+		assert resMap.size() == 1;
+		// can't use changelogRevisionIndex as key - it might have been TIP
+		return resMap.get(resMap.firstKey());
 	}
 	
 	/**
@@ -308,7 +310,9 @@ public final class HgManifest extends Revlog {
 		IntMap<Flags> resMap = new IntMap<Flags>(2);
 		FileLookupInspector parser = new FileLookupInspector(encodingHelper, file, null, resMap);
 		parser.walk(manifestRevIdx, content);
-		return resMap.get(changesetRevIndex);
+		assert resMap.size() == 1;
+		// can't use changesetRevIndex as key - it might have been TIP
+		return resMap.get(resMap.firstKey());
 	}
 
 
