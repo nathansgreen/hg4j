@@ -35,7 +35,7 @@ public class AnnotateFacility {
 	/**
 	 * Annotates changes of the file against its parent(s)
 	 */
-	public void annotateChange(HgDataFile df, int changesetRevisionIndex, Inspector insp) {
+	public void annotateChange(HgDataFile df, int changesetRevisionIndex, BlockInspector insp) {
 		// TODO detect if file is text/binary (e.g. looking for chars < ' ' and not \t\r\n\f
 		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(changesetRevisionIndex, df.getPath());
 		int fileRevIndex = df.getRevisionIndex(fileRev);
@@ -76,7 +76,7 @@ public class AnnotateFacility {
 	}
 
 	@Callback
-	public interface Inspector {
+	public interface BlockInspector {
 		void same(EqualBlock block);
 		void added(AddBlock block);
 		void changed(ChangeBlock block);
@@ -84,7 +84,7 @@ public class AnnotateFacility {
 	}
 	
 	@Callback
-	public interface InspectorEx extends Inspector { // XXX better name
+	public interface BlockInspectorEx extends BlockInspector { // XXX better name
 		// XXX perhaps, shall pass object instead of separate values for future extension?
 		void start(int originLineCount, int targetLineCount);
 		void done();
@@ -120,13 +120,24 @@ public class AnnotateFacility {
 	}
 	public interface ChangeBlock extends AddBlock, DeleteBlock {
 	}
+	
+	@Callback
+	public interface LineInspector {
+		void line(int lineNumber, int changesetRevIndex, LineDescriptor ld);
+	}
+	
+	public interface LineDescriptor {
+		int totalLines();
+	}
+	
+
 
 	static class BlameBlockInspector extends PatchGenerator.DeltaInspector<LineSequence> {
-		private final Inspector insp;
+		private final BlockInspector insp;
 		private final int csetP1;
 		private final int csetTarget;
 
-		public BlameBlockInspector(Inspector inspector, int parentCset1, int targetCset) {
+		public BlameBlockInspector(BlockInspector inspector, int parentCset1, int targetCset) {
 			assert inspector != null;
 			insp = inspector;
 			csetP1 = parentCset1;
@@ -136,16 +147,16 @@ public class AnnotateFacility {
 		@Override
 		public void begin(LineSequence s1, LineSequence s2) {
 			super.begin(s1, s2);
-			if (insp instanceof InspectorEx) {
-				((InspectorEx) insp).start(s1.chunkCount() - 1, s2.chunkCount() - 1);
+			if (insp instanceof BlockInspectorEx) {
+				((BlockInspectorEx) insp).start(s1.chunkCount() - 1, s2.chunkCount() - 1);
 			}
 		}
 		
 		@Override
 		public void end() {
 			super.end();
-			if(insp instanceof InspectorEx) {
-				((InspectorEx) insp).done();
+			if(insp instanceof BlockInspectorEx) {
+				((BlockInspectorEx) insp).done();
 			}
 		}
 
