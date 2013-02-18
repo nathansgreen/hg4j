@@ -14,17 +14,16 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.test;
+package org.tmatesoft.hg.internal;
 
 import java.util.LinkedList;
 
-import org.tmatesoft.hg.internal.AnnotateFacility;
-import org.tmatesoft.hg.internal.AnnotateFacility.LineInspector;
-import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.AnnotateFacility.AddBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.ChangeBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.DeleteBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.EqualBlock;
+import org.tmatesoft.hg.internal.AnnotateFacility.LineInspector;
+
 
 /**
  * 

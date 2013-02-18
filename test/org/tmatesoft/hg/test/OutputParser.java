@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,6 +49,9 @@ public interface OutputParser {
 		}
 		public CharSequence result() {
 			return result;
+		}
+		public void reset() {
+			result = null;
 		}
 
 		public Iterable<String> lines() {

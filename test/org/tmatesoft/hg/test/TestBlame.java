@@ -19,6 +19,7 @@ package org.tmatesoft.hg.test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -67,25 +68,26 @@ public class TestBlame {
 	public void testFileAnnotate() throws Exception {
 		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		final String fname = "src/org/tmatesoft/hg/internal/PatchGenerator.java";
-		final int[] checkChangesets = new int[] { 539 , 536, 531 };
 		HgDataFile df = repo.getFileNode(fname);
-		AnnotateFacility af = new AnnotateFacility();
-		FileAnnotateInspector fa = new FileAnnotateInspector();
-		for (int cs : checkChangesets) {
-			af.annotateChange(df, cs, new FileAnnotation(fa));
-		}
-		
 		OutputParser.Stub op = new OutputParser.Stub();
 		ExecHelper eh = new ExecHelper(op, null);
-		eh.run("hg", "annotate", "-r", String.valueOf(checkChangesets[0]), fname);
-		
-		String[] hgAnnotateLines = splitLines(op.result());
-		assertTrue("[sanity]", hgAnnotateLines.length > 0);
-		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, fa.lineRevisions.length);
 
-		for (int i = 0; i < fa.lineRevisions.length; i++) {
-			int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')));
-			assertEquals(String.format("Revision mismatch for line %d", i+1), hgAnnotateRevIndex, fa.lineRevisions[i]);
+		for (int startChangeset : new int[] { 539, 541/*, TIP */}) {
+			FileAnnotateInspector fa = new FileAnnotateInspector();
+			new AnnotateFacility().annotate(df, startChangeset, fa);
+			
+
+			op.reset();
+			eh.run("hg", "annotate", "-r", startChangeset == TIP ? "tip" : String.valueOf(startChangeset), fname);
+			
+			String[] hgAnnotateLines = splitLines(op.result());
+			assertTrue("[sanity]", hgAnnotateLines.length > 0);
+			assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, fa.lineRevisions.length);
+	
+			for (int i = 0; i < fa.lineRevisions.length; i++) {
+				int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')));
+				assertEquals(String.format("Revision mismatch for line %d", i+1), hgAnnotateRevIndex, fa.lineRevisions[i]);
+			}
 		}
 	}
 	

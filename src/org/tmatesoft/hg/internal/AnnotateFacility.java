@@ -17,11 +17,13 @@
 package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.PatchGenerator.LineSequence;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelledException;
 
 /**
@@ -31,7 +33,27 @@ import org.tmatesoft.hg.util.CancelledException;
  */
 @Experimental(reason="work in progress")
 public class AnnotateFacility {
-	
+
+	/**
+	 * Annotate file revision, line by line. 
+	 */
+	public void annotate(HgDataFile df, int changesetRevisionIndex, LineInspector insp) {
+		if (!df.exists()) {
+			return;
+		}
+		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(changesetRevisionIndex, df.getPath());
+		int fileRevIndex = df.getRevisionIndex(fileRev);
+		int[] fileRevParents = new int[2];
+		FileAnnotation fa = new FileAnnotation(insp);
+		do {
+			// also covers changesetRevisionIndex == TIP, #implAnnotateChange doesn't tolerate constants
+			changesetRevisionIndex = df.getChangesetRevisionIndex(fileRevIndex);
+			df.parents(fileRevIndex, fileRevParents, null, null);
+			implAnnotateChange(df, changesetRevisionIndex, fileRevIndex, fileRevParents, fa);
+			fileRevIndex = fileRevParents[0];
+		} while (fileRevIndex != NO_REVISION);
+	}
+
 	/**
 	 * Annotates changes of the file against its parent(s)
 	 */
@@ -41,22 +63,29 @@ public class AnnotateFacility {
 		int fileRevIndex = df.getRevisionIndex(fileRev);
 		int[] fileRevParents = new int[2];
 		df.parents(fileRevIndex, fileRevParents, null, null);
+		if (changesetRevisionIndex == TIP) {
+			changesetRevisionIndex = df.getChangesetRevisionIndex(fileRevIndex);
+		}
+		implAnnotateChange(df, changesetRevisionIndex, fileRevIndex, fileRevParents, insp);
+	}
+
+	private void implAnnotateChange(HgDataFile df, int csetRevIndex, int fileRevIndex, int[] fileParentRevs, BlockInspector insp) {
 		try {
-			if (fileRevParents[0] != NO_REVISION && fileRevParents[1] != NO_REVISION) {
+			if (fileParentRevs[0] != NO_REVISION && fileParentRevs[1] != NO_REVISION) {
 				// merge
-			} else if (fileRevParents[0] == fileRevParents[1]) {
+			} else if (fileParentRevs[0] == fileParentRevs[1]) {
 				// may be equal iff both are unset
-				assert fileRevParents[0] == NO_REVISION;
+				assert fileParentRevs[0] == NO_REVISION;
 				// everything added
 				ByteArrayChannel c;
 				df.content(fileRevIndex, c = new ByteArrayChannel());
-				BlameBlockInspector bbi = new BlameBlockInspector(insp, NO_REVISION, changesetRevisionIndex);
+				BlameBlockInspector bbi = new BlameBlockInspector(insp, NO_REVISION, csetRevIndex);
 				LineSequence cls = LineSequence.newlines(c.toArray());
 				bbi.begin(LineSequence.newlines(new byte[0]), cls);
 				bbi.match(0, cls.chunkCount()-1, 0);
 				bbi.end();
 			} else {
-				int soleParent = fileRevParents[0] == NO_REVISION ? fileRevParents[1] : fileRevParents[0];
+				int soleParent = fileParentRevs[0] == NO_REVISION ? fileParentRevs[1] : fileParentRevs[0];
 				assert soleParent != NO_REVISION;
 				ByteArrayChannel c1, c2;
 				df.content(soleParent, c1 = new ByteArrayChannel());
@@ -64,7 +93,7 @@ public class AnnotateFacility {
 				int parentChangesetRevIndex = df.getChangesetRevisionIndex(soleParent);
 				PatchGenerator<LineSequence> pg = new PatchGenerator<LineSequence>();
 				pg.init(LineSequence.newlines(c1.toArray()), LineSequence.newlines(c2.toArray()));
-				pg.findMatchingBlocks(new BlameBlockInspector(insp, parentChangesetRevIndex, changesetRevisionIndex));
+				pg.findMatchingBlocks(new BlameBlockInspector(insp, parentChangesetRevIndex, csetRevIndex));
 			}
 		} catch (CancelledException ex) {
 			// TODO likely it was bad idea to throw cancelled exception from content()
@@ -123,6 +152,9 @@ public class AnnotateFacility {
 	
 	@Callback
 	public interface LineInspector {
+		/**
+		 * Not necessarily invoked sequentially by line numbers
+		 */
 		void line(int lineNumber, int changesetRevIndex, LineDescriptor ld);
 	}
 	
