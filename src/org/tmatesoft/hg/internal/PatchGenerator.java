@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 
@@ -54,6 +55,13 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		seq1 = s1;
 		seq2 = s2;
 		prepare(s2);
+	}
+	
+	public void init(T s1) {
+		if (seq2 == null) {
+			throw new IllegalStateException("Use this #init() only when target sequence shall be matched against different origin");
+		}
+		seq1 = s1;
 	}
 
 
@@ -200,7 +208,11 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 					added(changeStartS1, changeStartS2, matchStartSeq2);
 				} else {
 					assert changeStartS2 == matchStartSeq2;
-					System.out.printf("adjustent equal blocks %d, %d and %d,%d\n", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
+					if (matchStartSeq1 > 0 || matchStartSeq2 > 0) {
+						// FIXME perhaps, exception is too much for the case
+						// once diff is covered with tests, replace with assert false : msg; 
+						throw new HgInvalidStateException(String.format("adjustent equal blocks %d, %d and %d,%d", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2));
+					}
 				}
 			}
 			if (matchLength > 0) {

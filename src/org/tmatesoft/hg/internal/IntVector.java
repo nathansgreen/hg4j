@@ -105,4 +105,9 @@ public class IntVector {
 		System.arraycopy(data, 0, newData, 0, count);
 		data = newData;
 	}
+	
+	@Override
+	public String toString() {
+		return String.format("%s[%d]", IntVector.class.getSimpleName(), size());
+	}
 }

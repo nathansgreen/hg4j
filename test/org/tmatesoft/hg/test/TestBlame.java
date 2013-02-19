@@ -27,9 +27,12 @@ import java.util.Arrays;
 import java.util.regex.Pattern;
 
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.console.Bundle.Dump;
 import org.tmatesoft.hg.internal.AnnotateFacility;
 import org.tmatesoft.hg.internal.AnnotateFacility.AddBlock;
+import org.tmatesoft.hg.internal.AnnotateFacility.Block;
 import org.tmatesoft.hg.internal.AnnotateFacility.ChangeBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.DeleteBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.EqualBlock;
@@ -45,6 +48,9 @@ import org.tmatesoft.hg.repo.HgRepository;
  * @author TMate Software Ltd.
  */
 public class TestBlame {
+
+	@Rule
+	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 
 	
 	@Test
@@ -72,7 +78,7 @@ public class TestBlame {
 		OutputParser.Stub op = new OutputParser.Stub();
 		ExecHelper eh = new ExecHelper(op, null);
 
-		for (int startChangeset : new int[] { 539, 541/*, TIP */}) {
+		for (int startChangeset : new int[] { TIP, /*539, 541/ *, TIP */}) {
 			FileAnnotateInspector fa = new FileAnnotateInspector();
 			new AnnotateFacility().annotate(df, startChangeset, fa);
 			
@@ -86,7 +92,7 @@ public class TestBlame {
 	
 			for (int i = 0; i < fa.lineRevisions.length; i++) {
 				int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')));
-				assertEquals(String.format("Revision mismatch for line %d", i+1), hgAnnotateRevIndex, fa.lineRevisions[i]);
+				errorCollector.assertEquals(String.format("Revision mismatch for line %d", i+1), hgAnnotateRevIndex, fa.lineRevisions[i]);
 			}
 		}
 	}
@@ -116,19 +122,49 @@ public class TestBlame {
 		return rv;
 	}
 	
-	private void leftovers() throws Exception {
+	
+	private void aaa() throws Exception {
 		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		final String fname = "src/org/tmatesoft/hg/internal/PatchGenerator.java";
 		final int checkChangeset = 539;
 		HgDataFile df = repo.getFileNode(fname);
 		AnnotateFacility af = new AnnotateFacility();
+		DiffOutInspector dump = new DiffOutInspector(System.out);
+		System.out.println("541 -> 543");
+		af.annotateChange(df, 543, dump);
+		System.out.println("539 -> 541");
+		af.annotateChange(df, 541, dump);
 		System.out.println("536 -> 539");
-		af.annotateChange(df, checkChangeset, new DiffOutInspector(System.out));
+		af.annotateChange(df, checkChangeset, dump);
 		System.out.println("531 -> 536");
-		af.annotateChange(df, 536, new DiffOutInspector(System.out));
+		af.annotateChange(df, 536, dump);
 		System.out.println(" -1 -> 531");
-		af.annotateChange(df, 531, new DiffOutInspector(System.out));
+		af.annotateChange(df, 531, dump);
+		
+		FileAnnotateInspector fai = new FileAnnotateInspector();
+		af.annotate(df, TIP, fai);
+		for (int i = 0; i < fai.lineRevisions.length; i++) {
+			System.out.printf("%3d: LINE %d\n", fai.lineRevisions[i], i+1);
+		}
+	}
 
+	private void bbb() throws Exception {
+		HgRepository repo = new HgLookup().detectFromWorkingDir();
+		final String fname = "src/org/tmatesoft/hg/repo/HgManifest.java";
+		final int checkChangeset = 415;
+		HgDataFile df = repo.getFileNode(fname);
+		AnnotateFacility af = new AnnotateFacility();
+		DiffOutInspector dump = new DiffOutInspector(System.out);
+		System.out.println("413 -> 415");
+		af.diff(df, 413, 415, dump);
+		System.out.println("408 -> 415");
+		af.diff(df, 408, 415, dump);
+		System.out.println("Combined (with merge):");
+		dump.needRevisions(true);
+		af.annotateChange(df, checkChangeset, dump);
+	}
+
+	private void leftovers() throws Exception {
 		IntMap<String> linesOld = new IntMap<String>(100), linesNew = new IntMap<String>(100);
 		System.out.println("Changes to old revision:");
 		for (int i = linesOld.firstKey(), x = linesOld.lastKey(); i < x; i++) {
@@ -150,14 +186,26 @@ public class TestBlame {
 //		System.out.println(Arrays.equals(new String[] { "abc" }, splitLines("abc")));
 //		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc")));
 //		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc\n")));
-		new TestBlame().testFileAnnotate();
+		new TestBlame().bbb();
 	}
 
 	static class DiffOutInspector implements AnnotateFacility.BlockInspector {
 		private final PrintStream out;
+		private boolean dumpRevs;
 		
 		DiffOutInspector(PrintStream ps) {
 			out = ps;
+		}
+		
+		public void needRevisions(boolean dumpRevs) {
+			// Note, true makes output incompatible with 'hg diff'
+			this.dumpRevs = dumpRevs;
+		}
+		
+		private void printRevs(Block b) {
+			if (dumpRevs) {
+				out.printf("[%3d -> %3d] ", b.originChangesetIndex(), b.targetChangesetIndex());
+			}
 		}
 		
 		public void same(EqualBlock block) {
@@ -165,6 +213,7 @@ public class TestBlame {
 		}
 		
 		public void deleted(DeleteBlock block) {
+			printRevs(block);
 			out.printf("@@ -%d,%d +%d,0 @@\n", block.firstRemovedLine() + 1, block.totalRemovedLines(), block.removedAt());
 //			String[] lines = block.removedLines();
 //			assert lines.length == block.totalRemovedLines();
@@ -176,10 +225,12 @@ public class TestBlame {
 		public void changed(ChangeBlock block) {
 //			deleted(block);
 //			added(block);
+			printRevs(block);
 			out.printf("@@ -%d,%d +%d,%d @@\n", block.firstRemovedLine() + 1, block.totalRemovedLines(), block.firstAddedLine() + 1, block.totalAddedLines());
 		}
 		
 		public void added(AddBlock block) {
+			printRevs(block);
 			out.printf("@@ -%d,0 +%d,%d @@\n", block.insertedAt(), block.firstAddedLine() + 1, block.totalAddedLines());
 //			String[] addedLines = block.addedLines();
 //			assert addedLines.length == block.totalAddedLines();
