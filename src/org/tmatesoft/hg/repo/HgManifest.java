@@ -266,9 +266,9 @@ public final class HgManifest extends Revlog {
 		IntMap<Nodeid> resMap = new IntMap<Nodeid>(3);
 		FileLookupInspector parser = new FileLookupInspector(encodingHelper, file, resMap, null);
 		parser.walk(manifestRevIndex, content);
-		assert resMap.size() == 1;
+		assert resMap.size() <= 1; // size() == 0 if file wasn't found
 		// can't use changelogRevisionIndex as key - it might have been TIP
-		return resMap.get(resMap.firstKey());
+		return resMap.size() == 0 ? null : resMap.get(resMap.firstKey());
 	}
 	
 	/**
@@ -310,9 +310,9 @@ public final class HgManifest extends Revlog {
 		IntMap<Flags> resMap = new IntMap<Flags>(2);
 		FileLookupInspector parser = new FileLookupInspector(encodingHelper, file, null, resMap);
 		parser.walk(manifestRevIdx, content);
-		assert resMap.size() == 1;
+		assert resMap.size() <= 1; // size() == 0 if not found
 		// can't use changesetRevIndex as key - it might have been TIP
-		return resMap.get(resMap.firstKey());
+		return resMap.size() == 0 ? null : resMap.get(resMap.firstKey());
 	}
 
 
