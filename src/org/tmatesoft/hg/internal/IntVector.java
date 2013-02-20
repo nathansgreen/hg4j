@@ -49,7 +49,7 @@ public class IntVector {
 	
 	public void add(int... values) {
 		if (count + values.length > data.length) {
-			grow(count + values.length - data.length);
+			grow(count + values.length);
 		}
 		for (int v : values) {
 			data[count++] = v;
@@ -92,6 +92,19 @@ public class IntVector {
 		System.arraycopy(data, 0, rv, 0, count);
 		return rv;
 	}
+	
+	public void reverse() {
+		for (int a = 0, b = count-1; a < b; a++, b--) {
+			int t = data[b];
+			data[b] = data[a];
+			data[a] = t;
+		}
+	}
+
+	@Override
+	public String toString() {
+		return String.format("%s[%d]", IntVector.class.getSimpleName(), size());
+	}
 
 	/**
 	 * Use only when this instance won't be used any longer
@@ -116,10 +129,5 @@ public class IntVector {
 		int[] newData = new int[newCapacity];
 		System.arraycopy(data, 0, newData, 0, count);
 		data = newData;
-	}
-	
-	@Override
-	public String toString() {
-		return String.format("%s[%d]", IntVector.class.getSimpleName(), size());
 	}
 }

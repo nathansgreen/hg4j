@@ -19,11 +19,19 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.util.BitSet;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Pair;
 
 /**
  * 
@@ -34,58 +42,102 @@ import org.tmatesoft.hg.util.CancelledException;
 public class AnnotateFacility {
 	
 	/**
-	 * mimic 'hg diff -r csetRevIndex1 -r csetRevIndex2'
+	 * mimic 'hg diff -r clogRevIndex1 -r clogRevIndex2'
 	 */
-	public void diff(HgDataFile df, int csetRevIndex1, int csetRevIndex2, BlockInspector insp) {
-		int fileRevIndex1 = fileRevIndex(df, csetRevIndex1);
-		int fileRevIndex2 = fileRevIndex(df, csetRevIndex2);
-		LineSequence c1 = lines(df, fileRevIndex1);
-		LineSequence c2 = lines(df, fileRevIndex2);
+	public void diff(HgDataFile df, int clogRevIndex1, int clogRevIndex2, BlockInspector insp) {
+		int fileRevIndex1 = fileRevIndex(df, clogRevIndex1);
+		int fileRevIndex2 = fileRevIndex(df, clogRevIndex2);
+		FileLinesCache fileInfoCache = new FileLinesCache(df, 5);
+		LineSequence c1 = fileInfoCache.lines(fileRevIndex1);
+		LineSequence c2 = fileInfoCache.lines(fileRevIndex2);
 		DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 		pg.init(c1, c2);
-		pg.findMatchingBlocks(new BlameBlockInspector(insp, csetRevIndex1, csetRevIndex2));
+		pg.findMatchingBlocks(new BlameBlockInspector(insp, clogRevIndex1, clogRevIndex2));
+	}
+	
+	public void annotate(HgDataFile df, int changelogRevisionIndex, BlockInspector insp, HgIterateDirection iterateOrder) {
+		if (!df.exists()) {
+			return;
+		}
+		// Note, changelogRevisionIndex may be TIP, while #implAnnotateChange doesn't tolerate constants
+		//
+		// XXX df.indexWalk(0, fileRevIndex, ) might be more effective
+		int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
+		int[] fileRevParents = new int[2];
+		IntVector fileParentRevs = new IntVector((fileRevIndex+1) * 2, 0);
+		fileParentRevs.add(NO_REVISION, NO_REVISION);
+		for (int i = 1; i <= fileRevIndex; i++) {
+			df.parents(i, fileRevParents, null, null);
+			fileParentRevs.add(fileRevParents[0], fileRevParents[1]);
+		}
+		// collect file revisions to visit, from newest to oldest
+		IntVector fileRevsToVisit = new IntVector(fileRevIndex + 1, 0);
+		LinkedList<Integer> queue = new LinkedList<Integer>();
+		BitSet seen = new BitSet(fileRevIndex + 1);
+		queue.add(fileRevIndex);
+		do {
+			int x = queue.removeFirst();
+			if (seen.get(x)) {
+				continue;
+			}
+			seen.set(x);
+			fileRevsToVisit.add(x);
+			int p1 = fileParentRevs.get(2*x);
+			int p2 = fileParentRevs.get(2*x + 1);
+			if (p1 != NO_REVISION) {
+				queue.addLast(p1);
+			}
+			if (p2 != NO_REVISION) {
+				queue.addLast(p2);
+			}
+		} while (!queue.isEmpty());
+		FileLinesCache fileInfoCache = new FileLinesCache(df, 10);
+		// fileRevsToVisit now { r10, r7, r6, r5, r0 }
+		// and we'll iterate it from behind, e.g. old to new unless reversed 
+		if (iterateOrder == HgIterateDirection.NewToOld) {
+			fileRevsToVisit.reverse();
+		}
+		for (int i = fileRevsToVisit.size() - 1; i >= 0; i--) {
+			int fri = fileRevsToVisit.get(i);
+			int clogRevIndex = df.getChangesetRevisionIndex(fri);
+			fileRevParents[0] = fileParentRevs.get(fri * 2);
+			fileRevParents[1] = fileParentRevs.get(fri * 2 + 1);
+			implAnnotateChange(fileInfoCache, clogRevIndex, fri, fileRevParents, insp);
+		}
 	}
 
 	/**
 	 * Annotate file revision, line by line. 
 	 */
-	public void annotate(HgDataFile df, int changesetRevisionIndex, LineInspector insp) {
+	public void annotate(HgDataFile df, int changelogRevisionIndex, LineInspector insp) {
 		if (!df.exists()) {
 			return;
 		}
-		int fileRevIndex = fileRevIndex(df, changesetRevisionIndex);
-		int[] fileRevParents = new int[2];
 		FileAnnotation fa = new FileAnnotation(insp);
-		do {
-			// also covers changesetRevisionIndex == TIP, #implAnnotateChange doesn't tolerate constants
-			changesetRevisionIndex = df.getChangesetRevisionIndex(fileRevIndex);
-			df.parents(fileRevIndex, fileRevParents, null, null);
-			implAnnotateChange(df, changesetRevisionIndex, fileRevIndex, fileRevParents, fa);
-			fileRevIndex = fileRevParents[0];
-		} while (fileRevIndex != NO_REVISION);
+		annotate(df, changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
 	}
 
 	/**
 	 * Annotates changes of the file against its parent(s)
 	 */
-	public void annotateChange(HgDataFile df, int changesetRevisionIndex, BlockInspector insp) {
+	public void annotateChange(HgDataFile df, int changelogRevisionIndex, BlockInspector insp) {
 		// TODO detect if file is text/binary (e.g. looking for chars < ' ' and not \t\r\n\f
-		int fileRevIndex = fileRevIndex(df, changesetRevisionIndex);
+		int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
 		int[] fileRevParents = new int[2];
 		df.parents(fileRevIndex, fileRevParents, null, null);
-		if (changesetRevisionIndex == TIP) {
-			changesetRevisionIndex = df.getChangesetRevisionIndex(fileRevIndex);
+		if (changelogRevisionIndex == TIP) {
+			changelogRevisionIndex = df.getChangesetRevisionIndex(fileRevIndex);
 		}
-		implAnnotateChange(df, changesetRevisionIndex, fileRevIndex, fileRevParents, insp);
+		implAnnotateChange(new FileLinesCache(df, 5), changelogRevisionIndex, fileRevIndex, fileRevParents, insp);
 	}
 
-	private void implAnnotateChange(HgDataFile df, int csetRevIndex, int fileRevIndex, int[] fileParentRevs, BlockInspector insp) {
-		final LineSequence fileRevLines = lines(df, fileRevIndex);
+	private void implAnnotateChange(FileLinesCache fl, int csetRevIndex, int fileRevIndex, int[] fileParentRevs, BlockInspector insp) {
+		final LineSequence fileRevLines = fl.lines(fileRevIndex);
 		if (fileParentRevs[0] != NO_REVISION && fileParentRevs[1] != NO_REVISION) {
-			LineSequence p1Lines = lines(df, fileParentRevs[0]);
-			LineSequence p2Lines = lines(df, fileParentRevs[1]);
-			int p1ClogIndex = df.getChangesetRevisionIndex(fileParentRevs[0]);
-			int p2ClogIndex = df.getChangesetRevisionIndex(fileParentRevs[1]);
+			LineSequence p1Lines = fl.lines(fileParentRevs[0]);
+			LineSequence p2Lines = fl.lines(fileParentRevs[1]);
+			int p1ClogIndex = fl.getChangesetRevisionIndex(fileParentRevs[0]);
+			int p2ClogIndex = fl.getChangesetRevisionIndex(fileParentRevs[1]);
 			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 			pg.init(p2Lines, fileRevLines);
 			EqualBlocksCollector p2MergeCommon = new EqualBlocksCollector();
@@ -106,9 +158,9 @@ public class AnnotateFacility {
 		} else {
 			int soleParent = fileParentRevs[0] == NO_REVISION ? fileParentRevs[1] : fileParentRevs[0];
 			assert soleParent != NO_REVISION;
-			LineSequence parentLines = lines(df, soleParent);
+			LineSequence parentLines = fl.lines(soleParent);
 			
-			int parentChangesetRevIndex = df.getChangesetRevisionIndex(soleParent);
+			int parentChangesetRevIndex = fl.getChangesetRevisionIndex(soleParent);
 			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 			pg.init(parentLines, fileRevLines);
 			pg.findMatchingBlocks(new BlameBlockInspector(insp, parentChangesetRevIndex, csetRevIndex));
@@ -120,17 +172,64 @@ public class AnnotateFacility {
 		return df.getRevisionIndex(fileRev);
 	}
 
-	private static LineSequence lines(HgDataFile df, int fileRevIndex) {
-		try {
-			ByteArrayChannel c;
-			df.content(fileRevIndex, c = new ByteArrayChannel());
-			return LineSequence.newlines(c.toArray());
-		} catch (CancelledException ex) {
-			// TODO likely it was bad idea to throw cancelled exception from content()
-			// deprecate and provide alternative?
-			HgInvalidStateException ise = new HgInvalidStateException("ByteArrayChannel never throws CancelledException");
-			ise.initCause(ex);
-			throw ise;
+	private static class FileLinesCache {
+		private final HgDataFile df;
+		private final LinkedList<Pair<Integer, LineSequence>> lruCache;
+		private final int limit;
+		private IntMap<Integer> fileToClogIndexMap = new IntMap<Integer>(20);
+
+		public FileLinesCache(HgDataFile file, int lruLimit) {
+			df = file;
+			limit = lruLimit;
+			lruCache = new LinkedList<Pair<Integer, LineSequence>>();
+		}
+		
+		public int getChangesetRevisionIndex(int fileRevIndex) {
+			Integer cached = fileToClogIndexMap.get(fileRevIndex);
+			if (cached == null) {
+				cached = df.getChangesetRevisionIndex(fileRevIndex);
+				fileToClogIndexMap.put(fileRevIndex, cached);
+			}
+			return cached.intValue();
+		}
+
+		public LineSequence lines(int fileRevIndex) {
+			Pair<Integer, LineSequence> cached = checkCache(fileRevIndex);
+			if (cached != null) {
+				return cached.second();
+			}
+			try {
+				ByteArrayChannel c;
+				df.content(fileRevIndex, c = new ByteArrayChannel());
+				LineSequence rv = LineSequence.newlines(c.toArray());
+				lruCache.addFirst(new Pair<Integer, LineSequence>(fileRevIndex, rv));
+				if (lruCache.size() > limit) {
+					lruCache.removeLast();
+				}
+				return rv;
+			} catch (CancelledException ex) {
+				// TODO likely it was bad idea to throw cancelled exception from content()
+				// deprecate and provide alternative?
+				HgInvalidStateException ise = new HgInvalidStateException("ByteArrayChannel never throws CancelledException");
+				ise.initCause(ex);
+				throw ise;
+			}
+		}
+		
+		private Pair<Integer,LineSequence> checkCache(int fileRevIndex) {
+			Pair<Integer, LineSequence> rv = null;
+			for (ListIterator<Pair<Integer, LineSequence>> it = lruCache.listIterator(); it.hasNext(); ) {
+				Pair<Integer, LineSequence> p = it.next();
+				if (p.first() == fileRevIndex) {
+					rv = p;
+					it.remove();
+					break;
+				}
+			}
+			if (rv != null) {
+				lruCache.addFirst(rv);
+			}
+			return rv;
 		}
 	}
 

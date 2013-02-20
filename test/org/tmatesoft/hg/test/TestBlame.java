@@ -30,6 +30,7 @@ import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.console.Bundle.Dump;
+import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.internal.AnnotateFacility;
 import org.tmatesoft.hg.internal.AnnotateFacility.AddBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.Block;
@@ -78,7 +79,7 @@ public class TestBlame {
 		OutputParser.Stub op = new OutputParser.Stub();
 		ExecHelper eh = new ExecHelper(op, null);
 
-		for (int startChangeset : new int[] { TIP, /*539, 541/ *, TIP */}) {
+		for (int startChangeset : new int[] { 539, 541 /*, TIP */}) {
 			FileAnnotateInspector fa = new FileAnnotateInspector();
 			new AnnotateFacility().annotate(df, startChangeset, fa);
 			
@@ -142,7 +143,7 @@ public class TestBlame {
 		af.annotateChange(df, 531, dump);
 		
 		FileAnnotateInspector fai = new FileAnnotateInspector();
-		af.annotate(df, TIP, fai);
+		af.annotate(df, 541, fai);
 		for (int i = 0; i < fai.lineRevisions.length; i++) {
 			System.out.printf("%3d: LINE %d\n", fai.lineRevisions[i], i+1);
 		}
@@ -155,13 +156,15 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode(fname);
 		AnnotateFacility af = new AnnotateFacility();
 		DiffOutInspector dump = new DiffOutInspector(System.out);
-		System.out.println("413 -> 415");
-		af.diff(df, 413, 415, dump);
-		System.out.println("408 -> 415");
-		af.diff(df, 408, 415, dump);
-		System.out.println("Combined (with merge):");
+//		System.out.println("413 -> 415");
+//		af.diff(df, 413, 415, dump);
+//		System.out.println("408 -> 415");
+//		af.diff(df, 408, 415, dump);
+//		System.out.println("Combined (with merge):");
+//		dump.needRevisions(true);
+//		af.annotateChange(df, checkChangeset, dump);
 		dump.needRevisions(true);
-		af.annotateChange(df, checkChangeset, dump);
+		af.annotate(df, checkChangeset, dump, HgIterateDirection.OldToNew);
 	}
 
 	private void leftovers() throws Exception {

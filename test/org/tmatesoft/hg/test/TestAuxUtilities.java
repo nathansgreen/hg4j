@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ import org.junit.Test;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
+import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.PathScope;
 import org.tmatesoft.hg.internal.RevisionDescendants;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -495,6 +496,36 @@ public class TestAuxUtilities {
 		//
 		errorCollector.assertEquals(Unrelated, p2.compareWith(p3));
 		errorCollector.assertEquals(Unrelated, p3.compareWith(p2));
+	}
+	
+	@Test
+	public void testIntVector() {
+		IntVector v = new IntVector();
+		v.add(10, 9, 8);
+		v.add(7);
+		errorCollector.assertEquals(4, v.size());
+		v.clear();
+		errorCollector.assertEquals(0, v.size());
+		
+		// vector that doesn't grow
+		v = new IntVector(3, 0);
+		v.add(1,2,3);
+		try {
+			v.add(4);
+			errorCollector.fail("This vector instance is not supposed to grow on demand");
+		} catch (UnsupportedOperationException ex) {
+		}
+		v = new IntVector(5, 2);
+		v.add(10,9,8);
+		v.add(7,6);
+		v.add(5,4,3,2,1);
+		errorCollector.assertEquals(10, v.size());
+		// so far so good - grow() works
+		// now, check reverse() 
+		v.reverse();
+		for (int i = 0; i < v.size(); i++) {
+			errorCollector.assertEquals(i+1, v.get(i));
+		}
 	}
 	
 	
