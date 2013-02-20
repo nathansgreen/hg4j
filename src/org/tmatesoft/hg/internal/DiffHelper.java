@@ -20,10 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
-import org.tmatesoft.hg.repo.HgLookup;
-import org.tmatesoft.hg.repo.HgRepository;
 
 /**
  * Mercurial cares about changes only up to the line level, e.g. a simple file version dump in manifest looks like (RevlogDump output):
@@ -41,9 +38,9 @@ import org.tmatesoft.hg.repo.HgRepository;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
+public class DiffHelper<T extends DiffHelper.ChunkSequence<?>> {
 
-	private Map<Chunk, IntVector> chunk2UseIndex;
+	private Map<Object, IntVector> chunk2UseIndex;
 	private T seq1, seq2;
 
 	// get filled by #longestMatch, track start of common sequence in seq1 and seq2, respectively
@@ -66,9 +63,9 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 
 
 	private void prepare(T s2) {
-		chunk2UseIndex = new HashMap<Chunk, IntVector>();
+		chunk2UseIndex = new HashMap<Object, IntVector>();
 		for (int i = 0, len = s2.chunkCount(); i < len; i++) {
-			Chunk bc = s2.chunk(i);
+			Object bc = s2.chunk(i);
 			IntVector loc = chunk2UseIndex.get(bc);
 			if (loc == null) {
 				chunk2UseIndex.put(bc, loc = new IntVector());
@@ -79,13 +76,6 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 			// i.e. when there are few equal ByteChain instances, notion of "usedIn" shall be either shared (reference same vector)
 			// or kept within only one of them
 		}
-//		for (ChunkSequence.ByteChain bc : chunk2UseIndex.keySet()) {
-//			System.out.printf("%s: {", new String(bc.data()));
-//			for (int x : chunk2UseIndex.get(bc).toArray()) {
-//				System.out.printf(" %d,", x);
-//			}
-//			System.out.println("}");
-//		}
 	}
 	
 	public void findMatchingBlocks(MatchInspector<T> insp) {
@@ -103,14 +93,13 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		int maxLength = 0;
 		IntMap<Integer> chunkIndex2MatchCount = new IntMap<Integer>(8);
 		for (int i = startS1; i < endS1; i++) {
-			Chunk bc = seq1.chunk(i);
-			IntMap<Integer> newChunkIndex2MatchCount = new IntMap<Integer>(8);
+			Object bc = seq1.chunk(i);
 			IntVector occurencesInS2 = chunk2UseIndex.get(bc);
 			if (occurencesInS2 == null) {
-				// chunkIndex2MatchCount.clear(); // TODO need clear instead of new instance
-				chunkIndex2MatchCount = newChunkIndex2MatchCount;
+				chunkIndex2MatchCount.clear();
 				continue;
 			}
+			IntMap<Integer> newChunkIndex2MatchCount = new IntMap<Integer>(8);
 			for (int j : occurencesInS2.toArray()) {
 				// s1[i] == s2[j]
 				if (j < startS2) {
@@ -147,7 +136,7 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		}
 	}
 	
-	interface MatchInspector<T extends ChunkSequence<?>> {
+	public interface MatchInspector<T extends ChunkSequence<?>> {
 		void begin(T s1, T s2);
 		void match(int startSeq1, int startSeq2, int matchLength);
 		void end();
@@ -172,7 +161,10 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		}
 	}
 	
-	static class DeltaInspector<T extends ChunkSequence<?>> implements MatchInspector<T> {
+	/**
+	 * Matcher implementation that translates "match/equal" notification to a delta-style "added/removed/changed". 
+	 */
+	public static class DeltaInspector<T extends ChunkSequence<?>> implements MatchInspector<T> {
 		protected int changeStartS1, changeStartS2;
 		protected T seq1, seq2;
 
@@ -263,49 +255,16 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		}
 	}
 	
-	public static void main(String[] args) throws Exception {
-		PatchGenerator<LineSequence> pg1 = new PatchGenerator<LineSequence>();
-//		pg1.init(LineSequence.newlines("hello\nabc".getBytes()), LineSequence.newlines("hello\nworld".getBytes()));
-//		pg1.init(LineSequence.newlines("".getBytes()), LineSequence.newlines("hello\nworld".getBytes()));
-		pg1.init(LineSequence.newlines("hello\nworld".getBytes()), LineSequence.newlines("".getBytes()));
-		pg1.findMatchingBlocks(new MatchDumpInspector<LineSequence>());
-		pg1.findMatchingBlocks(new DeltaDumpInspector<LineSequence>());
-		if (Boolean.FALSE.booleanValue()) {
-			return;
-		}
-		HgRepository repo = new HgLookup().detectFromWorkingDir();
-		HgDataFile df = repo.getFileNode("cmdline/org/tmatesoft/hg/console/Main.java");
-		ByteArrayChannel bac1, bac2;
-		df.content(80, bac1 = new ByteArrayChannel());
-		df.content(81, bac2 = new ByteArrayChannel());
-//		String s1 = "line 1\nline 2\r\nline 3\n\nline 1\nline 2";
-//		String s2 = "abc\ncdef\r\nline 2\r\nline 3\nline 2";
-		PatchGenerator<LineSequence> pg = new PatchGenerator<LineSequence>();
-		byte[] data1 = bac1.toArray();
-		byte[] data2 = bac2.toArray();
-		pg.init(new LineSequence(data1).splitByNewlines(), new LineSequence(data2).splitByNewlines());
-		System.out.println("Matches:");
-		pg.findMatchingBlocks(new MatchDumpInspector<LineSequence>());
-		System.out.println("Deltas:");
-		pg.findMatchingBlocks(new DeltaDumpInspector<LineSequence>());
-	}
-
-	/**
-	 * Unsure if this marker interface worth presence
-	 */
-	public interface Chunk {
-	}
-	
 	/**
 	 * Generic sequence of chunk, where chunk is anything comparable to another chunk, e.g. a string or a single char
 	 * Sequence diff algorithm above doesn't care about sequence nature.
 	 */
-	public interface ChunkSequence<T extends Chunk> {
+	public interface ChunkSequence<T> {
 		public T chunk(int index);
 		public int chunkCount();
 	}
 	
-	static final class LineSequence implements ChunkSequence<LineSequence.ByteChain> {
+	public static final class LineSequence implements ChunkSequence<LineSequence.ByteChain> {
 		
 		private final byte[] input;
 		private ArrayList<ByteChain> lines;
@@ -361,7 +320,7 @@ public class PatchGenerator<T extends PatchGenerator.ChunkSequence<?>> {
 		}
 
 		
-		final class ByteChain implements Chunk {
+		final class ByteChain {
 			private final int start, end;
 			private final int hash;
 			

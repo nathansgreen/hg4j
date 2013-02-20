@@ -42,9 +42,18 @@ public class IntVector {
 
 	public void add(int v) {
 		if (count == data.length) {
-			grow();
+			grow(0);
 		}
 		data[count++] = v;
+	}
+	
+	public void add(int... values) {
+		if (count + values.length > data.length) {
+			grow(count + values.length - data.length);
+		}
+		for (int v : values) {
+			data[count++] = v;
+		}
 	}
 	
 	public int get(int i) {
@@ -95,11 +104,14 @@ public class IntVector {
 		return toArray();
 	}
 
-	private void grow() {
+	private void grow(int newCapacityHint) {
 		if (increment == 0) {
 			throw new UnsupportedOperationException("This vector is not allowed to expand");
 		}
 		int newCapacity = increment < 0 ? data.length << 1 : data.length + increment;
+		if (newCapacityHint > 0 && newCapacity < newCapacityHint) {
+			newCapacity = newCapacityHint;
+		}
 		assert newCapacity > 0 && newCapacity != data.length : newCapacity;
 		int[] newData = new int[newCapacity];
 		System.arraycopy(data, 0, newData, 0, count);

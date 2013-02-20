@@ -16,8 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
-import org.tmatesoft.hg.internal.PatchGenerator.DeltaInspector;
-import org.tmatesoft.hg.internal.PatchGenerator.LineSequence;
+import org.tmatesoft.hg.internal.DiffHelper.DeltaInspector;
+import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 
 class GeneratePatchInspector extends DeltaInspector<LineSequence> {
 	private final Patch deltaCollector;
@@ -29,7 +29,7 @@ class GeneratePatchInspector extends DeltaInspector<LineSequence> {
 	
 	public static Patch delta(byte[] prev, byte[] content) {
 		Patch rv = new Patch();
-		PatchGenerator<LineSequence> pg = new PatchGenerator<LineSequence>();
+		DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 		pg.init(new LineSequence(prev).splitByNewlines(), new LineSequence(content).splitByNewlines());
 		pg.findMatchingBlocks(new GeneratePatchInspector(rv));
 		return rv;

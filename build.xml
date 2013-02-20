@@ -106,6 +106,7 @@
 			<test name="org.tmatesoft.hg.test.TestAddRemove" />
 			<test name="org.tmatesoft.hg.test.TestCommit" />
 			<test name="org.tmatesoft.hg.test.TestBlame" />
+			<test name="org.tmatesoft.hg.test.TestDiffHelper" />
 		</junit>
 	</target>
 

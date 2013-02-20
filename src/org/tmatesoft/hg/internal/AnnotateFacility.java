@@ -20,7 +20,7 @@ import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.PatchGenerator.LineSequence;
+import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.util.CancelledException;
@@ -41,7 +41,7 @@ public class AnnotateFacility {
 		int fileRevIndex2 = fileRevIndex(df, csetRevIndex2);
 		LineSequence c1 = lines(df, fileRevIndex1);
 		LineSequence c2 = lines(df, fileRevIndex2);
-		PatchGenerator<LineSequence> pg = new PatchGenerator<LineSequence>();
+		DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 		pg.init(c1, c2);
 		pg.findMatchingBlocks(new BlameBlockInspector(insp, csetRevIndex1, csetRevIndex2));
 	}
@@ -86,7 +86,7 @@ public class AnnotateFacility {
 			LineSequence p2Lines = lines(df, fileParentRevs[1]);
 			int p1ClogIndex = df.getChangesetRevisionIndex(fileParentRevs[0]);
 			int p2ClogIndex = df.getChangesetRevisionIndex(fileParentRevs[1]);
-			PatchGenerator<LineSequence> pg = new PatchGenerator<LineSequence>();
+			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 			pg.init(p2Lines, fileRevLines);
 			EqualBlocksCollector p2MergeCommon = new EqualBlocksCollector();
 			pg.findMatchingBlocks(p2MergeCommon);
@@ -109,7 +109,7 @@ public class AnnotateFacility {
 			LineSequence parentLines = lines(df, soleParent);
 			
 			int parentChangesetRevIndex = df.getChangesetRevisionIndex(soleParent);
-			PatchGenerator<LineSequence> pg = new PatchGenerator<LineSequence>();
+			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 			pg.init(parentLines, fileRevLines);
 			pg.findMatchingBlocks(new BlameBlockInspector(insp, parentChangesetRevIndex, csetRevIndex));
 		}
@@ -194,7 +194,7 @@ public class AnnotateFacility {
 	
 
 
-	static class BlameBlockInspector extends PatchGenerator.DeltaInspector<LineSequence> {
+	static class BlameBlockInspector extends DiffHelper.DeltaInspector<LineSequence> {
 		private final BlockInspector insp;
 		private final int csetOrigin;
 		private final int csetTarget;
@@ -443,7 +443,7 @@ public class AnnotateFacility {
 		}
 	}
 
-	static class EqualBlocksCollector implements PatchGenerator.MatchInspector<LineSequence> {
+	static class EqualBlocksCollector implements DiffHelper.MatchInspector<LineSequence> {
 		private final IntVector matches = new IntVector(10*3, 2*3);
 
 		public void begin(LineSequence s1, LineSequence s2) {

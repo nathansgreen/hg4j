@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -125,6 +126,11 @@ public class IntMap<V> {
 			keys[size] = 0;
 			values[size] = null;
 		}
+	}
+	
+	public void clear() {
+		Arrays.fill(values, 0, size, null); // do not keep the references
+		size = 0;
 	}
 	
 	/**
