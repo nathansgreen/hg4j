@@ -24,21 +24,22 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.regex.Pattern;
 
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
-import org.tmatesoft.hg.console.Bundle.Dump;
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.internal.AnnotateFacility;
+import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.AnnotateFacility.AddBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.Block;
 import org.tmatesoft.hg.internal.AnnotateFacility.ChangeBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.DeleteBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.EqualBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.LineDescriptor;
-import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -96,6 +97,31 @@ public class TestBlame {
 				errorCollector.assertEquals(String.format("Revision mismatch for line %d", i+1), hgAnnotateRevIndex, fa.lineRevisions[i]);
 			}
 		}
+	}
+	
+	@Test
+	public void testComplexHistoryAnnotate() throws Exception {
+		HgRepository repo = Configuration.get().find("test-annotate");
+		HgDataFile df = repo.getFileNode("file1");
+		AnnotateFacility af = new AnnotateFacility();
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		DiffOutInspector dump = new DiffOutInspector(new PrintStream(bos));
+		af.annotate(df, TIP, dump, HgIterateDirection.OldToNew);
+		LinkedList<String> apiResult = new LinkedList<String>(Arrays.asList(splitLines(bos.toString())));
+		
+		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
+		ExecHelper eh = new ExecHelper(gp, repo.getWorkingDir());
+		System.out.println(Arrays.toString(dump.getReportedTargetRevisions()));
+		for (int cs : dump.getReportedTargetRevisions()) {
+			gp.reset();
+			eh.run("hg", "diff", "-c", String.valueOf(cs), "-U", "0", df.getPath().toString());
+			for (String expected : splitLines(gp.result())) {
+				if (!apiResult.remove(expected)) {
+					errorCollector.fail(String.format("Expected diff output '%s' for changes in revision %d", expected, cs));
+				}
+			}
+		}
+		errorCollector.assertTrue(String.format("Annotate API reported excessive diff: %s ", apiResult.toString()), apiResult.isEmpty());
 	}
 	
 	private static String[] splitLines(CharSequence seq) {
@@ -166,35 +192,34 @@ public class TestBlame {
 		dump.needRevisions(true);
 		af.annotate(df, checkChangeset, dump, HgIterateDirection.OldToNew);
 	}
-
-	private void leftovers() throws Exception {
-		IntMap<String> linesOld = new IntMap<String>(100), linesNew = new IntMap<String>(100);
-		System.out.println("Changes to old revision:");
-		for (int i = linesOld.firstKey(), x = linesOld.lastKey(); i < x; i++) {
-			if (linesOld.containsKey(i)) {
-				System.out.println(linesOld.get(i));
-			}
-		}
-
-		System.out.println("Changes in the new revision:");
-		for (int i = linesNew.firstKey(), x = linesNew.lastKey(); i < x; i++) {
-			if (linesNew.containsKey(i)) {
-				System.out.println(linesNew.get(i));
-			}
+	
+	private void ccc() throws Exception {
+		HgRepository repo = new HgLookup().detect("/home/artem/hg/test-annotate/");
+		HgDataFile df = repo.getFileNode("file1");
+		AnnotateFacility af = new AnnotateFacility();
+		DiffOutInspector dump = new DiffOutInspector(System.out);
+		dump.needRevisions(true);
+		af.annotate(df, TIP, dump, HgIterateDirection.OldToNew);
+		System.out.println();
+		FileAnnotateInspector fa = new FileAnnotateInspector();
+		af.annotate(df, TIP, fa);
+		for (int i = 0; i < fa.lineRevisions.length; i++) {
+			System.out.printf("%d: LINE %d\n", fa.lineRevisions[i], i+1);
 		}
 	}
-	
+
 	public static void main(String[] args) throws Exception {
 //		System.out.println(Arrays.equals(new String[0], splitLines("")));
 //		System.out.println(Arrays.equals(new String[] { "abc" }, splitLines("abc")));
 //		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc")));
 //		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc\n")));
-		new TestBlame().bbb();
+		new TestBlame().ccc();
 	}
 
 	static class DiffOutInspector implements AnnotateFacility.BlockInspector {
 		private final PrintStream out;
 		private boolean dumpRevs;
+		private IntVector reportedRevisionPairs = new IntVector();
 		
 		DiffOutInspector(PrintStream ps) {
 			out = ps;
@@ -209,6 +234,20 @@ public class TestBlame {
 			if (dumpRevs) {
 				out.printf("[%3d -> %3d] ", b.originChangesetIndex(), b.targetChangesetIndex());
 			}
+			reportedRevisionPairs.add(b.originChangesetIndex(), b.targetChangesetIndex());
+		}
+		
+		int[] getReportedTargetRevisions() {
+			LinkedHashSet<Integer> rv = new LinkedHashSet<Integer>();
+			for (int i = 1; i < reportedRevisionPairs.size(); i += 2) {
+				rv.add(reportedRevisionPairs.get(i));
+			}
+			int[] x = new int[rv.size()];
+			int i = 0;
+			for (int v : rv) {
+				x[i++] = v;
+			}
+			return x;
 		}
 		
 		public void same(EqualBlock block) {
@@ -250,6 +289,10 @@ public class TestBlame {
 
 		public LineGrepOutputParser(String regexp) {
 			pattern = Pattern.compile(regexp);
+		}
+		
+		public void reset() {
+			result.setLength(0);
 		}
 		
 		public CharSequence result() {
