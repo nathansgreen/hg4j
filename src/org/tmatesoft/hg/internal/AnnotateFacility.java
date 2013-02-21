@@ -25,7 +25,9 @@ import java.util.ListIterator;
 
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.AnnotateFacility.BlockData;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
+import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.util.CancelledException;
@@ -242,8 +244,36 @@ public class AnnotateFacility {
 	@Callback
 	public interface BlockInspectorEx extends BlockInspector { // XXX better name
 		// XXX perhaps, shall pass object instead of separate values for future extension?
-		void start(int originLineCount, int targetLineCount);
+		void start(BlockData originContent, BlockData targetContent);
 		void done();
+	}
+	
+	/**
+	 * Represents content of a block, either as a sequence of bytes or a 
+	 * sequence of smaller blocks (lines), if appropriate (according to usage context).
+	 * 
+	 * This approach allows line-by-line access to content data along with complete byte sequence for the whole block, i.e.
+	 * <pre>
+	 *    BlockData bd = addBlock.addedLines()
+	 *    // bd describes data from the addition completely.
+	 *    // elements of the BlockData are lines
+	 *    bd.elementCount() == addBlock.totalAddedLines();
+	 *    // one cat obtain complete addition with
+	 *    byte[] everythingAdded = bd.asArray();
+	 *    // or iterate line by line
+	 *    for (int i = 0; i < bd.elementCount(); i++) {
+	 *    	 byte[] lineContent = bd.elementAt(i);
+	 *       String line = new String(lineContent, fileEncodingCharset);
+	 *    }
+	 *    where bd.elementAt(0) is the line at index addBlock.firstAddedLine() 
+	 * </pre> 
+	 * 
+	 * LineData or ChunkData? 
+	 */
+	public interface BlockData {
+		BlockData elementAt(int index);
+		int elementCount();
+		byte[] asArray();
 	}
 	
 	public interface Block {
@@ -260,19 +290,20 @@ public class AnnotateFacility {
 		int originStart();
 		int targetStart();
 		int length();
+		BlockData content();
 	}
 	
 	public interface AddBlock extends Block {
 		int insertedAt(); // line index in the old file 
 		int firstAddedLine();
 		int totalAddedLines();
-		String[] addedLines();
+		BlockData addedLines();
 	}
 	public interface DeleteBlock extends Block {
 		int removedAt(); // line index in the new file
 		int firstRemovedLine();
 		int totalRemovedLines();
-		String[] removedLines();
+		BlockData removedLines();
 	}
 	public interface ChangeBlock extends AddBlock, DeleteBlock {
 	}
@@ -298,6 +329,7 @@ public class AnnotateFacility {
 		private EqualBlocksCollector p2MergeCommon;
 		private int csetMergeParent;
 		private IntVector mergeRanges;
+		private ContentBlock originContent, targetContent;
 
 		public BlameBlockInspector(BlockInspector inspector, int originCset, int targetCset) {
 			assert inspector != null;
@@ -315,8 +347,10 @@ public class AnnotateFacility {
 		@Override
 		public void begin(LineSequence s1, LineSequence s2) {
 			super.begin(s1, s2);
+			originContent = new ContentBlock(s1);
+			targetContent = new ContentBlock(s2);
 			if (insp instanceof BlockInspectorEx) {
-				((BlockInspectorEx) insp).start(s1.chunkCount() - 1, s2.chunkCount() - 1);
+				((BlockInspectorEx) insp).start(originContent, targetContent);
 			}
 		}
 		
@@ -353,13 +387,13 @@ public class AnnotateFacility {
 					// how many lines we may reported as changed (don't use more than in range unless it's the very last range)
 					final int s1LinesToBorrow = lastRange ? s1LinesLeft : Math.min(s1LinesLeft, rangeLen);
 					if (s1LinesToBorrow > 0) {
-						BlockImpl2 block = new BlockImpl2(seq1, seq2, s1Start, s1LinesToBorrow, rangeStart, rangeLen, s1Start, rangeStart);
+						ChangeBlockImpl block = new ChangeBlockImpl(originContent, targetContent, s1Start, s1LinesToBorrow, rangeStart, rangeLen, s1Start, rangeStart);
 						block.setOriginAndTarget(rangeOrigin, csetTarget);
 						insp.changed(block);
 						s1ConsumedLines += s1LinesToBorrow;
 						s1Start += s1LinesToBorrow;
 					} else {
-						BlockImpl2 block = getAddBlock(rangeStart, rangeLen, s1Start);
+						ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, s1Start);
 						block.setOriginAndTarget(rangeOrigin, csetTarget);
 						insp.added(block);
 					}
@@ -368,7 +402,7 @@ public class AnnotateFacility {
 					throw new HgInvalidStateException(String.format("Expected to process %d lines, but actually was %d", s1TotalLines, s1ConsumedLines));
 				}
 			} else {
-				BlockImpl2 block = new BlockImpl2(seq1, seq2, s1From, s1To-s1From, s2From, s2To - s2From, s1From, s2From);
+				ChangeBlockImpl block = new ChangeBlockImpl(originContent, targetContent, s1From, s1To-s1From, s2From, s2To - s2From, s1From, s2From);
 				block.setOriginAndTarget(csetOrigin, csetTarget);
 				insp.changed(block);
 			}
@@ -384,14 +418,14 @@ public class AnnotateFacility {
 					int rangeOrigin = mergeRanges.get(i);
 					int rangeStart = mergeRanges.get(i+1);
 					int rangeLen = mergeRanges.get(i+2);
-					BlockImpl2 block = getAddBlock(rangeStart, rangeLen, insPoint);
+					ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, insPoint);
 					block.setOriginAndTarget(rangeOrigin, csetTarget);
 					insp.added(block);
 					// indicate insPoint moved down number of lines we just reported
 					insPoint += rangeLen;
 				}
 			} else {
-				BlockImpl2 block = getAddBlock(s2From, s2To - s2From, s1InsertPoint);
+				ChangeBlockImpl block = getAddBlock(s2From, s2To - s2From, s1InsertPoint);
 				block.setOriginAndTarget(csetOrigin, csetTarget);
 				insp.added(block);
 			}
@@ -399,20 +433,20 @@ public class AnnotateFacility {
 		
 		@Override
 		protected void deleted(int s2DeletePoint, int s1From, int s1To) {
-			BlockImpl2 block = new BlockImpl2(seq1, null, s1From, s1To - s1From, -1, -1, -1, s2DeletePoint);
+			ChangeBlockImpl block = new ChangeBlockImpl(originContent, null, s1From, s1To - s1From, -1, -1, -1, s2DeletePoint);
 			block.setOriginAndTarget(csetOrigin, csetTarget);
 			insp.deleted(block);
 		}
 
 		@Override
 		protected void unchanged(int s1From, int s2From, int length) {
-			BlockImpl1 block = new BlockImpl1(s1From, s2From, length);
+			EqualBlockImpl block = new EqualBlockImpl(s1From, s2From, length, targetContent);
 			block.setOriginAndTarget(csetOrigin, csetTarget);
 			insp.same(block);
 		}
 		
-		private BlockImpl2 getAddBlock(int start, int len, int insPoint) {
-			return new BlockImpl2(null, seq2, -1, -1, start, len, insPoint, -1);
+		private ChangeBlockImpl getAddBlock(int start, int len, int insPoint) {
+			return new ChangeBlockImpl(null, targetContent, -1, -1, start, len, insPoint, -1);
 		}
 	}
 	
@@ -438,14 +472,17 @@ public class AnnotateFacility {
 		}
 	}
 
-	static class BlockImpl1 extends BlockImpl implements EqualBlock {
+	static class EqualBlockImpl extends BlockImpl implements EqualBlock {
 		private final int start1, start2;
 		private final int length;
+		private final ContentBlock fullContent;
+		private FilterBlock myContent;
 		
-		BlockImpl1(int blockStartSeq1, int blockStartSeq2, int blockLength) {
+		EqualBlockImpl(int blockStartSeq1, int blockStartSeq2, int blockLength, ContentBlock targetContent) {
 			start1 = blockStartSeq1;
 			start2 = blockStartSeq2;
 			length = blockLength;
+			fullContent = targetContent;
 		}
 
 		public int originStart() {
@@ -460,26 +497,34 @@ public class AnnotateFacility {
 			return length;
 		}
 		
+		public BlockData content() {
+			if (myContent == null) {
+				myContent = new FilterBlock(fullContent, start2, length);
+			}
+			return myContent;
+		}
+		
 		@Override
 		public String toString() {
 			return String.format("@@ [%d..%d) == [%d..%d) @@", start1, start1+length, start2, start2+length);
 		}
 	}
 	
-	static class BlockImpl2 extends BlockImpl implements ChangeBlock {
+	static class ChangeBlockImpl extends BlockImpl implements ChangeBlock {
 		
-		private final LineSequence oldSeq;
-		private final LineSequence newSeq;
+		private final ContentBlock oldContent;
+		private final ContentBlock newContent;
 		private final int s1Start;
 		private final int s1Len;
 		private final int s2Start;
 		private final int s2Len;
 		private final int s1InsertPoint;
 		private final int s2DeletePoint;
+		private FilterBlock addedBlock, removedBlock;
 
-		public BlockImpl2(LineSequence s1, LineSequence s2, int s1Start, int s1Len, int s2Start, int s2Len, int s1InsertPoint, int s2DeletePoint) {
-			oldSeq = s1;
-			newSeq = s2;
+		public ChangeBlockImpl(ContentBlock c1, ContentBlock c2, int s1Start, int s1Len, int s2Start, int s2Len, int s1InsertPoint, int s2DeletePoint) {
+			oldContent = c1;
+			newContent = c2;
 			this.s1Start = s1Start;
 			this.s1Len = s1Len;
 			this.s2Start = s2Start;
@@ -500,8 +545,11 @@ public class AnnotateFacility {
 			return s2Len;
 		}
 
-		public String[] addedLines() {
-			return generateLines(totalAddedLines(), firstAddedLine());
+		public BlockData addedLines() {
+			if (addedBlock == null) {
+				addedBlock = new FilterBlock(newContent, firstAddedLine(), totalAddedLines());
+			}
+			return addedBlock;
 		}
 		
 		public int removedAt() {
@@ -516,16 +564,11 @@ public class AnnotateFacility {
 			return s1Len;
 		}
 
-		public String[] removedLines() {
-			return generateLines(totalRemovedLines(), firstRemovedLine());
-		}
-		
-		private String[] generateLines(int count, int startFrom) {
-			String[] rv = new String[count];
-			for (int i = 0; i < count; i++) {
-				rv[i] = String.format("LINE %d", startFrom + i+1);
+		public BlockData removedLines() {
+			if (removedBlock == null) {
+				removedBlock = new FilterBlock(oldContent, firstRemovedLine(), totalRemovedLines());
 			}
-			return rv;
+			return removedBlock;
 		}
 		
 		@Override
@@ -539,6 +582,77 @@ public class AnnotateFacility {
 			return String.format("@@ -%d,%d +%d,%d @@", firstRemovedLine(), totalRemovedLines(), firstAddedLine(), totalAddedLines());
 		}
 	}
+	
+	private static class SingleLine implements BlockData {
+		private final ByteChain line;
+
+		public SingleLine(ByteChain lineContent) {
+			line = lineContent;
+		}
+
+		public BlockData elementAt(int index) {
+			assert false;
+			return null;
+		}
+
+		public int elementCount() {
+			return 0;
+		}
+
+		public byte[] asArray() {
+			return line.data();
+		}
+	}
+	
+	private static class ContentBlock implements BlockData {
+		private final LineSequence seq;
+
+		public ContentBlock(LineSequence sequence) {
+			seq = sequence;
+		}
+
+		public BlockData elementAt(int index) {
+			return new SingleLine(seq.chunk(index));
+		}
+
+		public int elementCount() {
+			return seq.chunkCount() - 1;
+		}
+
+		public byte[] asArray() {
+			return seq.data(0, seq.chunkCount() - 1);
+		}
+	}
+	
+	private static class FilterBlock implements BlockData {
+		private final ContentBlock contentBlock;
+		private final int from;
+		private final int length;
+
+		public FilterBlock(ContentBlock bd, int startFrom, int len) {
+			assert bd != null;
+			assert startFrom + len < bd.seq.chunkCount(); // there's one extra chunk in the end, so strict less is ok
+			contentBlock = bd;
+			from = startFrom;
+			length = len;
+		}
+
+		public BlockData elementAt(int index) {
+			if (index < 0 || index >= length) {
+				throw new IllegalArgumentException(String.format("Expected value from [0..%d), got %d", length, index));
+			}
+			return contentBlock.elementAt(from + index);
+		}
+
+		public int elementCount() {
+			return length;
+		}
+
+		public byte[] asArray() {
+			return contentBlock.seq.data(from, from + length);
+		}
+	}
+	
 
 	static class EqualBlocksCollector implements DiffHelper.MatchInspector<LineSequence> {
 		private final IntVector matches = new IntVector(10*3, 2*3);

@@ -19,6 +19,7 @@ package org.tmatesoft.hg.internal;
 import java.util.LinkedList;
 
 import org.tmatesoft.hg.internal.AnnotateFacility.AddBlock;
+import org.tmatesoft.hg.internal.AnnotateFacility.BlockData;
 import org.tmatesoft.hg.internal.AnnotateFacility.ChangeBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.DeleteBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.EqualBlock;
@@ -51,9 +52,9 @@ public class FileAnnotation implements AnnotateFacility.BlockInspectorEx {
 			delegate = lineInspector;
 		}
 		
-		public void start(int originLineCount, int targetLineCount) {
+		public void start(BlockData originContent, BlockData targetContent) {
 			if (knownLines == null) {
-				knownLines = new boolean[targetLineCount];
+				knownLines = new boolean[targetContent.elementCount()];
 			}
 		}
 

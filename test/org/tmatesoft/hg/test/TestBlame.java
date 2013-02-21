@@ -36,6 +36,7 @@ import org.tmatesoft.hg.internal.AnnotateFacility;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.AnnotateFacility.AddBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.Block;
+import org.tmatesoft.hg.internal.AnnotateFacility.BlockData;
 import org.tmatesoft.hg.internal.AnnotateFacility.ChangeBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.DeleteBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.EqualBlock;
@@ -194,12 +195,16 @@ public class TestBlame {
 	}
 	
 	private void ccc() throws Exception {
-		HgRepository repo = new HgLookup().detect("/home/artem/hg/test-annotate/");
+		HgRepository repo = new HgLookup().detect("/home/artem/hg/junit-test-repos/test-annotate/");
 		HgDataFile df = repo.getFileNode("file1");
 		AnnotateFacility af = new AnnotateFacility();
 		DiffOutInspector dump = new DiffOutInspector(System.out);
 		dump.needRevisions(true);
 		af.annotate(df, TIP, dump, HgIterateDirection.OldToNew);
+		System.out.println();
+		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
+		System.out.println();
+		af.annotate(df, TIP, new LineDumpInspector(false), HgIterateDirection.NewToOld);
 		System.out.println();
 		FileAnnotateInspector fa = new FileAnnotateInspector();
 		af.annotate(df, TIP, fa);
@@ -216,7 +221,7 @@ public class TestBlame {
 		new TestBlame().ccc();
 	}
 
-	static class DiffOutInspector implements AnnotateFacility.BlockInspector {
+	private static class DiffOutInspector implements AnnotateFacility.BlockInspector {
 		private final PrintStream out;
 		private boolean dumpRevs;
 		private IntVector reportedRevisionPairs = new IntVector();
@@ -225,8 +230,8 @@ public class TestBlame {
 			out = ps;
 		}
 		
+		// Note, true makes output incompatible with 'hg diff'
 		public void needRevisions(boolean dumpRevs) {
-			// Note, true makes output incompatible with 'hg diff'
 			this.dumpRevs = dumpRevs;
 		}
 		
@@ -257,16 +262,9 @@ public class TestBlame {
 		public void deleted(DeleteBlock block) {
 			printRevs(block);
 			out.printf("@@ -%d,%d +%d,0 @@\n", block.firstRemovedLine() + 1, block.totalRemovedLines(), block.removedAt());
-//			String[] lines = block.removedLines();
-//			assert lines.length == block.totalRemovedLines();
-//			for (int i = 0, ln = block.firstRemovedLine(); i < lines.length; i++, ln++) {
-//				linesOld.put(ln, String.format("%3d:---:%s", ln, lines[i]));
-//			}
 		}
 		
 		public void changed(ChangeBlock block) {
-//			deleted(block);
-//			added(block);
 			printRevs(block);
 			out.printf("@@ -%d,%d +%d,%d @@\n", block.firstRemovedLine() + 1, block.totalRemovedLines(), block.firstAddedLine() + 1, block.totalAddedLines());
 		}
@@ -274,11 +272,6 @@ public class TestBlame {
 		public void added(AddBlock block) {
 			printRevs(block);
 			out.printf("@@ -%d,0 +%d,%d @@\n", block.insertedAt(), block.firstAddedLine() + 1, block.totalAddedLines());
-//			String[] addedLines = block.addedLines();
-//			assert addedLines.length == block.totalAddedLines();
-//			for (int i = 0, ln = block.firstAddedLine(), x = addedLines.length; i < x; i++, ln++) {
-//				linesNew.put(ln, String.format("%3d:+++:%s", ln, addedLines[i]));
-//			}
 		}
 	}
 	
@@ -331,4 +324,44 @@ public class TestBlame {
 		}
 	}
 
+	private static class LineDumpInspector implements AnnotateFacility.BlockInspector {
+		
+		private final boolean lineByLine;
+
+		public LineDumpInspector(boolean lineByLine) {
+			this.lineByLine = lineByLine;
+		}
+
+		public void same(EqualBlock block) {
+		}
+
+		public void added(AddBlock block) {
+			BlockData lines = block.addedLines();
+			printBlock(lines, block.targetChangesetIndex(), block.firstAddedLine(), block.totalAddedLines(), "+++");
+		}
+
+		public void changed(ChangeBlock block) {
+			deleted(block);
+			added(block);
+		}
+
+		public void deleted(DeleteBlock block) {
+			BlockData lines = block.removedLines();
+			assert lines.elementCount() == block.totalRemovedLines();
+			printBlock(lines, block.originChangesetIndex(), block.firstRemovedLine(), block.totalRemovedLines(), "---");
+		}
+		
+		private void printBlock(BlockData lines, int cset, int first, int length, String marker) {
+			assert lines.elementCount() == length;
+			if (lineByLine) {
+				for (int i = 0, ln = first; i < length; i++, ln++) {
+					String line = new String(lines.elementAt(i).asArray());
+					System.out.printf("%3d:%3d:%s:%s", cset, ln, marker, line);
+				}
+			} else {
+				String content = new String(lines.asArray());
+				System.out.printf("%3d:%s:[%d..%d):\n%s", cset, marker, first, first+length, content);
+			}
+		}
+	}
 }
