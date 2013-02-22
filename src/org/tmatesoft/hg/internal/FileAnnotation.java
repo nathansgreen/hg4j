@@ -19,8 +19,9 @@ package org.tmatesoft.hg.internal;
 import java.util.LinkedList;
 
 import org.tmatesoft.hg.core.HgIterateDirection;
-import org.tmatesoft.hg.internal.AnnotateFacility.*;
+import org.tmatesoft.hg.repo.HgBlameFacility;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgBlameFacility.*;
 
 /**
  * Produce output like 'hg annotate' does
@@ -28,7 +29,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class FileAnnotation implements AnnotateFacility.BlockInspector, RevisionDescriptor.Recipient {
+public class FileAnnotation implements HgBlameFacility.BlockInspector, RevisionDescriptor.Recipient {
 
 	@Experimental(reason="The line-by-line inspector likely to become part of core/command API")
 	@Callback
@@ -51,7 +52,7 @@ public class FileAnnotation implements AnnotateFacility.BlockInspector, Revision
 			return;
 		}
 		FileAnnotation fa = new FileAnnotation(insp);
-		AnnotateFacility af = new AnnotateFacility();
+		HgBlameFacility af = new HgBlameFacility();
 		af.annotate(df, changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
 	}
 

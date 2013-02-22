@@ -320,7 +320,7 @@ public class DiffHelper<T extends DiffHelper.ChunkSequence<?>> {
 		}
 
 		
-		final class ByteChain {
+		public final class ByteChain {
 			private final int start, end;
 			private final int hash;
 			

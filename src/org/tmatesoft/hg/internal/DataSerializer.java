@@ -59,6 +59,9 @@ public class DataSerializer {
 		buffer[offset++] = (byte) (value & 0x0ff);
 	}
 	
+	/**
+	 * Denotes an entity that wants to/could be serialized
+	 */
 	@Experimental(reason="Work in progress")
 	interface DataSource {
 		public void serialize(DataSerializer out) throws IOException;

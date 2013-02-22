@@ -14,7 +14,7 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.internal;
+package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
@@ -25,12 +25,15 @@ import java.util.ListIterator;
 
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.AnnotateFacility.RevisionDescriptor.Recipient;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.Callback;
+import org.tmatesoft.hg.internal.DiffHelper;
+import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.IntMap;
+import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
-import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInvalidStateException;
-import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgBlameFacility.RevisionDescriptor.Recipient;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
@@ -41,8 +44,8 @@ import org.tmatesoft.hg.util.Pair;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="work in progress")
-public class AnnotateFacility {
+@Experimental(reason="Unstable API")
+public final class HgBlameFacility {
 	
 	/**
 	 * mimic 'hg diff -r clogRevIndex1 -r clogRevIndex2'
@@ -55,7 +58,7 @@ public class AnnotateFacility {
 		LineSequence c2 = fileInfoCache.lines(fileRevIndex2);
 		DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 		pg.init(c1, c2);
-		pg.findMatchingBlocks(new BlameBlockInspector(insp, clogRevIndex1, clogRevIndex2));
+		pg.findMatchingBlocks(new BlameBlockInspector(fileRevIndex2, insp, clogRevIndex1, clogRevIndex2));
 	}
 	
 	/**
@@ -141,14 +144,14 @@ public class AnnotateFacility {
 			pg.findMatchingBlocks(p2MergeCommon);
 			//
 			pg.init(p1Lines);
-			BlameBlockInspector bbi = new BlameBlockInspector(insp, p1ClogIndex, csetRevIndex);
+			BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex, insp, p1ClogIndex, csetRevIndex);
 			bbi.setMergeParent2(p2MergeCommon, p2ClogIndex);
 			pg.findMatchingBlocks(bbi);
 		} else if (fileParentRevs[0] == fileParentRevs[1]) {
 			// may be equal iff both are unset
 			assert fileParentRevs[0] == NO_REVISION;
 			// everything added
-			BlameBlockInspector bbi = new BlameBlockInspector(insp, NO_REVISION, csetRevIndex);
+			BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex, insp, NO_REVISION, csetRevIndex);
 			bbi.begin(LineSequence.newlines(new byte[0]), fileRevLines);
 			bbi.match(0, fileRevLines.chunkCount()-1, 0);
 			bbi.end();
@@ -160,7 +163,7 @@ public class AnnotateFacility {
 			int parentChangesetRevIndex = fl.getChangesetRevisionIndex(soleParent);
 			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 			pg.init(parentLines, fileRevLines);
-			pg.findMatchingBlocks(new BlameBlockInspector(insp, parentChangesetRevIndex, csetRevIndex));
+			pg.findMatchingBlocks(new BlameBlockInspector(fileRevIndex, insp, parentChangesetRevIndex, csetRevIndex));
 		}
 	}
 
@@ -305,7 +308,7 @@ public class AnnotateFacility {
 		 */
 		int mergeChangesetIndex();
 		/**
-		 * @return revision index of the change in file's revlog
+		 * @return revision index of the change in target file's revlog
 		 */
 		int fileRevisionIndex();
 
@@ -330,6 +333,10 @@ public class AnnotateFacility {
 		}
 	}
 	
+	/**
+	 * Each change block comes from a single origin, blocks that are result of a merge
+	 * have {@link #originChangesetIndex()} equal to {@link RevisionDescriptor#mergeChangesetIndex()}.
+	 */
 	public interface Block {
 		int originChangesetIndex();
 		int targetChangesetIndex();
@@ -343,15 +350,39 @@ public class AnnotateFacility {
 	}
 	
 	public interface AddBlock extends Block {
-		int insertedAt(); // line index in the old file 
+		/**
+		 * @return line index in the origin where this block is inserted
+		 */
+		int insertedAt();  
+		/**
+		 * @return line index of the first added line in the target revision
+		 */
 		int firstAddedLine();
+		/**
+		 * @return number of added lines in this block
+		 */
 		int totalAddedLines();
+		/**
+		 * @return content of added lines
+		 */
 		BlockData addedLines();
 	}
 	public interface DeleteBlock extends Block {
-		int removedAt(); // line index in the new file
+		/**
+		 * @return line index in the target revision were this deleted block would be
+		 */
+		int removedAt();
+		/**
+		 * @return line index of the first removed line in the original revision
+		 */
 		int firstRemovedLine();
+		/**
+		 * @return number of deleted lines in this block
+		 */
 		int totalRemovedLines();
+		/**
+		 * @return content of deleted lines
+		 */
 		BlockData removedLines();
 	}
 	public interface ChangeBlock extends AddBlock, DeleteBlock {
@@ -366,10 +397,11 @@ public class AnnotateFacility {
 		private IntVector mergeRanges;
 		private final AnnotateRev annotatedRevision;
 
-		public BlameBlockInspector(BlockInspector inspector, int originCset, int targetCset) {
+		public BlameBlockInspector(int fileRevIndex, BlockInspector inspector, int originCset, int targetCset) {
 			assert inspector != null;
 			insp = inspector;
 			annotatedRevision = new AnnotateRev();
+			annotatedRevision.set(fileRevIndex);
 			csetOrigin = originCset;
 			csetTarget = targetCset;
 		}
@@ -443,7 +475,7 @@ public class AnnotateFacility {
 					throw new HgInvalidStateException(String.format("Expected to process %d lines, but actually was %d", s1TotalLines, s1ConsumedLines));
 				}
 			} else {
-				ChangeBlockImpl block = getChangeBlock(s1From, s1To-s1From, s2From, s2To - s2From);
+				ChangeBlockImpl block = getChangeBlock(s1From, s1To - s1From, s2From, s2To - s2From);
 				block.setOriginAndTarget(csetOrigin, csetTarget);
 				insp.changed(block);
 			}
@@ -490,13 +522,12 @@ public class AnnotateFacility {
 			return new ChangeBlockImpl(null, annotatedRevision.target, -1, -1, start, len, insPoint, -1);
 		}
 		
-		private ChangeBlockImpl getChangeBlock(int start1, int end1, int start2, int end2) {
-			return new ChangeBlockImpl(annotatedRevision.origin, annotatedRevision.target, start1, end1-start1, start2, end2-start2, start1, start2);
+		private ChangeBlockImpl getChangeBlock(int start1, int len1, int start2, int len2) {
+			return new ChangeBlockImpl(annotatedRevision.origin, annotatedRevision.target, start1, len1, start2, len2, start1, start2);
 		}
 	}
 	
 	private static class BlockImpl implements Block {
-		
 		private int originCset;
 		private int targetCset;
 
@@ -556,7 +587,6 @@ public class AnnotateFacility {
 	}
 	
 	private static class ChangeBlockImpl extends BlockImpl implements ChangeBlock {
-		
 		private final ContentBlock oldContent;
 		private final ContentBlock newContent;
 		private final int s1Start;
@@ -807,6 +837,9 @@ public class AnnotateFacility {
 		public ContentBlock origin, target;
 		public int originCset, targetCset, mergeCset, fileRevIndex;
 		
+		public void set(int fileRev) {
+			fileRevIndex = fileRev;
+		}
 		public void set(ContentBlock o, ContentBlock t) {
 			origin = o;
 			target = t;
