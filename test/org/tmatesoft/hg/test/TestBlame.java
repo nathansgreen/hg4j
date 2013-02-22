@@ -33,14 +33,16 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.internal.AnnotateFacility;
-import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.AnnotateFacility.AddBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.Block;
 import org.tmatesoft.hg.internal.AnnotateFacility.BlockData;
 import org.tmatesoft.hg.internal.AnnotateFacility.ChangeBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.DeleteBlock;
 import org.tmatesoft.hg.internal.AnnotateFacility.EqualBlock;
-import org.tmatesoft.hg.internal.AnnotateFacility.LineDescriptor;
+import org.tmatesoft.hg.internal.FileAnnotation;
+import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
+import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
+import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -63,7 +65,7 @@ public class TestBlame {
 		final int checkChangeset = 539;
 		HgDataFile df = repo.getFileNode(fname);
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		new AnnotateFacility().annotateChange(df, checkChangeset, new DiffOutInspector(new PrintStream(bos)));
+		new AnnotateFacility().annotateSingleRevision(df, checkChangeset, new DiffOutInspector(new PrintStream(bos)));
 		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
 		ExecHelper eh = new ExecHelper(gp, null);
 		eh.run("hg", "diff", "-c", String.valueOf(checkChangeset), "-U", "0", fname);
@@ -83,7 +85,7 @@ public class TestBlame {
 
 		for (int startChangeset : new int[] { 539, 541 /*, TIP */}) {
 			FileAnnotateInspector fa = new FileAnnotateInspector();
-			new AnnotateFacility().annotate(df, startChangeset, fa);
+			FileAnnotation.annotate(df, startChangeset, fa);
 			
 
 			op.reset();
@@ -159,18 +161,18 @@ public class TestBlame {
 		AnnotateFacility af = new AnnotateFacility();
 		DiffOutInspector dump = new DiffOutInspector(System.out);
 		System.out.println("541 -> 543");
-		af.annotateChange(df, 543, dump);
+		af.annotateSingleRevision(df, 543, dump);
 		System.out.println("539 -> 541");
-		af.annotateChange(df, 541, dump);
+		af.annotateSingleRevision(df, 541, dump);
 		System.out.println("536 -> 539");
-		af.annotateChange(df, checkChangeset, dump);
+		af.annotateSingleRevision(df, checkChangeset, dump);
 		System.out.println("531 -> 536");
-		af.annotateChange(df, 536, dump);
+		af.annotateSingleRevision(df, 536, dump);
 		System.out.println(" -1 -> 531");
-		af.annotateChange(df, 531, dump);
+		af.annotateSingleRevision(df, 531, dump);
 		
 		FileAnnotateInspector fai = new FileAnnotateInspector();
-		af.annotate(df, 541, fai);
+		FileAnnotation.annotate(df, 541, fai);
 		for (int i = 0; i < fai.lineRevisions.length; i++) {
 			System.out.printf("%3d: LINE %d\n", fai.lineRevisions[i], i+1);
 		}
@@ -207,7 +209,7 @@ public class TestBlame {
 		af.annotate(df, TIP, new LineDumpInspector(false), HgIterateDirection.NewToOld);
 		System.out.println();
 		FileAnnotateInspector fa = new FileAnnotateInspector();
-		af.annotate(df, TIP, fa);
+		FileAnnotation.annotate(df, TIP, fa);
 		for (int i = 0; i < fa.lineRevisions.length; i++) {
 			System.out.printf("%d: LINE %d\n", fa.lineRevisions[i], i+1);
 		}
@@ -309,7 +311,7 @@ public class TestBlame {
 		}
 	}
 
-	private static class FileAnnotateInspector implements AnnotateFacility.LineInspector {
+	private static class FileAnnotateInspector implements LineInspector {
 		private int[] lineRevisions;
 		
 		FileAnnotateInspector() {
