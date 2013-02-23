@@ -32,8 +32,8 @@ import org.tmatesoft.hg.util.Path;
  * <p>It's intentionally not a subclass of {@link HgException} to avoid get mixed with library own errors and be processed separately.
  * 
  * <p>Top-level API handlers ({@link HgStatusHandler}, {@link HgManifestHandler}, {@link HgChangesetHandler}, etc) allow to throw 
- * HgCallbackTargetException from their methods. Exceptions throws this way are not handled in corresponding commands, except for
- * revision or file name specification, unless already set. The, these exceptions go straight to the command caller.
+ * HgCallbackTargetException from their methods. Exceptions thrown this way are not handled in corresponding commands, except for
+ * revision or file name specification, unless already set. Then, these exceptions go straight to the command caller.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

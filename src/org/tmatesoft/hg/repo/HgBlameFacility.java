@@ -442,12 +442,15 @@ public final class HgBlameFacility {
 				p2MergeCommon.combineAndMarkRangesWithTarget(s2From, s2To - s2From, csetOrigin, csetMergeParent, mergeRanges);
 				
 				/*
-				 * Usecases:
+				 * Usecases, how it USED TO BE initially:
 				 * 3 lines changed to 10 lines. range of 10 lines breaks down to 2 from p2, 3 from p1, and 5 from p2.
 				 * We report: 2 lines changed to 2(p2), then 1 line changed with 3(p1) and 5 lines added from p2.
 				 * 
 				 * 10 lines changed to 3 lines, range of 3 lines breaks down to 2 line from p1 and 1 line from p2.
-				 * We report: 2 lines changed to 2(p1) and 8 lines changed to 1(p2) 
+				 * We report: 2 lines changed to 2(p1) and 8 lines changed to 1(p2)
+				 * 
+				 * NOW, lines from p2 are always reported as pure add (since we need their insertion point to be in p2, not in p1)
+				 * and we try to consume p1 changes as soon as we see first p1's range 
 				 */
 				int s1TotalLines = s1To - s1From, s1ConsumedLines = 0, s1Start = s1From;
 				
@@ -457,22 +460,30 @@ public final class HgBlameFacility {
 					final int rangeLen = mergeRanges.get(i+2);
 					final boolean lastRange = i+3 >= mergeRanges.size();
 					final int s1LinesLeft = s1TotalLines - s1ConsumedLines;
-					// how many lines we may reported as changed (don't use more than in range unless it's the very last range)
+					// how many lines we may report as changed (don't use more than in range unless it's the very last range)
 					final int s1LinesToBorrow = lastRange ? s1LinesLeft : Math.min(s1LinesLeft, rangeLen);
-					if (s1LinesToBorrow > 0) {
+					if (rangeOrigin != csetMergeParent && s1LinesToBorrow > 0) {
 						ChangeBlockImpl block = getChangeBlock(s1Start, s1LinesToBorrow, rangeStart, rangeLen);
 						block.setOriginAndTarget(rangeOrigin, csetTarget);
 						insp.changed(block);
 						s1ConsumedLines += s1LinesToBorrow;
 						s1Start += s1LinesToBorrow;
 					} else {
-						ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, s1Start);
+						int blockInsPoint = rangeOrigin != csetMergeParent ? s1Start : p2MergeCommon.reverseMapLine(rangeStart);
+						ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, blockInsPoint);
 						block.setOriginAndTarget(rangeOrigin, csetTarget);
 						insp.added(block);
 					}
 				}
 				if (s1ConsumedLines != s1TotalLines) {
-					throw new HgInvalidStateException(String.format("Expected to process %d lines, but actually was %d", s1TotalLines, s1ConsumedLines));
+					assert s1ConsumedLines < s1TotalLines : String.format("Expected to process %d lines, but actually was %d", s1TotalLines, s1ConsumedLines);
+					// either there were no ranges from p1, whole s2From..s2To range came from p2, shall report as deleted
+					// or the ranges found were not enough to consume whole s2From..s2To
+					// The "deletion point" is shifted to the end of last csetOrigin->csetTarget change
+					int s2DeletePoint = s2From + s1ConsumedLines;
+					ChangeBlockImpl block =  new ChangeBlockImpl(annotatedRevision.origin, null, s1Start, s1To - s1Start, -1, -1, -1, s2DeletePoint);
+					block.setOriginAndTarget(csetOrigin, csetTarget);
+					insp.deleted(block);
 				}
 			} else {
 				ChangeBlockImpl block = getChangeBlock(s1From, s1To - s1From, s2From, s2To - s2From);
@@ -730,6 +741,7 @@ public final class HgBlameFacility {
 	
 
 	static class EqualBlocksCollector implements DiffHelper.MatchInspector<LineSequence> {
+		// FIXME replace with RangeSeq
 		private final IntVector matches = new IntVector(10*3, 2*3);
 
 		public void begin(LineSequence s1, LineSequence s2) {
@@ -771,6 +783,25 @@ public final class HgBlameFacility {
 			}
 		}
 		
+		/**
+		 * find out line index in origin that matches specifid target line
+		 */
+		public int reverseMapLine(int targetLine) {
+			for (int i = 0; i < matches.size(); i +=3) {
+				int os = matches.get(i);
+				int ts = matches.get(i + 1);
+				int l = matches.get(i + 2);
+				if (ts > targetLine) {
+					return -1;
+				}
+				if (ts + l > targetLine) {
+					return os + (targetLine - ts);
+				}
+			}
+			return -1;
+		}
+
+
 		/*
 		 * intersects [start..start+length) with ranges of target lines, and based on the intersection 
 		 * breaks initial range into smaller ranges and records them into result, with marker to indicate
@@ -876,6 +907,13 @@ public final class HgBlameFacility {
 
 		public int fileRevisionIndex() {
 			return fileRevIndex;
+		}
+		@Override
+		public String toString() {
+			if (isMerge()) {
+				return String.format("[%d,%d->%d]", originCset, mergeCset, targetCset);
+			}
+			return String.format("[%d->%d]", originCset, targetCset);
 		}
 	}
 

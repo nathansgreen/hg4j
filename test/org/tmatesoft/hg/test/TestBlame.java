@@ -22,10 +22,13 @@ import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
+import java.util.ListIterator;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.Assert;
@@ -37,15 +40,15 @@ import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.repo.HgBlameFacility;
-import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgLookup;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgBlameFacility.AddBlock;
 import org.tmatesoft.hg.repo.HgBlameFacility.Block;
 import org.tmatesoft.hg.repo.HgBlameFacility.BlockData;
 import org.tmatesoft.hg.repo.HgBlameFacility.ChangeBlock;
 import org.tmatesoft.hg.repo.HgBlameFacility.DeleteBlock;
 import org.tmatesoft.hg.repo.HgBlameFacility.EqualBlock;
+import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRepository;
 
 /**
  * 
@@ -56,6 +59,7 @@ public class TestBlame {
 
 	@Rule
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
+	private ExecHelper eh;
 
 	
 	@Test
@@ -76,29 +80,46 @@ public class TestBlame {
 	}
 	
 	@Test
-	public void testFileAnnotate() throws Exception {
+	public void testFileLineAnnotate1() throws Exception {
 		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		final String fname = "src/org/tmatesoft/hg/internal/PatchGenerator.java";
 		HgDataFile df = repo.getFileNode(fname);
 		OutputParser.Stub op = new OutputParser.Stub();
-		ExecHelper eh = new ExecHelper(op, null);
+		eh = new ExecHelper(op, null);
 
 		for (int startChangeset : new int[] { 539, 541 /*, TIP */}) {
-			FileAnnotateInspector fa = new FileAnnotateInspector();
-			FileAnnotation.annotate(df, startChangeset, fa);
-			
-
-			op.reset();
-			eh.run("hg", "annotate", "-r", startChangeset == TIP ? "tip" : String.valueOf(startChangeset), fname);
-			
-			String[] hgAnnotateLines = splitLines(op.result());
-			assertTrue("[sanity]", hgAnnotateLines.length > 0);
-			assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, fa.lineRevisions.length);
+			doLineAnnotateTest(df, startChangeset, op);
+		}
+	}
 	
-			for (int i = 0; i < fa.lineRevisions.length; i++) {
-				int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')));
-				errorCollector.assertEquals(String.format("Revision mismatch for line %d", i+1), hgAnnotateRevIndex, fa.lineRevisions[i]);
-			}
+	private void doLineAnnotateTest(HgDataFile df, int cs, OutputParser.Stub op) throws InterruptedException, IOException {
+		FileAnnotateInspector fa = new FileAnnotateInspector();
+		FileAnnotation.annotate(df, cs, fa);
+
+		op.reset();
+		eh.run("hg", "annotate", "-r", cs == TIP ? "tip" : String.valueOf(cs), df.getPath().toString());
+
+		String[] hgAnnotateLines = splitLines(op.result());
+		assertTrue("[sanity]", hgAnnotateLines.length > 0);
+		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, fa.lineRevisions.length);
+
+		for (int i = 0; i < fa.lineRevisions.length; i++) {
+			int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')));
+			errorCollector.assertEquals(String.format("Revision mismatch for line %d", i+1), hgAnnotateRevIndex, fa.lineRevisions[i]);
+			String hgAnnotateLine = hgAnnotateLines[i].substring(hgAnnotateLines[i].indexOf(':') + 1);
+			String apiLine = fa.line(i).trim();
+			errorCollector.assertEquals(hgAnnotateLine.trim(), apiLine);
+		}
+	}
+	
+	@Test
+	public void testFileLineAnnotate2() throws Exception {
+		HgRepository repo = Configuration.get().find("test-annotate");
+		HgDataFile df = repo.getFileNode("file1");
+		OutputParser.Stub op = new OutputParser.Stub();
+		eh = new ExecHelper(op, repo.getWorkingDir());
+		for (int cs : new int[] { 4, 6, TIP/*, 8 FIXME find out how come hg annotate doesn't see re-added line in rev4*/}) {
+			doLineAnnotateTest(df, cs, op);
 		}
 	}
 	
@@ -111,6 +132,41 @@ public class TestBlame {
 		DiffOutInspector dump = new DiffOutInspector(new PrintStream(bos));
 		af.annotate(df, TIP, dump, HgIterateDirection.OldToNew);
 		LinkedList<String> apiResult = new LinkedList<String>(Arrays.asList(splitLines(bos.toString())));
+		
+		/*
+		 * FIXME this is an ugly hack to deal with the way `hg diff -c <mergeRev>` describes the change
+		 * and our merge handling approach. For merged revision m, and lines changed both in p1 and p2
+		 * we report lines from p2 as pure additions, regardless of intersecting p1 changes (which
+		 * are reported as deletions, if no sufficient changed lines in m found)
+		 * So, here we try to combine deletion that follows a change (based on identical insertionPoint)
+		 * into a single change
+		 * To fix, need to find better approach to find out reference info (i.e. `hg diff -c` is flawed in this case,
+		 * as it uses first parent only).
+		 */
+		Pattern fix = Pattern.compile("@@ -(\\d+),(\\d+) \\+(\\d+),(\\d+) @@");
+		int v1, v2, v3, v4;
+		v1 = v2 = v3 = v4 = -1;
+		for (ListIterator<String> it = apiResult.listIterator(); it.hasNext();) {
+			String n = it.next();
+			Matcher m = fix.matcher(n);
+			if (m.find()) {
+				int d1 = Integer.parseInt(m.group(1));
+				int d2 = Integer.parseInt(m.group(2));
+				int d3 = Integer.parseInt(m.group(3));
+				int d4 = Integer.parseInt(m.group(4));
+				if (v1 == d1 && d4 == 0) {
+					it.previous(); // shift to current element
+					it.previous(); // to real previous
+					it.remove();
+					it.next();
+					it.set(String.format("@@ -%d,%d +%d,%d @@", v1, v2+d2, v3, v4));
+				}
+				v1 = d1;
+				v2 = d2;
+				v3 = d3;
+				v4 = d4;
+			}
+		}
 		
 		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
 		ExecHelper eh = new ExecHelper(gp, repo.getWorkingDir());
@@ -199,18 +255,18 @@ public class TestBlame {
 		HgRepository repo = new HgLookup().detect("/home/artem/hg/junit-test-repos/test-annotate/");
 		HgDataFile df = repo.getFileNode("file1");
 		HgBlameFacility af = new HgBlameFacility();
-		DiffOutInspector dump = new DiffOutInspector(System.out);
-		dump.needRevisions(true);
-		af.annotate(df, TIP, dump, HgIterateDirection.OldToNew);
-		System.out.println();
-		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
-		System.out.println();
-		af.annotate(df, TIP, new LineDumpInspector(false), HgIterateDirection.NewToOld);
-		System.out.println();
+//		DiffOutInspector dump = new DiffOutInspector(System.out);
+//		dump.needRevisions(true);
+//		af.annotate(df, TIP, dump, HgIterateDirection.OldToNew);
+//		System.out.println();
+//		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
+//		System.out.println();
+//		af.annotate(df, TIP, new LineDumpInspector(false), HgIterateDirection.NewToOld);
+//		System.out.println();
 		FileAnnotateInspector fa = new FileAnnotateInspector();
-		FileAnnotation.annotate(df, TIP, fa);
+		FileAnnotation.annotate(df, TIP, fa); //4,6,TIP
 		for (int i = 0; i < fa.lineRevisions.length; i++) {
-			System.out.printf("%d: LINE %d\n", fa.lineRevisions[i], i+1);
+			System.out.printf("%d: %s", fa.lineRevisions[i], fa.line(i) == null ? "null\n" : fa.line(i));
 		}
 	}
 
@@ -312,16 +368,23 @@ public class TestBlame {
 
 	private static class FileAnnotateInspector implements LineInspector {
 		private int[] lineRevisions;
+		private String[] lines;
 		
 		FileAnnotateInspector() {
 		}
 		
-		public void line(int lineNumber, int changesetRevIndex, LineDescriptor ld) {
+		public void line(int lineNumber, int changesetRevIndex, BlockData lineContent, LineDescriptor ld) {
 			if (lineRevisions == null) {
 				lineRevisions = new int [ld.totalLines()];
 				Arrays.fill(lineRevisions, NO_REVISION);
+				lines = new String[ld.totalLines()];
 			}
 			lineRevisions[lineNumber] = changesetRevIndex;
+			lines[lineNumber] = new String(lineContent.asArray());
+		}
+		
+		public String line(int i) {
+			return lines[i];
 		}
 	}
 
