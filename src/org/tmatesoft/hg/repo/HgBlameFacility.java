@@ -33,6 +33,7 @@ import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
+import org.tmatesoft.hg.internal.RangeSeq;
 import org.tmatesoft.hg.repo.HgBlameFacility.RevisionDescriptor.Recipient;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelledException;
@@ -740,36 +741,27 @@ public final class HgBlameFacility {
 	}
 	
 
-	static class EqualBlocksCollector implements DiffHelper.MatchInspector<LineSequence> {
-		// FIXME replace with RangeSeq
-		private final IntVector matches = new IntVector(10*3, 2*3);
+	private static class EqualBlocksCollector implements DiffHelper.MatchInspector<LineSequence> {
+		private final RangeSeq matches = new RangeSeq();
 
 		public void begin(LineSequence s1, LineSequence s2) {
 		}
 
 		public void match(int startSeq1, int startSeq2, int matchLength) {
-			matches.add(startSeq1);
-			matches.add(startSeq2);
-			matches.add(matchLength);
+			matches.add(startSeq1, startSeq2, matchLength);
 		}
 
 		public void end() {
 		}
-		
-		// true when specified line in origin is equal to a line in target
-		public boolean includesOriginLine(int ln) {
-			return includes(ln, 0);
+
+		public int reverseMapLine(int ln) {
+			return matches.reverseMapLine(ln);
 		}
-		
-		// true when specified line in target is equal to a line in origin
-		public boolean includesTargetLine(int ln) {
-			return includes(ln, 1);
-		}
-		
+
 		public void intersectWithTarget(int start, int length, IntVector result) {
 			int s = start;
 			for (int l = start, x = start + length; l < x; l++) {
-				if (!includesTargetLine(l)) {
+				if (!matches.includesTargetLine(l)) {
 					if (l - s > 0) {
 						result.add(s);
 						result.add(l - s);
@@ -783,25 +775,6 @@ public final class HgBlameFacility {
 			}
 		}
 		
-		/**
-		 * find out line index in origin that matches specifid target line
-		 */
-		public int reverseMapLine(int targetLine) {
-			for (int i = 0; i < matches.size(); i +=3) {
-				int os = matches.get(i);
-				int ts = matches.get(i + 1);
-				int l = matches.get(i + 2);
-				if (ts > targetLine) {
-					return -1;
-				}
-				if (ts + l > targetLine) {
-					return os + (targetLine - ts);
-				}
-			}
-			return -1;
-		}
-
-
 		/*
 		 * intersects [start..start+length) with ranges of target lines, and based on the intersection 
 		 * breaks initial range into smaller ranges and records them into result, with marker to indicate
@@ -811,7 +784,7 @@ public final class HgBlameFacility {
 		public void combineAndMarkRangesWithTarget(int start, int length, int markerSource, int markerTarget, IntVector result) {
 			int sourceStart = start, targetStart = start, sourceEnd = start + length;
 			for (int l = sourceStart; l < sourceEnd; l++) {
-				if (includesTargetLine(l)) {
+				if (matches.includesTargetLine(l)) {
 					// l is from target
 					if (sourceStart < l) {
 						// few lines from source range were not in the target, report them
@@ -847,20 +820,6 @@ public final class HgBlameFacility {
 				result.add(targetStart);
 				result.add(sourceEnd - targetStart);
 			}
-		}
-		
-		private boolean includes(int ln, int o) {
-			for (int i = 2; i < matches.size(); o += 3, i+=3) {
-				int rangeStart = matches.get(o);
-				if (rangeStart > ln) {
-					return false;
-				}
-				int rangeLen = matches.get(i);
-				if (rangeStart + rangeLen > ln) {
-					return true;
-				}
-			}
-			return false;
 		}
 	}
 
@@ -923,11 +882,6 @@ public final class HgBlameFacility {
 		bc.match(-1, 10, 2);
 		bc.match(-1, 15, 3);
 		bc.match(-1, 20, 3);
-		assert !bc.includesTargetLine(4);
-		assert bc.includesTargetLine(7);
-		assert !bc.includesTargetLine(8);
-		assert bc.includesTargetLine(10);
-		assert !bc.includesTargetLine(12);
 		IntVector r = new IntVector();
 		bc.intersectWithTarget(7, 10, r);
 		for (int i = 0; i < r.size(); i+=2) {

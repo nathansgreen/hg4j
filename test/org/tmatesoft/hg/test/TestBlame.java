@@ -118,9 +118,22 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode("file1");
 		OutputParser.Stub op = new OutputParser.Stub();
 		eh = new ExecHelper(op, repo.getWorkingDir());
-		for (int cs : new int[] { 4, 6, TIP/*, 8 FIXME find out how come hg annotate doesn't see re-added line in rev4*/}) {
+		for (int cs : new int[] { 4, 6 /*, 8 see below*/, TIP}) {
 			doLineAnnotateTest(df, cs, op);
 		}
+		/*`hg annotate -r 8` and HgBlameFacility give different result
+		 * for "r0, line 5" line, which was deleted in rev2 and restored back in
+		 * rev4 (both in default branch), while branch with r3 and r6 kept the line intact.
+		 * HgBlame reports rev4 for the line, `hg annotate` gives original, rev0.
+		 * However `hg annotate -r 4` shows rev4 for the line, too. The aforementioned rev0 for 
+		 * the merge rev8 results from the iteration order and is implementation specific 
+		 * (i.e. one can't tell which one is right). Mercurial walks from parents to children,
+		 * and traces equal lines, wile HgBlameFacility walks from child to parents and records 
+		 * changes (additions). Seems it processes branch with rev3 and rev6 first 
+		 * (printout in context.py, annotate and annotate.pair reveals that), and the line 0_5
+		 * comes as unchanged through this branch, and later processing rev2 and rev4 doesn't 
+		 * change that. 
+		 */
 	}
 	
 	@Test

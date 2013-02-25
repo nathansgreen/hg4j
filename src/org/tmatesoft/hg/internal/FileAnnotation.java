@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.util.Formatter;
 
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.repo.HgBlameFacility;
@@ -158,112 +157,6 @@ public class FileAnnotation implements HgBlameFacility.BlockInspector, RevisionD
 
 		public int totalLines() {
 			return FileAnnotation.this.knownLines.length;
-		}
-	}
-
-	private static class RangeSeq {
-		// XXX smth like IntSliceVector to access triples (or slices of any size, in fact)
-		// with easy indexing, e.g. #get(sliceIndex, indexWithinSlice)
-		// and vect.get(7,2) instead of vect.get(7*SIZEOF_SLICE+2)
-		private final IntVector ranges = new IntVector(3*10, 3*5);
-		private int count;
-		
-		public void add(int start1, int start2, int length) {
-			if (count > 0) {
-				int lastIndex = 3 * (count-1);
-				int lastS1 = ranges.get(lastIndex);
-				int lastS2 = ranges.get(lastIndex + 1);
-				int lastLen = ranges.get(lastIndex + 2);
-				if (start1 == lastS1 + lastLen && start2 == lastS2 + lastLen) {
-					// new range continues the previous one - just increase the length
-					ranges.set(lastIndex + 2, lastLen + length);
-					return;
-				}
-			}
-			ranges.add(start1, start2, length);
-			count++;
-		}
-		
-		public void clear() {
-			ranges.clear();
-			count = 0;
-		}
-
-		public int size() {
-			return count;
-		}
-
-		public int mapLineIndex(int ln) {
-			for (int i = 0; i < ranges.size(); i += 3) {
-				int s1 = ranges.get(i);
-				if (s1 > ln) {
-					return -1;
-				}
-				int l = ranges.get(i+2);
-				if (s1 + l > ln) {
-					int s2 = ranges.get(i + 1);
-					return s2 + (ln - s1);
-				}
-			}
-			return -1;
-		}
-		
-		public RangeSeq intersect(RangeSeq target) {
-			RangeSeq v = new RangeSeq();
-			for (int i = 0; i < ranges.size(); i += 3) {
-				int originLine = ranges.get(i);
-				int targetLine = ranges.get(i + 1);
-				int length = ranges.get(i + 2);
-				int startTargetLine = -1, startOriginLine = -1, c = 0;
-				for (int j = 0; j < length; j++) {
-					int lnInFinal = target.mapLineIndex(targetLine + j);
-					if (lnInFinal == -1 || (startTargetLine != -1 && lnInFinal != startTargetLine + c)) {
-						// the line is not among "same" in ultimate origin
-						// or belongs to another/next "same" chunk 
-						if (startOriginLine == -1) {
-							continue;
-						}
-						v.add(startOriginLine, startTargetLine, c);
-						c = 0;
-						startOriginLine = startTargetLine = -1;
-						// fall-through to check if it's not complete miss but a next chunk
-					}
-					if (lnInFinal != -1) {
-						if (startOriginLine == -1) {
-							startOriginLine = originLine + j;
-							startTargetLine = lnInFinal;
-							c = 1;
-						} else {
-							// lnInFinal != startTargetLine + s is covered above
-							assert lnInFinal == startTargetLine + c;
-							c++;
-						}
-					}
-				}
-				if (startOriginLine != -1) {
-					assert c > 0;
-					v.add(startOriginLine, startTargetLine, c);
-				}
-			}
-			return v;
-		}
-		
-		@SuppressWarnings("unused")
-		public CharSequence dump() {
-			StringBuilder sb = new StringBuilder();
-			Formatter f = new Formatter(sb);
-			for (int i = 0; i < ranges.size(); i += 3) {
-				int s1 = ranges.get(i);
-				int s2 = ranges.get(i + 1);
-				int len = ranges.get(i + 2);
-				f.format("[%d..%d) == [%d..%d);  ", s1, s1 + len, s2, s2 + len);
-			}
-			return sb;
-		}
-		
-		@Override
-		public String toString() {
-			return String.format("RangeSeq[%d]:%s", count, dump());
 		}
 	}
 }

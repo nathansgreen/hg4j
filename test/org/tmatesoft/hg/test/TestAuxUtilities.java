@@ -33,6 +33,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.PathScope;
+import org.tmatesoft.hg.internal.RangeSeq;
 import org.tmatesoft.hg.internal.RevisionDescendants;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -526,6 +527,20 @@ public class TestAuxUtilities {
 		for (int i = 0; i < v.size(); i++) {
 			errorCollector.assertEquals(i+1, v.get(i));
 		}
+	}
+	
+	@Test
+	public void testRangeSequence() {
+		RangeSeq rs = new RangeSeq();
+		rs.add(-1, 5, 3);
+		rs.add(-1, 10, 2);
+		rs.add(-1, 15, 3);
+		rs.add(-1, 20, 3);
+		errorCollector.assertFalse(rs.includesTargetLine(4));
+		errorCollector.assertTrue(rs.includesTargetLine(7));
+		errorCollector.assertFalse(rs.includesTargetLine(8));
+		errorCollector.assertTrue(rs.includesTargetLine(10));
+		errorCollector.assertFalse(rs.includesTargetLine(12));
 	}
 	
 	
