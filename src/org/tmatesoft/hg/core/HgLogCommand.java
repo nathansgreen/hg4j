@@ -298,10 +298,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		if (csetTransform != null) {
 			throw new ConcurrentModificationException();
 		}
+		if (repo.getChangelog().getRevisionCount() == 0) {
+			return;
+		}
 		final int lastCset = endRev == TIP ? repo.getChangelog().getLastRevision() : endRev;
 		// XXX pretty much like HgInternals.checkRevlogRange
 		if (lastCset < 0 || lastCset > repo.getChangelog().getLastRevision()) {
-			throw new HgBadArgumentException(String.format("Bad value %d for end revision", endRev), null);
+			throw new HgBadArgumentException(String.format("Bad value %d for end revision", lastCset), null);
 		}
 		if (startRev < 0 || startRev > lastCset) {
 			throw new HgBadArgumentException(String.format("Bad value %d for start revision for range [%1$d..%d]", startRev, lastCset), null);

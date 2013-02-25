@@ -52,7 +52,7 @@ public class TestRevert {
 		
 		repo = new HgLookup().detect(testRepoLoc);
 		Path targetFile = Path.create("b");
-		RepoUtils.modifyFileAppend(new File(testRepoLoc, targetFile.toString()));
+		RepoUtils.modifyFileAppend(new File(testRepoLoc, targetFile.toString()), "XXX");
 		
 		StatusOutputParser statusParser = new StatusOutputParser();
 		eh = new ExecHelper(statusParser, testRepoLoc);

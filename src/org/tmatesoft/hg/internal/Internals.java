@@ -202,6 +202,10 @@ public final class Internals implements SessionContext.Source {
 		return new EncodingHelper(getFilenameEncoding(), repo.getSessionContext());
 	}
 	
+	public boolean fncacheInUse() {
+		return (getRequiresFlags() & RequiresFile.FNCACHE) != 0;
+	}
+	
 	/*package-local*/ Charset getFilenameEncoding() {
 		return getFileEncoding(getSessionContext());
 	}

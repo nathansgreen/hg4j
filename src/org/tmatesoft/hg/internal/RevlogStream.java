@@ -348,6 +348,7 @@ public class RevlogStream {
 		if (inline && indexRecordOffset != null) {
 			assert indexRecordOffset.length == revisionIndex;
 			int[] indexRecordOffsetCopy = new int[indexRecordOffset.length + 1];
+			System.arraycopy(indexRecordOffset, 0, indexRecordOffsetCopy, 0, indexRecordOffset.length);
 			indexRecordOffsetCopy[indexRecordOffset.length] = offsetFieldToInlineFileOffset(revisionOffset, revisionIndex);
 			indexRecordOffset = indexRecordOffsetCopy;
 		}

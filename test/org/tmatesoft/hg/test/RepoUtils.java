@@ -22,6 +22,7 @@ import static org.tmatesoft.hg.internal.RequiresFile.*;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 
@@ -60,7 +61,8 @@ public class RepoUtils {
 		File testRepoLoc = createEmptyDir(name);
 		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), testRepoLoc.getParentFile());
 		ArrayList<String> cmd = new ArrayList<String>();
-		cmd.add("hg"); cmd.add("clone");
+		cmd.add("hg");
+		cmd.add("clone");
 		if (noupdate) {
 			cmd.add("--noupdate");
 		}
@@ -71,11 +73,33 @@ public class RepoUtils {
 		return testRepoLoc;
 	}
 
-	static void modifyFileAppend(File f) throws IOException {
+	static void modifyFileAppend(File f, Object content) throws IOException {
 		assertTrue(f.isFile());
 		FileOutputStream fos = new FileOutputStream(f, true);
-		fos.write("XXX".getBytes());
+		if (content == null) {
+			content = "XXX".getBytes();
+		}
+		if (content instanceof byte[]) {
+			fos.write((byte[]) content);
+		} else {
+			fos.write(String.valueOf(content).getBytes());
+		}
 		fos.close();
 	}
 
+	static void createFile(File f, Object content) throws IOException {
+		if (content == null) {
+			f.createNewFile();
+			return;
+		}
+		if (content instanceof byte[]) {
+			FileOutputStream fos = new FileOutputStream(f);
+			fos.write((byte[]) content);
+			fos.close();
+		} else {
+			FileWriter fw = new FileWriter(f);
+			fw.write(String.valueOf(content));
+			fw.close();
+		}
+	}
 }

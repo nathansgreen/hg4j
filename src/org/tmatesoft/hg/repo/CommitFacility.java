@@ -24,7 +24,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
@@ -48,11 +50,12 @@ import org.tmatesoft.hg.util.LogFacility.Severity;
  * @author TMate Software Ltd.
  */
 @Experimental(reason="Work in progress")
-public class CommitFacility {
+public final class CommitFacility {
 	private final HgRepository repo;
 	private final int p1Commit, p2Commit;
 	private Map<Path, Pair<HgDataFile, ByteDataSupplier>> files = new LinkedHashMap<Path, Pair<HgDataFile, ByteDataSupplier>>();
-	
+	private Set<Path> removals = new TreeSet<Path>();
+	private String branch;
 
 	public CommitFacility(HgRepository hgRepo, int parentCommit) {
 		this(hgRepo, parentCommit, NO_REVISION);
@@ -72,7 +75,20 @@ public class CommitFacility {
 	}
 
 	public void add(HgDataFile dataFile, ByteDataSupplier content) {
+		if (content == null) {
+			throw new IllegalArgumentException();
+		}
+		removals.remove(dataFile.getPath());
 		files.put(dataFile.getPath(), new Pair<HgDataFile, ByteDataSupplier>(dataFile, content));
+	}
+
+	public void forget(HgDataFile dataFile) {
+		files.remove(dataFile.getPath());
+		removals.add(dataFile.getPath());
+	}
+	
+	public void branch(String branchName) {
+		branch = branchName;
 	}
 	
 	public Nodeid commit(String message) throws HgRepositoryLockException {
@@ -87,37 +103,32 @@ public class CommitFacility {
 		if (p2Commit != NO_REVISION) {
 			repo.getManifest().walk(p2Commit, p2Commit, c2Manifest);
 		}
-		FNCacheFile fncache = null;
-		if ((repo.getImplHelper().getRequiresFlags() & RequiresFile.FNCACHE) != 0) {
-			fncache = new FNCacheFile(repo.getImplHelper());
-			try {
-				fncache.read(new Path.SimpleSource());
-			} catch (IOException ex) {
-				// fncache may be restored using native client, so do not treat failure to read it as severe enough to stop
-				repo.getSessionContext().getLog().dump(getClass(), Severity.Error, ex, "Failed to read fncache, attempt commit nevertheless");
-			}
-		}
 //		Pair<Integer, Integer> manifestParents = getManifestParents();
 		Pair<Integer, Integer> manifestParents = new Pair<Integer, Integer>(c1Manifest.revisionIndex(), c2Manifest.revisionIndex());
 		TreeMap<Path, Nodeid> newManifestRevision = new TreeMap<Path, Nodeid>();
 		HashMap<Path, Pair<Integer, Integer>> fileParents = new HashMap<Path, Pair<Integer,Integer>>();
 		for (Path f : c1Manifest.files()) {
 			HgDataFile df = repo.getFileNode(f);
-			Nodeid fileKnownRev = c1Manifest.nodeid(f);
-			final int fileRevIndex1 = df.getRevisionIndex(fileKnownRev);
+			Nodeid fileKnownRev1 = c1Manifest.nodeid(f), fileKnownRev2;
+			final int fileRevIndex1 = df.getRevisionIndex(fileKnownRev1);
 			final int fileRevIndex2;
-			if ((fileKnownRev = c2Manifest.nodeid(f)) != null) {
+			if ((fileKnownRev2 = c2Manifest.nodeid(f)) != null) {
 				// merged files
-				fileRevIndex2 = df.getRevisionIndex(fileKnownRev);
+				fileRevIndex2 = df.getRevisionIndex(fileKnownRev2);
 			} else {
 				fileRevIndex2 = NO_REVISION;
 			}
 				
 			fileParents.put(f, new Pair<Integer, Integer>(fileRevIndex1, fileRevIndex2));
-			newManifestRevision.put(f, fileKnownRev);
+			newManifestRevision.put(f, fileKnownRev1);
 		}
 		//
-		// Files
+		// Forget removed
+		for (Path p : removals) {
+			newManifestRevision.remove(p);
+		}
+		//
+		// Register new/changed
 		ArrayList<Path> newlyAddedFiles = new ArrayList<Path>();
 		for (Pair<HgDataFile, ByteDataSupplier> e : files.values()) {
 			HgDataFile df = e.first();
@@ -161,10 +172,13 @@ public class CommitFacility {
 		// Changelog
 		final ChangelogEntryBuilder changelogBuilder = new ChangelogEntryBuilder();
 		changelogBuilder.setModified(files.keySet());
+		changelogBuilder.branch(branch == null ? HgRepository.DEFAULT_BRANCH_NAME : branch);
 		byte[] clogContent = changelogBuilder.build(manifestRev, message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo.getSessionContext(), clog.content);
 		Nodeid changesetRev = changelogWriter.addRevision(clogContent, clogRevisionIndex, p1Commit, p2Commit);
-		if (!newlyAddedFiles.isEmpty() && fncache != null) {
+		// FIXME move fncache update to an external facility, along with dirstate update
+		if (!newlyAddedFiles.isEmpty() && repo.getImplHelper().fncacheInUse()) {
+			FNCacheFile fncache = new FNCacheFile(repo.getImplHelper());
 			for (Path p : newlyAddedFiles) {
 				fncache.add(p);
 			}
@@ -198,6 +212,7 @@ public class CommitFacility {
 	// unlike DataAccess (which provides structured access), this one 
 	// deals with a sequence of bytes, when there's no need in structure of the data
 	public interface ByteDataSupplier { // TODO look if can resolve DataAccess in HgCloneCommand visibility issue
+		// FIXME needs lifecycle, e.g. for supplier that reads from WC
 		int read(ByteBuffer buf);
 	}
 	

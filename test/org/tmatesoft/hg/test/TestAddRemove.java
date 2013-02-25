@@ -17,10 +17,9 @@
 package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.tmatesoft.hg.test.RepoUtils.createFile;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -86,11 +85,4 @@ public class TestAddRemove {
 		eh.run("hg", "status", "-A");
 		assertEquals(2, statusParser.getRemoved().size());
 	}
-
-	private static void createFile(File f, Object content) throws IOException {
-		FileOutputStream fos = new FileOutputStream(f, true);
-		fos.write(String.valueOf(content).getBytes());
-		fos.close();
-	}
-	
 }
