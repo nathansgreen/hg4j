@@ -110,6 +110,11 @@ public class FileAnnotation implements HgBlameFacility.BlockInspector, RevisionD
 		} else {
 			equalRanges.put(rd.originChangesetIndex(), v);
 		}
+		if (rd.isMerge() && !mergedRanges.containsKey(rd.mergeChangesetIndex())) {
+			// seen merge, but no lines were merged from p2.
+			// Add empty range to avoid uncertainty when a parent of p2 pops in
+			mergedRanges.put(rd.mergeChangesetIndex(), new RangeSeq());
+		}
 		intermediateEquals.clear();
 		activeEquals = null;
 		activeEqualsComesFromMerge = false;
