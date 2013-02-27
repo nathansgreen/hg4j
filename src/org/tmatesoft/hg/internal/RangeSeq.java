@@ -170,6 +170,6 @@ public final class RangeSeq {
 	
 	@Override
 	public String toString() {
-		return String.format("RangeSeq[%d]", count);
+		return String.format("RangeSeq[%d]:%s", count, dump());
 	}
 }

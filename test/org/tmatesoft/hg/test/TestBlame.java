@@ -97,15 +97,15 @@ public class TestBlame {
 		FileAnnotation.annotate(df, cs, fa);
 
 		op.reset();
-		eh.run("hg", "annotate", "-r", cs == TIP ? "tip" : String.valueOf(cs), df.getPath().toString());
+		eh.run("hg", "annotate", "--no-follow", "-r", cs == TIP ? "tip" : String.valueOf(cs), df.getPath().toString());
 
 		String[] hgAnnotateLines = splitLines(op.result());
 		assertTrue("[sanity]", hgAnnotateLines.length > 0);
 		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, fa.lineRevisions.length);
 
 		for (int i = 0; i < fa.lineRevisions.length; i++) {
-			int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')));
-			errorCollector.assertEquals(String.format("Revision mismatch for line %d", i+1), hgAnnotateRevIndex, fa.lineRevisions[i]);
+			int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')).trim());
+			errorCollector.assertEquals(String.format("Revision mismatch for line %d (annotating rev: %d)", i+1, cs), hgAnnotateRevIndex, fa.lineRevisions[i]);
 			String hgAnnotateLine = hgAnnotateLines[i].substring(hgAnnotateLines[i].indexOf(':') + 1);
 			String apiLine = fa.line(i).trim();
 			errorCollector.assertEquals(hgAnnotateLine.trim(), apiLine);
@@ -264,26 +264,33 @@ public class TestBlame {
 		af.annotate(df, checkChangeset, dump, HgIterateDirection.OldToNew);
 	}
 	
-	private void ccc() throws Exception {
-		HgRepository repo = new HgLookup().detect("/home/artem/hg/junit-test-repos/test-annotate/");
-		HgDataFile df = repo.getFileNode("file1");
+	private void ccc() throws Throwable {
+		HgRepository repo = new HgLookup().detect("/home/artem/hg/hgtest-annotate1/");
+		HgDataFile df = repo.getFileNode("file1b.txt");
 		HgBlameFacility af = new HgBlameFacility();
-//		DiffOutInspector dump = new DiffOutInspector(System.out);
-//		dump.needRevisions(true);
-//		af.annotate(df, TIP, dump, HgIterateDirection.OldToNew);
+		DiffOutInspector dump = new DiffOutInspector(System.out);
+		dump.needRevisions(true);
+//		af.annotate(df, 62, dump, HgIterateDirection.NewToOld);
+//		af.annotateSingleRevision(df, 113, dump);
 //		System.out.println();
 //		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
 //		System.out.println();
 //		af.annotate(df, TIP, new LineDumpInspector(false), HgIterateDirection.NewToOld);
 //		System.out.println();
+		OutputParser.Stub op = new OutputParser.Stub();
+		eh = new ExecHelper(op, repo.getWorkingDir());
+		for (int cs : new int[] { 24, 46, 49, 52, 59, 62, 64, TIP}) {
+			doLineAnnotateTest(df, cs, op);
+		}
+		errorCollector.verify();
 		FileAnnotateInspector fa = new FileAnnotateInspector();
-		FileAnnotation.annotate(df, TIP, fa); //4,6,TIP
+		FileAnnotation.annotate(df, 62, fa);
 		for (int i = 0; i < fa.lineRevisions.length; i++) {
 			System.out.printf("%d: %s", fa.lineRevisions[i], fa.line(i) == null ? "null\n" : fa.line(i));
 		}
 	}
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Throwable {
 //		System.out.println(Arrays.equals(new String[0], splitLines("")));
 //		System.out.println(Arrays.equals(new String[] { "abc" }, splitLines("abc")));
 //		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc")));

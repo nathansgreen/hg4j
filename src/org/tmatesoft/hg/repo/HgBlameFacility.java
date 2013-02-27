@@ -80,7 +80,9 @@ public final class HgBlameFacility {
 			df.parents(i, fileRevParents, null, null);
 			fileParentRevs.add(fileRevParents[0], fileRevParents[1]);
 		}
-		// collect file revisions to visit, from newest to oldest
+		// collect file revisions to visit, from newest to oldest:
+		// traverse parents, starting from the given file revision
+		// this ignores all file revision made in parallel to the one of interest
 		IntVector fileRevsToVisit = new IntVector(fileRevIndex + 1, 0);
 		LinkedList<Integer> queue = new LinkedList<Integer>();
 		BitSet seen = new BitSet(fileRevIndex + 1);
@@ -102,6 +104,8 @@ public final class HgBlameFacility {
 			}
 		} while (!queue.isEmpty());
 		FileLinesCache fileInfoCache = new FileLinesCache(df, 10);
+		// make sure no child is processed before we handled all (grand-)parents of the element
+		fileRevsToVisit.sort(false);
 		// fileRevsToVisit now { r10, r7, r6, r5, r0 }
 		// and we'll iterate it from behind, e.g. old to new unless reversed 
 		if (iterateOrder == HgIterateDirection.NewToOld) {

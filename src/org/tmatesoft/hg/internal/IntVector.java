@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.util.Arrays;
+
 /**
  * Vector of primitive values
  * 
@@ -100,6 +102,18 @@ public class IntVector {
 			data[a] = t;
 		}
 	}
+
+	/**
+	 * 
+	 * @param ascending <code>true</code> to sort in ascending order, <code>false</code> for descending
+	 */
+	public void sort(boolean ascending) {
+		Arrays.sort(data, 0, count);
+		if (!ascending) {
+			reverse();
+		}
+	}
+
 
 	@Override
 	public String toString() {
