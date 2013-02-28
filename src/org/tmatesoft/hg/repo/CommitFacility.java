@@ -36,7 +36,6 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FNCacheFile;
 import org.tmatesoft.hg.internal.ManifestEntryBuilder;
 import org.tmatesoft.hg.internal.ManifestRevision;
-import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.RevlogStreamWriter;
 import org.tmatesoft.hg.util.Pair;

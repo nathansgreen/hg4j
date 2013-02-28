@@ -17,12 +17,13 @@
 package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.test.RepoUtils.cloneRepoToTempLocation;
 
 import java.io.File;
 import java.io.FileFilter;
 
-import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCheckoutCommand;
@@ -48,12 +49,12 @@ public class TestCheckout {
 
 	@Test
 	public void testCleanCheckoutInEmptyDir() throws Exception {
-		File testRepoLoc = cloneRepoToTempLocation("log-1", "test-checkoutClean", true);
+		File testRepoLoc = cloneRepoToTempLocation("log-1", "test-checkout-clean", true);
 		repo = new HgLookup().detect(testRepoLoc);
 		// nothing but .hg dir
 		assertEquals("[sanity]", 0, testRepoLoc.listFiles(new FilesOnlyFilter()).length);
 		
-		new HgCheckoutCommand(repo).changeset(1).execute();
+		new HgCheckoutCommand(repo).clean(true).changeset(1).execute();
 		errorCollector.assertEquals(2, testRepoLoc.listFiles(new FilesOnlyFilter()).length);
 
 		Pair<Nodeid, Nodeid> workingCopyParents = repo.getWorkingCopyParents();
@@ -68,7 +69,7 @@ public class TestCheckout {
 		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("a")));
 		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("b")));
 		
-		new HgCheckoutCommand(repo).changeset(3).execute();
+		new HgCheckoutCommand(repo).clean(true).changeset(3).execute();
 		statusOutputParser.reset();
 		eh.run("hg", "status", "-A");
 		errorCollector.assertEquals(3, statusOutputParser.getClean().size());
@@ -77,9 +78,24 @@ public class TestCheckout {
 		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("dir/b")));
 	}
 
+	/**
+	 * Make sure WC is cleared prior to clean checkout
+	 */
 	@Test
-	public void testCleanCheckoutInDirtyDir() {
-		Assert.fail("Make sure WC is cleared prior to clean checkout");
+	public void testCleanCheckoutInDirtyDir() throws Exception {
+		File repoLoc = cloneRepoToTempLocation("log-1", "test-checkout-dirty", false);
+		File untrackedFile = new File(repoLoc, "aaa");
+		RepoUtils.createFile(untrackedFile, "shall survive hg co --clean");
+		File modifiedFile = new File(repoLoc, "b");
+		assertTrue("[sanity]", modifiedFile.canRead());
+		final long modifiedFileInitialLen = modifiedFile.length();
+		RepoUtils.modifyFileAppend(modifiedFile, "the change shall not survive");
+		assertTrue("[sanity]", modifiedFile.length() > modifiedFileInitialLen);
+		//
+		repo = new HgLookup().detect(repoLoc);
+		new HgCheckoutCommand(repo).clean(true).changeset(TIP).execute();
+		errorCollector.assertTrue(untrackedFile.canRead());
+		errorCollector.assertEquals(modifiedFileInitialLen, modifiedFile.length());
 	}
 
 	@Test
@@ -87,7 +103,7 @@ public class TestCheckout {
 		File testRepoLoc = cloneRepoToTempLocation("log-branches", "test-checkoutBranch", true);
 		repo = new HgLookup().detect(testRepoLoc);
 		
-		new HgCheckoutCommand(repo).changeset(3 /*branch test*/).execute();
+		new HgCheckoutCommand(repo).clean(true).changeset(3 /*branch test*/).execute();
 
 		StatusOutputParser statusOutputParser = new StatusOutputParser();
 		eh = new ExecHelper(statusOutputParser, testRepoLoc);

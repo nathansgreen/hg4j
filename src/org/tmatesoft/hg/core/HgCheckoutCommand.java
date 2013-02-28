@@ -31,8 +31,12 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.WorkingDirFileWriter;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgDirstate;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
+import org.tmatesoft.hg.repo.HgDirstate.Record;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -54,9 +58,23 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 
 	private final HgRepository repo;
 	private int revisionToCheckout = HgRepository.BAD_REVISION;
+	private boolean cleanCheckout;
 
 	public HgCheckoutCommand(HgRepository hgRepo) {
 		repo = hgRepo;
+	}
+	
+	/**
+	 * Whether to discard all uncommited changes prior to check-out.
+	 * 
+	 * NOTE, at the moment, only clean checkout is supported!
+	 *  
+	 * @param clean <code>true</code> to discard any change
+	 * @return <code>this</code> for convenience
+	 */
+	public HgCheckoutCommand clean(boolean clean) {
+		cleanCheckout = clean;
+		return this;
 	}
 	
 	/**
@@ -77,12 +95,15 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 	/**
 	 * Select revision to check out using local revision index
 	 * 
-	 * @param changesetIndex local revision index
+	 * @param changesetIndex local revision index, or {@link HgRepository#TIP}
 	 * @return <code>this</code> for convenience
 	 * @throws HgBadArgumentException if failed to find supplied changeset 
 	 */
 	public HgCheckoutCommand changeset(int changesetIndex) throws HgBadArgumentException {
 		int lastCsetIndex = repo.getChangelog().getLastRevision();
+		if (changesetIndex == HgRepository.TIP) {
+			changesetIndex = lastCsetIndex;
+		}
 		if (changesetIndex < 0 || changesetIndex > lastCsetIndex) {
 			throw new HgBadArgumentException(String.format("Bad revision index %d, value from [0..%d] expected", changesetIndex, lastCsetIndex), null).setRevisionIndex(changesetIndex);
 		}
@@ -99,8 +120,24 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 	public void execute() throws HgException, CancelledException {
 		try {
 			Internals internalRepo = Internals.getInstance(repo);
-			// FIXME remove tracked files from wd (perhaps, just forget 'Added'?)
-			// TODO
+			if (cleanCheckout) {
+				// remove tracked files from wd (perhaps, just forget 'Added'?)
+				// for now, just delete each and every tracked file
+				// TODO WorkingCopy container with getFile(HgDataFile/Path) to access files in WD
+				HgDirstate dirstate = new HgInternals(repo).getDirstate();
+				dirstate.walk(new HgDirstate.Inspector() {
+					
+					public boolean next(EntryKind kind, Record entry) {
+						File f = new File(repo.getWorkingDir(), entry.name().toString());
+						if (f.exists()) {
+							f.delete();
+						}
+						return true;
+					}
+				});
+			} else {
+				throw new HgBadArgumentException("Sorry, only clean checkout is supported now, use #clean(true)", null);
+			}
 			final DirstateBuilder dirstateBuilder = new DirstateBuilder(internalRepo);
 			final CheckoutWorker worker = new CheckoutWorker(internalRepo);
 			HgManifest.Inspector insp = new HgManifest.Inspector() {
@@ -127,9 +164,9 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 			worker.checkFailed();
 			File dirstateFile = internalRepo.getRepositoryFile(Dirstate);
 			try {
-				FileChannel dirstate = new FileOutputStream(dirstateFile).getChannel();
-				dirstateBuilder.serialize(dirstate);
-				dirstate.close();
+				FileChannel dirstateFileChannel = new FileOutputStream(dirstateFile).getChannel();
+				dirstateBuilder.serialize(dirstateFileChannel);
+				dirstateFileChannel.close();
 			} catch (IOException ex) {
 				throw new HgIOException("Can't write down new directory state", ex, dirstateFile);
 			}
