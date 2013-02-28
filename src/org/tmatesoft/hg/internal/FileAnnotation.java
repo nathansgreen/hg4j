@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.internal;
 
 
+import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.repo.HgBlameFacility;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
@@ -34,7 +35,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class FileAnnotation implements HgBlameFacility.BlockInspector, RevisionDescriptor.Recipient {
+public class FileAnnotation implements HgBlameFacility.Inspector, RevisionDescriptor.Recipient {
 
 	@Experimental(reason="The line-by-line inspector likely to become part of core/command API")
 	@Callback
@@ -52,7 +53,7 @@ public class FileAnnotation implements HgBlameFacility.BlockInspector, RevisionD
 	/**
 	 * Annotate file revision, line by line.
 	 */
-	public static void annotate(HgDataFile df, int changelogRevisionIndex, LineInspector insp) {
+	public static void annotate(HgDataFile df, int changelogRevisionIndex, LineInspector insp) throws HgCallbackTargetException {
 		if (!df.exists()) {
 			return;
 		}

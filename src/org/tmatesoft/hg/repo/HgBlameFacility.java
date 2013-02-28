@@ -23,6 +23,7 @@ import java.util.BitSet;
 import java.util.LinkedList;
 import java.util.ListIterator;
 
+import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -51,7 +52,7 @@ public final class HgBlameFacility {
 	/**
 	 * mimic 'hg diff -r clogRevIndex1 -r clogRevIndex2'
 	 */
-	public void diff(HgDataFile df, int clogRevIndex1, int clogRevIndex2, BlockInspector insp) {
+	public void diff(HgDataFile df, int clogRevIndex1, int clogRevIndex2, Inspector insp) throws HgCallbackTargetException {
 		int fileRevIndex1 = fileRevIndex(df, clogRevIndex1);
 		int fileRevIndex2 = fileRevIndex(df, clogRevIndex2);
 		FileLinesCache fileInfoCache = new FileLinesCache(df, 5);
@@ -59,13 +60,15 @@ public final class HgBlameFacility {
 		LineSequence c2 = fileInfoCache.lines(fileRevIndex2);
 		DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 		pg.init(c1, c2);
-		pg.findMatchingBlocks(new BlameBlockInspector(fileRevIndex2, insp, clogRevIndex1, clogRevIndex2));
+		BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex2, insp, clogRevIndex1, clogRevIndex2);
+		pg.findMatchingBlocks(bbi);
+		bbi.checkErrors();
 	}
 	
 	/**
 	 * Walk file history up to revision at given changeset and report changes for each revision
 	 */
-	public void annotate(HgDataFile df, int changelogRevisionIndex, BlockInspector insp, HgIterateDirection iterateOrder) {
+	public void annotate(HgDataFile df, int changelogRevisionIndex, Inspector insp, HgIterateDirection iterateOrder) throws HgCallbackTargetException {
 		if (!df.exists()) {
 			return;
 		}
@@ -122,10 +125,10 @@ public final class HgBlameFacility {
 
 	/**
 	 * Annotates changes of the file against its parent(s). 
-	 * Unlike {@link #annotate(HgDataFile, int, BlockInspector, HgIterateDirection)}, doesn't
+	 * Unlike {@link #annotate(HgDataFile, int, Inspector, HgIterateDirection)}, doesn't
 	 * walk file history, looks at the specified revision only. Handles both parents (if merge revision).
 	 */
-	public void annotateSingleRevision(HgDataFile df, int changelogRevisionIndex, BlockInspector insp) {
+	public void annotateSingleRevision(HgDataFile df, int changelogRevisionIndex, Inspector insp) throws HgCallbackTargetException {
 		// TODO detect if file is text/binary (e.g. looking for chars < ' ' and not \t\r\n\f
 		int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
 		int[] fileRevParents = new int[2];
@@ -136,7 +139,7 @@ public final class HgBlameFacility {
 		implAnnotateChange(new FileLinesCache(df, 5), changelogRevisionIndex, fileRevIndex, fileRevParents, insp);
 	}
 
-	private void implAnnotateChange(FileLinesCache fl, int csetRevIndex, int fileRevIndex, int[] fileParentRevs, BlockInspector insp) {
+	private void implAnnotateChange(FileLinesCache fl, int csetRevIndex, int fileRevIndex, int[] fileParentRevs, Inspector insp) throws HgCallbackTargetException {
 		final LineSequence fileRevLines = fl.lines(fileRevIndex);
 		if (fileParentRevs[0] != NO_REVISION && fileParentRevs[1] != NO_REVISION) {
 			LineSequence p1Lines = fl.lines(fileParentRevs[0]);
@@ -152,6 +155,7 @@ public final class HgBlameFacility {
 			BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex, insp, p1ClogIndex, csetRevIndex);
 			bbi.setMergeParent2(p2MergeCommon, p2ClogIndex);
 			pg.findMatchingBlocks(bbi);
+			bbi.checkErrors();
 		} else if (fileParentRevs[0] == fileParentRevs[1]) {
 			// may be equal iff both are unset
 			assert fileParentRevs[0] == NO_REVISION;
@@ -160,6 +164,7 @@ public final class HgBlameFacility {
 			bbi.begin(LineSequence.newlines(new byte[0]), fileRevLines);
 			bbi.match(0, fileRevLines.chunkCount()-1, 0);
 			bbi.end();
+			bbi.checkErrors();
 		} else {
 			int soleParent = fileParentRevs[0] == NO_REVISION ? fileParentRevs[1] : fileParentRevs[0];
 			assert soleParent != NO_REVISION;
@@ -168,7 +173,9 @@ public final class HgBlameFacility {
 			int parentChangesetRevIndex = fl.getChangesetRevisionIndex(soleParent);
 			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
 			pg.init(parentLines, fileRevLines);
-			pg.findMatchingBlocks(new BlameBlockInspector(fileRevIndex, insp, parentChangesetRevIndex, csetRevIndex));
+			BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex, insp, parentChangesetRevIndex, csetRevIndex);
+			pg.findMatchingBlocks(bbi);
+			bbi.checkErrors();
 		}
 	}
 
@@ -247,11 +254,18 @@ public final class HgBlameFacility {
 	 * {@link RevisionDescriptor.Recipient} through {@link Adaptable}.  
 	 */
 	@Callback
-	public interface BlockInspector {
-		void same(EqualBlock block);
-		void added(AddBlock block);
-		void changed(ChangeBlock block);
-		void deleted(DeleteBlock block);
+	public interface Inspector {
+		void same(EqualBlock block) throws HgCallbackTargetException;
+		void added(AddBlock block) throws HgCallbackTargetException;
+		void changed(ChangeBlock block) throws HgCallbackTargetException;
+		void deleted(DeleteBlock block) throws HgCallbackTargetException;
+	}
+	
+	/**
+	 * No need to keep "Block" prefix as long as there's only one {@link Inspector}
+	 */
+	@Deprecated
+	public interface BlockInspector extends Inspector {
 	}
 	
 	/**
@@ -283,7 +297,7 @@ public final class HgBlameFacility {
 	}
 	
 	/**
-	 * {@link BlockInspector} may optionally request extra information about revisions
+	 * {@link Inspector} may optionally request extra information about revisions
 	 * being inspected, denoting itself as a {@link RevisionDescriptor.Recipient}. This class 
 	 * provides complete information about file revision under annotation now. 
 	 */
@@ -330,11 +344,11 @@ public final class HgBlameFacility {
 			/**
 			 * Comes prior to any change {@link Block blocks}
 			 */
-			void start(RevisionDescriptor revisionDescription);
+			void start(RevisionDescriptor revisionDescription) throws HgCallbackTargetException;
 			/**
 			 * Comes after all change {@link Block blocks} were dispatched
 			 */
-			void done(RevisionDescriptor revisionDescription);
+			void done(RevisionDescriptor revisionDescription) throws HgCallbackTargetException;
 		}
 	}
 	
@@ -394,15 +408,16 @@ public final class HgBlameFacility {
 	}
 	
 	private static class BlameBlockInspector extends DiffHelper.DeltaInspector<LineSequence> {
-		private final BlockInspector insp;
+		private final Inspector insp;
 		private final int csetOrigin;
 		private final int csetTarget;
 		private EqualBlocksCollector p2MergeCommon;
 		private int csetMergeParent;
 		private IntVector mergeRanges;
 		private final AnnotateRev annotatedRevision;
+		private HgCallbackTargetException error;
 
-		public BlameBlockInspector(int fileRevIndex, BlockInspector inspector, int originCset, int targetCset) {
+		public BlameBlockInspector(int fileRevIndex, Inspector inspector, int originCset, int targetCset) {
 			assert inspector != null;
 			insp = inspector;
 			annotatedRevision = new AnnotateRev();
@@ -420,118 +435,170 @@ public final class HgBlameFacility {
 		@Override
 		public void begin(LineSequence s1, LineSequence s2) {
 			super.begin(s1, s2);
+			if (shallStop()) {
+				return;
+			}
 			ContentBlock originContent = new ContentBlock(s1);
 			ContentBlock targetContent = new ContentBlock(s2);
 			annotatedRevision.set(originContent, targetContent);
 			annotatedRevision.set(csetOrigin, csetTarget, p2MergeCommon != null ? csetMergeParent : NO_REVISION);
 			Recipient curious = Adaptable.Factory.getAdapter(insp, Recipient.class, null);
 			if (curious != null) {
-				curious.start(annotatedRevision);
+				try {
+					curious.start(annotatedRevision);
+				} catch (HgCallbackTargetException ex) {
+					error = ex;
+				}
 			}
 		}
 		
 		@Override
 		public void end() {
 			super.end();
+			if (shallStop()) {
+				return;
+			}
 			Recipient curious = Adaptable.Factory.getAdapter(insp, Recipient.class, null);
 			if (curious != null) {
-				curious.done(annotatedRevision);
+				try {
+					curious.done(annotatedRevision);
+				} catch (HgCallbackTargetException ex) {
+					error = ex;
+				}
 			}
 			p2MergeCommon = null;
 		}
 
 		@Override
 		protected void changed(int s1From, int s1To, int s2From, int s2To) {
-			if (p2MergeCommon != null) {
-				mergeRanges.clear();
-				p2MergeCommon.combineAndMarkRangesWithTarget(s2From, s2To - s2From, csetOrigin, csetMergeParent, mergeRanges);
-				
-				/*
-				 * Usecases, how it USED TO BE initially:
-				 * 3 lines changed to 10 lines. range of 10 lines breaks down to 2 from p2, 3 from p1, and 5 from p2.
-				 * We report: 2 lines changed to 2(p2), then 1 line changed with 3(p1) and 5 lines added from p2.
-				 * 
-				 * 10 lines changed to 3 lines, range of 3 lines breaks down to 2 line from p1 and 1 line from p2.
-				 * We report: 2 lines changed to 2(p1) and 8 lines changed to 1(p2)
-				 * 
-				 * NOW, lines from p2 are always reported as pure add (since we need their insertion point to be in p2, not in p1)
-				 * and we try to consume p1 changes as soon as we see first p1's range 
-				 */
-				int s1TotalLines = s1To - s1From, s1ConsumedLines = 0, s1Start = s1From;
-				
-				for (int i = 0; i < mergeRanges.size(); i += 3) {
-					final int rangeOrigin = mergeRanges.get(i);
-					final int rangeStart = mergeRanges.get(i+1);
-					final int rangeLen = mergeRanges.get(i+2);
-					final boolean lastRange = i+3 >= mergeRanges.size();
-					final int s1LinesLeft = s1TotalLines - s1ConsumedLines;
-					// how many lines we may report as changed (don't use more than in range unless it's the very last range)
-					final int s1LinesToBorrow = lastRange ? s1LinesLeft : Math.min(s1LinesLeft, rangeLen);
-					if (rangeOrigin != csetMergeParent && s1LinesToBorrow > 0) {
-						ChangeBlockImpl block = getChangeBlock(s1Start, s1LinesToBorrow, rangeStart, rangeLen);
-						block.setOriginAndTarget(rangeOrigin, csetTarget);
-						insp.changed(block);
-						s1ConsumedLines += s1LinesToBorrow;
-						s1Start += s1LinesToBorrow;
-					} else {
-						int blockInsPoint = rangeOrigin != csetMergeParent ? s1Start : p2MergeCommon.reverseMapLine(rangeStart);
-						ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, blockInsPoint);
-						block.setOriginAndTarget(rangeOrigin, csetTarget);
-						insp.added(block);
+			if (shallStop()) {
+				return;
+			}
+			try {
+				if (p2MergeCommon != null) {
+					mergeRanges.clear();
+					p2MergeCommon.combineAndMarkRangesWithTarget(s2From, s2To - s2From, csetOrigin, csetMergeParent, mergeRanges);
+					
+					/*
+					 * Usecases, how it USED TO BE initially:
+					 * 3 lines changed to 10 lines. range of 10 lines breaks down to 2 from p2, 3 from p1, and 5 from p2.
+					 * We report: 2 lines changed to 2(p2), then 1 line changed with 3(p1) and 5 lines added from p2.
+					 * 
+					 * 10 lines changed to 3 lines, range of 3 lines breaks down to 2 line from p1 and 1 line from p2.
+					 * We report: 2 lines changed to 2(p1) and 8 lines changed to 1(p2)
+					 * 
+					 * NOW, lines from p2 are always reported as pure add (since we need their insertion point to be in p2, not in p1)
+					 * and we try to consume p1 changes as soon as we see first p1's range 
+					 */
+					int s1TotalLines = s1To - s1From, s1ConsumedLines = 0, s1Start = s1From;
+					
+					for (int i = 0; i < mergeRanges.size(); i += 3) {
+						final int rangeOrigin = mergeRanges.get(i);
+						final int rangeStart = mergeRanges.get(i+1);
+						final int rangeLen = mergeRanges.get(i+2);
+						final boolean lastRange = i+3 >= mergeRanges.size();
+						final int s1LinesLeft = s1TotalLines - s1ConsumedLines;
+						// how many lines we may report as changed (don't use more than in range unless it's the very last range)
+						final int s1LinesToBorrow = lastRange ? s1LinesLeft : Math.min(s1LinesLeft, rangeLen);
+						if (rangeOrigin != csetMergeParent && s1LinesToBorrow > 0) {
+							ChangeBlockImpl block = getChangeBlock(s1Start, s1LinesToBorrow, rangeStart, rangeLen);
+							block.setOriginAndTarget(rangeOrigin, csetTarget);
+							insp.changed(block);
+							s1ConsumedLines += s1LinesToBorrow;
+							s1Start += s1LinesToBorrow;
+						} else {
+							int blockInsPoint = rangeOrigin != csetMergeParent ? s1Start : p2MergeCommon.reverseMapLine(rangeStart);
+							ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, blockInsPoint);
+							block.setOriginAndTarget(rangeOrigin, csetTarget);
+							insp.added(block);
+						}
 					}
-				}
-				if (s1ConsumedLines != s1TotalLines) {
-					assert s1ConsumedLines < s1TotalLines : String.format("Expected to process %d lines, but actually was %d", s1TotalLines, s1ConsumedLines);
-					// either there were no ranges from p1, whole s2From..s2To range came from p2, shall report as deleted
-					// or the ranges found were not enough to consume whole s2From..s2To
-					// The "deletion point" is shifted to the end of last csetOrigin->csetTarget change
-					int s2DeletePoint = s2From + s1ConsumedLines;
-					ChangeBlockImpl block =  new ChangeBlockImpl(annotatedRevision.origin, null, s1Start, s1To - s1Start, -1, -1, -1, s2DeletePoint);
+					if (s1ConsumedLines != s1TotalLines) {
+						assert s1ConsumedLines < s1TotalLines : String.format("Expected to process %d lines, but actually was %d", s1TotalLines, s1ConsumedLines);
+						// either there were no ranges from p1, whole s2From..s2To range came from p2, shall report as deleted
+						// or the ranges found were not enough to consume whole s2From..s2To
+						// The "deletion point" is shifted to the end of last csetOrigin->csetTarget change
+						int s2DeletePoint = s2From + s1ConsumedLines;
+						ChangeBlockImpl block =  new ChangeBlockImpl(annotatedRevision.origin, null, s1Start, s1To - s1Start, -1, -1, -1, s2DeletePoint);
+						block.setOriginAndTarget(csetOrigin, csetTarget);
+						insp.deleted(block);
+					}
+				} else {
+					ChangeBlockImpl block = getChangeBlock(s1From, s1To - s1From, s2From, s2To - s2From);
 					block.setOriginAndTarget(csetOrigin, csetTarget);
-					insp.deleted(block);
+					insp.changed(block);
 				}
-			} else {
-				ChangeBlockImpl block = getChangeBlock(s1From, s1To - s1From, s2From, s2To - s2From);
-				block.setOriginAndTarget(csetOrigin, csetTarget);
-				insp.changed(block);
+			} catch (HgCallbackTargetException ex) {
+				error = ex;
 			}
 		}
 		
 		@Override
 		protected void added(int s1InsertPoint, int s2From, int s2To) {
-			if (p2MergeCommon != null) {
-				mergeRanges.clear();
-				p2MergeCommon.combineAndMarkRangesWithTarget(s2From, s2To - s2From, csetOrigin, csetMergeParent, mergeRanges);
-				int insPoint = s1InsertPoint; // track changes to insertion point
-				for (int i = 0; i < mergeRanges.size(); i += 3) {
-					int rangeOrigin = mergeRanges.get(i);
-					int rangeStart = mergeRanges.get(i+1);
-					int rangeLen = mergeRanges.get(i+2);
-					ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, insPoint);
-					block.setOriginAndTarget(rangeOrigin, csetTarget);
+			if (shallStop()) {
+				return;
+			}
+			try {
+				if (p2MergeCommon != null) {
+					mergeRanges.clear();
+					p2MergeCommon.combineAndMarkRangesWithTarget(s2From, s2To - s2From, csetOrigin, csetMergeParent, mergeRanges);
+					int insPoint = s1InsertPoint; // track changes to insertion point
+					for (int i = 0; i < mergeRanges.size(); i += 3) {
+						int rangeOrigin = mergeRanges.get(i);
+						int rangeStart = mergeRanges.get(i+1);
+						int rangeLen = mergeRanges.get(i+2);
+						ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, insPoint);
+						block.setOriginAndTarget(rangeOrigin, csetTarget);
+						insp.added(block);
+						// indicate insPoint moved down number of lines we just reported
+						insPoint += rangeLen;
+					}
+				} else {
+					ChangeBlockImpl block = getAddBlock(s2From, s2To - s2From, s1InsertPoint);
+					block.setOriginAndTarget(csetOrigin, csetTarget);
 					insp.added(block);
-					// indicate insPoint moved down number of lines we just reported
-					insPoint += rangeLen;
 				}
-			} else {
-				ChangeBlockImpl block = getAddBlock(s2From, s2To - s2From, s1InsertPoint);
-				block.setOriginAndTarget(csetOrigin, csetTarget);
-				insp.added(block);
+			} catch (HgCallbackTargetException ex) {
+				error = ex;
 			}
 		}
 		
 		@Override
 		protected void deleted(int s2DeletePoint, int s1From, int s1To) {
-			ChangeBlockImpl block = new ChangeBlockImpl(annotatedRevision.origin, null, s1From, s1To - s1From, -1, -1, -1, s2DeletePoint);
-			block.setOriginAndTarget(csetOrigin, csetTarget);
-			insp.deleted(block);
+			if (shallStop()) {
+				return;
+			}
+			try {
+				ChangeBlockImpl block = new ChangeBlockImpl(annotatedRevision.origin, null, s1From, s1To - s1From, -1, -1, -1, s2DeletePoint);
+				block.setOriginAndTarget(csetOrigin, csetTarget);
+				insp.deleted(block);
+			} catch (HgCallbackTargetException ex) {
+				error = ex;
+			}
 		}
 
 		@Override
 		protected void unchanged(int s1From, int s2From, int length) {
-			EqualBlockImpl block = new EqualBlockImpl(s1From, s2From, length, annotatedRevision.target);
-			block.setOriginAndTarget(csetOrigin, csetTarget);
-			insp.same(block);
+			if (shallStop()) {
+				return;
+			}
+			try {
+				EqualBlockImpl block = new EqualBlockImpl(s1From, s2From, length, annotatedRevision.target);
+				block.setOriginAndTarget(csetOrigin, csetTarget);
+				insp.same(block);
+			} catch (HgCallbackTargetException ex) {
+				error = ex;
+			}
+		}
+		
+		void checkErrors() throws HgCallbackTargetException {
+			if (error != null) {
+				throw error;
+			}
+		}
+		
+		private boolean shallStop() {
+			return error != null;
 		}
 		
 		private ChangeBlockImpl getAddBlock(int start, int len, int insPoint) {

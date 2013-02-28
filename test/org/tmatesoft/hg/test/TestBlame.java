@@ -34,6 +34,7 @@ import java.util.regex.Pattern;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
@@ -92,7 +93,7 @@ public class TestBlame {
 		}
 	}
 	
-	private void doLineAnnotateTest(HgDataFile df, int cs, OutputParser.Stub op) throws InterruptedException, IOException {
+	private void doLineAnnotateTest(HgDataFile df, int cs, OutputParser.Stub op) throws HgCallbackTargetException, InterruptedException, IOException {
 		FileAnnotateInspector fa = new FileAnnotateInspector();
 		FileAnnotation.annotate(df, cs, fa);
 
@@ -265,26 +266,28 @@ public class TestBlame {
 	}
 	
 	private void ccc() throws Throwable {
-		HgRepository repo = new HgLookup().detect("/home/artem/hg/hgtest-annotate1/");
-		HgDataFile df = repo.getFileNode("file1b.txt");
+		HgRepository repo = new HgLookup().detect("/home/artem/hg/hgtest-annotate-merge/");
+		HgDataFile df = repo.getFileNode("file.txt");
 		HgBlameFacility af = new HgBlameFacility();
 		DiffOutInspector dump = new DiffOutInspector(System.out);
 		dump.needRevisions(true);
-//		af.annotate(df, 62, dump, HgIterateDirection.NewToOld);
+		af.annotate(df, 8, dump, HgIterateDirection.NewToOld);
 //		af.annotateSingleRevision(df, 113, dump);
 //		System.out.println();
 //		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
 //		System.out.println();
 //		af.annotate(df, TIP, new LineDumpInspector(false), HgIterateDirection.NewToOld);
 //		System.out.println();
+		/*
 		OutputParser.Stub op = new OutputParser.Stub();
 		eh = new ExecHelper(op, repo.getWorkingDir());
 		for (int cs : new int[] { 24, 46, 49, 52, 59, 62, 64, TIP}) {
 			doLineAnnotateTest(df, cs, op);
 		}
 		errorCollector.verify();
+		*/
 		FileAnnotateInspector fa = new FileAnnotateInspector();
-		FileAnnotation.annotate(df, 62, fa);
+		FileAnnotation.annotate(df, 8, fa);
 		for (int i = 0; i < fa.lineRevisions.length; i++) {
 			System.out.printf("%d: %s", fa.lineRevisions[i], fa.line(i) == null ? "null\n" : fa.line(i));
 		}
@@ -298,7 +301,7 @@ public class TestBlame {
 		new TestBlame().ccc();
 	}
 
-	private static class DiffOutInspector implements HgBlameFacility.BlockInspector {
+	private static class DiffOutInspector implements HgBlameFacility.Inspector {
 		private final PrintStream out;
 		private boolean dumpRevs;
 		private IntVector reportedRevisionPairs = new IntVector();
@@ -408,7 +411,7 @@ public class TestBlame {
 		}
 	}
 
-	private static class LineDumpInspector implements HgBlameFacility.BlockInspector {
+	private static class LineDumpInspector implements HgBlameFacility.Inspector {
 		
 		private final boolean lineByLine;
 
