@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,7 +59,7 @@ public class HgIgnore implements Path.Matcher {
 
 	/* package-local */ List<String> read(BufferedReader content) throws IOException {
 		final String REGEXP = "regexp", GLOB = "glob";
-		final String REGEXP_PREFIX = REGEXP + ":", GLOB_PREFIX = GLOB + ":";
+		final String REGEXP_PREFIX1 = REGEXP + ":", REGEXP_PREFIX2 = "re:", GLOB_PREFIX = GLOB + ":";
 		ArrayList<String> errors = new ArrayList<String>();
 		ArrayList<Pattern> result = new ArrayList<Pattern>(entries); // start with existing
 		String syntax = REGEXP;
@@ -94,8 +94,11 @@ public class HgIgnore implements Path.Matcher {
 				if (line.startsWith(GLOB_PREFIX)) {
 					line = line.substring(GLOB_PREFIX.length()).trim();
 					lineSyntax = GLOB;
-				} else if (line.startsWith(REGEXP_PREFIX)) {
-					line = line.substring(REGEXP_PREFIX.length()).trim();
+				} else if (line.startsWith(REGEXP_PREFIX1)) {
+					line = line.substring(REGEXP_PREFIX1.length()).trim();
+					lineSyntax = REGEXP;
+				} else if (line.startsWith(REGEXP_PREFIX2)) {
+					line = line.substring(REGEXP_PREFIX2.length()).trim();
 					lineSyntax = REGEXP;
 				} else {
 					lineSyntax = syntax;
