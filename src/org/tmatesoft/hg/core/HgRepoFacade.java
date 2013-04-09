@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -120,5 +120,11 @@ public class HgRepoFacade {
 
 	public HgIncomingCommand createIncomingCommand() {
 		return new HgIncomingCommand(repo);
+	}
+	
+	// TODO [1.1] add factory methods for all new commands
+	
+	public HgAnnotateCommand createAnnotateCommand() {
+		return new HgAnnotateCommand(repo);
 	}
 }
