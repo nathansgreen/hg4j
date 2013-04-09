@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,19 +17,17 @@
 package org.tmatesoft.hg.core;
 
 import static org.tmatesoft.hg.repo.HgRepository.*;
-import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.ConcurrentModificationException;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.PathPool;
-import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgManifest;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
+import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
@@ -70,6 +68,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 		badArgs |= rev2 != TIP && rev2 < rev1; // range(3, 1);
 		badArgs |= rev1 == TIP && rev2 != TIP; // range(TIP, 2), although this may be legitimate when TIP points to 2
 		if (badArgs) {
+			// TODO [2.0 API break] throw checked HgBadArgumentException instead
 			throw new IllegalArgumentException(String.format("Bad range: [%d, %d]", rev1, rev2));
 		}
 		startRev = rev1;
@@ -83,6 +82,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	 * @return <code>this</code> for convenience.
 	 */
 	public HgManifestCommand changeset(int csetRevisionIndex) {
+		// TODO [2.0 API break] shall throw HgBadArgumentException, like other commands do
 		return range(csetRevisionIndex, csetRevisionIndex);
 	}
 	
@@ -95,12 +95,8 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 	 */
 	public HgManifestCommand changeset(Nodeid nid) throws HgBadArgumentException {
 		// XXX also see HgLogCommand#changeset(Nodeid)
-		try {
-			final int csetRevIndex = repo.getChangelog().getRevisionIndex(nid);
-			return range(csetRevIndex, csetRevIndex);
-		} catch (HgInvalidRevisionException ex) {
-			throw new HgBadArgumentException("Can't find revision", ex).setRevision(nid);
-		}
+		final int csetRevIndex = new CsetParamKeeper(repo).set(nid).get();
+		return range(csetRevIndex, csetRevIndex);
 	}
 
 	public HgManifestCommand dirs(boolean include) {

@@ -21,15 +21,15 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
+import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.DirstateBuilder;
 import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
-import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
-import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
 
@@ -46,11 +46,13 @@ public class HgRevertCommand extends HgAbstractCommand<HgRevertCommand> {
 
 	private final HgRepository repo;
 	private final Set<Path> files = new LinkedHashSet<Path>();
-	private int changesetToCheckout = HgRepository.WORKING_COPY; // XXX WORKING_COPY_PARENT, in fact
+	private CsetParamKeeper changesetToCheckout;
 	private boolean keepOriginal = true;
 
 	public HgRevertCommand(HgRepository hgRepo) {
 		repo = hgRepo;
+		changesetToCheckout = new CsetParamKeeper(hgRepo);
+		changesetToCheckout.doSet(HgRepository.WORKING_COPY); // XXX WORKING_COPY_PARENT, in fact
 	}
 
 	/**
@@ -72,11 +74,7 @@ public class HgRevertCommand extends HgAbstractCommand<HgRevertCommand> {
 	 * @throws HgBadArgumentException
 	 */
 	public HgRevertCommand changeset(int changesetRevIndex) throws HgBadArgumentException {
-		int lastCsetIndex = repo.getChangelog().getLastRevision();
-		if (changesetRevIndex < 0 || changesetRevIndex > lastCsetIndex) {
-			throw new HgBadArgumentException(String.format("Bad revision index %d, value from [0..%d] expected", changesetRevIndex, lastCsetIndex), null).setRevisionIndex(changesetRevIndex);
-		}
-		changesetToCheckout = changesetRevIndex;
+		changesetToCheckout.set(changesetRevIndex);
 		return this;
 	}
 	
@@ -88,14 +86,11 @@ public class HgRevertCommand extends HgAbstractCommand<HgRevertCommand> {
 	 * @throws HgBadArgumentException
 	 */
 	public HgRevertCommand changeset(Nodeid revision) throws HgBadArgumentException {
-		try {
-			return changeset(repo.getChangelog().getRevisionIndex(revision));
-		} catch (HgInvalidRevisionException ex) {
-			throw new HgBadArgumentException("Can't find revision", ex).setRevision(revision);
-		}
+		changesetToCheckout.set(revision);
+		return this;
 	}
 	
-	// TODO keepOriginal() to save .orig
+	// TODO keepOriginal() to save .orig (with tests!)
 
 	/**
 	 * Perform the back out for the given files
@@ -107,10 +102,10 @@ public class HgRevertCommand extends HgAbstractCommand<HgRevertCommand> {
 	public void execute() throws HgException, CancelledException {
 		try {
 			final int csetRevision;
-			if (changesetToCheckout == HgRepository.WORKING_COPY) {
+			if (changesetToCheckout.get() == HgRepository.WORKING_COPY) {
 				csetRevision = repo.getChangelog().getRevisionIndex(repo.getWorkingCopyParents().first());
 			} else {
-				csetRevision = changesetToCheckout;
+				csetRevision = changesetToCheckout.get();
 			}
 			Internals implRepo = Internals.getInstance(repo);
 			final DirstateBuilder dirstateBuilder = new DirstateBuilder(implRepo);

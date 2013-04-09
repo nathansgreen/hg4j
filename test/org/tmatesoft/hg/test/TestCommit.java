@@ -23,13 +23,11 @@ import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.List;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgAddRemoveCommand;
 import org.tmatesoft.hg.core.HgCatCommand;

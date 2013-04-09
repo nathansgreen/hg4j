@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.channels.FileChannel;
 
+import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.DirstateBuilder;
 import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Experimental;
@@ -32,11 +33,10 @@ import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.WorkingDirFileWriter;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgDirstate;
-import org.tmatesoft.hg.repo.HgInternals;
-import org.tmatesoft.hg.repo.HgInvalidRevisionException;
-import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
 import org.tmatesoft.hg.repo.HgDirstate.Record;
+import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -57,11 +57,12 @@ import org.tmatesoft.hg.util.Path;
 public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 
 	private final HgRepository repo;
-	private int revisionToCheckout = HgRepository.BAD_REVISION;
+	private final CsetParamKeeper revisionToCheckout;
 	private boolean cleanCheckout;
 
 	public HgCheckoutCommand(HgRepository hgRepo) {
 		repo = hgRepo;
+		revisionToCheckout = new CsetParamKeeper(repo);
 	}
 	
 	/**
@@ -85,29 +86,19 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 	 * @throws HgBadArgumentException if failed to find supplied changeset 
 	 */
 	public HgCheckoutCommand changeset(Nodeid nodeid) throws HgBadArgumentException {
-		try {
-			return changeset(repo.getChangelog().getRevisionIndex(nodeid));
-		} catch (HgInvalidRevisionException ex) {
-			throw new HgBadArgumentException("Can't find revision", ex).setRevision(nodeid);
-		}
+		revisionToCheckout.set(nodeid);
+		return this;
 	}
 
 	/**
 	 * Select revision to check out using local revision index
 	 * 
-	 * @param changesetIndex local revision index, or {@link HgRepository#TIP}
+	 * @param changesetIndex local changelog revision index, or {@link HgRepository#TIP}
 	 * @return <code>this</code> for convenience
 	 * @throws HgBadArgumentException if failed to find supplied changeset 
 	 */
 	public HgCheckoutCommand changeset(int changesetIndex) throws HgBadArgumentException {
-		int lastCsetIndex = repo.getChangelog().getLastRevision();
-		if (changesetIndex == HgRepository.TIP) {
-			changesetIndex = lastCsetIndex;
-		}
-		if (changesetIndex < 0 || changesetIndex > lastCsetIndex) {
-			throw new HgBadArgumentException(String.format("Bad revision index %d, value from [0..%d] expected", changesetIndex, lastCsetIndex), null).setRevisionIndex(changesetIndex);
-		}
-		revisionToCheckout = changesetIndex;
+		revisionToCheckout.set(changesetIndex);
 		return this;
 	}
 
@@ -159,8 +150,10 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 					return true;
 				}
 			};
-			dirstateBuilder.parents(repo.getChangelog().getRevision(revisionToCheckout), null);
-			repo.getManifest().walk(revisionToCheckout, revisionToCheckout, insp);
+			// checkout tip if no revision set
+			final int coRevision = revisionToCheckout.get(HgRepository.TIP);
+			dirstateBuilder.parents(repo.getChangelog().getRevision(coRevision), null);
+			repo.getManifest().walk(coRevision, coRevision, insp);
 			worker.checkFailed();
 			File dirstateFile = internalRepo.getRepositoryFile(Dirstate);
 			try {
@@ -170,7 +163,7 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 			} catch (IOException ex) {
 				throw new HgIOException("Can't write down new directory state", ex, dirstateFile);
 			}
-			String branchName = repo.getChangelog().range(revisionToCheckout, revisionToCheckout).get(0).branch();
+			String branchName = repo.getChangelog().range(coRevision, coRevision).get(0).branch();
 			assert branchName != null;
 			if (!HgRepository.DEFAULT_BRANCH_NAME.equals(branchName)) {
 				File branchFile = internalRepo.getRepositoryFile(Branch);

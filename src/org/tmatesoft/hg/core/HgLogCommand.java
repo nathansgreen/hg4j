@@ -1,5 +1,5 @@
 /*
-s * Copyright (c) 2011-2012 TMate Software Ltd
+s * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@ import java.util.TreeSet;
 
 import org.tmatesoft.hg.internal.AdapterPlug;
 import org.tmatesoft.hg.internal.BatchRangeHelper;
+import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.Internals;
@@ -45,7 +46,6 @@ import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
-import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -176,6 +176,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			startRev = rev1;
 			endRev = rev2;
 		}
+		// TODO [2.0 API break] shall throw HgBadArgumentException, like other commands do
 		return this;
 	}
 	
@@ -188,12 +189,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 	 */
 	public HgLogCommand changeset(Nodeid nid) throws HgBadArgumentException {
 		// XXX perhaps, shall support multiple (...) arguments and extend #execute to handle not only range, but also set of revisions.
-		try {
-			final int csetRevIndex = repo.getChangelog().getRevisionIndex(nid);
-			return range(csetRevIndex, csetRevIndex);
-		} catch (HgInvalidRevisionException ex) {
-			throw new HgBadArgumentException("Can't find revision", ex).setRevision(nid);
-		}
+		final int csetRevIndex = new CsetParamKeeper(repo).set(nid).get();
+		return range(csetRevIndex, csetRevIndex);
 	}
 	
 	/**
