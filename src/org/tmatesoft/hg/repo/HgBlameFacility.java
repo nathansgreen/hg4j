@@ -32,6 +32,7 @@ import org.tmatesoft.hg.internal.DiffHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
 import org.tmatesoft.hg.internal.RangeSeq;
@@ -48,11 +49,19 @@ import org.tmatesoft.hg.util.Pair;
  */
 @Experimental(reason="Unstable API")
 public final class HgBlameFacility {
+	private final HgDataFile df;
+	
+	public HgBlameFacility(HgDataFile file) {
+		if (file == null) {
+			throw new IllegalArgumentException();
+		}
+		df = file;
+	}
 	
 	/**
 	 * mimic 'hg diff -r clogRevIndex1 -r clogRevIndex2'
 	 */
-	public void diff(HgDataFile df, int clogRevIndex1, int clogRevIndex2, Inspector insp) throws HgCallbackTargetException {
+	public void diff(int clogRevIndex1, int clogRevIndex2, Inspector insp) throws HgCallbackTargetException {
 		int fileRevIndex1 = fileRevIndex(df, clogRevIndex1);
 		int fileRevIndex2 = fileRevIndex(df, clogRevIndex2);
 		FileLinesCache fileInfoCache = new FileLinesCache(df, 5);
@@ -66,59 +75,23 @@ public final class HgBlameFacility {
 	}
 	
 	/**
-	 * Walk file history up to revision at given changeset and report changes for each revision
+	 * Walk file history up/down to revision at given changeset and report changes for each revision
 	 */
-	public void annotate(HgDataFile df, int changelogRevisionIndex, Inspector insp, HgIterateDirection iterateOrder) throws HgCallbackTargetException {
+	public void annotate(int changelogRevisionIndex, Inspector insp, HgIterateDirection iterateOrder) throws HgCallbackTargetException {
 		if (!df.exists()) {
 			return;
 		}
 		// Note, changelogRevisionIndex may be TIP, while #implAnnotateChange doesn't tolerate constants
 		//
-		// XXX df.indexWalk(0, fileRevIndex, ) might be more effective
-		int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
+		FileRevisionHistoryChunk fileHistory = new FileRevisionHistoryChunk(df);
+		fileHistory.init(changelogRevisionIndex);
+//		fileHistory.linkTo(null); FIXME
+
 		int[] fileRevParents = new int[2];
-		IntVector fileParentRevs = new IntVector((fileRevIndex+1) * 2, 0);
-		fileParentRevs.add(NO_REVISION, NO_REVISION);
-		for (int i = 1; i <= fileRevIndex; i++) {
-			df.parents(i, fileRevParents, null, null);
-			fileParentRevs.add(fileRevParents[0], fileRevParents[1]);
-		}
-		// collect file revisions to visit, from newest to oldest:
-		// traverse parents, starting from the given file revision
-		// this ignores all file revision made in parallel to the one of interest
-		IntVector fileRevsToVisit = new IntVector(fileRevIndex + 1, 0);
-		LinkedList<Integer> queue = new LinkedList<Integer>();
-		BitSet seen = new BitSet(fileRevIndex + 1);
-		queue.add(fileRevIndex);
-		do {
-			int x = queue.removeFirst();
-			if (seen.get(x)) {
-				continue;
-			}
-			seen.set(x);
-			fileRevsToVisit.add(x);
-			int p1 = fileParentRevs.get(2*x);
-			int p2 = fileParentRevs.get(2*x + 1);
-			if (p1 != NO_REVISION) {
-				queue.addLast(p1);
-			}
-			if (p2 != NO_REVISION) {
-				queue.addLast(p2);
-			}
-		} while (!queue.isEmpty());
 		FileLinesCache fileInfoCache = new FileLinesCache(df, 10);
-		// make sure no child is processed before we handled all (grand-)parents of the element
-		fileRevsToVisit.sort(false);
-		// fileRevsToVisit now { r10, r7, r6, r5, r0 }
-		// and we'll iterate it from behind, e.g. old to new unless reversed 
-		if (iterateOrder == HgIterateDirection.NewToOld) {
-			fileRevsToVisit.reverse();
-		}
-		for (int i = fileRevsToVisit.size() - 1; i >= 0; i--) {
-			int fri = fileRevsToVisit.get(i);
+		for (int fri : fileHistory.fileRevisions(iterateOrder)) {
 			int clogRevIndex = df.getChangesetRevisionIndex(fri);
-			fileRevParents[0] = fileParentRevs.get(fri * 2);
-			fileRevParents[1] = fileParentRevs.get(fri * 2 + 1);
+			fileHistory.getParents(fri, fileRevParents);
 			implAnnotateChange(fileInfoCache, clogRevIndex, fri, fileRevParents, insp);
 		}
 	}
@@ -128,7 +101,7 @@ public final class HgBlameFacility {
 	 * Unlike {@link #annotate(HgDataFile, int, Inspector, HgIterateDirection)}, doesn't
 	 * walk file history, looks at the specified revision only. Handles both parents (if merge revision).
 	 */
-	public void annotateSingleRevision(HgDataFile df, int changelogRevisionIndex, Inspector insp) throws HgCallbackTargetException {
+	public void annotateSingleRevision(int changelogRevisionIndex, Inspector insp) throws HgCallbackTargetException {
 		// TODO detect if file is text/binary (e.g. looking for chars < ' ' and not \t\r\n\f
 		int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
 		int[] fileRevParents = new int[2];
@@ -182,6 +155,74 @@ public final class HgBlameFacility {
 	private static int fileRevIndex(HgDataFile df, int csetRevIndex) {
 		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(csetRevIndex, df.getPath());
 		return df.getRevisionIndex(fileRev);
+	}
+	
+	private static class FileRevisionHistoryChunk {
+		private final HgDataFile df;
+		private IntVector fileRevsToVisit;
+		private IntVector fileParentRevs;
+
+		public FileRevisionHistoryChunk(HgDataFile file) {
+			df = file;
+		}
+		
+		public void getParents(int fileRevIndex, int[] fileRevParents) {
+			fileRevParents[0] = fileParentRevs.get(fileRevIndex * 2);
+			fileRevParents[1] = fileParentRevs.get(fileRevIndex * 2 + 1);
+		}
+
+		public void init (int changelogRevisionIndex) {
+			// XXX df.indexWalk(0, fileRevIndex, ) might be more effective
+			int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
+			int[] fileRevParents = new int[2];
+			fileParentRevs = new IntVector((fileRevIndex+1) * 2, 0);
+			fileParentRevs.add(NO_REVISION, NO_REVISION); // parents of fileRevIndex == 0
+			for (int i = 1; i <= fileRevIndex; i++) {
+				df.parents(i, fileRevParents, null, null);
+				fileParentRevs.add(fileRevParents[0], fileRevParents[1]);
+			}
+			fileRevsToVisit = new IntVector(fileRevIndex + 1, 0);
+			LinkedList<Integer> queue = new LinkedList<Integer>();
+			BitSet seen = new BitSet(fileRevIndex + 1);
+			queue.add(fileRevIndex);
+			do {
+				int x = queue.removeFirst();
+				if (seen.get(x)) {
+					continue;
+				}
+				seen.set(x);
+				fileRevsToVisit.add(x);
+				int p1 = fileParentRevs.get(2*x);
+				int p2 = fileParentRevs.get(2*x + 1);
+				if (p1 != NO_REVISION) {
+					queue.addLast(p1);
+				}
+				if (p2 != NO_REVISION) {
+					queue.addLast(p2);
+				}
+			} while (!queue.isEmpty());
+			// make sure no child is processed before we handled all (grand-)parents of the element
+			fileRevsToVisit.sort(false);
+			// now fileRevsToVisit keep file change ancestry from new to old
+		}
+		
+		public void linkTo(FileRevisionHistoryChunk origin) {
+			Internals.notImplemented();
+		}
+		
+		public int[] fileRevisions(HgIterateDirection iterateOrder) {
+			// fileRevsToVisit is { r10, r7, r6, r5, r0 }, new to old
+			int[] rv = fileRevsToVisit.toArray();
+			if (iterateOrder == HgIterateDirection.OldToNew) {
+				// reverse return value
+				for (int a = 0, b = rv.length-1; a < b; a++, b--) {
+					int t = rv[b];
+					rv[b] = rv[a];
+					rv[a] = t;
+				}
+			}
+			return rv;
+		}
 	}
 
 	private static class FileLinesCache {

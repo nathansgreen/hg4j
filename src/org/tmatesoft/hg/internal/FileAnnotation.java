@@ -58,8 +58,8 @@ public class FileAnnotation implements HgBlameFacility.Inspector, RevisionDescri
 			return;
 		}
 		FileAnnotation fa = new FileAnnotation(insp);
-		HgBlameFacility af = new HgBlameFacility();
-		af.annotate(df, changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
+		HgBlameFacility af = new HgBlameFacility(df);
+		af.annotate(changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
 	}
 
 	// keeps <startSeq1, startSeq2, len> of equal blocks, origin to target, from some previous step

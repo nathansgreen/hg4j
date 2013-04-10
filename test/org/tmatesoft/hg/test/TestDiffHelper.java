@@ -172,7 +172,6 @@ public class TestDiffHelper {
 		}
 		@Override
 		protected void added(int s1InsertPoint, int s2From, int s2To) {
-			// TODO Auto-generated method stub
 			added.add(s1InsertPoint, s2From, s2To - s2From);
 		}
 		@Override
