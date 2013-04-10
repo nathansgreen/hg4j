@@ -27,9 +27,11 @@ import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
 import org.tmatesoft.hg.repo.HgBlameFacility.BlockData;
+import org.tmatesoft.hg.repo.HgBlameFacility;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * WORK IN PROGRESS. UNSTABLE API
@@ -44,7 +46,8 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 	
 	private final HgRepository repo;
 	private final CsetParamKeeper annotateRevision;
-	private HgDataFile file;
+	private Path file;
+	private boolean followRename;
 
 	public HgAnnotateCommand(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -62,15 +65,31 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		return this;
 	}
 	
-	public HgAnnotateCommand file(HgDataFile fileNode) {
-		file = fileNode;
+	/**
+	 * Select file to annotate, origin of renamed/copied file would be followed, too.
+	 *  
+	 * @param filePath path relative to repository root
+	 * @return <code>this</code> for convenience
+	 */
+	public HgAnnotateCommand file(Path filePath) {
+		return file(filePath, true);
+	}
+
+	/**
+	 * Select file to annotate.
+	 * 
+	 * @param filePath path relative to repository root
+	 * @param followCopyRename true to follow copies/renames.
+	 * @return <code>this</code> for convenience
+	 */
+	public HgAnnotateCommand file(Path filePath, boolean followCopyRename) {
+		file = filePath;
+		followRename = followCopyRename;
 		return this;
 	}
 	
 	// TODO [1.1] set encoding and provide String line content from LineInfo
 
-	// FIXME [1.1] follow and no-follow parameters
-	
 	public void execute(Inspector inspector) throws HgException, HgCallbackTargetException, CancelledException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
@@ -78,8 +97,15 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		if (file == null) {
 			throw new HgBadArgumentException("Command needs file argument", null);
 		}
+		HgDataFile df = repo.getFileNode(file);
+		if (!df.exists()) {
+			return;
+		}
+		final int changesetStart = followRename ? 0 : df.getChangesetRevisionIndex(0);
 		Collector c = new Collector();
-		FileAnnotation.annotate(file, annotateRevision.get(), c);
+		FileAnnotation fa = new FileAnnotation(c);
+		HgBlameFacility af = new HgBlameFacility(df);
+		af.annotate(changesetStart, annotateRevision.get(), fa, HgIterateDirection.NewToOld);
 		LineImpl li = new LineImpl();
 		for (int i = 0; i < c.lineRevisions.length; i++) {
 			li.init(i+1, c.lineRevisions[i], c.line(i));
@@ -92,9 +118,9 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 	 */
 	@Callback
 	public interface Inspector {
-		// start(FileDescriptor);
-		void next(LineInfo lineInfo);
-		// end(FileDescriptor);
+		// start(FileDescriptor) throws HgCallbackTargetException;
+		void next(LineInfo lineInfo) throws HgCallbackTargetException;
+		// end(FileDescriptor) throws HgCallbackTargetException;
 	}
 	
 	/**

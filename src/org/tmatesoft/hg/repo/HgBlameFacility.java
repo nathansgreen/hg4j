@@ -16,30 +16,24 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
+import static org.tmatesoft.hg.core.HgIterateDirection.NewToOld;
+import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
+import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
+import static org.tmatesoft.hg.repo.HgRepository.*;
 
+import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.LinkedList;
-import java.util.ListIterator;
 
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.BlameHelper;
 import org.tmatesoft.hg.internal.Callback;
-import org.tmatesoft.hg.internal.DiffHelper;
 import org.tmatesoft.hg.internal.Experimental;
-import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
-import org.tmatesoft.hg.internal.Internals;
-import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
-import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
-import org.tmatesoft.hg.internal.RangeSeq;
-import org.tmatesoft.hg.repo.HgBlameFacility.RevisionDescriptor.Recipient;
 import org.tmatesoft.hg.util.Adaptable;
-import org.tmatesoft.hg.util.CancelledException;
-import org.tmatesoft.hg.util.Pair;
 
 /**
  * Facility with diff/annotate functionality.
@@ -62,37 +56,95 @@ public final class HgBlameFacility {
 	 * mimic 'hg diff -r clogRevIndex1 -r clogRevIndex2'
 	 */
 	public void diff(int clogRevIndex1, int clogRevIndex2, Inspector insp) throws HgCallbackTargetException {
+		// FIXME clogRevIndex1 and clogRevIndex2 may point to different files, need to decide whether to throw an exception
+		// or to attempt to look up correct file node (tricky)
 		int fileRevIndex1 = fileRevIndex(df, clogRevIndex1);
 		int fileRevIndex2 = fileRevIndex(df, clogRevIndex2);
-		FileLinesCache fileInfoCache = new FileLinesCache(df, 5);
-		LineSequence c1 = fileInfoCache.lines(fileRevIndex1);
-		LineSequence c2 = fileInfoCache.lines(fileRevIndex2);
-		DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
-		pg.init(c1, c2);
-		BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex2, insp, clogRevIndex1, clogRevIndex2);
-		pg.findMatchingBlocks(bbi);
-		bbi.checkErrors();
+		BlameHelper bh = new BlameHelper(insp, 5);
+		bh.useFileUpTo(df, clogRevIndex2);
+		bh.diff(fileRevIndex1, clogRevIndex1, fileRevIndex2, clogRevIndex2);
 	}
 	
 	/**
 	 * Walk file history up/down to revision at given changeset and report changes for each revision
 	 */
 	public void annotate(int changelogRevisionIndex, Inspector insp, HgIterateDirection iterateOrder) throws HgCallbackTargetException {
+		annotate(0, changelogRevisionIndex, insp, iterateOrder);
+	}
+
+	/**
+	 * Walk file history range and report changes for each revision
+	 */
+	public void annotate(int changelogRevIndexStart, int changelogRevIndexEnd, Inspector insp, HgIterateDirection iterateOrder) throws HgCallbackTargetException {
+		if (wrongRevisionIndex(changelogRevIndexStart) || wrongRevisionIndex(changelogRevIndexEnd)) {
+			throw new IllegalArgumentException();
+		}
+		// Note, changelogRevisionIndex may be TIP, while the code below doesn't tolerate constants
+		//
+		int lastRevision = df.getRepo().getChangelog().getLastRevision();
+		if (changelogRevIndexEnd == TIP) {
+			changelogRevIndexEnd = lastRevision;
+		}
+		HgInternals.checkRevlogRange(changelogRevIndexStart, changelogRevIndexEnd, lastRevision);
 		if (!df.exists()) {
 			return;
 		}
-		// Note, changelogRevisionIndex may be TIP, while #implAnnotateChange doesn't tolerate constants
-		//
-		FileRevisionHistoryChunk fileHistory = new FileRevisionHistoryChunk(df);
-		fileHistory.init(changelogRevisionIndex);
-//		fileHistory.linkTo(null); FIXME
+		BlameHelper bh = new BlameHelper(insp, 10);
+		HgDataFile currentFile = df;
+		int fileLastClogRevIndex = changelogRevIndexEnd;
+		FileRevisionHistoryChunk nextChunk = null;
+		LinkedList<FileRevisionHistoryChunk> fileCompleteHistory = new LinkedList<FileRevisionHistoryChunk>();
+		do {
+			FileRevisionHistoryChunk fileHistory = new FileRevisionHistoryChunk(currentFile);
+			fileHistory.init(fileLastClogRevIndex);
+			fileHistory.linkTo(nextChunk);
+			fileCompleteHistory.addFirst(fileHistory); // to get the list in old-to-new order
+			nextChunk = fileHistory;
+			bh.useFileUpTo(currentFile, fileLastClogRevIndex);
+			if (currentFile.isCopy()) {
+				// TODO SessionContext.getPathFactory() and replace all Path.create
+				HgRepository repo = currentFile.getRepo();
+				currentFile = repo.getFileNode(currentFile.getCopySourceName());
+				fileLastClogRevIndex = repo.getChangelog().getRevisionIndex(currentFile.getCopySourceRevision());
+				// XXX perhaps, shall fail with meaningful exception if new file doesn't exist (.i/.d not found for whatever reason)
+				// or source revision is missing?
+			} else {
+				currentFile = null; // stop iterating
+			}
+		} while (currentFile != null && fileLastClogRevIndex >= changelogRevIndexStart);
+		// fileCompleteHistory is in (origin, intermediate target, ultimate target) order
 
-		int[] fileRevParents = new int[2];
-		FileLinesCache fileInfoCache = new FileLinesCache(df, 10);
-		for (int fri : fileHistory.fileRevisions(iterateOrder)) {
-			int clogRevIndex = df.getChangesetRevisionIndex(fri);
-			fileHistory.getParents(fri, fileRevParents);
-			implAnnotateChange(fileInfoCache, clogRevIndex, fri, fileRevParents, insp);
+		int[] fileClogParentRevs = new int[2];
+		int[] fileParentRevs = new int[2];
+		if (iterateOrder == NewToOld) {
+			Collections.reverse(fileCompleteHistory);
+		}
+		boolean shallFilterStart = changelogRevIndexStart != 0; // no reason if complete history is walked
+		for (FileRevisionHistoryChunk fileHistory : fileCompleteHistory) {
+			for (int fri : fileHistory.fileRevisions(iterateOrder)) {
+				int clogRevIndex = fileHistory.changeset(fri);
+				if (shallFilterStart) {
+					if (iterateOrder == NewToOld) {
+						// clogRevIndex decreases
+						if (clogRevIndex < changelogRevIndexStart) {
+							break;
+						}
+						// fall-through, clogRevIndex is in the [start..end] range
+					} else { // old to new
+						// the way we built fileHistory ensures we won't walk past changelogRevIndexEnd
+						// here we ensure we start from the right one, the one indicated with changelogRevIndexStart
+						if (clogRevIndex < changelogRevIndexStart) {
+							continue;
+						} else {
+							shallFilterStart = false; // once boundary is crossed, no need to check
+							// fall-through
+						}
+					}
+				}
+				fileHistory.fillFileParents(fri, fileParentRevs);
+				fileHistory.fillCsetParents(fri, fileClogParentRevs);
+				bh.annotateChange(fri, clogRevIndex, fileParentRevs, fileClogParentRevs);
+			}
 		}
 	}
 
@@ -109,181 +161,12 @@ public final class HgBlameFacility {
 		if (changelogRevisionIndex == TIP) {
 			changelogRevisionIndex = df.getChangesetRevisionIndex(fileRevIndex);
 		}
-		implAnnotateChange(new FileLinesCache(df, 5), changelogRevisionIndex, fileRevIndex, fileRevParents, insp);
-	}
-
-	private void implAnnotateChange(FileLinesCache fl, int csetRevIndex, int fileRevIndex, int[] fileParentRevs, Inspector insp) throws HgCallbackTargetException {
-		final LineSequence fileRevLines = fl.lines(fileRevIndex);
-		if (fileParentRevs[0] != NO_REVISION && fileParentRevs[1] != NO_REVISION) {
-			LineSequence p1Lines = fl.lines(fileParentRevs[0]);
-			LineSequence p2Lines = fl.lines(fileParentRevs[1]);
-			int p1ClogIndex = fl.getChangesetRevisionIndex(fileParentRevs[0]);
-			int p2ClogIndex = fl.getChangesetRevisionIndex(fileParentRevs[1]);
-			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
-			pg.init(p2Lines, fileRevLines);
-			EqualBlocksCollector p2MergeCommon = new EqualBlocksCollector();
-			pg.findMatchingBlocks(p2MergeCommon);
-			//
-			pg.init(p1Lines);
-			BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex, insp, p1ClogIndex, csetRevIndex);
-			bbi.setMergeParent2(p2MergeCommon, p2ClogIndex);
-			pg.findMatchingBlocks(bbi);
-			bbi.checkErrors();
-		} else if (fileParentRevs[0] == fileParentRevs[1]) {
-			// may be equal iff both are unset
-			assert fileParentRevs[0] == NO_REVISION;
-			// everything added
-			BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex, insp, NO_REVISION, csetRevIndex);
-			bbi.begin(LineSequence.newlines(new byte[0]), fileRevLines);
-			bbi.match(0, fileRevLines.chunkCount()-1, 0);
-			bbi.end();
-			bbi.checkErrors();
-		} else {
-			int soleParent = fileParentRevs[0] == NO_REVISION ? fileParentRevs[1] : fileParentRevs[0];
-			assert soleParent != NO_REVISION;
-			LineSequence parentLines = fl.lines(soleParent);
-			
-			int parentChangesetRevIndex = fl.getChangesetRevisionIndex(soleParent);
-			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
-			pg.init(parentLines, fileRevLines);
-			BlameBlockInspector bbi = new BlameBlockInspector(fileRevIndex, insp, parentChangesetRevIndex, csetRevIndex);
-			pg.findMatchingBlocks(bbi);
-			bbi.checkErrors();
-		}
-	}
-
-	private static int fileRevIndex(HgDataFile df, int csetRevIndex) {
-		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(csetRevIndex, df.getPath());
-		return df.getRevisionIndex(fileRev);
-	}
-	
-	private static class FileRevisionHistoryChunk {
-		private final HgDataFile df;
-		private IntVector fileRevsToVisit;
-		private IntVector fileParentRevs;
-
-		public FileRevisionHistoryChunk(HgDataFile file) {
-			df = file;
-		}
-		
-		public void getParents(int fileRevIndex, int[] fileRevParents) {
-			fileRevParents[0] = fileParentRevs.get(fileRevIndex * 2);
-			fileRevParents[1] = fileParentRevs.get(fileRevIndex * 2 + 1);
-		}
-
-		public void init (int changelogRevisionIndex) {
-			// XXX df.indexWalk(0, fileRevIndex, ) might be more effective
-			int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
-			int[] fileRevParents = new int[2];
-			fileParentRevs = new IntVector((fileRevIndex+1) * 2, 0);
-			fileParentRevs.add(NO_REVISION, NO_REVISION); // parents of fileRevIndex == 0
-			for (int i = 1; i <= fileRevIndex; i++) {
-				df.parents(i, fileRevParents, null, null);
-				fileParentRevs.add(fileRevParents[0], fileRevParents[1]);
-			}
-			fileRevsToVisit = new IntVector(fileRevIndex + 1, 0);
-			LinkedList<Integer> queue = new LinkedList<Integer>();
-			BitSet seen = new BitSet(fileRevIndex + 1);
-			queue.add(fileRevIndex);
-			do {
-				int x = queue.removeFirst();
-				if (seen.get(x)) {
-					continue;
-				}
-				seen.set(x);
-				fileRevsToVisit.add(x);
-				int p1 = fileParentRevs.get(2*x);
-				int p2 = fileParentRevs.get(2*x + 1);
-				if (p1 != NO_REVISION) {
-					queue.addLast(p1);
-				}
-				if (p2 != NO_REVISION) {
-					queue.addLast(p2);
-				}
-			} while (!queue.isEmpty());
-			// make sure no child is processed before we handled all (grand-)parents of the element
-			fileRevsToVisit.sort(false);
-			// now fileRevsToVisit keep file change ancestry from new to old
-		}
-		
-		public void linkTo(FileRevisionHistoryChunk origin) {
-			Internals.notImplemented();
-		}
-		
-		public int[] fileRevisions(HgIterateDirection iterateOrder) {
-			// fileRevsToVisit is { r10, r7, r6, r5, r0 }, new to old
-			int[] rv = fileRevsToVisit.toArray();
-			if (iterateOrder == HgIterateDirection.OldToNew) {
-				// reverse return value
-				for (int a = 0, b = rv.length-1; a < b; a++, b--) {
-					int t = rv[b];
-					rv[b] = rv[a];
-					rv[a] = t;
-				}
-			}
-			return rv;
-		}
-	}
-
-	private static class FileLinesCache {
-		private final HgDataFile df;
-		private final LinkedList<Pair<Integer, LineSequence>> lruCache;
-		private final int limit;
-		private IntMap<Integer> fileToClogIndexMap = new IntMap<Integer>(20);
-
-		public FileLinesCache(HgDataFile file, int lruLimit) {
-			df = file;
-			limit = lruLimit;
-			lruCache = new LinkedList<Pair<Integer, LineSequence>>();
-		}
-		
-		public int getChangesetRevisionIndex(int fileRevIndex) {
-			Integer cached = fileToClogIndexMap.get(fileRevIndex);
-			if (cached == null) {
-				cached = df.getChangesetRevisionIndex(fileRevIndex);
-				fileToClogIndexMap.put(fileRevIndex, cached);
-			}
-			return cached.intValue();
-		}
-
-		public LineSequence lines(int fileRevIndex) {
-			Pair<Integer, LineSequence> cached = checkCache(fileRevIndex);
-			if (cached != null) {
-				return cached.second();
-			}
-			try {
-				ByteArrayChannel c;
-				df.content(fileRevIndex, c = new ByteArrayChannel());
-				LineSequence rv = LineSequence.newlines(c.toArray());
-				lruCache.addFirst(new Pair<Integer, LineSequence>(fileRevIndex, rv));
-				if (lruCache.size() > limit) {
-					lruCache.removeLast();
-				}
-				return rv;
-			} catch (CancelledException ex) {
-				// TODO likely it was bad idea to throw cancelled exception from content()
-				// deprecate and provide alternative?
-				HgInvalidStateException ise = new HgInvalidStateException("ByteArrayChannel never throws CancelledException");
-				ise.initCause(ex);
-				throw ise;
-			}
-		}
-		
-		private Pair<Integer,LineSequence> checkCache(int fileRevIndex) {
-			Pair<Integer, LineSequence> rv = null;
-			for (ListIterator<Pair<Integer, LineSequence>> it = lruCache.listIterator(); it.hasNext(); ) {
-				Pair<Integer, LineSequence> p = it.next();
-				if (p.first() == fileRevIndex) {
-					rv = p;
-					it.remove();
-					break;
-				}
-			}
-			if (rv != null) {
-				lruCache.addFirst(rv);
-			}
-			return rv;
-		}
+		BlameHelper bh = new BlameHelper(insp, 5);
+		bh.useFileUpTo(df, changelogRevisionIndex);
+		int[] fileClogParentRevs = new int[2];
+		fileClogParentRevs[0] = fileRevParents[0] == NO_REVISION ? NO_REVISION : df.getChangesetRevisionIndex(fileRevParents[0]);
+		fileClogParentRevs[1] = fileRevParents[1] == NO_REVISION ? NO_REVISION : df.getChangesetRevisionIndex(fileRevParents[1]);
+		bh.annotateChange(fileRevIndex, changelogRevisionIndex, fileRevParents, fileClogParentRevs);
 	}
 
 	/**
@@ -373,6 +256,11 @@ public final class HgBlameFacility {
 		int fileRevisionIndex();
 
 		/**
+		 * @return file object under blame (target file)
+		 */
+		HgDataFile file();
+
+		/**
 		 * Implement to indicate interest in {@link RevisionDescriptor}.
 		 * 
 		 * Note, instance of {@link RevisionDescriptor} is the same for 
@@ -447,563 +335,118 @@ public final class HgBlameFacility {
 	}
 	public interface ChangeBlock extends AddBlock, DeleteBlock {
 	}
-	
-	private static class BlameBlockInspector extends DiffHelper.DeltaInspector<LineSequence> {
-		private final Inspector insp;
-		private final int csetOrigin;
-		private final int csetTarget;
-		private EqualBlocksCollector p2MergeCommon;
-		private int csetMergeParent;
-		private IntVector mergeRanges;
-		private final AnnotateRev annotatedRevision;
-		private HgCallbackTargetException error;
 
-		public BlameBlockInspector(int fileRevIndex, Inspector inspector, int originCset, int targetCset) {
-			assert inspector != null;
-			insp = inspector;
-			annotatedRevision = new AnnotateRev();
-			annotatedRevision.set(fileRevIndex);
-			csetOrigin = originCset;
-			csetTarget = targetCset;
+
+	private static int fileRevIndex(HgDataFile df, int csetRevIndex) {
+		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(csetRevIndex, df.getPath());
+		return df.getRevisionIndex(fileRev);
+	}
+	
+	private static class FileRevisionHistoryChunk {
+		private final HgDataFile df;
+		// change ancestry, sequence of file revisions
+		private IntVector fileRevsToVisit;
+		// parent pairs of complete file history
+		private IntVector fileParentRevs;
+		// map file revision to changelog revision (sparse array, only file revisions to visit are set)
+		private int[] file2changelog;
+		private int originChangelogRev = BAD_REVISION, originFileRev = BAD_REVISION;
+
+		public FileRevisionHistoryChunk(HgDataFile file) {
+			df = file;
 		}
 		
-		public void setMergeParent2(EqualBlocksCollector p2Merge, int parentCset2) {
-			p2MergeCommon = p2Merge;
-			csetMergeParent = parentCset2;
-			mergeRanges = new IntVector(3*10, 3*10);
+		public void init(int changelogRevisionIndex) {
+			// XXX df.indexWalk(0, fileRevIndex, ) might be more effective
+			int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
+			int[] fileRevParents = new int[2];
+			fileParentRevs = new IntVector((fileRevIndex+1) * 2, 0);
+			fileParentRevs.add(NO_REVISION, NO_REVISION); // parents of fileRevIndex == 0
+			for (int i = 1; i <= fileRevIndex; i++) {
+				df.parents(i, fileRevParents, null, null);
+				fileParentRevs.add(fileRevParents[0], fileRevParents[1]);
+			}
+			// fileRevsToVisit keep file change ancestry from new to old
+			fileRevsToVisit = new IntVector(fileRevIndex + 1, 0);
+			// keep map of file revision to changelog revision
+			file2changelog = new int[fileRevIndex+1];
+			// only elements worth visit would get mapped, so there would be unfilled areas in the file2changelog,
+			// prevent from error (make it explicit) by bad value
+			Arrays.fill(file2changelog, BAD_REVISION);
+			LinkedList<Integer> queue = new LinkedList<Integer>();
+			BitSet seen = new BitSet(fileRevIndex + 1);
+			queue.add(fileRevIndex);
+			do {
+				int x = queue.removeFirst();
+				if (seen.get(x)) {
+					continue;
+				}
+				seen.set(x);
+				fileRevsToVisit.add(x);
+				file2changelog[x] = df.getChangesetRevisionIndex(x);
+				int p1 = fileParentRevs.get(2*x);
+				int p2 = fileParentRevs.get(2*x + 1);
+				if (p1 != NO_REVISION) {
+					queue.addLast(p1);
+				}
+				if (p2 != NO_REVISION) {
+					queue.addLast(p2);
+				}
+			} while (!queue.isEmpty());
+			// make sure no child is processed before we handled all (grand-)parents of the element
+			fileRevsToVisit.sort(false);
 		}
 		
-		@Override
-		public void begin(LineSequence s1, LineSequence s2) {
-			super.begin(s1, s2);
-			if (shallStop()) {
+		public void linkTo(FileRevisionHistoryChunk target) {
+			// assume that target.init() has been called already 
+			if (target == null) {
 				return;
 			}
-			ContentBlock originContent = new ContentBlock(s1);
-			ContentBlock targetContent = new ContentBlock(s2);
-			annotatedRevision.set(originContent, targetContent);
-			annotatedRevision.set(csetOrigin, csetTarget, p2MergeCommon != null ? csetMergeParent : NO_REVISION);
-			Recipient curious = Adaptable.Factory.getAdapter(insp, Recipient.class, null);
-			if (curious != null) {
-				try {
-					curious.start(annotatedRevision);
-				} catch (HgCallbackTargetException ex) {
-					error = ex;
-				}
-			}
+			target.originFileRev = fileRevsToVisit.get(0); // files to visit are new to old
+			target.originChangelogRev = changeset(target.originFileRev);
 		}
 		
-		@Override
-		public void end() {
-			super.end();
-			if (shallStop()) {
+		public int[] fileRevisions(HgIterateDirection iterateOrder) {
+			// fileRevsToVisit is { r10, r7, r6, r5, r0 }, new to old
+			int[] rv = fileRevsToVisit.toArray();
+			if (iterateOrder == OldToNew) {
+				// reverse return value
+				for (int a = 0, b = rv.length-1; a < b; a++, b--) {
+					int t = rv[b];
+					rv[b] = rv[a];
+					rv[a] = t;
+				}
+			}
+			return rv;
+		}
+		
+		public int changeset(int fileRevIndex) {
+			return file2changelog[fileRevIndex];
+		}
+		
+		public void fillFileParents(int fileRevIndex, int[] fileParents) {
+			if (fileRevIndex == 0 && originFileRev != BAD_REVISION) {
+				// this chunk continues another file
+				assert originFileRev != NO_REVISION;
+				fileParents[0] = originFileRev;
+				fileParents[1] = NO_REVISION;
 				return;
 			}
-			Recipient curious = Adaptable.Factory.getAdapter(insp, Recipient.class, null);
-			if (curious != null) {
-				try {
-					curious.done(annotatedRevision);
-				} catch (HgCallbackTargetException ex) {
-					error = ex;
-				}
-			}
-			p2MergeCommon = null;
+			fileParents[0] = fileParentRevs.get(fileRevIndex * 2);
+			fileParents[1] = fileParentRevs.get(fileRevIndex * 2 + 1);
 		}
-
-		@Override
-		protected void changed(int s1From, int s1To, int s2From, int s2To) {
-			if (shallStop()) {
+		
+		public void fillCsetParents(int fileRevIndex, int[] csetParents) {
+			if (fileRevIndex == 0 && originFileRev != BAD_REVISION) {
+				assert originFileRev != NO_REVISION;
+				csetParents[0] = originChangelogRev;
+				csetParents[1] = NO_REVISION; // I wonder if possible to start a copy with two parents?
 				return;
 			}
-			try {
-				if (p2MergeCommon != null) {
-					mergeRanges.clear();
-					p2MergeCommon.combineAndMarkRangesWithTarget(s2From, s2To - s2From, csetOrigin, csetMergeParent, mergeRanges);
-					
-					/*
-					 * Usecases, how it USED TO BE initially:
-					 * 3 lines changed to 10 lines. range of 10 lines breaks down to 2 from p2, 3 from p1, and 5 from p2.
-					 * We report: 2 lines changed to 2(p2), then 1 line changed with 3(p1) and 5 lines added from p2.
-					 * 
-					 * 10 lines changed to 3 lines, range of 3 lines breaks down to 2 line from p1 and 1 line from p2.
-					 * We report: 2 lines changed to 2(p1) and 8 lines changed to 1(p2)
-					 * 
-					 * NOW, lines from p2 are always reported as pure add (since we need their insertion point to be in p2, not in p1)
-					 * and we try to consume p1 changes as soon as we see first p1's range 
-					 */
-					int s1TotalLines = s1To - s1From, s1ConsumedLines = 0, s1Start = s1From;
-					
-					for (int i = 0; i < mergeRanges.size(); i += 3) {
-						final int rangeOrigin = mergeRanges.get(i);
-						final int rangeStart = mergeRanges.get(i+1);
-						final int rangeLen = mergeRanges.get(i+2);
-						final boolean lastRange = i+3 >= mergeRanges.size();
-						final int s1LinesLeft = s1TotalLines - s1ConsumedLines;
-						// how many lines we may report as changed (don't use more than in range unless it's the very last range)
-						final int s1LinesToBorrow = lastRange ? s1LinesLeft : Math.min(s1LinesLeft, rangeLen);
-						if (rangeOrigin != csetMergeParent && s1LinesToBorrow > 0) {
-							ChangeBlockImpl block = getChangeBlock(s1Start, s1LinesToBorrow, rangeStart, rangeLen);
-							block.setOriginAndTarget(rangeOrigin, csetTarget);
-							insp.changed(block);
-							s1ConsumedLines += s1LinesToBorrow;
-							s1Start += s1LinesToBorrow;
-						} else {
-							int blockInsPoint = rangeOrigin != csetMergeParent ? s1Start : p2MergeCommon.reverseMapLine(rangeStart);
-							ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, blockInsPoint);
-							block.setOriginAndTarget(rangeOrigin, csetTarget);
-							insp.added(block);
-						}
-					}
-					if (s1ConsumedLines != s1TotalLines) {
-						assert s1ConsumedLines < s1TotalLines : String.format("Expected to process %d lines, but actually was %d", s1TotalLines, s1ConsumedLines);
-						// either there were no ranges from p1, whole s2From..s2To range came from p2, shall report as deleted
-						// or the ranges found were not enough to consume whole s2From..s2To
-						// The "deletion point" is shifted to the end of last csetOrigin->csetTarget change
-						int s2DeletePoint = s2From + s1ConsumedLines;
-						ChangeBlockImpl block =  new ChangeBlockImpl(annotatedRevision.origin, null, s1Start, s1To - s1Start, -1, -1, -1, s2DeletePoint);
-						block.setOriginAndTarget(csetOrigin, csetTarget);
-						insp.deleted(block);
-					}
-				} else {
-					ChangeBlockImpl block = getChangeBlock(s1From, s1To - s1From, s2From, s2To - s2From);
-					block.setOriginAndTarget(csetOrigin, csetTarget);
-					insp.changed(block);
-				}
-			} catch (HgCallbackTargetException ex) {
-				error = ex;
-			}
-		}
-		
-		@Override
-		protected void added(int s1InsertPoint, int s2From, int s2To) {
-			if (shallStop()) {
-				return;
-			}
-			try {
-				if (p2MergeCommon != null) {
-					mergeRanges.clear();
-					p2MergeCommon.combineAndMarkRangesWithTarget(s2From, s2To - s2From, csetOrigin, csetMergeParent, mergeRanges);
-					int insPoint = s1InsertPoint; // track changes to insertion point
-					for (int i = 0; i < mergeRanges.size(); i += 3) {
-						int rangeOrigin = mergeRanges.get(i);
-						int rangeStart = mergeRanges.get(i+1);
-						int rangeLen = mergeRanges.get(i+2);
-						ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, insPoint);
-						block.setOriginAndTarget(rangeOrigin, csetTarget);
-						insp.added(block);
-						// indicate insPoint moved down number of lines we just reported
-						insPoint += rangeLen;
-					}
-				} else {
-					ChangeBlockImpl block = getAddBlock(s2From, s2To - s2From, s1InsertPoint);
-					block.setOriginAndTarget(csetOrigin, csetTarget);
-					insp.added(block);
-				}
-			} catch (HgCallbackTargetException ex) {
-				error = ex;
-			}
-		}
-		
-		@Override
-		protected void deleted(int s2DeletePoint, int s1From, int s1To) {
-			if (shallStop()) {
-				return;
-			}
-			try {
-				ChangeBlockImpl block = new ChangeBlockImpl(annotatedRevision.origin, null, s1From, s1To - s1From, -1, -1, -1, s2DeletePoint);
-				block.setOriginAndTarget(csetOrigin, csetTarget);
-				insp.deleted(block);
-			} catch (HgCallbackTargetException ex) {
-				error = ex;
-			}
-		}
-
-		@Override
-		protected void unchanged(int s1From, int s2From, int length) {
-			if (shallStop()) {
-				return;
-			}
-			try {
-				EqualBlockImpl block = new EqualBlockImpl(s1From, s2From, length, annotatedRevision.target);
-				block.setOriginAndTarget(csetOrigin, csetTarget);
-				insp.same(block);
-			} catch (HgCallbackTargetException ex) {
-				error = ex;
-			}
-		}
-		
-		void checkErrors() throws HgCallbackTargetException {
-			if (error != null) {
-				throw error;
-			}
-		}
-		
-		private boolean shallStop() {
-			return error != null;
-		}
-		
-		private ChangeBlockImpl getAddBlock(int start, int len, int insPoint) {
-			return new ChangeBlockImpl(null, annotatedRevision.target, -1, -1, start, len, insPoint, -1);
-		}
-		
-		private ChangeBlockImpl getChangeBlock(int start1, int len1, int start2, int len2) {
-			return new ChangeBlockImpl(annotatedRevision.origin, annotatedRevision.target, start1, len1, start2, len2, start1, start2);
-		}
-	}
-	
-	private static class BlockImpl implements Block {
-		private int originCset;
-		private int targetCset;
-
-		void setOriginAndTarget(int originChangesetIndex, int targetChangesetIndex) {
-			// XXX perhaps, shall be part of Inspector API, rather than Block's
-			// as they don't change between blocks (although the moment about merged revisions)
-			// is not yet clear to me
-			originCset = originChangesetIndex;
-			targetCset = targetChangesetIndex;
-		}
-
-		public int originChangesetIndex() {
-			return originCset;
-		}
-
-		public int targetChangesetIndex() {
-			return targetCset;
-		}
-	}
-
-	private static class EqualBlockImpl extends BlockImpl implements EqualBlock {
-		private final int start1, start2;
-		private final int length;
-		private final ContentBlock fullContent;
-		private FilterBlock myContent;
-		
-		EqualBlockImpl(int blockStartSeq1, int blockStartSeq2, int blockLength, ContentBlock targetContent) {
-			start1 = blockStartSeq1;
-			start2 = blockStartSeq2;
-			length = blockLength;
-			fullContent = targetContent;
-		}
-
-		public int originStart() {
-			return start1;
-		}
-
-		public int targetStart() {
-			return start2;
-		}
-
-		public int length() {
-			return length;
-		}
-		
-		public BlockData content() {
-			if (myContent == null) {
-				myContent = new FilterBlock(fullContent, start2, length);
-			}
-			return myContent;
-		}
-		
-		@Override
-		public String toString() {
-			return String.format("@@ [%d..%d) == [%d..%d) @@", start1, start1+length, start2, start2+length);
-		}
-	}
-	
-	private static class ChangeBlockImpl extends BlockImpl implements ChangeBlock {
-		private final ContentBlock oldContent;
-		private final ContentBlock newContent;
-		private final int s1Start;
-		private final int s1Len;
-		private final int s2Start;
-		private final int s2Len;
-		private final int s1InsertPoint;
-		private final int s2DeletePoint;
-		private FilterBlock addedBlock, removedBlock;
-
-		public ChangeBlockImpl(ContentBlock c1, ContentBlock c2, int s1Start, int s1Len, int s2Start, int s2Len, int s1InsertPoint, int s2DeletePoint) {
-			oldContent = c1;
-			newContent = c2;
-			this.s1Start = s1Start;
-			this.s1Len = s1Len;
-			this.s2Start = s2Start;
-			this.s2Len = s2Len;
-			this.s1InsertPoint = s1InsertPoint;
-			this.s2DeletePoint = s2DeletePoint;
-		}
-		
-		public int insertedAt() {
-			return s1InsertPoint;
-		}
-
-		public int firstAddedLine() {
-			return s2Start;
-		}
-
-		public int totalAddedLines() {
-			return s2Len;
-		}
-
-		public BlockData addedLines() {
-			if (addedBlock == null) {
-				addedBlock = new FilterBlock(newContent, firstAddedLine(), totalAddedLines());
-			}
-			return addedBlock;
-		}
-		
-		public int removedAt() {
-			return s2DeletePoint;
-		}
-
-		public int firstRemovedLine() {
-			return s1Start;
-		}
-
-		public int totalRemovedLines() {
-			return s1Len;
-		}
-
-		public BlockData removedLines() {
-			if (removedBlock == null) {
-				removedBlock = new FilterBlock(oldContent, firstRemovedLine(), totalRemovedLines());
-			}
-			return removedBlock;
-		}
-		
-		@Override
-		public String toString() {
-			if (s2DeletePoint == -1) {
-				return String.format("@@ -%d,0 +%d,%d @@", insertedAt(), firstAddedLine(), totalAddedLines());
-			} else if (s1InsertPoint == -1) {
-				// delete only
-				return String.format("@@ -%d,%d +%d,0 @@", firstRemovedLine(), totalRemovedLines(), removedAt());
-			}
-			return String.format("@@ -%d,%d +%d,%d @@", firstRemovedLine(), totalRemovedLines(), firstAddedLine(), totalAddedLines());
-		}
-	}
-	
-	private static class SingleLine implements BlockData {
-		private final ByteChain line;
-
-		public SingleLine(ByteChain lineContent) {
-			line = lineContent;
-		}
-
-		public BlockData elementAt(int index) {
-			assert false;
-			return null;
-		}
-
-		public int elementCount() {
-			return 0;
-		}
-
-		public byte[] asArray() {
-			return line.data();
-		}
-	}
-	
-	private static class ContentBlock implements BlockData {
-		private final LineSequence seq;
-
-		public ContentBlock(LineSequence sequence) {
-			seq = sequence;
-		}
-
-		public BlockData elementAt(int index) {
-			return new SingleLine(seq.chunk(index));
-		}
-
-		public int elementCount() {
-			return seq.chunkCount() - 1;
-		}
-
-		public byte[] asArray() {
-			return seq.data(0, seq.chunkCount() - 1);
-		}
-	}
-	
-	private static class FilterBlock implements BlockData {
-		private final ContentBlock contentBlock;
-		private final int from;
-		private final int length;
-
-		public FilterBlock(ContentBlock bd, int startFrom, int len) {
-			assert bd != null;
-			assert startFrom + len < bd.seq.chunkCount(); // there's one extra chunk in the end, so strict less is ok
-			contentBlock = bd;
-			from = startFrom;
-			length = len;
-		}
-
-		public BlockData elementAt(int index) {
-			if (index < 0 || index >= length) {
-				throw new IllegalArgumentException(String.format("Expected value from [0..%d), got %d", length, index));
-			}
-			return contentBlock.elementAt(from + index);
-		}
-
-		public int elementCount() {
-			return length;
-		}
-
-		public byte[] asArray() {
-			return contentBlock.seq.data(from, from + length);
-		}
-	}
-	
-
-	private static class EqualBlocksCollector implements DiffHelper.MatchInspector<LineSequence> {
-		private final RangeSeq matches = new RangeSeq();
-
-		public void begin(LineSequence s1, LineSequence s2) {
-		}
-
-		public void match(int startSeq1, int startSeq2, int matchLength) {
-			matches.add(startSeq1, startSeq2, matchLength);
-		}
-
-		public void end() {
-		}
-
-		public int reverseMapLine(int ln) {
-			return matches.reverseMapLine(ln);
-		}
-
-		public void intersectWithTarget(int start, int length, IntVector result) {
-			int s = start;
-			for (int l = start, x = start + length; l < x; l++) {
-				if (!matches.includesTargetLine(l)) {
-					if (l - s > 0) {
-						result.add(s);
-						result.add(l - s);
-					}
-					s = l+1;
-				}
-			}
-			if (s < start+length) {
-				result.add(s);
-				result.add((start + length) - s);
-			}
-		}
-		
-		/*
-		 * intersects [start..start+length) with ranges of target lines, and based on the intersection 
-		 * breaks initial range into smaller ranges and records them into result, with marker to indicate
-		 * whether the range is from initial range (markerSource) or is a result of the intersection with target
-		 * (markerTarget)
-		 */
-		public void combineAndMarkRangesWithTarget(int start, int length, int markerSource, int markerTarget, IntVector result) {
-			int sourceStart = start, targetStart = start, sourceEnd = start + length;
-			for (int l = sourceStart; l < sourceEnd; l++) {
-				if (matches.includesTargetLine(l)) {
-					// l is from target
-					if (sourceStart < l) {
-						// few lines from source range were not in the target, report them
-						result.add(markerSource);
-						result.add(sourceStart);
-						result.add(l - sourceStart);
-					}
-					// indicate the earliest line from source range to use
-					sourceStart = l + 1;
-				} else {
-					// l is not in target
-					if (targetStart < l) {
-						// report lines from target range
-						result.add(markerTarget);
-						result.add(targetStart);
-						result.add(l - targetStart);
-					}
-					// next line *may* be from target
-					targetStart = l + 1;
-				}
-			}
-			// if source range end with line from target, sourceStart would be == sourceEnd, and we need to add range with markerTarget
-			// if source range doesn't end with target line, targetStart == sourceEnd, while sourceStart < sourceEnd
-			if (sourceStart < sourceEnd) {
-				assert targetStart == sourceEnd;
-				// something left from the source range
-				result.add(markerSource);
-				result.add(sourceStart);
-				result.add(sourceEnd - sourceStart);
-			} else if (targetStart < sourceEnd) {
-				assert sourceStart == sourceEnd;
-				result.add(markerTarget);
-				result.add(targetStart);
-				result.add(sourceEnd - targetStart);
-			}
-		}
-	}
-
-	private static class AnnotateRev implements RevisionDescriptor {
-		public ContentBlock origin, target;
-		public int originCset, targetCset, mergeCset, fileRevIndex;
-		
-		public void set(int fileRev) {
-			fileRevIndex = fileRev;
-		}
-		public void set(ContentBlock o, ContentBlock t) {
-			origin = o;
-			target = t;
-		}
-		public void set(int o, int t, int m) {
-			originCset = o;
-			targetCset = t;
-			mergeCset = m;
-		}
-		
-		public BlockData origin() {
-			return origin;
-		}
-
-		public BlockData target() {
-			return target;
-		}
-
-		public int originChangesetIndex() {
-			return originCset;
-		}
-
-		public int targetChangesetIndex() {
-			return targetCset;
-		}
-
-		public boolean isMerge() {
-			return mergeCset != NO_REVISION;
-		}
-
-		public int mergeChangesetIndex() {
-			return mergeCset;
-		}
-
-		public int fileRevisionIndex() {
-			return fileRevIndex;
-		}
-		@Override
-		public String toString() {
-			if (isMerge()) {
-				return String.format("[%d,%d->%d]", originCset, mergeCset, targetCset);
-			}
-			return String.format("[%d->%d]", originCset, targetCset);
-		}
-	}
-
-	public static void main(String[] args) {
-		EqualBlocksCollector bc = new EqualBlocksCollector();
-		bc.match(-1, 5, 3);
-		bc.match(-1, 10, 2);
-		bc.match(-1, 15, 3);
-		bc.match(-1, 20, 3);
-		IntVector r = new IntVector();
-		bc.intersectWithTarget(7, 10, r);
-		for (int i = 0; i < r.size(); i+=2) {
-			System.out.printf("[%d..%d) ", r.get(i), r.get(i) + r.get(i+1));
-		}
-		System.out.println();
-		r.clear();
-		bc.combineAndMarkRangesWithTarget(0, 16, 508, 514, r);
-		for (int i = 0; i < r.size(); i+=3) {
-			System.out.printf("%d:[%d..%d)  ", r.get(i), r.get(i+1), r.get(i+1) + r.get(i+2));
+			int fp1 = fileParentRevs.get(fileRevIndex * 2);
+			int fp2 = fileParentRevs.get(fileRevIndex * 2 + 1);
+			csetParents[0] = fp1 == NO_REVISION ? NO_REVISION : changeset(fp1);
+			csetParents[1] = fp2 == NO_REVISION ? NO_REVISION : changeset(fp2);
 		}
 	}
 }
