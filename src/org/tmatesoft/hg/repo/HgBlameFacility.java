@@ -104,8 +104,9 @@ public final class HgBlameFacility {
 			if (currentFile.isCopy()) {
 				// TODO SessionContext.getPathFactory() and replace all Path.create
 				HgRepository repo = currentFile.getRepo();
+				Nodeid originLastRev = currentFile.getCopySourceRevision();
 				currentFile = repo.getFileNode(currentFile.getCopySourceName());
-				fileLastClogRevIndex = repo.getChangelog().getRevisionIndex(currentFile.getCopySourceRevision());
+				fileLastClogRevIndex = currentFile.getChangesetRevisionIndex(currentFile.getRevisionIndex(originLastRev));
 				// XXX perhaps, shall fail with meaningful exception if new file doesn't exist (.i/.d not found for whatever reason)
 				// or source revision is missing?
 			} else {

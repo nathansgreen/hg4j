@@ -22,11 +22,13 @@ import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import java.io.File;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.ListIterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,8 +36,11 @@ import java.util.regex.Pattern;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.core.HgAnnotateCommand;
+import org.tmatesoft.hg.core.HgAnnotateCommand.LineInfo;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
+import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
@@ -50,6 +55,7 @@ import org.tmatesoft.hg.repo.HgBlameFacility.EqualBlock;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * 
@@ -60,7 +66,6 @@ public class TestBlame {
 
 	@Rule
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
-	private ExecHelper eh;
 
 	
 	@Test
@@ -85,31 +90,13 @@ public class TestBlame {
 		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		final String fname = "src/org/tmatesoft/hg/internal/PatchGenerator.java";
 		HgDataFile df = repo.getFileNode(fname);
-		OutputParser.Stub op = new OutputParser.Stub();
-		eh = new ExecHelper(op, null);
+		AnnotateRunner ar = new AnnotateRunner(df.getPath(), null);
 
-		for (int startChangeset : new int[] { 539, 541 /*, TIP */}) {
-			doLineAnnotateTest(df, startChangeset, op);
-		}
-	}
-	
-	private void doLineAnnotateTest(HgDataFile df, int cs, OutputParser.Stub op) throws HgCallbackTargetException, InterruptedException, IOException {
-		FileAnnotateInspector fa = new FileAnnotateInspector();
-		FileAnnotation.annotate(df, cs, fa);
-
-		op.reset();
-		eh.run("hg", "annotate", "--no-follow", "-r", cs == TIP ? "tip" : String.valueOf(cs), df.getPath().toString());
-
-		String[] hgAnnotateLines = splitLines(op.result());
-		assertTrue("[sanity]", hgAnnotateLines.length > 0);
-		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, fa.lineRevisions.length);
-
-		for (int i = 0; i < fa.lineRevisions.length; i++) {
-			int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')).trim());
-			errorCollector.assertEquals(String.format("Revision mismatch for line %d (annotating rev: %d)", i+1, cs), hgAnnotateRevIndex, fa.lineRevisions[i]);
-			String hgAnnotateLine = hgAnnotateLines[i].substring(hgAnnotateLines[i].indexOf(':') + 1);
-			String apiLine = fa.line(i).trim();
-			errorCollector.assertEquals(hgAnnotateLine.trim(), apiLine);
+		for (int cs : new int[] { 539, 541 /*, TIP */}) {
+			ar.run(cs, false);
+			FileAnnotateInspector fa = new FileAnnotateInspector();
+			FileAnnotation.annotate(df, cs, fa);
+			doAnnotateLineCheck(cs, ar.getLines(), Arrays.asList(fa.lineRevisions), Arrays.asList(fa.lines));
 		}
 	}
 	
@@ -117,10 +104,13 @@ public class TestBlame {
 	public void testFileLineAnnotate2() throws Exception {
 		HgRepository repo = Configuration.get().find("test-annotate");
 		HgDataFile df = repo.getFileNode("file1");
-		OutputParser.Stub op = new OutputParser.Stub();
-		eh = new ExecHelper(op, repo.getWorkingDir());
+		AnnotateRunner ar = new AnnotateRunner(df.getPath(), repo.getWorkingDir());
+
 		for (int cs : new int[] { 4, 6 /*, 8 see below*/, TIP}) {
-			doLineAnnotateTest(df, cs, op);
+			ar.run(cs, false);
+			FileAnnotateInspector fa = new FileAnnotateInspector();
+			FileAnnotation.annotate(df, cs, fa);
+			doAnnotateLineCheck(cs, ar.getLines(), Arrays.asList(fa.lineRevisions), Arrays.asList(fa.lines));
 		}
 		/*`hg annotate -r 8` and HgBlameFacility give different result
 		 * for "r0, line 5" line, which was deleted in rev2 and restored back in
@@ -195,6 +185,49 @@ public class TestBlame {
 		}
 		errorCollector.assertTrue(String.format("Annotate API reported excessive diff: %s ", apiResult.toString()), apiResult.isEmpty());
 	}
+
+	@Test
+	public void testAnnotateCmdFollowNoFollow() throws Exception {
+		HgRepoFacade hgRepoFacade = new HgRepoFacade();
+		HgRepository repo = Configuration.get().find("test-annotate2");
+		hgRepoFacade.init(repo);
+		HgAnnotateCommand cmd = hgRepoFacade.createAnnotateCommand();
+		final Path fname = Path.create("file1b.txt");
+		final int changeset = TIP;
+		AnnotateInspector ai = new AnnotateInspector();
+
+		cmd.changeset(changeset);
+		// follow
+		cmd.file(fname);
+		cmd.execute(ai);
+		AnnotateRunner ar = new AnnotateRunner(fname, repo.getWorkingDir());
+		ar.run(changeset, true);
+		doAnnotateLineCheck(changeset, ar.getLines(), ai.changesets, ai.lines);
+		
+		// no follow
+		cmd.file(fname, false);
+		ai = new AnnotateInspector();
+		cmd.execute(ai);
+		ar.run(changeset, false);
+		doAnnotateLineCheck(changeset, ar.getLines(), ai.changesets, ai.lines);
+	}
+
+	private void doAnnotateLineCheck(int cs, String[] hgAnnotateLines, List<Integer> cmdChangesets, List<String> cmdLines) {
+		assertTrue("[sanity]", hgAnnotateLines.length > 0);
+		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, cmdLines.size());
+
+		for (int i = 0; i < cmdChangesets.size(); i++) {
+			int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')).trim());
+			errorCollector.assertEquals(String.format("Revision mismatch for line %d (annotating rev: %d)", i+1, cs), hgAnnotateRevIndex, cmdChangesets.get(i));
+			String hgAnnotateLine = hgAnnotateLines[i].substring(hgAnnotateLines[i].indexOf(':') + 1);
+			String apiLine = cmdLines.get(i).trim();
+			errorCollector.assertEquals(hgAnnotateLine.trim(), apiLine);
+		}
+	}
+
+	// FIXME HgWorkingCopyStatusCollector (and HgStatusCollector), with their ancestors (rev 59/69) have examples
+	// of *incorrect* assignment of common lines (like "}") - our impl doesn't process common lines in any special way
+	// while original diff lib does. Would be nice to behave as close to original, as possible.
 	
 	private static String[] splitLines(CharSequence seq) {
 		int lineCount = 0;
@@ -298,7 +331,8 @@ public class TestBlame {
 //		System.out.println(Arrays.equals(new String[] { "abc" }, splitLines("abc")));
 //		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc")));
 //		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc\n")));
-		new TestBlame().ccc();
+		TestBlame tt = new TestBlame();
+		tt.ccc();
 	}
 
 	private static class DiffOutInspector implements HgBlameFacility.Inspector {
@@ -390,7 +424,7 @@ public class TestBlame {
 	}
 
 	private static class FileAnnotateInspector implements LineInspector {
-		private int[] lineRevisions;
+		private Integer[] lineRevisions;
 		private String[] lines;
 		
 		FileAnnotateInspector() {
@@ -398,7 +432,7 @@ public class TestBlame {
 		
 		public void line(int lineNumber, int changesetRevIndex, BlockData lineContent, LineDescriptor ld) {
 			if (lineRevisions == null) {
-				lineRevisions = new int [ld.totalLines()];
+				lineRevisions = new Integer[ld.totalLines()];
 				Arrays.fill(lineRevisions, NO_REVISION);
 				lines = new String[ld.totalLines()];
 			}
@@ -449,6 +483,49 @@ public class TestBlame {
 				String content = new String(lines.asArray());
 				System.out.printf("%3d:%s:[%d..%d):\n%s", cset, marker, first, first+length, content);
 			}
+		}
+	}
+	
+	static class AnnotateInspector implements HgAnnotateCommand.Inspector {
+		private int lineNumber = 1;
+		public final ArrayList<String> lines = new ArrayList<String>();
+		public final ArrayList<Integer> changesets = new ArrayList<Integer>();
+		
+		public void next(LineInfo lineInfo) throws HgCallbackTargetException {
+			Assert.assertEquals(lineInfo.getLineNumber(), lineNumber);
+			lineNumber++;
+			lines.add(new String(lineInfo.getContent()));
+			changesets.add(lineInfo.getChangesetIndex());
+		}
+	}
+	
+	private static class AnnotateRunner {
+		private final ExecHelper eh;
+		private final OutputParser.Stub op;
+		private final Path file;
+		
+		public AnnotateRunner(Path filePath, File repoDir) {
+			file = filePath;
+			op = new OutputParser.Stub();
+			eh = new ExecHelper(op, repoDir);
+		}
+		
+		public void run(int cset, boolean follow) throws Exception {
+			op.reset();
+			ArrayList<String> args = new ArrayList<String>();
+			args.add("hg");
+			args.add("annotate");
+			args.add("-r");
+			args.add(cset == TIP ? "tip" : String.valueOf(cset));
+			if (!follow) {
+				args.add("--no-follow");
+			}
+			args.add(file.toString());
+			eh.run(args);
+		}
+		
+		public String[] getLines() {
+			return splitLines(op.result());
 		}
 	}
 }

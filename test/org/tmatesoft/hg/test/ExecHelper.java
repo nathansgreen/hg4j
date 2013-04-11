@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,13 +19,14 @@ package org.tmatesoft.hg.test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.StringTokenizer;
 
 import org.tmatesoft.hg.internal.ProcessExecHelper;
 
 /**
- *
+ * Utility to run a command line application and to parse its output
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -61,9 +62,13 @@ public class ExecHelper extends ProcessExecHelper {
 		return super.prepareCommand(cmd);
 	}
 	
-	public void run(String... cmd) throws IOException, InterruptedException {
+	public void run(List<String> cmd) throws IOException, InterruptedException {
 		CharSequence res = super.exec(cmd);
 		parser.parse(res);
+	}
+
+	public void run(String... cmd) throws IOException, InterruptedException {
+		run(Arrays.asList(cmd));
 	}
 
 	public int getExitValue() {
