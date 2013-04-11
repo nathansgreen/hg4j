@@ -146,6 +146,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		private final ProgressSupport progressSupport;
 		private final CancelSupport cancelSupport;
 		private final SessionContext ctx;
+		private final Path.Source pathFactory;
 		private FileOutputStream indexFile;
 		private String filename; // human-readable name of the file being written, for log/exception purposes 
 
@@ -174,6 +175,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			progressSupport = progress;
 			cancelSupport = cancel;
 			revlogDataZip = new RevlogCompressor(sessionCtx);
+			pathFactory = ctx.getPathFactory();
 		}
 
 		public void initEmptyRepository() throws IOException {
@@ -243,7 +245,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			try {
 				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
-				fncacheFile.add(Path.create(name)); 
+				fncacheFile.add(pathFactory.path(name)); 
 				File file = new File(hgDir, filename = storagePathHelper.rewrite(name).toString());
 				file.getParentFile().mkdirs();
 				indexFile = new FileOutputStream(file);

@@ -194,7 +194,7 @@ public final class HgManifest extends Revlog {
 			manifestLast = manifestFirst;
 			manifestFirst = x;
 		}
-		content.iterate(manifestFirst, manifestLast, true, new ManifestParser(inspector, encodingHelper));
+		content.iterate(manifestFirst, manifestLast, true, new ManifestParser(inspector));
 	}
 	
 	/**
@@ -214,7 +214,7 @@ public final class HgManifest extends Revlog {
 			throw new IllegalArgumentException();
 		}
 		int[] manifestRevs = toManifestRevisionIndexes(revisionIndexes, inspector);
-		content.iterate(manifestRevs, true, new ManifestParser(inspector, encodingHelper));
+		content.iterate(manifestRevs, true, new ManifestParser(inspector));
 	}
 	
 	// 
@@ -399,18 +399,16 @@ public final class HgManifest extends Revlog {
 	 * of the String, but these are only for unique Strings (Paths) (3020 in the example above). Besides, I save
 	 * useless char[] and byte->char conversions. 
 	 */
-	private static class PathProxy {
+	private final class PathProxy {
 		private byte[] data;
 		private int start; 
 		private final int hash, length;
 		private Path result;
-		private final EncodingHelper encHelper;
 
-		public PathProxy(byte[] data, int start, int length, EncodingHelper eh) {
+		public PathProxy(byte[] data, int start, int length) {
 			this.data = data;
 			this.start = start;
 			this.length = length;
-			this.encHelper = eh;
 
 			// copy from String.hashCode(). In fact, not necessarily match result of String(data).hashCode
 			// just need some nice algorithm here
@@ -448,7 +446,8 @@ public final class HgManifest extends Revlog {
 		
 		public Path freeze() {
 			if (result == null) {
-				result = Path.create(encHelper.fromManifest(data, start, length));
+				Path.Source pathFactory = HgManifest.this.getRepo().getSessionContext().getPathFactory();
+				result = pathFactory.path(HgManifest.this.encodingHelper.fromManifest(data, start, length));
 				// release reference to bigger data array, make a copy of relevant part only
 				// use original bytes, not those from String above to avoid cache misses due to different encodings 
 				byte[] d = new byte[length];
@@ -460,19 +459,17 @@ public final class HgManifest extends Revlog {
 		}
 	}
 
-	private static class ManifestParser implements RevlogStream.Inspector, Lifecycle {
+	private class ManifestParser implements RevlogStream.Inspector, Lifecycle {
 		private final Inspector inspector;
 		private IdentityPool<Nodeid> nodeidPool, thisRevPool;
 		private final IdentityPool<PathProxy> fnamePool;
 		private byte[] nodeidLookupBuffer = new byte[20]; // get reassigned each time new Nodeid is added to pool
 		private final ProgressSupport progressHelper;
 		private IterateControlMediator iterateControl;
-		private final EncodingHelper encHelper;
 		
-		public ManifestParser(Inspector delegate, EncodingHelper eh) {
+		public ManifestParser(Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
-			encHelper = eh;
 			nodeidPool = new IdentityPool<Nodeid>();
 			fnamePool = new IdentityPool<PathProxy>();
 			thisRevPool = new IdentityPool<Nodeid>();
@@ -496,7 +493,7 @@ public final class HgManifest extends Revlog {
 						int x = i;
 						for( ; data[i] != '\n' && i < actualLen; i++) {
 							if (fname == null && data[i] == 0) {
-								PathProxy px = fnamePool.unify(new PathProxy(data, x, i - x, encHelper));
+								PathProxy px = fnamePool.unify(new PathProxy(data, x, i - x));
 								// if (cached = fnamePool.unify(px))== px then cacheMiss, else cacheHit
 								// cpython 0..10k: hits: 15 989 152, misses: 3020
 								fname = px.freeze();

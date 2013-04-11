@@ -266,7 +266,7 @@ public final class HgRepository implements SessionContext.Source {
 	
 	public HgDataFile getFileNode(String path) {
 		CharSequence nPath = normalizePath.rewrite(path);
-		Path p = Path.create(nPath);
+		Path p = sessionContext.getPathFactory().path(nPath);
 		return getFileNode(p);
 	}
 

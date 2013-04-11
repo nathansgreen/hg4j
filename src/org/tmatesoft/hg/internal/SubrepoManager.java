@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -81,6 +81,7 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 			String line;
 			LinkedList<HgSubrepoLocation> res = new LinkedList<HgSubrepoLocation>();
 			HgInternals hgRepoInternal = new HgInternals(repo);
+			final Path.Source pathFactory = repo.getSessionContext().getPathFactory();
 			while ((line = br.readLine()) != null) {
 				int sep = line.indexOf('=');
 				if (sep == -1) {
@@ -109,7 +110,7 @@ public class SubrepoManager /* XXX RepoChangeNotifier, RepoChangeListener */{
 				//
 				// apparently, key value can't end with '/', `hg commit` fails if it does:
 				// abort: path ends in directory separator: fourth/
-				Path p = Path.create(key.charAt(key.length()-1) == '/' ? key : key + '/');
+				Path p = pathFactory.path(key.charAt(key.length()-1) == '/' ? key : key + '/');
 				String revValue = substate.get(key);
 				HgSubrepoLocation loc = hgRepoInternal.newSubrepo(p, value, kind, revValue == null ? null : Nodeid.fromAscii(revValue));
 				res.add(loc);

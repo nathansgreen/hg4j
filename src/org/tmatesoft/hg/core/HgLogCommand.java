@@ -230,7 +230,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 	 * @return <code>this</code> for convenience
 	 */
 	public HgLogCommand file(String file, boolean followCopyRename) {
-		return file(Path.create(repo.getToRepoPathHelper().rewrite(file)), followCopyRename);
+		Path.Source ps = repo.getSessionContext().getPathFactory();
+		return file(ps.path(repo.getToRepoPathHelper().rewrite(file)), followCopyRename);
 	}
 
 	/**
@@ -238,7 +239,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 	 * @return <code>this</code> for convenience
 	 */
 	public HgLogCommand file(String file, boolean followCopyRename, boolean followFileAncestry) {
-		return file(Path.create(repo.getToRepoPathHelper().rewrite(file)), followCopyRename, followFileAncestry);
+		Path.Source ps = repo.getSessionContext().getPathFactory();
+		return file(ps.path(repo.getToRepoPathHelper().rewrite(file)), followCopyRename, followFileAncestry);
 	}
 	
 	/**

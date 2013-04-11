@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.util.LogFacility;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * Access to objects that might need to be shared between various distinct operations ran during the same working session 
@@ -45,6 +46,25 @@ public abstract class SessionContext {
 	public abstract Object getConfigurationProperty(String name, Object defaultValue);
 	// perhaps, later may add Configuration object, with PropertyMarshal's helpers
 	// e.g. when there's standalone Caches and WritableSessionProperties objects
+
+	/**
+	 * Provide a factory to create {@link Path} objects.
+	 * 
+	 * Occasionally, there's a need to construct a {@link Path} object from a string/byte data 
+	 * kept in mercurial control files. Generally, default implementation (with {@link Path#create(CharSequence)} 
+	 * is enough, however, if there's a need to control number of string objects in memory (i.e. prevent duplicates),
+	 * default implementation might need to be replaced with more sophisticated (e.g. using weak references or
+	 * just a huge hash set).
+	 * 
+	 * @return factory to construct Path objects, never <code>null</code>
+	 */
+	public Path.Source getPathFactory() {
+		return new Path.Source() {
+			public Path path(CharSequence p) {
+				return Path.create(p);
+			}
+		};
+	}
 
 	/**
 	 * Providers of the context may implement

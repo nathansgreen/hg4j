@@ -36,7 +36,7 @@ import org.tmatesoft.hg.repo.HgLookup;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgRepoFacade {
+public class HgRepoFacade implements SessionContext.Source {
 	private HgRepository repo;
 	private final SessionContext context;
 
@@ -96,6 +96,10 @@ public class HgRepoFacade {
 			throw new IllegalStateException("Call any of #init*() methods first first");
 		}
 		return repo;
+	}
+	
+	public SessionContext getSessionContext() {
+		return context;
 	}
 
 	public HgLogCommand createLogCommand() {

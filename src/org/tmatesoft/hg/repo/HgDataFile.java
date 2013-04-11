@@ -401,7 +401,8 @@ public final class HgDataFile extends Revlog {
 	 */
 	public Path getCopySourceName() throws HgRuntimeException {
 		if (isCopy()) {
-			return Path.create(metadata.find(0, "copy"));
+			Path.Source ps = getRepo().getSessionContext().getPathFactory();
+			return ps.path(metadata.find(0, "copy"));
 		}
 		throw new UnsupportedOperationException(); // XXX REVISIT, think over if Exception is good (clients would check isCopy() anyway, perhaps null is sufficient?)
 	}
