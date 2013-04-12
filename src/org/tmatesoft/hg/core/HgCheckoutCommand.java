@@ -191,17 +191,18 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 		}
 		
 		public boolean next(Nodeid nid, Path fname, Flags flags) {
+			WorkingDirFileWriter workingDirWriter = null;
 			try {
 				HgDataFile df = hgRepo.getRepo().getFileNode(fname);
 				int fileRevIndex = df.getRevisionIndex(nid);
 				// check out files based on manifest
 				// FIXME links!
-				WorkingDirFileWriter workingDirWriter = new WorkingDirFileWriter(hgRepo);
+				workingDirWriter = new WorkingDirFileWriter(hgRepo);
 				workingDirWriter.processFile(df, fileRevIndex);
 				lastWrittenFileSize = workingDirWriter.bytesWritten();
 				return true;
 			} catch (IOException ex) {
-				failure = new HgIOException("Failed to write down file revision", ex, /*FIXME file*/null);
+				failure = new HgIOException("Failed to write down file revision", ex, workingDirWriter.getDestinationFile());
 			} catch (HgRuntimeException ex) {
 				failure = new HgLibraryFailureException(ex);
 			}

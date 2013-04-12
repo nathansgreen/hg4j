@@ -45,6 +45,13 @@ public class WorkingDirFileWriter implements ByteChannel {
 		hgRepo = internalRepo;
 	}
 	
+	/**
+	 * Information purposes only, to find out trouble location if {@link #processFile(HgDataFile, int)} fails
+	 */
+	public File getDestinationFile() {
+		return dest;
+	}
+	
 	public void processFile(HgDataFile df, int fileRevIndex) throws IOException {
 		try {
 			prepare(df.getPath());
