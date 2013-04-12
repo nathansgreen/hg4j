@@ -84,6 +84,13 @@ public class IntVector {
 		count = 0;
 	}
 	
+	public void trimTo(int newSize) {
+		if (newSize < 0 || newSize > count) {
+			throw new IllegalArgumentException(String.format("Can't trim vector of size %d to %d", count, newSize));
+		}
+		count = newSize;
+	}
+	
 	public void trimToSize() {
 		data = toArray(true);
 	}

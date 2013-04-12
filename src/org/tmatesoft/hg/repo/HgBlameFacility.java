@@ -79,7 +79,7 @@ public final class HgBlameFacility {
 		if (wrongRevisionIndex(changelogRevIndexStart) || wrongRevisionIndex(changelogRevIndexEnd)) {
 			throw new IllegalArgumentException();
 		}
-		// Note, changelogRevisionIndex may be TIP, while the code below doesn't tolerate constants
+		// Note, changelogRevIndexEnd may be TIP, while the code below doesn't tolerate constants
 		//
 		int lastRevision = df.getRepo().getChangelog().getLastRevision();
 		if (changelogRevIndexEnd == TIP) {
@@ -101,8 +101,18 @@ public final class HgBlameFacility {
 			fileCompleteHistory.addFirst(fileHistory); // to get the list in old-to-new order
 			nextChunk = fileHistory;
 			bh.useFileUpTo(currentFile, fileLastClogRevIndex);
-			if (currentFile.isCopy()) {
-				// TODO SessionContext.getPathFactory() and replace all Path.create
+			if (fileHistory.changeset(0) > changelogRevIndexStart && currentFile.isCopy()) {
+				// fileHistory.changeset(0) is the earliest revision we know about so far,
+				// once we get to revisions earlier than the requested start, stop digging.
+				// The reason there's NO == (i.e. not >=) because:
+				// (easy): once it's equal, we've reached our intended start
+				// (hard): if changelogRevIndexStart happens to be exact start of one of renames in the 
+				// chain of renames (test-annotate2 repository, file1->file1a->file1b, i.e. points 
+				// to the very start of file1a or file1 history), presence of == would get us to the next 
+				// chunk and hence changed parents of present chunk's first element. Our annotate alg 
+				// relies on parents only (i.e. knows nothing about 'last iteration element') to find out 
+				// what to compare, and hence won't report all lines of 'last iteration element' (which is the
+				// first revision of the renamed file) as "added in this revision", leaving gaps in annotate
 				HgRepository repo = currentFile.getRepo();
 				Nodeid originLastRev = currentFile.getCopySourceRevision();
 				currentFile = repo.getFileNode(currentFile.getCopySourceName());
@@ -110,9 +120,10 @@ public final class HgBlameFacility {
 				// XXX perhaps, shall fail with meaningful exception if new file doesn't exist (.i/.d not found for whatever reason)
 				// or source revision is missing?
 			} else {
+				fileHistory.chopAtChangeset(changelogRevIndexStart);
 				currentFile = null; // stop iterating
 			}
-		} while (currentFile != null && fileLastClogRevIndex >= changelogRevIndexStart);
+		} while (currentFile != null && fileLastClogRevIndex > changelogRevIndexStart);
 		// fileCompleteHistory is in (origin, intermediate target, ultimate target) order
 
 		int[] fileClogParentRevs = new int[2];
@@ -406,7 +417,30 @@ public final class HgBlameFacility {
 			target.originFileRev = fileRevsToVisit.get(0); // files to visit are new to old
 			target.originChangelogRev = changeset(target.originFileRev);
 		}
-		
+
+		/**
+		 * Mark revision closest(ceil) to specified as the very first one (no parents) 
+		 */
+		public void chopAtChangeset(int firstChangelogRevOfInterest) {
+			if (firstChangelogRevOfInterest == 0) {
+				return; // nothing to do
+			}
+			int i = 0, x = fileRevsToVisit.size(), fileRev = BAD_REVISION;
+			// fileRevsToVisit is new to old, greater numbers to smaller
+			while (i < x && changeset(fileRev = fileRevsToVisit.get(i)) >= firstChangelogRevOfInterest) {
+				i++;
+			}
+			assert fileRev != BAD_REVISION; // there's at least 1 revision in fileRevsToVisit
+			if (i == x && changeset(fileRev) != firstChangelogRevOfInterest) {
+				assert false : "Requested changeset shall belong to the chunk";
+				return;
+			}
+			fileRevsToVisit.trimTo(i); // no need to iterate more
+			// pretend fileRev got no parents
+			fileParentRevs.set(fileRev * 2, NO_REVISION);
+			fileParentRevs.set(fileRev, NO_REVISION);
+		}
+
 		public int[] fileRevisions(HgIterateDirection iterateOrder) {
 			// fileRevsToVisit is { r10, r7, r6, r5, r0 }, new to old
 			int[] rv = fileRevsToVisit.toArray();

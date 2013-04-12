@@ -18,11 +18,15 @@ package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.tmatesoft.hg.core.HgIterateDirection.NewToOld;
+import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -184,6 +188,39 @@ public class TestBlame {
 			}
 		}
 		errorCollector.assertTrue(String.format("Annotate API reported excessive diff: %s ", apiResult.toString()), apiResult.isEmpty());
+	}
+
+	
+	@Test
+	public void testPartialHistoryFollow() throws Exception {
+		HgRepository repo = Configuration.get().find("test-annotate2");
+		HgDataFile df = repo.getFileNode("file1b.txt");
+		// rev3: file1 -> file1a,  rev7: file1a -> file1b, tip: rev10
+		HgBlameFacility bf = new HgBlameFacility(df);
+		DiffOutInspector insp = new DiffOutInspector(new PrintStream(new OutputStream() {
+			@Override
+			public void write(int b) throws IOException {
+				// NULL OutputStream
+			}
+		}));
+		// rev6 changes rev4, rev4 changes rev3. Plus, anything changed 
+		// earlier than rev2 shall be reported as new from change3
+		int[] change_2_8_new2old = new int[] {4, 6, 3, 4, -1, 3}; 
+		int[] change_2_8_old2new = new int[] {-1, 3, 3, 4, 4, 6 };
+		bf.annotate(2, 8, insp, NewToOld);
+		Assert.assertArrayEquals(change_2_8_new2old, insp.getReportedRevisionPairs());
+		insp.reset();
+		bf.annotate(2, 8, insp, OldToNew);
+		Assert.assertArrayEquals(change_2_8_old2new, insp.getReportedRevisionPairs());
+		// same as 2 to 8, with addition of rev9 changes rev7  (rev6 to rev7 didn't change content, only name)
+		int[] change_3_9_new2old = new int[] {7, 9, 4, 6, 3, 4, -1, 3 }; 
+		int[] change_3_9_old2new = new int[] {-1, 3, 3, 4, 4, 6, 7, 9 };
+		insp.reset();
+		bf.annotate(3, 9, insp, NewToOld);
+		Assert.assertArrayEquals(change_3_9_new2old, insp.getReportedRevisionPairs());
+		insp.reset();
+		bf.annotate(3, 9, insp, OldToNew);
+		Assert.assertArrayEquals(change_3_9_old2new, insp.getReportedRevisionPairs());
 	}
 
 	@Test
@@ -367,6 +404,14 @@ public class TestBlame {
 				x[i++] = v;
 			}
 			return x;
+		}
+		
+		int[] getReportedRevisionPairs() {
+			return reportedRevisionPairs.toArray();
+		}
+		
+		void reset() {
+			reportedRevisionPairs.clear();
 		}
 		
 		public void same(EqualBlock block) {
