@@ -84,20 +84,23 @@ public class InflaterDataAccess extends FilterDataAccess {
 		int c = 0;
 		int oldPos = decompressedPos;
 		byte[] dummy = new byte[buffer.length];
-		int toRead;
-		while ((toRead = super.available()) > 0) {
-			if (toRead > buffer.length) {
-				toRead = buffer.length;
-			}
-			super.readBytes(buffer, 0, toRead);
-			inflater.setInput(buffer, 0, toRead);
-			try {
+		try {
+			int toRead = -1;
+			do {
 				while (!inflater.needsInput()) {
 					c += inflater.inflate(dummy, 0, dummy.length);
 				}
-			} catch (DataFormatException ex) {
-				throw new IOException(ex.toString());
-			}
+				if (inflater.needsInput() && (toRead = super.available()) > 0) {
+					// fill:
+					if (toRead > buffer.length) {
+						toRead = buffer.length;
+					}
+					super.readBytes(buffer, 0, toRead);
+					inflater.setInput(buffer, 0, toRead);
+				}
+			} while(toRead > 0);
+		} catch (DataFormatException ex) {
+			throw new IOException(ex.toString());
 		}
 		decompressedLength = c + oldPos;
 		reset();
