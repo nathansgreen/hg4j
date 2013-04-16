@@ -541,7 +541,7 @@ public class RevlogStream {
 			final Patch patch = new Patch();
 			final Inflater inflater = new Inflater();
 			// can share buffer between instances of InflaterDataAccess as I never read any two of them in parallel
-			final byte[] inflaterBuffer = new byte[1024];
+			final byte[] inflaterBuffer = new byte[10 * 1024]; // TODO consider using DAP.DEFAULT_FILE_BUFFER
 			//
 			
 			for (; i <= end; i++ ) {
