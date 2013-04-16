@@ -102,7 +102,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.checkFileSneakerPerformance2();
+		m.checkFileSneakerPerformance();
 //		m.testRevert();
 //		m.testCheckout();
 //		m.tryExtensions();
@@ -135,8 +135,8 @@ public class Main {
 		HgChangesetFileSneaker fs2 = new HgChangesetFileSneaker(hgRepo);
 		fs1.followRenames(true);
 		fs2.followRenames(true);
-		Nodeid cset = hgRepo.getChangelog().getRevision(TIP);
-		Path fname = Path.create("dir3/file8");
+		Nodeid cset = hgRepo.getChangelog().getRevision(2);
+		Path fname = Path.create("dir9/file9"); // close to the manifest end 
 		fs1.changeset(cset);
 		fs2.changeset(cset);
 //		hgRepo.getManifest().getFileRevision(TIP, fname);
@@ -153,17 +153,17 @@ public class Main {
 		}
 		ManifestRevision mr = new ManifestRevision(null, null);
 		final long _s1 = System.nanoTime();
-		hgRepo.getManifest().walk(2, 2, mr);
+		hgRepo.getManifest().walk(0, 0, mr);
 		final long _e1 = System.nanoTime();
-		hgRepo.getManifest().getFileRevision(2, fname);
+		hgRepo.getManifest().getFileRevision(0, fname);
 		final long _e2 = System.nanoTime();
 		System.out.printf("\n\tManifestRevision:%d ms, getFileRevision:%d ms\n", (_e1-_s1)/1000000, (_e2-_e1)/1000000);
 	}
 	
 	//  -agentlib:hprof=cpu=times,heap=sites,depth=10
 	private void checkFileSneakerPerformance2() throws Exception {
-		Path fname = Path.create("dir3/file8");
-		hgRepo.getManifest().getFileRevision(2, fname);
+		Path fname = Path.create("dir9/file9"); // close to the manifest end
+		hgRepo.getManifest().getFileRevision(0, fname);
 //		ManifestRevision mr = new ManifestRevision(null, null);
 //		hgRepo.getManifest().walk(2, 2, mr);
 	}

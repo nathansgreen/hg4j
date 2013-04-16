@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.EOFException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 import java.util.zip.ZipException;
@@ -32,9 +32,9 @@ import java.util.zip.ZipException;
 public class InflaterDataAccess extends FilterDataAccess {
 
 	private final Inflater inflater;
-	private final byte[] buffer;
-	private final byte[] singleByte = new byte[1];
-	private int decompressedPos = 0;
+	private final byte[] inBuffer;
+	private final ByteBuffer outBuffer;
+	private int inflaterPos = 0;
 	private int decompressedLength;
 
 	public InflaterDataAccess(DataAccess dataAccess, long offset, int compressedLength) {
@@ -52,20 +52,23 @@ public class InflaterDataAccess extends FilterDataAccess {
 		}
 		this.inflater = inflater;
 		this.decompressedLength = actualLength;
-		buffer = buf;
+		inBuffer = buf;
+		outBuffer = ByteBuffer.allocate(inBuffer.length * 2);
+		outBuffer.limit(0); // there's nothing to read in the buffer 
 	}
 	
 	@Override
 	public InflaterDataAccess reset() throws IOException {
 		super.reset();
 		inflater.reset();
-		decompressedPos = 0;
+		inflaterPos = 0;
+		outBuffer.clear().limit(0); // or flip(), to indicate nothing to read
 		return this;
 	}
 	
 	@Override
 	protected int available() throws IOException {
-		return length() - decompressedPos;
+		return length() - decompressedPosition();
 	}
 	
 	@Override
@@ -80,29 +83,16 @@ public class InflaterDataAccess extends FilterDataAccess {
 		if (decompressedLength != -1) {
 			return decompressedLength;
 		}
-		decompressedLength = 0; // guard to avoid endless loop in case length() would get invoked from below. 
-		int c = 0;
-		int oldPos = decompressedPos;
-		byte[] dummy = new byte[buffer.length];
-		try {
-			int toRead = -1;
-			do {
-				while (!inflater.needsInput()) {
-					c += inflater.inflate(dummy, 0, dummy.length);
-				}
-				if (inflater.needsInput() && (toRead = super.available()) > 0) {
-					// fill:
-					if (toRead > buffer.length) {
-						toRead = buffer.length;
-					}
-					super.readBytes(buffer, 0, toRead);
-					inflater.setInput(buffer, 0, toRead);
-				}
-			} while(toRead > 0);
-		} catch (DataFormatException ex) {
-			throw new IOException(ex.toString());
-		}
-		decompressedLength = c + oldPos;
+		decompressedLength = 0; // guard to avoid endless loop in case length() would get invoked from below.
+		final int oldPos = decompressedPosition();
+		final int inflatedUpTo = inflaterPos;
+		int inflatedMore = 0, c;
+		do {
+			outBuffer.limit(outBuffer.position()); // pretend the buffer is consumed
+			c = fillOutBuffer();
+			inflatedMore += c;
+		} while (c == outBuffer.capacity()); // once we unpacked less than capacity, input is over
+		decompressedLength = inflatedUpTo + inflatedMore;
 		reset();
 		seek(oldPos);
 		return decompressedLength;
@@ -113,8 +103,9 @@ public class InflaterDataAccess extends FilterDataAccess {
 		if (localOffset < 0 /* || localOffset >= length() */) {
 			throw new IllegalArgumentException();
 		}
-		if (localOffset >= decompressedPos) {
-			skip(localOffset - decompressedPos);
+		int currentPos = decompressedPosition();
+		if (localOffset >= currentPos) {
+			skip(localOffset - currentPos);
 		} else {
 			reset();
 			skip(localOffset);
@@ -125,57 +116,122 @@ public class InflaterDataAccess extends FilterDataAccess {
 	public void skip(final int bytesToSkip) throws IOException {
 		int bytes = bytesToSkip;
 		if (bytes < 0) {
-			bytes += decompressedPos;
+			bytes += decompressedPosition();
 			if (bytes < 0) {
-				throw new IOException(String.format("Underflow. Rewind past start of the slice. To skip:%d, decPos:%d, decLen:%d. Left:%d", bytesToSkip, decompressedPos, decompressedLength, bytes));
+				throw new IOException(String.format("Underflow. Rewind past start of the slice. To skip:%d, decPos:%d, decLen:%d. Left:%d", bytesToSkip, inflaterPos, decompressedLength, bytes));
 			}
 			reset();
 			// fall-through
 		}
 		while (!isEmpty() && bytes > 0) {
-			readByte();
-			bytes--;
+			int fromBuffer = outBuffer.remaining();
+			if (fromBuffer > 0) {
+				if (fromBuffer >= bytes) {
+					outBuffer.position(outBuffer.position() + bytes);
+					bytes = 0;
+					break;
+				} else {
+					bytes -= fromBuffer;
+					outBuffer.limit(outBuffer.position()); // mark consumed
+					// fall through to fill the buffer
+				}
+			}
+			fillOutBuffer();
 		}
 		if (bytes != 0) {
-			throw new IOException(String.format("Underflow. Rewind past end of the slice. To skip:%d, decPos:%d, decLen:%d. Left:%d", bytesToSkip, decompressedPos, decompressedLength, bytes));
+			throw new IOException(String.format("Underflow. Rewind past end of the slice. To skip:%d, decPos:%d, decLen:%d. Left:%d", bytesToSkip, inflaterPos, decompressedLength, bytes));
 		}
 	}
 
 	@Override
 	public byte readByte() throws IOException {
-		readBytes(singleByte, 0, 1);
-		return singleByte[0];
+		if (!outBuffer.hasRemaining()) {
+			fillOutBuffer();
+		}
+		return outBuffer.get();
 	}
 
 	@Override
 	public void readBytes(byte[] b, int off, int len) throws IOException {
+		do {
+			int fromBuffer = outBuffer.remaining();
+			if (fromBuffer > 0) {
+				if (fromBuffer >= len) {
+					outBuffer.get(b, off, len);
+					return;
+				} else {
+					outBuffer.get(b, off, fromBuffer);
+					off += fromBuffer;
+					len -= fromBuffer;
+					// fall-through
+				}
+			}
+			fillOutBuffer();
+		} while (len > 0);
+	}
+	
+	@Override
+	public void readBytes(ByteBuffer buf) throws IOException {
+		int len = Math.min(available(), buf.remaining());
+		while (len > 0) {
+			if (outBuffer.remaining() >= len) {
+				ByteBuffer slice = outBuffer.slice();
+				slice.limit(len);
+				buf.put(slice);
+				outBuffer.position(outBuffer.position() + len);
+				return;
+			} else { 
+				len -= outBuffer.remaining();
+				buf.put(outBuffer);
+			}
+			fillOutBuffer();
+		}
+	}
+	
+	private int decompressedPosition() {
+		assert outBuffer.remaining() <= inflaterPos; 
+		return inflaterPos - outBuffer.remaining();
+	}
+	
+	// after #fillOutBuffer(), outBuffer is ready for read
+	private int fillOutBuffer() throws IOException {
+		assert !outBuffer.hasRemaining();
 		try {
-		    int n;
-		    while (len > 0) {
-			    while ((n = inflater.inflate(b, off, len)) == 0) {
+			int inflatedBytes = 0;
+		    outBuffer.clear();
+		    int len = outBuffer.capacity();
+		    int off = 0;
+		    do {
+			    int n;
+			    while ((n = inflater.inflate(outBuffer.array(), off, len)) == 0) {
 			    	// XXX few last bytes (checksum?) may be ignored by inflater, thus inflate may return 0 in
 			    	// perfectly legal conditions (when all data already expanded, but there are still some bytes
 			    	// in the input stream)
 					int toRead = -1;
 					if (inflater.needsInput() && (toRead = super.available()) > 0) {
-						// fill:
-						if (toRead > buffer.length) {
-							toRead = buffer.length;
+						// fill
+						if (toRead > inBuffer.length) {
+							toRead = inBuffer.length;
 						}
-						super.readBytes(buffer, 0, toRead);
-						inflater.setInput(buffer, 0, toRead);
+						super.readBytes(inBuffer, 0, toRead);
+						inflater.setInput(inBuffer, 0, toRead);
 					} else {
+						// inflated nothing and doesn't want any more data (or no date available) - assume we're done 
+						assert inflater.finished();
+						assert toRead <= 0;
+						break;
 						// prevent hang up in this cycle if no more data is available, see Issue 25
-						throw new EOFException(String.format("No more compressed data is available to satisfy request for %d bytes. [finished:%b, needDict:%b, needInp:%b, available:%d", len, inflater.finished(), inflater.needsDictionary(), inflater.needsInput(), toRead));
+//						throw new EOFException(String.format("No more compressed data is available to satisfy request for %d bytes. [finished:%b, needDict:%b, needInp:%b, available:%d", len, inflater.finished(), inflater.needsDictionary(), inflater.needsInput(), toRead));
 					}
 			    }
 				off += n;
 				len -= n;
-				decompressedPos += n;
-				if (len == 0) {
-					return; // filled
-				}
-		    }
+				inflatedBytes += n;
+		    } while (len > 0 && !inflater.finished()); // either the buffer is filled or nothing more to unpack
+		    inflaterPos += inflatedBytes;
+		    outBuffer.limit(inflatedBytes);
+		    assert outBuffer.position() == 0; // didn't change since #clear() above
+		    return inflatedBytes;
 		} catch (DataFormatException e) {
 		    String s = e.getMessage();
 		    throw new ZipException(s != null ? s : "Invalid ZLIB data format");

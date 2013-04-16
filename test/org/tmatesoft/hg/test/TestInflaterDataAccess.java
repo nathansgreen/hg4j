@@ -22,6 +22,7 @@ import java.nio.ByteBuffer;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.Inflater;
 
+import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
@@ -33,7 +34,8 @@ import org.tmatesoft.hg.internal.InflaterDataAccess;
  * @author TMate Software Ltd.
  */
 public class TestInflaterDataAccess {
-	private final ErrorCollectorExt errorCollector = new ErrorCollectorExt();
+	@Rule
+	public final ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 	
 	private final byte[] testContent1 = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.".getBytes();
 	
@@ -70,13 +72,15 @@ public class TestInflaterDataAccess {
 		ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25]);
 		byte[] dummy = new byte[30];
 		ida.readBytes(dummy, 0, dummy.length);
-		int lll = ida.length();
 		errorCollector.assertEquals("#length() after readBytes()", testContent1.length, ida.length());
 		//
 		ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25]);
 		// consume most of the stream, so that all original compressed data is already read
-		ida.readBytes(ByteBuffer.allocate(testContent1.length - 1));
+		dummy = new byte[testContent1.length - 1];
+		ida.readBytes(dummy, 0, dummy.length);
 		errorCollector.assertEquals("#length() after origin was completely read", testContent1.length, ida.length());
+		//
+		errorCollector.assertFalse(ida.isEmpty()); // check InflaterDataAccess#available() positive
 	}
 
 	@Test
@@ -95,6 +99,15 @@ public class TestInflaterDataAccess {
 		ida.readBytes(chunk2, 2, 10);
 		errorCollector.assertTrue(new ByteArraySlice(testContent1, 10, 22).equalsTo(chunk1));
 		errorCollector.assertTrue(new ByteArraySlice(testContent1, 10+22+5, 12).equalsTo(chunk2));
+		int consumed = 10+22+5+12;
+		// 
+		// check that even when original content is completely unpacked, leftovers in the outBuffer are recognized   
+		ida.readBytes(ByteBuffer.allocate(testContent1.length - consumed - 2)); // unpack up to an end (almost)
+		errorCollector.assertFalse(ida.isEmpty()); // check InflaterDataAccess#available() positive
+		//
+		ByteBuffer chunk3 = ByteBuffer.allocate(10);
+		ida.readBytes(chunk3);
+		errorCollector.assertEquals(2, chunk3.flip().remaining());
 	}
 
 	private static class ByteArraySlice {
