@@ -20,26 +20,26 @@ import static org.tmatesoft.hg.core.Nodeid.NULL;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ByteVector;
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.EncodingHelper;
+import org.tmatesoft.hg.internal.IdentityPool;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
-import org.tmatesoft.hg.internal.IdentityPool;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
-import org.tmatesoft.hg.util.LogFacility.Severity;
 
 
 /**
@@ -51,7 +51,8 @@ import org.tmatesoft.hg.util.LogFacility.Severity;
  */
 public final class HgManifest extends Revlog {
 	private RevisionMapper revisionMap;
-	private EncodingHelper encodingHelper;
+	private final EncodingHelper encodingHelper;
+	private final Path.Source pathFactory; 
 	
 	/**
 	 * File flags recorded in manifest
@@ -111,11 +112,19 @@ public final class HgManifest extends Revlog {
 			}
 			throw new IllegalStateException(toString());
 		}
+		
+		public int fsMode() {
+			if (this == Exec) {
+				return 0755;
+			}
+			return 0644;
+		}
 	}
 
 	/*package-local*/ HgManifest(HgRepository hgRepo, RevlogStream content, EncodingHelper eh) {
 		super(hgRepo, content);
 		encodingHelper = eh;
+		pathFactory = hgRepo.getSessionContext().getPathFactory();
 	}
 
 	/**
@@ -446,8 +455,8 @@ public final class HgManifest extends Revlog {
 		
 		public Path freeze() {
 			if (result == null) {
-				Path.Source pathFactory = HgManifest.this.getRepo().getSessionContext().getPathFactory();
-				result = pathFactory.path(HgManifest.this.encodingHelper.fromManifest(data, start, length));
+				Path.Source pf = HgManifest.this.pathFactory;
+				result = pf.path(HgManifest.this.encodingHelper.fromManifest(data, start, length));
 				// release reference to bigger data array, make a copy of relevant part only
 				// use original bytes, not those from String above to avoid cache misses due to different encodings 
 				byte[] d = new byte[length];
@@ -689,16 +698,14 @@ public final class HgManifest extends Revlog {
 		}
 		
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
-			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			ByteVector byteVector = new ByteVector(256, 128); // allocate for long paths right away
 			try {
 				byte b;
 				while (!data.isEmpty() && (b = data.readByte()) != '\n') {
 					if (b != 0) {
-						bos.write(b);
+						byteVector.add(b);
 					} else {
-						byte[] byteArray = bos.toByteArray();
-						bos.reset();
-						if (Arrays.equals(filenameAsBytes, byteArray)) {
+						if (byteVector.equalsTo(filenameAsBytes)) {
 							Nodeid fileRev = null;
 							Flags flags = null;
 							if (csetIndex2FileRev != null || delegate != null) {
@@ -709,15 +716,15 @@ public final class HgManifest extends Revlog {
 								data.skip(40);
 							}
 							if (csetIndex2Flags != null || delegate != null) {
+								byteVector.clear();
 								while (!data.isEmpty() && (b = data.readByte()) != '\n') {
-									bos.write(b);
+									byteVector.add(b);
 								}
-								if (bos.size() == 0) {
+								if (byteVector.size() == 0) {
 									flags = Flags.RegularFile;
 								} else {
-									flags = Flags.parse(bos.toByteArray(), 0, bos.size());
+									flags = Flags.parse(byteVector.toByteArray(), 0, byteVector.size());
 								}
-								
 							}
 							if (delegate != null) {
 								assert flags != null;
@@ -741,6 +748,8 @@ public final class HgManifest extends Revlog {
 						// else skip to the end of line
 						while (!data.isEmpty() && (b = data.readByte()) != '\n')
 							;
+
+						byteVector.clear();
 					}
 				}
 			} catch (IOException ex) {

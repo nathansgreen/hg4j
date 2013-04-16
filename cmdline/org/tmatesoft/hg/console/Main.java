@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.tmatesoft.hg.core.HgChangeset;
+import org.tmatesoft.hg.core.HgChangesetFileSneaker;
 import org.tmatesoft.hg.core.HgChangesetTreeHandler;
 import org.tmatesoft.hg.core.HgCheckoutCommand;
 import org.tmatesoft.hg.core.HgException;
@@ -42,6 +43,7 @@ import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.PathGlobMatcher;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.internal.StreamLogFacility;
@@ -100,7 +102,8 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.testRevert();
+		m.checkFileSneakerPerformance2();
+//		m.testRevert();
 //		m.testCheckout();
 //		m.tryExtensions();
 //		m.dumpBookmarks();
@@ -126,6 +129,45 @@ public class Main {
 //		m.dumpCompleteManifestHigh();
 //		m.bunchOfTests();
 	}
+	
+	private void checkFileSneakerPerformance() throws Exception {
+		HgChangesetFileSneaker fs1 = new HgChangesetFileSneaker(hgRepo);
+		HgChangesetFileSneaker fs2 = new HgChangesetFileSneaker(hgRepo);
+		fs1.followRenames(true);
+		fs2.followRenames(true);
+		Nodeid cset = hgRepo.getChangelog().getRevision(TIP);
+		Path fname = Path.create("dir3/file8");
+		fs1.changeset(cset);
+		fs2.changeset(cset);
+//		hgRepo.getManifest().getFileRevision(TIP, fname);
+		final long start1 = System.nanoTime();
+		boolean e1 = fs1.checkExists(fname);
+		final long end1 = System.nanoTime();
+		boolean e2 = fs2.checkExists(fname);
+		final long end2 = System.nanoTime();
+		Nodeid fr = hgRepo.getManifest().getFileRevision(TIP, fname);
+		final long end3 = System.nanoTime();
+		System.out.printf("\t1st run: %d ms, %b\n\t2nd run: %d ms, %b\n\tfile only: %d ms", (end1 - start1) / 1000000, e1, (end2 - end1) / 1000000, e2, (end3-end2)/1000000);
+		if (!fr.equals(fs1.revision()) || !fr.equals(fs2.revision())) {
+			throw new AssertionError();
+		}
+		ManifestRevision mr = new ManifestRevision(null, null);
+		final long _s1 = System.nanoTime();
+		hgRepo.getManifest().walk(2, 2, mr);
+		final long _e1 = System.nanoTime();
+		hgRepo.getManifest().getFileRevision(2, fname);
+		final long _e2 = System.nanoTime();
+		System.out.printf("\n\tManifestRevision:%d ms, getFileRevision:%d ms\n", (_e1-_s1)/1000000, (_e2-_e1)/1000000);
+	}
+	
+	//  -agentlib:hprof=cpu=times,heap=sites,depth=10
+	private void checkFileSneakerPerformance2() throws Exception {
+		Path fname = Path.create("dir3/file8");
+		hgRepo.getManifest().getFileRevision(2, fname);
+//		ManifestRevision mr = new ManifestRevision(null, null);
+//		hgRepo.getManifest().walk(2, 2, mr);
+	}
+	
 	
 	private void testRevert() throws Exception {
 		HgRevertCommand cmd = new HgRevertCommand(hgRepo);

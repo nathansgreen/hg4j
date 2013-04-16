@@ -142,7 +142,7 @@ public class IntVector {
 		if (increment == 0) {
 			throw new UnsupportedOperationException("This vector is not allowed to expand");
 		}
-		int newCapacity = increment < 0 ? data.length << 1 : data.length + increment;
+		int newCapacity = increment < 0 ? data.length << 1 : (data.length + increment);
 		if (newCapacityHint > 0 && newCapacity < newCapacityHint) {
 			newCapacity = newCapacityHint;
 		}

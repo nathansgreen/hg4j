@@ -31,6 +31,7 @@ import org.junit.Test;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
+import org.tmatesoft.hg.internal.ByteVector;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.PathScope;
 import org.tmatesoft.hg.internal.RangeSeq;
@@ -543,8 +544,41 @@ public class TestAuxUtilities {
 		errorCollector.assertFalse(rs.includesTargetLine(12));
 	}
 	
+	@Test
+	public void testByteVector() {
+		ByteVector v = new ByteVector(4, 2);
+		v.add(7);
+		v.add(9);
+		errorCollector.assertEquals(2, v.size());
+		v.clear();
+		errorCollector.assertEquals(0, v.size());
+		v.add(10);
+		v.add(9);
+		v.add(8);
+		v.add(7);
+		v.add(6);
+		errorCollector.assertEquals(5, v.size());
+		v.add(5);
+		v.add(4);
+		errorCollector.assertEquals(7, v.size());
+		byte x = 10;
+		for (byte d : v.toByteArray()) {
+			errorCollector.assertEquals(x, d);
+			x--;
+		}
+		x = 10;
+		byte[] dd = new byte[10];
+		v.copyTo(dd);
+		for (int i = 0; i < v.size(); i++) {
+			errorCollector.assertEquals(x, dd[i]);
+			x--;
+		}
+		errorCollector.assertTrue(v.equalsTo(new byte[] { 10,9,8,7,6,5,4 }));
+	}
 	
-	public static void main(String[] args) throws Exception {
-		new TestAuxUtilities().testRepositoryConfig();
+	public static void main(String[] args) throws Throwable {
+		TestAuxUtilities t = new TestAuxUtilities();
+		t.testByteVector();
+		t.errorCollector.verify();
 	}
 }
