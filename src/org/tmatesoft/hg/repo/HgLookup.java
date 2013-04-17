@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@ import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.repo.HgRepoConfig.PathsSection;
 
 /**
@@ -57,7 +58,13 @@ public class HgLookup {
 		return detect(new File(location));
 	}
 
-	// look up in specified location and above
+	/**
+	 * Look up repository in specified location and above
+	 * 
+	 * @param location where to look for .hg directory, never <code>null</code>
+	 * @return repository object, never <code>null</code>
+	 * @throws HgRepositoryNotFoundException if no repository found, or repository version is not supported
+	 */
 	public HgRepository detect(File location) throws HgRepositoryNotFoundException {
 		File dir = location.getAbsoluteFile();
 		File repository;
@@ -74,7 +81,12 @@ public class HgLookup {
 			throw new HgRepositoryNotFoundException(String.format("Can't locate .hg/ directory of Mercurial repository in %s nor in parent dirs", location)).setLocation(location.getPath());
 		}
 		String repoPath = repository.getParentFile().getAbsolutePath();
-		return new HgRepository(getContext(), repoPath, repository);
+		HgRepository rv = new HgRepository(getContext(), repoPath, repository);
+		int requiresFlags = rv.getImplHelper().getRequiresFlags();
+		if ((requiresFlags & RequiresFile.REVLOGV1) == 0) {
+			throw new HgRepositoryNotFoundException(String.format("%s: repository version is not supported (Mercurial <0.9?)", repoPath)).setLocation(location.getPath());
+		}
+		return rv;
 	}
 	
 	public HgBundle loadBundle(File location) throws HgRepositoryNotFoundException {
