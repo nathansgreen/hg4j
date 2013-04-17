@@ -324,6 +324,10 @@ public final class HgRepository implements SessionContext.Source {
 	}
 
 	
+	/**
+	 * Repository-specific configuration.
+	 * @return access to configuration options, never <code>null</code>
+	 */
 	public HgRepoConfig getConfiguration() /* XXX throws HgInvalidControlFileException? Description of the exception suggests it is only for files under ./hg/*/ {
 		if (repoConfig == null) {
 			try {

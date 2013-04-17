@@ -293,10 +293,11 @@ public final class Internals implements SessionContext.Source {
 	}
 	
 	/**
+	 * User-specific configuration, from system-wide and user home locations, without any repository-specific data.
+	 * 
 	 * @see http://www.selenic.com/mercurial/hgrc.5.html
 	 */
-	public ConfigFile readConfiguration() throws IOException {
-		SessionContext sessionCtx = repo.getSessionContext();
+	public static ConfigFile readConfiguration(SessionContext sessionCtx) throws IOException {
 		ConfigFile configFile = new ConfigFile(sessionCtx);
 		File hgInstallRoot = findHgInstallRoot(sessionCtx); // may be null
 		//
@@ -335,11 +336,21 @@ public final class Internals implements SessionContext.Source {
 			configFile.addLocation(new File("/etc/mercurial/hgrc"));
 			configFile.addLocation(new File(System.getenv("HOME"), ".hgrc"));
 		}
+		return configFile;
+	}
+
+	/**
+	 * Repository-specific configuration
+	 * @see http://www.selenic.com/mercurial/hgrc.5.html
+	 */
+	public ConfigFile readConfiguration() throws IOException {
+		ConfigFile configFile = readConfiguration(repo.getSessionContext());
 		// last one, overrides anything else
 		// <repo>/.hg/hgrc
 		configFile.addLocation(getFileFromRepoDir("hgrc"));
 		return configFile;
 	}
+
 	
 	private static List<File> getWindowsConfigFilesPerInstall(File hgInstallDir) {
 		File f = new File(hgInstallDir, "Mercurial.ini");

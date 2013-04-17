@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,12 +26,17 @@ import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.util.Pair;
 
 /**
- * Repository-specific configuration. 
+ * Repository configuration. 
  * 
+ * @see http://www.selenic.com/mercurial/hgrc.5.html
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 public final class HgRepoConfig /*implements RepoChangeListener, perhaps, also RepoChangeNotifier? */{
+	// TODO [1.2+] The name HgRepoConfig is unfortunate, we could've used this class not only for 
+	// repository configuration but system-wide/global configuration, or user configuration (without repo), too.
+	// Perhaps, rename and deprecate?
+	
 	/*ease access for inner classes*/ final ConfigFile config;
 
 	/*package-local*/HgRepoConfig(ConfigFile configFile) {
