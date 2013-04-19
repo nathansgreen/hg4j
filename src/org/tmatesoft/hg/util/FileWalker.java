@@ -41,6 +41,8 @@ public class FileWalker implements FileIterator {
 	private RegularFileInfo nextFile;
 	private Path nextPath;
 
+	// TODO FileWalker to accept SessionContext.Source and SessionContext to implement SessionContext.Source
+	// (if it doesn't break binary compatibility)
 	public FileWalker(SessionContext ctx, File dir, Path.Source pathFactory) {
 		this(ctx, dir, pathFactory, null);
 	}

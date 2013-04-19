@@ -30,6 +30,8 @@ import org.tmatesoft.hg.core.HgCheckoutCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.FileInfo;
+import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
@@ -114,6 +116,36 @@ public class TestCheckout {
 		errorCollector.assertTrue(statusOutputParser.getClean().contains(Path.create("c")));
 		
 		errorCollector.assertEquals("test", repo.getWorkingCopyBranchName());
+	}
+	
+	@Test
+	public void testCheckoutLinkAndExec() throws Exception {
+		File testRepoLoc = cloneRepoToTempLocation("test-flags", "test-checkout-flags", true);
+		repo = new HgLookup().detect(testRepoLoc);
+		new HgCheckoutCommand(repo).clean(true).changeset(0).execute();
+		
+		FileWalker fw = new FileWalker(repo.getSessionContext(), testRepoLoc, new Path.SimpleSource());
+		int execFound, linkFound, regularFound;
+		execFound = linkFound = regularFound = 0;
+		while(fw.hasNext()) {
+			fw.next();
+			FileInfo fi = fw.file();
+			boolean executable = fi.isExecutable();
+			boolean symlink = fi.isSymlink();
+			if (executable) {
+				execFound++;
+			}
+			if (symlink) {
+				linkFound++;
+			}
+			if (!executable && !symlink) {
+				regularFound++;
+			}
+		}
+		// TODO alter expected values to pass on Windows 
+		errorCollector.assertEquals("Executable files", 1, execFound);
+		errorCollector.assertEquals("Symlink files", 1, linkFound);
+		errorCollector.assertEquals("Regular files", 1, regularFound);
 	}
 
 	private static final class FilesOnlyFilter implements FileFilter {

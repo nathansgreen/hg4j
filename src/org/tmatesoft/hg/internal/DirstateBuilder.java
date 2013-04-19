@@ -62,17 +62,7 @@ public class DirstateBuilder {
 		parent2 = p2 == null ? Nodeid.NULL : p2;
 	}
 	
-	public void recordNormal(Path fname, Flags flags, int bytesWritten) {
-		// Mercurial seems to write "n   0  -1   unset fname" on `hg --clean co -rev <earlier rev>`
-		// and the reason for 'force lookup' I suspect is a slight chance of simultaneous modification
-		// of the file by user that doesn't alter its size the very second dirstate is being written
-		// (or the file is being updated and the update brought in changes that didn't alter the file size - 
-		// with size and timestamp set, later `hg status` won't notice these changes)
-		
-		// However, as long as we use this class to write clean copies of the files, we can put all the fields
-		// right away.
-		int fmode = flags == Flags.RegularFile ? 0666 : 0777; // FIXME actual unix flags
-		int mtime = (int) (System.currentTimeMillis() / 1000);
+	public void recordNormal(Path fname, int fmode, int mtime, int bytesWritten) {
 		forget(fname);
 		normal.put(fname, new HgDirstate.Record(fmode, bytesWritten, mtime, fname, null));
 	}

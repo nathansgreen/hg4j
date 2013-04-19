@@ -135,8 +135,19 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 				
 				public boolean next(Nodeid nid, Path fname, Flags flags) {
 					if (worker.next(nid, fname, flags)) {
-						// new dirstate based on manifest
-						dirstateBuilder.recordNormal(fname, flags, worker.getLastWrittenFileSize());
+						// Mercurial seems to write "n   0  -1   unset fname" on `hg --clean co -rev <earlier rev>`
+						// and the reason for 'force lookup' I suspect is a slight chance of simultaneous modification
+						// of the file by user that doesn't alter its size the very second dirstate is being written
+						// (or the file is being updated and the update brought in changes that didn't alter the file size - 
+						// with size and timestamp set, later `hg status` won't notice these changes)
+						
+						// However, as long as we use this class to write clean copies of the files, we can put all the fields
+						// right away.
+						int mtime = worker.getLastFileModificationTime();
+						// Manifest flags are chars (despite octal values `hg manifest --debug` displays),
+						// while dirstate keeps actual unix flags.
+						int fmode = worker.getLastFileMode();
+						dirstateBuilder.recordNormal(fname, fmode, mtime, worker.getLastFileSize());
 						return true;
 					}
 					return false;
@@ -185,6 +196,8 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 		private final Internals hgRepo;
 		private HgException failure;
 		private int lastWrittenFileSize;
+		private int lastFileMode;
+		private int lastFileModificationTime;
 		
 		CheckoutWorker(Internals implRepo) {
 			hgRepo = implRepo;
@@ -196,10 +209,11 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 				HgDataFile df = hgRepo.getRepo().getFileNode(fname);
 				int fileRevIndex = df.getRevisionIndex(nid);
 				// check out files based on manifest
-				// FIXME links!
 				workingDirWriter = new WorkingDirFileWriter(hgRepo);
-				workingDirWriter.processFile(df, fileRevIndex);
+				workingDirWriter.processFile(df, fileRevIndex, flags);
 				lastWrittenFileSize = workingDirWriter.bytesWritten();
+				lastFileMode = workingDirWriter.fmode();
+				lastFileModificationTime = workingDirWriter.mtime();
 				return true;
 			} catch (IOException ex) {
 				failure = new HgIOException("Failed to write down file revision", ex, workingDirWriter.getDestinationFile());
@@ -209,7 +223,15 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 			return false;
 		}
 		
-		public int getLastWrittenFileSize() {
+		public int getLastFileMode() {
+			return lastFileMode;
+		}
+		
+		public int getLastFileModificationTime() {
+			return lastFileModificationTime;
+		}
+		
+		public int getLastFileSize() {
 			return lastWrittenFileSize;
 		}
 		

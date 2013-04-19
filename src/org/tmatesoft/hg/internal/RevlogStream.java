@@ -67,7 +67,7 @@ public class RevlogStream {
 	}
 
 	/*package*/ DataAccess getIndexStream() {
-		// FIXME post 1.0 must supply a hint that I'll need really few bytes of data (perhaps, at some offset) 
+		// FIXME [1.1] must supply a hint that I'll need really few bytes of data (perhaps, at some offset) 
 		// to avoid mmap files when only few bytes are to be read (i.e. #dataLength())
 		return dataAccess.createReader(indexFile);
 	}
