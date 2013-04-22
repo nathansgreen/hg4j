@@ -23,6 +23,7 @@ import static org.tmatesoft.hg.repo.HgRepository.*;
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
 
+import org.tmatesoft.hg.internal.AdapterPlug;
 import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -30,6 +31,7 @@ import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgStatusInspector;
 import org.tmatesoft.hg.repo.HgWorkingCopyStatusCollector;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
@@ -196,9 +198,6 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 					sc.walk(startRevision, endRevision, mediator);
 				}
 			}
-		} catch (CancelledException ex) {
-			// this is our exception, thrown from Mediator.
-			// next check shall throw original cause of the stop - either HgCallbackTargetException or original CancelledException
 			mediator.checkFailure();
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
@@ -207,7 +206,7 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		}
 	}
 
-	private class Mediator implements HgStatusInspector, CancelSupport {
+	private class Mediator extends AdapterPlug implements HgStatusInspector, Adaptable {
 		boolean needModified;
 		boolean needAdded;
 		boolean needRemoved;
@@ -218,63 +217,43 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		boolean needCopies;
 		HgStatusHandler handler;
 		private ChangelogHelper logHelper;
-		private CancelSupport handlerCancelSupport;
 		private HgCallbackTargetException failure;
-		private CancelledException cancellation;
 
 		Mediator() {
 		}
 		
 		public void start(HgStatusHandler h, CancelSupport hcs, ChangelogHelper changelogHelper) {
 			handler = h;
-			handlerCancelSupport = hcs;
+			super.attachAdapter(CancelSupport.class, hcs);
 			logHelper = changelogHelper;
 		}
 
 		public void done() {
 			handler = null;
-			handlerCancelSupport = null;
+			super.detachAdapter(CancelSupport.class);
 			logHelper = null;
 			failure = null;
-			cancellation = null;
 		}
 		
 		public boolean busy() {
 			return handler != null;
 		}
 
-		// XXX copy from ChangesetTransformer. Perhaps, can share the code?
-		public void checkFailure() throws HgCallbackTargetException, CancelledException {
+		// XXX similar code in ChangesetTransformer
+		public void checkFailure() throws HgCallbackTargetException {
 			// do not forget to clear exceptions for reuse of this instance 
 			if (failure != null) {
 				HgCallbackTargetException toThrow = failure;
 				failure = null; 
 				throw toThrow;
 			}
-			if (cancellation != null) {
-				CancelledException toThrow = cancellation;
-				cancellation = null;
-				throw toThrow;
-			}
-		}
-
-		// XXX copy from ChangesetTransformer. code sharing note above applies
-		public void checkCancelled() throws CancelledException {
-			if (failure != null || cancellation != null) {
-				// stop status iteration. Our exception is for the purposes of cancellation only,
-				// the one we have stored (this.cancellation) is for user
-				throw new CancelledException(); 
-			}
 		}
 
 		private void dispatch(HgStatus s) {
 			try {
 				handler.status(s);
-				handlerCancelSupport.checkCancelled();
 			} catch (HgCallbackTargetException ex) {
 				failure = ex;
-			} catch (CancelledException ex) {
-				cancellation = ex;
 			}
 		}
 
@@ -323,11 +302,8 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		public void invalid(Path fname, Exception err) {
 			try {
 				handler.error(fname, new Outcome(Outcome.Kind.Failure, "Failed to get file status", err));
-				handlerCancelSupport.checkCancelled();
 			} catch (HgCallbackTargetException ex) {
 				failure = ex;
-			} catch (CancelledException ex) {
-				cancellation = ex;
 			}
 		}
 	}

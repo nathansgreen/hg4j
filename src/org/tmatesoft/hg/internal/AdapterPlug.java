@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +36,11 @@ public class AdapterPlug implements Adaptable {
 	
 	public <T> void attachAdapter(Class<T> adapterClass, T instance) {
 		adapters.put(adapterClass, instance);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T> T detachAdapter(Class<T> adapterClass) {
+		return (T) adapters.remove(adapterClass);
 	}
 
 	public <T> T getAdapter(Class<T> adapterClass) {

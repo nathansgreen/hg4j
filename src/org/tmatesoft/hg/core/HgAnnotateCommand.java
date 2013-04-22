@@ -108,11 +108,13 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 			return;
 		}
 		final int changesetStart = followRename ? 0 : df.getChangesetRevisionIndex(0);
-		Collector c = new Collector();
+		Collector c = new Collector(cancellation);
 		FileAnnotation fa = new FileAnnotation(c);
 		HgBlameFacility af = new HgBlameFacility(df);
 		af.annotate(changesetStart, annotateRevision.get(), fa, HgIterateDirection.NewToOld);
 		progress.worked(1);
+		c.throwIfCancelled();
+		cancellation.checkCancelled();
 		ProgressSupport.Sub subProgress = new ProgressSupport.Sub(progress, 1);
 		LineImpl li = new LineImpl();
 		for (int i = 0; i < c.lineRevisions.length; i++) {
@@ -150,11 +152,17 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 	private static class Collector implements LineInspector {
 		private int[] lineRevisions;
 		private byte[][] lines;
+		private final CancelSupport cancelSupport;
+		private CancelledException cancelEx;
 		
-		Collector() {
+		Collector(CancelSupport cancellation) {
+			cancelSupport = cancellation;
 		}
 		
 		public void line(int lineNumber, int changesetRevIndex, BlockData lineContent, LineDescriptor ld) {
+			if (cancelEx != null) {
+				return;
+			}
 			if (lineRevisions == null) {
 				lineRevisions = new int [ld.totalLines()];
 				Arrays.fill(lineRevisions, NO_REVISION);
@@ -162,10 +170,21 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 			}
 			lineRevisions[lineNumber] = changesetRevIndex;
 			lines[lineNumber] = lineContent.asArray();
+			try {
+				cancelSupport.checkCancelled();
+			} catch (CancelledException ex) {
+				cancelEx = ex;
+			}
 		}
 		
 		public byte[] line(int i) {
 			return lines[i];
+		}
+		
+		public void throwIfCancelled() throws CancelledException {
+			if (cancelEx != null) {
+				throw cancelEx;
+			}
 		}
 	}
 	
