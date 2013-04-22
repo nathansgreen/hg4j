@@ -25,7 +25,10 @@ import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * WORK IN PROGRESS
@@ -94,20 +97,33 @@ public class HgAddRemoveCommand extends HgAbstractCommand<HgAddRemoveCommand> {
 	/**
 	 * Perform scheduled addition/removal
 	 * 
-	 * @throws HgException
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 * @throws CancelledException if execution of the command was cancelled
 	 */
-	public void execute() throws HgException {
+	public void execute() throws HgException, CancelledException {
 		try {
+			final ProgressSupport progress = getProgressSupport(null);
+			final CancelSupport cancellation = getCancelSupport(null, true);
+			cancellation.checkCancelled();
+			progress.start(2 + toAdd.size() + toRemove.size());
 			Internals implRepo = Internals.getInstance(repo);
 			final DirstateBuilder dirstateBuilder = new DirstateBuilder(implRepo);
 			dirstateBuilder.fillFrom(new DirstateReader(implRepo, new Path.SimpleSource()));
+			progress.worked(1);
+			cancellation.checkCancelled();
 			for (Path p : toAdd) {
 				dirstateBuilder.recordAdded(p, Flags.RegularFile, -1);
+				progress.worked(1);
+				cancellation.checkCancelled();
 			}
 			for (Path p : toRemove) {
 				dirstateBuilder.recordRemoved(p);
+				progress.worked(1);
+				cancellation.checkCancelled();
 			}
 			dirstateBuilder.serialize();
+			progress.worked(1);
+			progress.done();
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
 		}

@@ -30,8 +30,10 @@ import org.tmatesoft.hg.repo.HgBlameFacility.BlockData;
 import org.tmatesoft.hg.repo.HgBlameFacility;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * WORK IN PROGRESS. UNSTABLE API
@@ -97,6 +99,10 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		if (file == null) {
 			throw new HgBadArgumentException("Command needs file argument", null);
 		}
+		final ProgressSupport progress = getProgressSupport(inspector);
+		final CancelSupport cancellation = getCancelSupport(inspector, true);
+		cancellation.checkCancelled();
+		progress.start(2);
 		HgDataFile df = repo.getFileNode(file);
 		if (!df.exists()) {
 			return;
@@ -106,11 +112,17 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		FileAnnotation fa = new FileAnnotation(c);
 		HgBlameFacility af = new HgBlameFacility(df);
 		af.annotate(changesetStart, annotateRevision.get(), fa, HgIterateDirection.NewToOld);
+		progress.worked(1);
+		ProgressSupport.Sub subProgress = new ProgressSupport.Sub(progress, 1);
 		LineImpl li = new LineImpl();
 		for (int i = 0; i < c.lineRevisions.length; i++) {
 			li.init(i+1, c.lineRevisions[i], c.line(i));
 			inspector.next(li);
+			subProgress.worked(1);
+			cancellation.checkCancelled();
 		}
+		subProgress.done();
+		progress.done();
 	}
 	
 	/**

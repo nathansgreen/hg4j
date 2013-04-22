@@ -40,8 +40,10 @@ import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * WORK IN PROGRESS.
@@ -103,13 +105,18 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 	}
 
 	/**
+	 * Update working copy to match state of the selected revision.
 	 * 
 	 * @throws HgIOException to indicate troubles updating files in working copy
-	 * @throws HgException
-	 * @throws CancelledException
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 * @throws CancelledException if execution of the command was cancelled
 	 */
 	public void execute() throws HgException, CancelledException {
 		try {
+			final ProgressSupport progress = getProgressSupport(null);
+			final CancelSupport cancellation = getCancelSupport(null, true);
+			cancellation.checkCancelled();
+			progress.start(6);
 			Internals internalRepo = Internals.getInstance(repo);
 			if (cleanCheckout) {
 				// remove tracked files from wd (perhaps, just forget 'Added'?)
@@ -129,6 +136,8 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 			} else {
 				throw new HgBadArgumentException("Sorry, only clean checkout is supported now, use #clean(true)", null);
 			}
+			progress.worked(1);
+			cancellation.checkCancelled();
 			final DirstateBuilder dirstateBuilder = new DirstateBuilder(internalRepo);
 			final CheckoutWorker worker = new CheckoutWorker(internalRepo);
 			HgManifest.Inspector insp = new HgManifest.Inspector() {
@@ -166,6 +175,8 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 			dirstateBuilder.parents(repo.getChangelog().getRevision(coRevision), null);
 			repo.getManifest().walk(coRevision, coRevision, insp);
 			worker.checkFailed();
+			progress.worked(3);
+			cancellation.checkCancelled();
 			File dirstateFile = internalRepo.getRepositoryFile(Dirstate);
 			try {
 				FileChannel dirstateFileChannel = new FileOutputStream(dirstateFile).getChannel();
@@ -174,10 +185,17 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 			} catch (IOException ex) {
 				throw new HgIOException("Can't write down new directory state", ex, dirstateFile);
 			}
+			progress.worked(1);
+			cancellation.checkCancelled();
 			String branchName = repo.getChangelog().range(coRevision, coRevision).get(0).branch();
 			assert branchName != null;
-			if (!HgRepository.DEFAULT_BRANCH_NAME.equals(branchName)) {
-				File branchFile = internalRepo.getRepositoryFile(Branch);
+			File branchFile = internalRepo.getRepositoryFile(Branch);
+			if (HgRepository.DEFAULT_BRANCH_NAME.equals(branchName)) {
+				// clean actual branch, if any
+				if (branchFile.isFile()) {
+					branchFile.delete();
+				}
+			} else {
 				try {
 					// branch file is UTF-8, see http://mercurial.selenic.com/wiki/EncodingStrategy#UTF-8_strings
 					OutputStreamWriter ow = new OutputStreamWriter(new FileOutputStream(branchFile), EncodingHelper.getUTF8());
@@ -187,6 +205,8 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 					throw new HgIOException("Can't write down branch information", ex, branchFile);
 				}
 			}
+			progress.worked(1);
+			progress.done();
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
 		}
