@@ -86,7 +86,7 @@ public final class Patch {
 	}
 
 	// number of bytes this patch will add (or remove, if negative) from the base revision
-	private int patchSizeDelta() {
+	public int patchSizeDelta() {
 		int rv = 0;
 		int prevEnd = 0;
 		for (int i = 0, x = data.size(); i < x; i++) {
@@ -182,13 +182,19 @@ public final class Patch {
 	}
 
 	/*package-local*/ void add(int start, int end, byte[] d) {
+		// FIXME if start == end(-1), merge data
+		if (start == end && d.length == 0) {
+			System.currentTimeMillis();
+			return;
+		}
 		starts.add(start);
 		ends.add(end);
 		data.add(d);
 	}
 	
+	// copies [start..end) bytes from the d
 	private static byte[] subarray(byte[] d, int start, int end) {
-		byte[] r = new byte[end-start+1];
+		byte[] r = new byte[end-start];
 		System.arraycopy(d, start, r, 0, r.length);
 		return r;
 	}
@@ -196,7 +202,7 @@ public final class Patch {
 	/**
 	 * Modify this patch with subsequent patch 
 	 */
-	private /*SHALL BE PUBLIC ONCE TESTING ENDS*/ Patch apply(Patch another) {
+	public /*SHALL BE PUBLIC ONCE TESTING ENDS*/ Patch apply(Patch another) {
 		Patch r = new Patch();
 		int p1TotalAppliedDelta = 0; // value to add to start and end indexes of the older patch to get their values as if
 		// in the patched text, iow, directly comparable with respective indexes from the newer patch.
@@ -211,10 +217,10 @@ L0:		for (; p2 < p2Max; p2++) {
 			final int p2EntryRange = p2EntryEnd - p2EntryStart;
 			final byte[] p2Data = another.data.get(p2);
 			boolean insideP2entry = false;
-			int p2EntryStartOffset = -1;
+			// when we iterate p1 elements within single p2, we need to remember where p2
+			// shall ultimately start in terms of p1
+			int p2EntrySavedStart = -1;
 			///
-			p1EntryStart = p1EntryEnd = p1EntryLen = 0;
-			p1Data = null;
 			
 L1:			while (p1 < p1Max) {
 				if (!insideP1entry) {
@@ -229,8 +235,8 @@ L1:			while (p1 < p1Max) {
 				final int p1EntryAppliedEnd = p1EntryAppliedStart + p1EntryLen; // end of j'th patch entry in the text which is source for p2
 				
 				if (insideP2entry) {
-					if (p2EntryEnd < p1EntryAppliedStart) {
-						r.add(p2EntryStart - p2EntryStartOffset, p2EntryEnd - p1TotalAppliedDelta, p2Data);
+					if (p2EntryEnd <= p1EntryAppliedStart) {
+						r.add(p2EntrySavedStart, p2EntryEnd - p1TotalAppliedDelta, p2Data);
 						insideP2entry = false;
 						continue L0; 
 					}
@@ -242,17 +248,18 @@ L1:			while (p1 < p1Max) {
 						p1TotalAppliedDelta += p1EntryDelta;
 						continue L1;
 					}
-					// p1EntryAppliedStart <= p2EntryEnd < p1EntryAppliedEnd
-					r.add(p2EntryStart - p2EntryStartOffset, p2EntryEnd - p1TotalAppliedDelta, p2Data);
-					p1EntryStart = p2EntryEnd - p1TotalAppliedDelta;
-					final int p1DataPartShift = p2EntryEnd - p1EntryAppliedStart + 1;
-					if (p1DataPartShift >= p1EntryLen) {
-						p1EntryLen = 0;
-						p1Data = new byte[0];
-					} else {
-						p1EntryLen -= p1DataPartShift;
-						p1Data = subarray(p1Data, p1DataPartShift, p1Data.length);
-					}
+					// p1EntryAppliedStart < p2EntryEnd < p1EntryAppliedEnd
+					// can add up to p1EntryEnd here (not only to p1EntryStart), but decided
+					// to leave p1 intact here, to avoid delta/range recalculation 
+					r.add(p2EntrySavedStart, p1EntryStart, p2Data);
+					// consume part of p1 overlapped by current p2
+					final int p1DataPartShift = p2EntryEnd - p1EntryAppliedStart;
+					// p2EntryEnd < p1EntryAppliedEnd		==> p2EntryEnd < p1EntryAppliedStart + p1EntryLen
+					//										==> p2EntryEnd - p1EntryAppliedStart < p1EntryLen
+					assert p1DataPartShift < p1EntryLen;
+					p1EntryLen -= p1DataPartShift;
+					p1Data = subarray(p1Data, p1DataPartShift, p1Data.length);
+					p1TotalAppliedDelta += p1DataPartShift;
 					insideP1entry = true;
 					insideP2entry = false;
 					continue L0;
@@ -265,63 +272,40 @@ L1:			while (p1 < p1Max) {
 						insideP1entry = false;
 						p1++;
 						// fall-through to get p1TotalAppliedDelta incremented
-					} else { // SKETCH: II or III
+					} else { // SKETCH: II or III - p2 start inside p1 range
 						// remember, p1EntryDelta may be negative
 						// shall break j'th entry into few 
 						// fix p1's end/length
-						// p1EntryAppliedStart < p2EntryStart < p1EntryAppliedEnd
-						int s = p2EntryStart - p1TotalAppliedDelta; // p2EntryStart in p1 scale. Is within p1 range
-						if (s > p1EntryEnd) {
-							s = p1EntryEnd;
-						}
-						int p1DataPartEnd = p2EntryStart - p1EntryAppliedStart; // index, not count. <= (p1EntryEnd-p1EntryStart).
-						// add what left from p1
-						if (p1DataPartEnd < p1EntryLen) {
-							r.add(p1EntryStart, s, subarray(p1Data, 0, p1DataPartEnd)); 
-						} else {
-							p1DataPartEnd = p1EntryLen-1; // record factual number of p1 bytes we consumed.
-							r.add(p1EntryStart, s, p1Data);
-						}
-						p1TotalAppliedDelta += p1DataPartEnd - (s - p1EntryStart); // (s2 - (s1+delta)) - (s2 - delta - s1) = s2-s1-delta-s2+delta+s1 = 0, unless p1DataPartEnd >= p1Data.length
-						p1EntryLen -= (p1DataPartEnd+1); 
-						if (p2EntryEnd < p1EntryAppliedEnd) {
-							// SKETCH: III
+						// p1EntryAppliedStart < p2EntryStart < p1EntryAppliedEnd, or, alternatively
+						// p2EntryStart is from (p1EntryAppliedStart .. p1EntryAppliedStart + p1EntryLen)
+						int p1DataPartEnd = p2EntryStart - p1EntryAppliedStart;
+						assert p1DataPartEnd < p1EntryLen;
+						r.add(p1EntryStart, p1EntryEnd, subarray(p1Data, 0, p1DataPartEnd));
+						if (p2EntryEnd <= p1EntryAppliedEnd) { // p2 fits completely into p1
+							r.add(p1EntryEnd, p1EntryEnd, p2Data);
+							// p2 consumed, p1 has p1EntryLen - p1DataPartEnd - p2EntryRange bytes left to *insert*
 							insideP1entry = true;
-							// p2 completely fits into changes of p1
-							int e = p2EntryEnd - p1TotalAppliedDelta; // p2EntryEnd in p1 scale
-							if (e > p1EntryEnd) {
-								// any index past p1 end shall be calculated with respect to p1 end, thus it's unsafe to go past p1 end (there may be more p1 entries there)   
-								e = p1EntryEnd;
-							}
-							r.add(s, e, p2Data); // add p2
-							// modify p1 leftover
-							p1EntryStart = e;
-							if (p2EntryRange >= p1EntryLen) {
-								p1EntryLen = 0;
-								p1Data = new byte[0];
-							} else {
-								p1Data = subarray(p1Data, p1DataPartEnd + p2EntryRange, p1Data.length-1 /*up to the last one*/);
-								p1EntryLen -= p2EntryRange;
-							}
-							// p2 is handled, but there are leftovers of p1
+							p1EntryStart = p1EntryEnd;
+							p1EntryLen -= p1DataPartEnd;
+							p1EntryLen -= p2EntryRange;
+							// p2EntryEnd <= p1EntryAppliedEnd						==> p2EntryEnd <= p1EntryAppliedStart + p1EntryLen
+							// -p2EntryStart    									==> p2EntryRange <= p1EntryAppliedStart-p2EntryStart + p1EntryLen
+							// p1EntryAppliedStart-p2EntryStart = -p1DataPartEnd	==> p2EntryRange <= p1EntryLen - p1DataEndPart
+							//	+p1DataEndPart										==> p2EntryRange + p1DataEndPart <= p1EntryLen
+							assert p1EntryLen >= 0;
+							// p1EntryLen==0 with insideP1entry == true is nor really good here (gives empty patch elements x;x;0), 
+							// however changing <= to < in p2EntryEnd <= p1EntryAppliedEnd above leads to errors
+							p1Data = subarray(p1Data, p1DataPartEnd+p2EntryRange, p1Data.length);
+							// augment total delta with p1EntryDelta part already consumed (p1EntryLen is pure insertion left for the next step) 
+							p1TotalAppliedDelta += (p1EntryDelta - p1EntryLen);
 							continue L0;
-						} else { // p2EntryEnd >= p1EntryAppliedEnd
-							// SKETCH: II
+						} else {
+							// p1 is consumed, take next
 							insideP1entry = false;
 							p1++;
-							if (p1EntryAppliedStart + p1EntryDelta >= p2EntryEnd) {
-								// here we know next p1 entry would be past p2 entry and thus can put p2 right away
-								r.add(p2EntryStart - p1TotalAppliedDelta, p1EntryEnd, p2Data);
-								p1TotalAppliedDelta += p1EntryDelta;
-								continue L0;
-							} else {
-								// there are chances there are more p1 entries till p2 ends
-								insideP2entry = true;
-								p2EntryStartOffset = p1TotalAppliedDelta;
-								// p2EntryEnd is past delta, no chances for p1Data leftovers to be in use
-								// p2 processing is not over, need to fix end, depending on what else fits into p2 range (if nothing, can put p2.end right away)
-								// fall-through to get p1TotalAppliedDelta incremented;
-							}
+							insideP2entry = true;
+							p2EntrySavedStart = p1EntryEnd; // this is how far we've progressed in p1
+							// fall-through to get p1TotalAppliedDelta updated with consumed p1
 						}
 					}
 				} else { // p1EntryAppliedStart >= p2EntryStart
@@ -331,34 +315,43 @@ L1:			while (p1 < p1Max) {
 						// SHALL NOT increment p1TotalAppliedDelta as we didn't use any of p1
 						continue L0; // next p2 
 					} else { // p2EntryEnd >= p1EntryAppliedStart
-						// SKETCH: I or IV
-						// p2EntryEnd is either  < p1EntryAppliedEnd or past it
-						if (p2EntryEnd <= p1EntryAppliedEnd) {
+						// SKETCH: I or IV:
+						// p2 start is outside of p1 range.
+						//
+						// p2DataPartEnd: this is how many bytes prior to p1EntryStart is replaced by p2Data
+						int p2DataPartEnd = p1EntryAppliedStart - p2EntryStart;
+						if (p2EntryEnd < p1EntryAppliedEnd) {
 							// SKETCH: I: copy p2, strip p1 to start from p2EntryEnd, next i (p2)
 							insideP1entry = true;
-							int e = p2EntryEnd - p1TotalAppliedDelta;
-							if (e > p1EntryEnd) {
-								e = p1EntryEnd; // added by analogy with above. Is needed?
-							}
-							r.add(p2EntryStart - p1TotalAppliedDelta, e, p2Data);
-							p1EntryStart = e;
-							int p1DataShift = p2EntryEnd - p1EntryAppliedStart;
-							if (p1DataShift >= p1EntryLen) {
-								p1EntryLen = 0;
-								p1Data = new byte[0];
-							} else {
-								p1EntryLen -= p1DataShift;
-								p1Data = subarray(p1Data, p1DataShift, p1Data.length - 1);
-							}
-							// p1TotalAppliedDelta would get incremented once this modified p1 is handled
+							// replace whole p1 (extended to the left by (p2 \ p1) front bytes)
+							r.add(p1EntryStart - p2DataPartEnd, p1EntryEnd, p2Data);
+							p1EntryStart = p1EntryEnd;
+							// see how much of p1 is left for insertion
+							int p1DataPartEnd = p2EntryEnd - p1EntryAppliedStart; // #1
+							// Similar, although incorrect: p1DataPartEnd == p2Data.length - p2DataPartEnd; // #2
+							// #1(p2EntryStart + p2DataLen) - p1EntryAppliedStart
+							// #2 p2DataLen - (p1EntryAppliedStart - p2EntryStart)
+							// but this works only in assumption that p2EntryEnd-p2EntryStart == p2Data.length
+							//
+							// p1EntryAppliedStart <= p2EntryEnd < p1EntryAppliedStart + p1EntryLen
+							// -p1EntryAppliedStart (to compare against p1DataPartEnd)  ==> 	0 <= p1DataPartEnd < p1EntryLen
+							assert p1DataPartEnd < p1EntryLen;
+							assert p1DataPartEnd >= 0;
+							p1EntryLen -= p1DataPartEnd;
+							p1Data = subarray(p1Data, p1DataPartEnd, p1Data.length);
+
+							// p1TotalAppliedDelta XXX
+							p1TotalAppliedDelta += (p1EntryDelta - p1EntryLen);
 							continue L0; // next p2;
 						} else {
-							// p2EntryEnd > p1EntryAppliedEnd
+							// p2EntryEnd >= p1EntryAppliedEnd
 							// SKETCH IV: skip (rest of) p1 completely, continue the same unless  found p1 with start or end past p2EntryEnd.
 							insideP1entry = false;
+							// p1 consumed
 							p1++;
 							insideP2entry = true;
-							p2EntryStartOffset = p1TotalAppliedDelta;
+							// extend to the left of p1 by p2 \ p1 front bytes
+							p2EntrySavedStart = p1EntryStart - p2DataPartEnd;
 							// fall-through to get p1TotalAppliedDelta incremented
 						}
 					}
@@ -368,10 +361,9 @@ L1:			while (p1 < p1Max) {
 			{
 				// no more p1 entries, shall close p2 (if it's handled, code above jumps directly to L0)
 				// regardless of whether insideP2 is .t
-				int s = p2EntryStart;
-				// p2EntryStartOffset != -1 when we started p2 entry processing, but not completed
+				int s = p2EntrySavedStart != -1 ? p2EntrySavedStart : p2EntryStart - p1TotalAppliedDelta;
+				// p2EntrySavedStart != -1 when we started p2 entry processing, but not completed
 				// if we handled last p1 entry but didn't start with p2 entry processing, it's -1 and regular p1 delta shall be used
-				s -= p2EntryStartOffset == -1 ? p1TotalAppliedDelta : p2EntryStartOffset;
 				r.add(s, p2EntryEnd - p1TotalAppliedDelta, p2Data);
 			}
 		}
@@ -384,6 +376,60 @@ L1:			while (p1 < p1Max) {
 			p1++;
 		};
 		return r;
+	}
+
+	/**
+	 * Combine consecutive regions into one.
+	 * XXX NOW only combines two subsequent regions, seems enough for quick test
+	 * @return <code>this</code> or new instance of consecutive regions found
+	 */
+	public Patch normalize() {
+		Patch rv = null;
+		for (int i = 1, x = data.size(); i < x; i++) {
+			if (starts.get(i) == ends.get(i-1)) {
+				if (rv == null) {
+					rv = new Patch();
+					rv.copyOf(this, 0, i-1);
+//				} else if (ends.get(i-1) == rv.ends.get(rv.ends.size()-1)) {
+//					// "JUST IN CASE" code, i++ below prevents us from getting here
+//					// if the last region is the one already merged,
+//					// ignore this occurrence (otherwise data(i-1) would get copied again) 
+//					continue;
+				}
+				byte[] d1 = data.get(i-1);
+				byte[] d = data.get(i);
+				byte[] nd;
+				if (d1.length > 0 && d.length > 0) {
+					nd = new byte[d1.length + d.length];
+					System.arraycopy(d1, 0, nd, 0, d1.length);
+					System.arraycopy(d, 0, nd, d1.length, d.length);
+				} else {
+					nd = d1.length == 0 ? d : d1 ;
+				}
+				rv.add(starts.get(i-1), ends.get(i), nd);
+				i++; // skip i-th element (effectively means we detect only pairs)
+				// without this ++, element(i-1) is added to rv once "else" below is hit on the next step
+			} else {
+				if (rv != null) {
+					rv.add(this, i-1);
+				}
+			}
+		}
+		if (rv == null) {
+			return this;
+		} else {
+			int last = count() - 1;
+			if (starts.get(last) != ends.get(last-1)) {
+				rv.add(this, last);
+			}
+		}
+		return rv;
+	}
+	
+	private void copyOf(Patch another, int fromIndex, int upToIndex) {
+		while(fromIndex < upToIndex) {
+			add(another, fromIndex++);
+		}
 	}
 
 	public class PatchDataSource implements DataSerializer.DataSource {

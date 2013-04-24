@@ -371,12 +371,12 @@ public final class HgManifest extends Revlog {
 		 * Denotes entering specific manifest revision, separate entries are
 		 * reported with subsequence {@link #next(Nodeid, Path, Flags)} calls.
 		 * 
-		 * @param mainfestRevisionIndex  local revision index of the inspected revision
+		 * @param manifestRevisionIndex  local revision index of the inspected revision
 		 * @param manifestRevision revision of the manifest we're about to iterate through
 		 * @param changelogRevisionIndex local revision index of changelog this manifest points to 
 		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
 		 */
-		boolean begin(int mainfestRevisionIndex, Nodeid manifestRevision, int changelogRevisionIndex);
+		boolean begin(int manifestRevisionIndex, Nodeid manifestRevision, int changelogRevisionIndex);
 
 		
 		/**

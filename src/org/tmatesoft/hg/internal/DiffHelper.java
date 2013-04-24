@@ -232,7 +232,7 @@ public class DiffHelper<T extends DiffHelper.ChunkSequence<?>> {
 		}
 	}
 	
-	static class DeltaDumpInspector<T extends ChunkSequence<?>> extends DeltaInspector<T> {
+	public static class DeltaDumpInspector<T extends ChunkSequence<?>> extends DeltaInspector<T> {
 
 		@Override
 		protected void changed(int s1From, int s1To, int s2From, int s2To) {
