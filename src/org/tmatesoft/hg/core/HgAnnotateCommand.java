@@ -116,6 +116,7 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		c.throwIfCancelled();
 		cancellation.checkCancelled();
 		ProgressSupport.Sub subProgress = new ProgressSupport.Sub(progress, 1);
+		subProgress.start(c.lineRevisions.length);
 		LineImpl li = new LineImpl();
 		for (int i = 0; i < c.lineRevisions.length; i++) {
 			li.init(i+1, c.lineRevisions[i], c.line(i));

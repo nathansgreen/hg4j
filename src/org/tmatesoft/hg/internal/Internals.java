@@ -88,6 +88,26 @@ public final class Internals implements SessionContext.Source {
 	 * Integer value, use negative for attempts to acquire lock until success, and zero to try once and fail immediately. 
 	 */
 	public static final String CFG_PROPERTY_FS_LOCK_TIMEOUT = "hg4j.fs.lock.timeout";
+	
+	/**
+	 * Alternative, more effective approach to build revision text from revlog patches - collect all the
+	 * patches one by one, starting at revision next to base, and apply against each other to get 
+	 * one final patch, which in turned is applied to base revision. 
+	 * <p>
+	 * Original approach is to apply each patch to a previous revision, so that with base revision 
+	 * of 1M and three patches, each altering just a tiny fraction
+	 * of the origin, with latter approach we consume 1M (original) + 1M (first patch applied) + 1M (second
+	 * patch applied) + 1M (third patch applied).
+	 * <p>
+	 * Alternative approach, controlled with this option, first combines these there patches into one,
+	 * and only then applies it to base revision, eliminating 2 intermediate elements.
+	 * <p>
+	 * Present default value for this option is <b>FALSE</b>, and will be changed in future, once
+	 * tests prove support is fully functional (likely in v1.2).
+	 * 
+	 * @since 1.1
+	 */
+	public static final String CFG_PROPERTY_PATCH_MERGE = "hg4j.repo.merge_revlog_patches";
 
 	public static final int REVLOGV1_RECORD_SIZE = 64;
 

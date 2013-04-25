@@ -267,7 +267,7 @@ public class RevlogStream {
 		HgInternals.checkRevlogRange(start, end, indexSize-1);
 		// XXX may cache [start .. end] from index with a single read (pre-read)
 		
-		ReaderN1 r = new ReaderN1(needData, inspector);
+		ReaderN1 r = new ReaderN1(needData, inspector, dataAccess.shallMergePatches());
 		try {
 			r.start(end - start + 1);
 			r.range(start, end);
@@ -299,7 +299,7 @@ public class RevlogStream {
 			throw new HgInvalidRevisionException(String.format("Can't iterate [%d, %d] in range [0..%d]", sortedRevisions[0], sortedRevisions[sortedRevisions.length - 1], indexSize), null, sortedRevisions[sortedRevisions.length - 1]);
 		}
 
-		ReaderN1 r = new ReaderN1(needData, inspector);
+		ReaderN1 r = new ReaderN1(needData, inspector, dataAccess.shallMergePatches());
 		try {
 			r.start(sortedRevisions.length);
 			for (int i = 0; i < sortedRevisions.length; ) {
@@ -382,7 +382,7 @@ public class RevlogStream {
 		return baseRevisions != null && baseRevisions.length > 0;
 	}
 	
-	// translate 6-byte offset field value to pysical file offset for inline revlogs
+	// translate 6-byte offset field value to physical file offset for inline revlogs
 	// DOESN'T MAKE SENSE if revlog with data is separate
 	private static int offsetFieldToInlineFileOffset(long offset, int recordIndex) throws HgInvalidStateException {
 		int o = Internals.ltoi(offset);
@@ -463,22 +463,39 @@ public class RevlogStream {
 	 * operation with single file open/close and multiple diverse reads.
 	 * XXX initOutline might need similar extraction to keep N1 format knowledge  
 	 */
-	class ReaderN1 {
+	final class ReaderN1 {
 		private final Inspector inspector;
 		private final boolean needData;
+		private final boolean mergePatches;
 		private DataAccess daIndex = null, daData = null;
 		private Lifecycle.BasicCallback cb = null;
 		private Lifecycle lifecycleListener = null;
 		private int lastRevisionRead = BAD_REVISION;
 		private DataAccess lastUserData;
+		//
+		// next are transient values, for range() use only
+		private final Inflater inflater = new Inflater();
+		// can share buffer between instances of InflaterDataAccess as I never read any two of them in parallel
+		private final byte[] inflaterBuffer = new byte[10 * 1024]; // TODO consider using DAP.DEFAULT_FILE_BUFFER
+		private final byte[] nodeidBuf = new byte[20];
+		// revlog record fields
+		private long offset;
+		@SuppressWarnings("unused")
+		private int flags;
+		private int compressedLen;
+		private int actualLen;
+		private int baseRevision;
+		private int linkRevision;
+		private int parent1Revision;
+		private int parent2Revision;
 		// next are to track two major bottlenecks - patch application and actual time spent in inspector 
 //		private long applyTime, inspectorTime; // TIMING
-
-
-		public ReaderN1(boolean needData, Inspector insp) {
+		
+		public ReaderN1(boolean dataRequested, Inspector insp, boolean usePatchMerge) {
 			assert insp != null;
-			this.needData = needData;
+			needData = dataRequested;
 			inspector = insp;
+			mergePatches = usePatchMerge;
 		}
 		
 		public void start(int totalWork) {
@@ -513,10 +530,66 @@ public class RevlogStream {
 			}
 //			System.out.printf("applyTime:%d ms, inspectorTime: %d ms\n", applyTime, inspectorTime); // TIMING
 		}
+		
+		private void readHeaderRecord(int i) throws IOException {
+			if (inline && needData) {
+				// inspector reading data (though FilterDataAccess) may have affected index position
+				daIndex.seek(getIndexOffsetInt(i));
+			}
+			long l = daIndex.readLong(); // 0
+			offset = i == 0 ? 0 : (l >>> 16);
+			flags = (int) (l & 0x0FFFF);
+			compressedLen = daIndex.readInt(); // +8
+			actualLen = daIndex.readInt(); // +12
+			baseRevision = daIndex.readInt(); // +16
+			linkRevision = daIndex.readInt(); // +20
+			parent1Revision = daIndex.readInt();
+			parent2Revision = daIndex.readInt();
+			// Hg has 32 bytes here, uses 20 for nodeid, and keeps 12 last bytes empty
+			daIndex.readBytes(nodeidBuf, 0, 20); // +32
+			daIndex.skip(12);
+		}
+		
+		private boolean isPatch(int i) {
+			return baseRevision != i; // the only way I found to tell if it's a patch
+		}
+		
+		private DataAccess getStoredData(int i) throws IOException {
+			DataAccess userDataAccess = null;
+			DataAccess streamDataAccess;
+			long streamOffset;
+			if (inline) {
+				streamOffset = getIndexOffsetInt(i) + REVLOGV1_RECORD_SIZE;
+				streamDataAccess = daIndex;
+				 // don't need to do seek as it's actual position in the index stream, but it's safe to seek, just in case
+				daIndex.longSeek(streamOffset);
+			} else {
+				streamOffset = offset;
+				streamDataAccess = daData;
+				daData.longSeek(streamOffset);
+			}
+			if (streamDataAccess.isEmpty() || compressedLen == 0) {
+				userDataAccess = new DataAccess(); // empty
+			} else {
+				final byte firstByte = streamDataAccess.readByte();
+				if (firstByte == 0x78 /* 'x' */) {
+					inflater.reset();
+					userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, isPatch(i) ? -1 : actualLen, inflater, inflaterBuffer);
+				} else if (firstByte == 0x75 /* 'u' */) {
+					userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
+				} else {
+					// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0' but I don't see reason not to return data as is
+					//
+					// although firstByte is already read from the streamDataAccess, FilterDataAccess#readByte would seek to
+					// initial offset before first attempt to read a byte
+					userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
+				}
+			}
+			return userDataAccess;
+		}
 
 		// may be invoked few times per instance life
 		public boolean range(int start, int end) throws IOException {
-			byte[] nodeidBuf = new byte[20];
 			int i;
 			// it (i.e. replace with i >= start)
 			if (needData && (i = getBaseRevision(start)) < start) {
@@ -537,63 +610,42 @@ public class RevlogStream {
 			
 			daIndex.seek(getIndexOffsetInt(i));
 			//
-			// reuse some instances
-			final Patch patch = new Patch();
-			final Inflater inflater = new Inflater();
-			// can share buffer between instances of InflaterDataAccess as I never read any two of them in parallel
-			final byte[] inflaterBuffer = new byte[10 * 1024]; // TODO consider using DAP.DEFAULT_FILE_BUFFER
+			// reuse instance, do not normalize it as patches from the stream are unlikely to need it
+			final Patch patch = new Patch(false);
+			//
+			if (needData && mergePatches && start-i > 2) {
+				// i+1 == start just reads lastUserData, i+2 == start applies one patch - not worth dedicated effort 
+				Patch ultimatePatch = new Patch(true);
+				for ( ; i < start; i++) {
+					readHeaderRecord(i);
+					DataAccess userDataAccess = getStoredData(i);
+					if (lastUserData == null) {
+						assert !isPatch(i);
+						lastUserData = userDataAccess;
+					} else {
+						assert isPatch(i); // i < start and i == getBaseRevision()
+						patch.read(userDataAccess);
+						userDataAccess.done();
+						// I assume empty patches are applied ok
+						ultimatePatch = ultimatePatch.apply(patch);
+						patch.clear();
+					}
+				}
+				lastUserData.reset();
+				byte[] userData = ultimatePatch.apply(lastUserData, actualLen);
+				ultimatePatch.clear();
+				lastUserData.done();
+				lastUserData = new ByteArrayDataAccess(userData);
+			}
 			//
 			
 			for (; i <= end; i++ ) {
-				if (inline && needData) {
-					// inspector reading data (though FilterDataAccess) may have affected index position
-					daIndex.seek(getIndexOffsetInt(i));
-				}
-				long l = daIndex.readLong(); // 0
-				long offset = i == 0 ? 0 : (l >>> 16);
-				@SuppressWarnings("unused")
-				int flags = (int) (l & 0x0FFFF);
-				int compressedLen = daIndex.readInt(); // +8
-				int actualLen = daIndex.readInt(); // +12
-				int baseRevision = daIndex.readInt(); // +16
-				int linkRevision = daIndex.readInt(); // +20
-				int parent1Revision = daIndex.readInt();
-				int parent2Revision = daIndex.readInt();
-				// Hg has 32 bytes here, uses 20 for nodeid, and keeps 12 last bytes empty
-				daIndex.readBytes(nodeidBuf, 0, 20); // +32
-				daIndex.skip(12);
+				readHeaderRecord(i);
 				DataAccess userDataAccess = null;
 				if (needData) {
-					long streamOffset;
-					DataAccess streamDataAccess;
-					if (inline) {
-						streamDataAccess = daIndex;
-						streamOffset = getIndexOffsetInt(i) + REVLOGV1_RECORD_SIZE; // don't need to do seek as it's actual position in the index stream
-					} else {
-						streamOffset = offset;
-						streamDataAccess = daData;
-						daData.longSeek(streamOffset);
-					}
-					final boolean patchToPrevious = baseRevision != i; // the only way I found to tell if it's a patch
-					if (streamDataAccess.isEmpty() || compressedLen == 0) {
-						userDataAccess = new DataAccess(); // empty
-					} else {
-						final byte firstByte = streamDataAccess.readByte();
-						if (firstByte == 0x78 /* 'x' */) {
-							inflater.reset();
-							userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, patchToPrevious ? -1 : actualLen, inflater, inflaterBuffer);
-						} else if (firstByte == 0x75 /* 'u' */) {
-							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
-						} else {
-							// XXX Python impl in fact throws exception when there's not 'x', 'u' or '0' but I don't see reason not to return data as is
-							//
-							// although firstByte is already read from the streamDataAccess, FilterDataAccess#readByte would seek to
-							// initial offset before first attempt to read a byte
-							userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset, compressedLen);
-						}
-					}
+					userDataAccess = getStoredData(i);
 					// userDataAccess is revision content, either complete revision, patch of a previous content, or an empty patch
-					if (patchToPrevious) {
+					if (isPatch(i)) {
 						// this is a patch
 						if (userDataAccess.isEmpty()) {
 							// Issue 22, empty patch to an empty base revision

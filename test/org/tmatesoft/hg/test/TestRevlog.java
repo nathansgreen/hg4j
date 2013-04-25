@@ -51,14 +51,15 @@ public class TestRevlog {
 	
 	private void run(File indexFile) throws Exception {
 		final boolean shallDumpDiff = Boolean.TRUE.booleanValue();
-		final boolean thoroughCheck = Boolean.TRUE.booleanValue();
+		final boolean thoroughCheck = Boolean.FALSE.booleanValue();
 		//
 		RevlogReader rr = new RevlogReader(indexFile);
 		rr.init(true);
 		rr.needData(true);
-		int startEntryIndex = 76507; // 150--87 
+		int startEntryIndex = 76507 + 100; // 150--87 
 		rr.startFrom(startEntryIndex);
 		rr.readNext();
+		final long s0 = System.currentTimeMillis();
 		ByteBuffer baseRevision = null;
 		if (rr.isPatch()) {
 			byte[] cc = getRevisionTrueContent(indexFile.getParentFile(), rr.entryIndex, rr.linkRevision);
@@ -72,7 +73,7 @@ public class TestRevlog {
 		//
 		final long start = System.currentTimeMillis();
 		int n = 1419;
-		Patch seqPatch = null, normalizedPatch = null;
+		Patch seqPatch = new Patch(false), normalizedPatch = new Patch(true);
 		while (rr.hasMore() && n-- > 0) {
 			rr.readNext();
 			if (!rr.isPatch()) {
@@ -83,65 +84,59 @@ public class TestRevlog {
 				continue;
 			}
 			Patch p1 = createPatch(rr);
-			if (seqPatch != null) {
-				if (n < 1) {
-					System.out.println("+" + p1);
-					System.currentTimeMillis();
-				}
+			if (n < 1) {
+				System.out.println("+" + p1);
+				System.currentTimeMillis();
+			}
 				seqPatch = seqPatch.apply(p1);
-				Patch ppp = normalizedPatch.apply(p1);
-				normalizedPatch = ppp.normalize();
-				if (n <= 1) {
-					System.out.println("=" + seqPatch);
-				}
-				if (n == 0) {
-					System.out.println("A" + ppp);
-					System.out.println("N" + normalizedPatch);
-					normalizedPatch = ppp;
-				}
+				normalizedPatch = normalizedPatch.apply(p1);
+//				if (n <= 1) {
+//					System.out.println("=" + seqPatch);
+//				}
+//				if (n == 0) {
+//					System.out.println("A" + ppp);
+//					System.out.println("N" + normalizedPatch);
+//					normalizedPatch = ppp;
+//				}
 				//
-				if (!thoroughCheck) {
-					if (baseRevisionContent.length() + seqPatch.patchSizeDelta() != rr.actualLen) {
-						System.out.printf("Sequential patches:\tPatchRevision #%d (+%d, cset:%d) failed\n", rr.entryIndex, rr.entryIndex - startEntryIndex, rr.linkRevision);
-					}
-					if (baseRevisionContent.length() + normalizedPatch.patchSizeDelta() != rr.actualLen) {
-						System.out.printf("Normalized patches:\tPatchRevision #%d (+%d, cset:%d) failed\n", rr.entryIndex, rr.entryIndex - startEntryIndex, rr.linkRevision);
-					}
-				} else {
-					byte[] origin = getRevisionTrueContent(indexFile.getParentFile(), rr.entryIndex, rr.linkRevision);
-					try {
-						byte[] result1 = seqPatch.apply(baseRevisionContent, rr.actualLen);
-						if (!Arrays.equals(result1, origin)) {
-							System.out.printf("Sequential patches:\tPatchRevision #%d (+%d, cset:%d) failed\n", rr.entryIndex, rr.entryIndex - startEntryIndex, rr.linkRevision);
-						}
-					} catch (ArrayIndexOutOfBoundsException ex) {
-						System.err.printf("Failure at entry %d (+%d)\n", rr.entryIndex, rr.entryIndex - startEntryIndex);
-						ex.printStackTrace();
-					}
-					try {
-						byte[] result2 = normalizedPatch.apply(baseRevisionContent, rr.actualLen);
-						if (!Arrays.equals(result2, origin)) {
-							System.out.printf("Normalized patches:\tPatchRevision #%d (+%d, cset:%d) failed\n", rr.entryIndex, rr.entryIndex - startEntryIndex, rr.linkRevision);
-						}
-					} catch (ArrayIndexOutOfBoundsException ex) {
-						System.err.printf("Failure at entry %d (+%d)\n", rr.entryIndex, rr.entryIndex - startEntryIndex);
-						ex.printStackTrace();
-					}
+			if (!thoroughCheck) {
+				if (baseRevisionContent.length() + seqPatch.patchSizeDelta() != rr.actualLen) {
+					System.out.printf("Sequential patches:\tPatchRevision #%d (+%d, cset:%d) failed\n", rr.entryIndex, rr.entryIndex - startEntryIndex, rr.linkRevision);
+				}
+				if (baseRevisionContent.length() + normalizedPatch.patchSizeDelta() != rr.actualLen) {
+					System.out.printf("Normalized patches:\tPatchRevision #%d (+%d, cset:%d) failed\n", rr.entryIndex, rr.entryIndex - startEntryIndex, rr.linkRevision);
 				}
 			} else {
-				seqPatch = p1;
-				normalizedPatch = p1.normalize();
+				byte[] origin = getRevisionTrueContent(indexFile.getParentFile(), rr.entryIndex, rr.linkRevision);
+				try {
+					byte[] result1 = seqPatch.apply(baseRevisionContent, rr.actualLen);
+					if (!Arrays.equals(result1, origin)) {
+						System.out.printf("Sequential patches:\tPatchRevision #%d (+%d, cset:%d) failed\n", rr.entryIndex, rr.entryIndex - startEntryIndex, rr.linkRevision);
+					}
+				} catch (ArrayIndexOutOfBoundsException ex) {
+					System.err.printf("Failure at entry %d (+%d)\n", rr.entryIndex, rr.entryIndex - startEntryIndex);
+					ex.printStackTrace();
+				}
+//					try {
+//						byte[] result2 = normalizedPatch.apply(baseRevisionContent, rr.actualLen);
+//						if (!Arrays.equals(result2, origin)) {
+//							System.out.printf("Normalized patches:\tPatchRevision #%d (+%d, cset:%d) failed\n", rr.entryIndex, rr.entryIndex - startEntryIndex, rr.linkRevision);
+//						}
+//					} catch (ArrayIndexOutOfBoundsException ex) {
+//						System.err.printf("Failure at entry %d (+%d)\n", rr.entryIndex, rr.entryIndex - startEntryIndex);
+//						ex.printStackTrace();
+//					}
 			}
 		}
 		final long end1 = System.currentTimeMillis();
 		//
-//		byte[] result = seqPatch.apply(baseRevisionContent, rr.actualLen);
-		byte[] result = normalizedPatch.apply(baseRevisionContent, rr.actualLen);
+		byte[] result = seqPatch.apply(baseRevisionContent, rr.actualLen);
+//		byte[] result = normalizedPatch.apply(baseRevisionContent, rr.actualLen);
 		final long end2 = System.currentTimeMillis();
 		byte[] origin = getRevisionTrueContent(indexFile.getParentFile(), rr.entryIndex, rr.linkRevision);
 		final long end3 = System.currentTimeMillis();
 		rr.done();
-		System.out.printf("Collected patches up to revision %d. Patches total: %d, last contains %d elements\n", rr.entryIndex, rr.entryIndex - startEntryIndex + 1, seqPatch.count());
+		System.out.printf("Collected patches up to revision %d. Patches total: %d, sequentialPatch contains %d elements, normalized: %d\n", rr.entryIndex, rr.entryIndex - startEntryIndex + 1, seqPatch.count(), normalizedPatch.count());
 		if (!Arrays.equals(result, origin)) {
 			if (shallDumpDiff) {
 				diff(result, origin);
@@ -151,9 +146,9 @@ public class TestRevlog {
 			}
 		} else {
 			System.out.println("OK!");
-			System.out.printf("Iterate: %d ms, apply collected: %d ms, total=%d ms; Conventional: %d ms\n", (end1-start), (end2-end1), (end2-start), (end3-end2));
+			System.out.printf("Iterate: %d ms, read base:%d, apply collected: %d ms, total=%d ms; Conventional: %d ms\n", (end1-start), (start-s0), (end2-end1), (end2-s0), (end3-end2));
 		}
-		Patch normalized = normalizedPatch; //seqPatch.normalize();
+		Patch normalized = seqPatch.normalize();
 		System.out.printf("N%s\n%d => %d patch elements\n", normalized, seqPatch.count(), normalized.count());
 //		System.out.println(rs);
 	}

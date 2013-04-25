@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
@@ -153,8 +154,9 @@ public class InflaterDataAccess extends FilterDataAccess {
 
 	@Override
 	public void readBytes(byte[] b, int off, int len) throws IOException {
+		int fromBuffer;
 		do {
-			int fromBuffer = outBuffer.remaining();
+			fromBuffer = outBuffer.remaining();
 			if (fromBuffer > 0) {
 				if (fromBuffer >= len) {
 					outBuffer.get(b, off, len);
@@ -166,8 +168,12 @@ public class InflaterDataAccess extends FilterDataAccess {
 					// fall-through
 				}
 			}
-			fillOutBuffer();
-		} while (len > 0);
+			fromBuffer = fillOutBuffer();
+		} while (len > 0 && fromBuffer > 0);
+		if (len > 0) {
+			// prevent hang up in this cycle if no more data is available, see Issue 25
+			throw new EOFException(String.format("No more compressed data is available to satisfy request for %d bytes. [finished:%b, needDict:%b, needInp:%b, available:%d", len, inflater.finished(), inflater.needsDictionary(), inflater.needsInput(), super.available()));
+		}
 	}
 	
 	@Override
@@ -220,8 +226,6 @@ public class InflaterDataAccess extends FilterDataAccess {
 						assert inflater.finished();
 						assert toRead <= 0;
 						break;
-						// prevent hang up in this cycle if no more data is available, see Issue 25
-//						throw new EOFException(String.format("No more compressed data is available to satisfy request for %d bytes. [finished:%b, needDict:%b, needInp:%b, available:%d", len, inflater.finished(), inflater.needsDictionary(), inflater.needsInput(), toRead));
 					}
 			    }
 				off += n;

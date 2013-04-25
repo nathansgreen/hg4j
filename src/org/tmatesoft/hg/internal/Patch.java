@@ -33,6 +33,7 @@ import java.util.Formatter;
 public final class Patch {
 	private final IntVector starts, ends;
 	private final ArrayList<byte[]> data;
+	private final boolean shallNormalize;
 
 	private static byte[] generate(int c) {
 		byte[] rv = new byte[c];
@@ -65,8 +66,13 @@ public final class Patch {
 		Patch r = p1.apply(p2);
 		System.out.println("r: " + r);
 	}
-
+	
 	public Patch() {
+		this(false);
+	}
+
+	public Patch(boolean normalizeOnChange) {
+		shallNormalize = normalizeOnChange;
 		starts = new IntVector();
 		ends = new IntVector();
 		data = new ArrayList<byte[]>();
@@ -182,10 +188,28 @@ public final class Patch {
 	}
 
 	/*package-local*/ void add(int start, int end, byte[] d) {
-		// FIXME if start == end(-1), merge data
 		if (start == end && d.length == 0) {
 			System.currentTimeMillis();
 			return;
+		}
+		int last;
+		if (shallNormalize && (last = starts.size()) > 0) {
+			last--;
+			if (ends.get(last) == start) {
+				byte[] d1 = data.get(last);
+				byte[] nd;
+				if (d1.length > 0 && d.length > 0) {
+					nd = new byte[d1.length + d.length];
+					System.arraycopy(d1, 0, nd, 0, d1.length);
+					System.arraycopy(d, 0, nd, d1.length, d.length);
+				} else {
+					nd = d1.length == 0 ? d : d1 ;
+				}
+				ends.set(last, end);
+				data.set(last, nd);
+				return;
+			}
+			// fall-through
 		}
 		starts.add(start);
 		ends.add(end);
@@ -203,7 +227,7 @@ public final class Patch {
 	 * Modify this patch with subsequent patch 
 	 */
 	public /*SHALL BE PUBLIC ONCE TESTING ENDS*/ Patch apply(Patch another) {
-		Patch r = new Patch();
+		Patch r = new Patch(shallNormalize);
 		int p1TotalAppliedDelta = 0; // value to add to start and end indexes of the older patch to get their values as if
 		// in the patched text, iow, directly comparable with respective indexes from the newer patch.
 		int p1EntryStart = 0, p1EntryEnd = 0, p1EntryLen = 0;
