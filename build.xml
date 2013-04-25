@@ -134,7 +134,7 @@
 
 	<target name="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="src" destdir="bin" debug="${compile-with-debug}" />
+		<javac srcdir="src" destdir="bin" debug="${compile-with-debug}" includeantruntime="no"/>
 		<jar destfile="${hg4j.jar}">
 			<fileset dir="bin/">
 				<include name="org/tmatesoft/hg/core/**" />

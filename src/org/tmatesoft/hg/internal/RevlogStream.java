@@ -192,6 +192,18 @@ public class RevlogStream {
 		}
 	}
 	
+	/**
+	 * Extract base revision field from the revlog
+	 * 
+	 * @throws HgInvalidControlFileException if attempt to read index file failed
+	 * @throws HgInvalidRevisionException if revisionIndex argument doesn't represent a valid record in the revlog
+	 */
+	public int baseRevision(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		initOutline();
+		revisionIndex = checkRevisionIndex(revisionIndex);
+		return getBaseRevision(revisionIndex);
+	}
+	
 	// Perhaps, RevlogStream should be limited to use of plain int revisions for access,
 	// while Nodeids should be kept on the level up, in Revlog. Guess, Revlog better keep
 	// map of nodeids, and once this comes true, we may get rid of this method.
