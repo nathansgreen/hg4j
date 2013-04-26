@@ -126,9 +126,31 @@ public class HgRepoFacade implements SessionContext.Source {
 		return new HgIncomingCommand(repo);
 	}
 	
-	// TODO [1.1] add factory methods for all new commands
+	public HgCloneCommand createCloneCommand() {
+		return new HgCloneCommand();
+	}
+	
+	public HgUpdateConfigCommand createUpdateRepositoryConfigCommand() {
+		return HgUpdateConfigCommand.forRepository(repo);
+	}
+	
+	public HgAddRemoveCommand createAddRemoveCommand() {
+		return new HgAddRemoveCommand(repo);
+	}
+	
+	public HgCheckoutCommand createCheckoutCommand() {
+		return new HgCheckoutCommand(repo);
+	}
+	
+	public HgRevertCommand createRevertCommand() {
+		return new HgRevertCommand(repo);
+	}
 	
 	public HgAnnotateCommand createAnnotateCommand() {
 		return new HgAnnotateCommand(repo);
+	}
+	
+	public HgCommitCommand createCommitCommand() {
+		return new HgCommitCommand(repo);
 	}
 }

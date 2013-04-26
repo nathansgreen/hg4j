@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.core.HgCommitCommand;
 import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -44,6 +45,8 @@ import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * WORK IN PROGRESS
+ * Name: CommitObject, FutureCommit or PendingCommit
+ * Only public API now: {@link HgCommitCommand}. TEMPORARILY lives in the oth.repo public packages, until code interdependencies are resolved
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -54,7 +57,7 @@ public final class CommitFacility {
 	private final int p1Commit, p2Commit;
 	private Map<Path, Pair<HgDataFile, ByteDataSupplier>> files = new LinkedHashMap<Path, Pair<HgDataFile, ByteDataSupplier>>();
 	private Set<Path> removals = new TreeSet<Path>();
-	private String branch;
+	private String branch, user;
 
 	public CommitFacility(HgRepository hgRepo, int parentCommit) {
 		this(hgRepo, parentCommit, NO_REVISION);
@@ -88,6 +91,10 @@ public final class CommitFacility {
 	
 	public void branch(String branchName) {
 		branch = branchName;
+	}
+	
+	public void user(String userName) {
+		user = userName;
 	}
 	
 	public Nodeid commit(String message) throws HgRepositoryLockException {
@@ -172,6 +179,7 @@ public final class CommitFacility {
 		final ChangelogEntryBuilder changelogBuilder = new ChangelogEntryBuilder();
 		changelogBuilder.setModified(files.keySet());
 		changelogBuilder.branch(branch == null ? HgRepository.DEFAULT_BRANCH_NAME : branch);
+		changelogBuilder.user(String.valueOf(user));
 		byte[] clogContent = changelogBuilder.build(manifestRev, message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo.getSessionContext(), clog.content);
 		Nodeid changesetRev = changelogWriter.addRevision(clogContent, clogRevisionIndex, p1Commit, p2Commit);
@@ -210,6 +218,9 @@ public final class CommitFacility {
 
 	// unlike DataAccess (which provides structured access), this one 
 	// deals with a sequence of bytes, when there's no need in structure of the data
+	// FIXME java.nio.ReadableByteChannel or ByteStream/ByteSequence(read, length, reset)
+	// SHALL be inline with util.ByteChannel, reading bytes from HgDataFile, preferably DataAccess#readBytes(BB) to match API,
+	// and a wrap for ByteVector
 	public interface ByteDataSupplier { // TODO look if can resolve DataAccess in HgCloneCommand visibility issue
 		// FIXME needs lifecycle, e.g. for supplier that reads from WC
 		int read(ByteBuffer buf);

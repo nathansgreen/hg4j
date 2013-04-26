@@ -56,7 +56,7 @@ public class TestRevlog {
 		RevlogReader rr = new RevlogReader(indexFile);
 		rr.init(true);
 		rr.needData(true);
-		int startEntryIndex = 76507 + 100; // 150--87 
+		int startEntryIndex = 76507; // 150--87 
 		rr.startFrom(startEntryIndex);
 		rr.readNext();
 		final long s0 = System.currentTimeMillis();

@@ -18,27 +18,29 @@ package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.*;
 import static org.tmatesoft.hg.repo.HgRepository.*;
-import static org.tmatesoft.hg.repo.HgRepository.DEFAULT_BRANCH_NAME;
-import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.List;
 
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgAddRemoveCommand;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgChangeset;
+import org.tmatesoft.hg.core.HgCommitCommand;
 import org.tmatesoft.hg.core.HgLogCommand;
+import org.tmatesoft.hg.core.HgRevertCommand;
+import org.tmatesoft.hg.core.HgStatus.Kind;
+import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.FileContentSupplier;
 import org.tmatesoft.hg.repo.CommitFacility;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -224,6 +226,53 @@ public class TestCommit {
 		assertHgVerifyOk(repoLoc);
 	}
 	
+	@Test
+	public void testCommandBasics() throws Exception {
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit-cmd", false);
+		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		HgDataFile dfB = hgRepo.getFileNode("b");
+		assertTrue("[sanity]", dfB.exists());
+		File fileB = new File(repoLoc, "b");
+		assertTrue("[sanity]", fileB.canRead());
+		RepoUtils.modifyFileAppend(fileB, " 1 \n");
+
+		HgCommitCommand cmd = new HgCommitCommand(hgRepo);
+		assertFalse(cmd.isMergeCommit());
+		Outcome r = cmd.message("FIRST").execute();
+		assertTrue(r.isOk());
+		Nodeid c1 = cmd.getCommittedRevision();
+		
+		hgRepo = new HgLookup().detect(repoLoc);
+		//
+		new HgRevertCommand(hgRepo).file(dfB.getPath()).execute(); // FIXME Hack to emulate dirstate update
+		//
+		TestStatus.StatusCollector status = new TestStatus.StatusCollector();
+		new HgStatusCommand(hgRepo).defaults().execute(status);
+		assertTrue(status.getErrors().isEmpty());
+		assertTrue(status.get(Kind.Modified).isEmpty());
+		
+		HgDataFile dfD = hgRepo.getFileNode("d");
+		assertTrue("[sanity]", dfD.exists());
+		File fileD = new File(repoLoc, "d");
+		assertTrue("[sanity]", fileD.canRead());
+		//
+		RepoUtils.modifyFileAppend(fileD, " 1 \n");
+		cmd = new HgCommitCommand(hgRepo);
+		assertFalse(cmd.isMergeCommit());
+		r = cmd.message("SECOND").execute();
+		assertTrue(r.isOk());
+		Nodeid c2 = cmd.getCommittedRevision();
+		//
+		hgRepo = new HgLookup().detect(repoLoc);
+		int lastRev = hgRepo.getChangelog().getLastRevision();
+		List<HgChangeset> csets = new HgLogCommand(hgRepo).range(lastRev-1, lastRev).execute();
+		assertEquals(csets.get(0).getNodeid(), c1);
+		assertEquals(csets.get(1).getNodeid(), c2);
+		assertEquals(csets.get(0).getComment(), "FIRST");
+		assertEquals(csets.get(1).getComment(), "SECOND");
+		assertHgVerifyOk(repoLoc);
+	}
+	
 	private void assertHgVerifyOk(File repoLoc) throws InterruptedException, IOException {
 		ExecHelper verifyRun = new ExecHelper(new OutputParser.Stub(), repoLoc);
 		verifyRun.run("hg", "verify");
@@ -273,37 +322,6 @@ public class TestCommit {
 			buf.put(data, pos, count);
 			pos += count;
 			return count;
-		}
-	}
-	
-	static class FileContentSupplier implements CommitFacility.ByteDataSupplier {
-		private final FileChannel channel;
-		private IOException error;
-
-		public FileContentSupplier(File f) throws IOException {
-			if (!f.canRead()) {
-				throw new IOException(String.format("Can't read file %s", f));
-			}
-			channel = new FileInputStream(f).getChannel();
-		}
-
-		public int read(ByteBuffer buf) {
-			if (error != null) {
-				return -1;
-			}
-			try {
-				return channel.read(buf);
-			} catch (IOException ex) {
-				error = ex;
-			}
-			return -1;
-		}
-		
-		public void done() throws IOException {
-			channel.close();
-			if (error != null) {
-				throw error;
-			}
 		}
 	}
 }

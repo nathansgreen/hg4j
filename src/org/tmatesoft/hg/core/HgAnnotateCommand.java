@@ -92,6 +92,14 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 	
 	// TODO [1.1] set encoding and provide String line content from LineInfo
 
+	/**
+	 * Annotate selected file
+	 * 
+	 * @param inspector
+	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 * @throws HgCallbackTargetException
+	 * @throws CancelledException if execution of the command was cancelled
+	 */
 	public void execute(Inspector inspector) throws HgException, HgCallbackTargetException, CancelledException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
