@@ -68,14 +68,18 @@ public final class Patch {
 	}
 	
 	public Patch() {
-		this(false);
+		this(16, false);
+	}
+	
+	public Patch(boolean normalizeOnChange) {
+		this(16, normalizeOnChange);
 	}
 
-	public Patch(boolean normalizeOnChange) {
+	public Patch(int sizeHint, boolean normalizeOnChange) {
 		shallNormalize = normalizeOnChange;
-		starts = new IntVector();
-		ends = new IntVector();
-		data = new ArrayList<byte[]>();
+		starts = new IntVector(sizeHint, -1);
+		ends = new IntVector(sizeHint, -1);
+		data = new ArrayList<byte[]>(sizeHint);
 	}
 	
 	public String toString() {
@@ -227,7 +231,7 @@ public final class Patch {
 	 * Modify this patch with subsequent patch 
 	 */
 	public /*SHALL BE PUBLIC ONCE TESTING ENDS*/ Patch apply(Patch another) {
-		Patch r = new Patch(shallNormalize);
+		Patch r = new Patch(count() + another.count() * 2, shallNormalize);
 		int p1TotalAppliedDelta = 0; // value to add to start and end indexes of the older patch to get their values as if
 		// in the patched text, iow, directly comparable with respective indexes from the newer patch.
 		int p1EntryStart = 0, p1EntryEnd = 0, p1EntryLen = 0;
