@@ -106,7 +106,7 @@ public final class LineReader {
 				if (encoding == null) {
 					fileReader = new FileReader(file);
 				} else {
-					fileReader = new InputStreamReader(new FileInputStream(file));
+					fileReader = new InputStreamReader(new FileInputStream(file), encoding);
 				}
 				statusFileReader = new BufferedReader(fileReader);
 				String line;
