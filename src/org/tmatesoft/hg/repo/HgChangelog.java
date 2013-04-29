@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -247,10 +247,19 @@ public final class HgChangelog extends Revlog {
 			if (breakIndex2 == -1) {
 				throw new HgInvalidDataFormatException("Bad Changeset data");
 			}
-			String _user = new String(data, breakIndex1 + 1, breakIndex2 - breakIndex1 - 1);
-			if (usersPool != null) {
-				_user = usersPool.unify(_user);
+			String _user;
+			try {
+				// TODO use encoding helper? Although where encoding is fixed (like here), seems to be just too much
+				_user = new String(data, breakIndex1 + 1, breakIndex2 - breakIndex1 - 1, "UTF-8");
+				if (usersPool != null) {
+					_user = usersPool.unify(_user);
+				}
+			} catch (UnsupportedEncodingException ex) {
+				_user = "";
+				// Could hardly happen
+				throw new HgInvalidDataFormatException("Bad Changeset data", ex);
 			}
+
 			int breakIndex3 = indexOf(data, lineBreak, breakIndex2 + 1, bufferEndIndex);
 			if (breakIndex3 == -1) {
 				throw new HgInvalidDataFormatException("Bad Changeset data");
