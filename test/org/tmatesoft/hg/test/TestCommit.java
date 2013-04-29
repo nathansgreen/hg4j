@@ -24,13 +24,13 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 
+import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgAddRemoveCommand;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgChangeset;
 import org.tmatesoft.hg.core.HgCommitCommand;
 import org.tmatesoft.hg.core.HgLogCommand;
-import org.tmatesoft.hg.core.HgRevertCommand;
 import org.tmatesoft.hg.core.HgStatus.Kind;
 import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.core.Nodeid;
@@ -52,6 +52,9 @@ import org.tmatesoft.hg.util.Path;
  */
 public class TestCommit {
 
+	@Rule
+	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
+
 	@Test
 	public void testCommitToNonEmpty() throws Exception {
 		File repoLoc = RepoUtils.initEmptyTempRepo("test-commit2non-empty");
@@ -67,15 +70,15 @@ public class TestCommit {
 		Nodeid secondRev = cf.commit("SECOND");
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).execute();
-		assertEquals(2, commits.size());
+		errorCollector.assertEquals(2, commits.size());
 		HgChangeset c1 = commits.get(0);
 		HgChangeset c2 = commits.get(1);
-		assertEquals("FIRST", c1.getComment());
-		assertEquals("SECOND", c2.getComment());
-		assertEquals(df.getPath(), c2.getAffectedFiles().get(0));
-		assertEquals(c1.getNodeid(), c2.getFirstParentRevision());
-		assertEquals(Nodeid.NULL, c2.getSecondParentRevision());
-		assertEquals(secondRev, c2.getNodeid());
+		errorCollector.assertEquals("FIRST", c1.getComment());
+		errorCollector.assertEquals("SECOND", c2.getComment());
+		errorCollector.assertEquals(df.getPath(), c2.getAffectedFiles().get(0));
+		errorCollector.assertEquals(c1.getNodeid(), c2.getFirstParentRevision());
+		errorCollector.assertEquals(Nodeid.NULL, c2.getSecondParentRevision());
+		errorCollector.assertEquals(secondRev, c2.getNodeid());
 	}
 	
 	@Test
@@ -94,16 +97,16 @@ public class TestCommit {
 		String comment = "commit 1";
 		Nodeid c1Rev = cf.commit(comment);
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).execute();
-		assertEquals(1, commits.size());
+		errorCollector.assertEquals(1, commits.size());
 		HgChangeset c1 = commits.get(0);
-		assertEquals(1, c1.getAffectedFiles().size());
-		assertEquals(df.getPath(), c1.getAffectedFiles().get(0));
-		assertEquals(0, c1.getRevisionIndex());
-		assertEquals(Nodeid.NULL, c1.getFirstParentRevision());
-		assertEquals(Nodeid.NULL, c1.getSecondParentRevision());
-		assertEquals(HgRepository.DEFAULT_BRANCH_NAME, c1.getBranch());
-		assertEquals(comment, c1.getComment());
-		assertEquals(c1Rev, c1.getNodeid());
+		errorCollector.assertEquals(1, c1.getAffectedFiles().size());
+		errorCollector.assertEquals(df.getPath(), c1.getAffectedFiles().get(0));
+		errorCollector.assertEquals(0, c1.getRevisionIndex());
+		errorCollector.assertEquals(Nodeid.NULL, c1.getFirstParentRevision());
+		errorCollector.assertEquals(Nodeid.NULL, c1.getSecondParentRevision());
+		errorCollector.assertEquals(HgRepository.DEFAULT_BRANCH_NAME, c1.getBranch());
+		errorCollector.assertEquals(comment, c1.getComment());
+		errorCollector.assertEquals(c1Rev, c1.getNodeid());
 		ByteArrayChannel bac = new ByteArrayChannel();
 		new HgCatCommand(hgRepo).file(df.getPath()).execute(bac);
 		assertArrayEquals(initialContent, bac.toArray());
@@ -134,9 +137,9 @@ public class TestCommit {
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).range(parentCsetRevIndex+1, TIP).execute();
 		assertEquals(1, commits.size());
 		HgChangeset c1 = commits.get(0);
-		assertEquals(c1.getNodeid(), commitRev1);
-		assertEquals("branch1", c1.getBranch());
-		assertEquals("FIRST", c1.getComment());
+		errorCollector.assertEquals(c1.getNodeid(), commitRev1);
+		errorCollector.assertEquals("branch1", c1.getBranch());
+		errorCollector.assertEquals("FIRST", c1.getComment());
 		//
 		assertHgVerifyOk(repoLoc);
 	}
@@ -164,10 +167,10 @@ public class TestCommit {
 		hgRepo = new HgLookup().detect(repoLoc);
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).changeset(commitRev).execute();
 		HgChangeset cmt = commits.get(0);
-		assertEquals(1, cmt.getAddedFiles().size());
-		assertEquals("xx", cmt.getAddedFiles().get(0).getPath().toString());
-		assertEquals(1, cmt.getRemovedFiles().size());
-		assertEquals("d", cmt.getRemovedFiles().get(0).toString());
+		errorCollector.assertEquals(1, cmt.getAddedFiles().size());
+		errorCollector.assertEquals("xx", cmt.getAddedFiles().get(0).getPath().toString());
+		errorCollector.assertEquals(1, cmt.getRemovedFiles().size());
+		errorCollector.assertEquals("d", cmt.getRemovedFiles().get(0).toString());
 		ByteArrayChannel sink = new ByteArrayChannel();
 		new HgCatCommand(hgRepo).file(Path.create("xx")).changeset(commitRev).execute(sink);
 		assertArrayEquals("xyz".getBytes(), sink.toArray());
@@ -214,15 +217,15 @@ public class TestCommit {
 		HgChangeset c1 = commits.get(0);
 		HgChangeset c2 = commits.get(1);
 		HgChangeset c3 = commits.get(2);
-		assertEquals(c1.getNodeid(), commitRev1);
-		assertEquals(c2.getNodeid(), commitRev2);
-		assertEquals(c3.getNodeid(), commitRev3);
-		assertEquals("branch1", c1.getBranch());
-		assertEquals("branch2", c2.getBranch());
-		assertEquals(DEFAULT_BRANCH_NAME, c3.getBranch());
-		assertEquals("FIRST", c1.getComment());
-		assertEquals("SECOND", c2.getComment());
-		assertEquals("THIRD", c3.getComment());
+		errorCollector.assertEquals(c1.getNodeid(), commitRev1);
+		errorCollector.assertEquals(c2.getNodeid(), commitRev2);
+		errorCollector.assertEquals(c3.getNodeid(), commitRev3);
+		errorCollector.assertEquals("branch1", c1.getBranch());
+		errorCollector.assertEquals("branch2", c2.getBranch());
+		errorCollector.assertEquals(DEFAULT_BRANCH_NAME, c3.getBranch());
+		errorCollector.assertEquals("FIRST", c1.getComment());
+		errorCollector.assertEquals("SECOND", c2.getComment());
+		errorCollector.assertEquals("THIRD", c3.getComment());
 		assertHgVerifyOk(repoLoc);
 	}
 	
@@ -239,17 +242,17 @@ public class TestCommit {
 		HgCommitCommand cmd = new HgCommitCommand(hgRepo);
 		assertFalse(cmd.isMergeCommit());
 		Outcome r = cmd.message("FIRST").execute();
-		assertTrue(r.isOk());
+		errorCollector.assertTrue(r.isOk());
 		Nodeid c1 = cmd.getCommittedRevision();
 		
+		// check that modified files are no longer reported as such
 		hgRepo = new HgLookup().detect(repoLoc);
-		//
-		new HgRevertCommand(hgRepo).file(dfB.getPath()).execute(); // FIXME Hack to emulate dirstate update
-		//
 		TestStatus.StatusCollector status = new TestStatus.StatusCollector();
-		new HgStatusCommand(hgRepo).defaults().execute(status);
-		assertTrue(status.getErrors().isEmpty());
-		assertTrue(status.get(Kind.Modified).isEmpty());
+		new HgStatusCommand(hgRepo).all().execute(status);
+		errorCollector.assertTrue(status.getErrors().isEmpty());
+		errorCollector.assertTrue(status.get(Kind.Modified).isEmpty());
+		errorCollector.assertEquals(1, status.get(dfB.getPath()).size());
+		errorCollector.assertTrue(status.get(dfB.getPath()).contains(Kind.Clean));
 		
 		HgDataFile dfD = hgRepo.getFileNode("d");
 		assertTrue("[sanity]", dfD.exists());
@@ -260,23 +263,23 @@ public class TestCommit {
 		cmd = new HgCommitCommand(hgRepo);
 		assertFalse(cmd.isMergeCommit());
 		r = cmd.message("SECOND").execute();
-		assertTrue(r.isOk());
+		errorCollector.assertTrue(r.isOk());
 		Nodeid c2 = cmd.getCommittedRevision();
 		//
 		hgRepo = new HgLookup().detect(repoLoc);
 		int lastRev = hgRepo.getChangelog().getLastRevision();
 		List<HgChangeset> csets = new HgLogCommand(hgRepo).range(lastRev-1, lastRev).execute();
-		assertEquals(csets.get(0).getNodeid(), c1);
-		assertEquals(csets.get(1).getNodeid(), c2);
-		assertEquals(csets.get(0).getComment(), "FIRST");
-		assertEquals(csets.get(1).getComment(), "SECOND");
+		errorCollector.assertEquals(csets.get(0).getNodeid(), c1);
+		errorCollector.assertEquals(csets.get(1).getNodeid(), c2);
+		errorCollector.assertEquals(csets.get(0).getComment(), "FIRST");
+		errorCollector.assertEquals(csets.get(1).getComment(), "SECOND");
 		assertHgVerifyOk(repoLoc);
 	}
 	
 	private void assertHgVerifyOk(File repoLoc) throws InterruptedException, IOException {
 		ExecHelper verifyRun = new ExecHelper(new OutputParser.Stub(), repoLoc);
 		verifyRun.run("hg", "verify");
-		assertEquals("hg verify", 0, verifyRun.getExitValue());
+		errorCollector.assertEquals("hg verify", 0, verifyRun.getExitValue());
 	}
 
 	public static void main(String[] args) throws Exception {

@@ -29,12 +29,16 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.core.HgCommitCommand;
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ChangelogEntryBuilder;
+import org.tmatesoft.hg.internal.DirstateBuilder;
+import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FNCacheFile;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ManifestEntryBuilder;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.RevlogStream;
@@ -97,7 +101,7 @@ public final class CommitFacility {
 		user = userName;
 	}
 	
-	public Nodeid commit(String message) throws HgRepositoryLockException {
+	public Nodeid commit(String message) throws HgIOException, HgRepositoryLockException {
 		
 		final HgChangelog clog = repo.getChangelog();
 		final int clogRevisionIndex = clog.getRevisionCount();
@@ -136,6 +140,7 @@ public final class CommitFacility {
 		//
 		// Register new/changed
 		ArrayList<Path> newlyAddedFiles = new ArrayList<Path>();
+		ArrayList<Path> touchInDirstate = new ArrayList<Path>();
 		for (Pair<HgDataFile, ByteDataSupplier> e : files.values()) {
 			HgDataFile df = e.first();
 			Pair<Integer, Integer> fp = fileParents.get(df.getPath());
@@ -165,6 +170,7 @@ public final class CommitFacility {
 			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo.getSessionContext(), contentStream);
 			Nodeid fileRev = fileWriter.addRevision(bac.toArray(), clogRevisionIndex, fp.first(), fp.second());
 			newManifestRevision.put(df.getPath(), fileRev);
+			touchInDirstate.add(df.getPath());
 		}
 		//
 		// Manifest
@@ -196,6 +202,18 @@ public final class CommitFacility {
 				repo.getSessionContext().getLog().dump(getClass(), Severity.Error, ex, "Failed to write fncache, error ignored");
 			}
 		}
+		// bring dirstate up to commit state
+		Internals implRepo = Internals.getInstance(repo);
+		final DirstateBuilder dirstateBuilder = new DirstateBuilder(implRepo);
+		dirstateBuilder.fillFrom(new DirstateReader(implRepo, new Path.SimpleSource()));
+		for (Path p : removals) {
+			dirstateBuilder.recordRemoved(p);
+		}
+		for (Path p : touchInDirstate) {
+			dirstateBuilder.recordUncertain(p);
+		}
+		dirstateBuilder.parents(changesetRev, Nodeid.NULL);
+		dirstateBuilder.serialize();
 		return changesetRev;
 	}
 /*
