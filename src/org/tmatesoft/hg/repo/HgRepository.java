@@ -23,11 +23,9 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.lang.ref.SoftReference;
 import java.nio.CharBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
@@ -94,7 +92,6 @@ public final class HgRepository implements SessionContext.Source {
 	 */
 	public static final String DEFAULT_BRANCH_NAME = "default";
 
-	private final File repoDir; // .hg folder
 	private final File workingDir; // .hg/../
 	private final String repoLocation;
 	/*
@@ -114,9 +111,6 @@ public final class HgRepository implements SessionContext.Source {
 	private HgBookmarks bookmarks;
 	private HgExtensionsManager extManager;
 
-	// XXX perhaps, shall enable caching explicitly
-	private final HashMap<Path, SoftReference<RevlogStream>> streamsCache = new HashMap<Path, SoftReference<RevlogStream>>();
-	
 	private final org.tmatesoft.hg.internal.Internals impl;
 	private HgIgnore ignore;
 	private HgRepoConfig repoConfig;
@@ -130,7 +124,6 @@ public final class HgRepository implements SessionContext.Source {
 
 	
 	HgRepository(String repositoryPath) {
-		repoDir = null;
 		workingDir = null;
 		repoLocation = repositoryPath;
 		normalizePath = null;
@@ -146,14 +139,24 @@ public final class HgRepository implements SessionContext.Source {
 		assert repositoryPath != null; 
 		assert repositoryRoot != null;
 		assert ctx != null;
-		repoDir = repositoryRoot;
-		workingDir = repoDir.getParentFile();
+		workingDir = repositoryRoot.getParentFile();
 		if (workingDir == null) {
-			throw new IllegalArgumentException(repoDir.toString());
+			throw new IllegalArgumentException(repositoryRoot.toString());
 		}
 		repoLocation = repositoryPath;
 		sessionContext = ctx;
-		impl = new org.tmatesoft.hg.internal.Internals(this, repositoryRoot);
+		impl = new Internals(this, repositoryRoot, new Internals.ImplAccess() {
+			
+			public RevlogStream getStream(HgDataFile df) {
+				return df.content;
+			}
+			public RevlogStream getManifestStream() {
+				return HgRepository.this.getManifest().content;
+			}
+			public RevlogStream getChangelogStream() {
+				return HgRepository.this.getChangelog().content;
+			}
+		});
 		normalizePath = impl.buildNormalizePathRewrite(); 
 	}
 
@@ -174,7 +177,7 @@ public final class HgRepository implements SessionContext.Source {
 	 * @return repository location information, never <code>null</code>
 	 */
 	public String getLocation() {
-		return repoLocation;
+		return repoLocation; // XXX field to keep this is bit too much 
 	}
 
 	public boolean isInvalid() {
@@ -183,8 +186,7 @@ public final class HgRepository implements SessionContext.Source {
 	
 	public HgChangelog getChangelog() {
 		if (changelog == null) {
-			File chlogFile = impl.getFileFromStoreDir("00changelog.i");
-			RevlogStream content = new RevlogStream(impl.getDataAccess(), chlogFile);
+			RevlogStream content = impl.createChangelogStream();
 			changelog = new HgChangelog(this, content);
 		}
 		return changelog;
@@ -192,8 +194,7 @@ public final class HgRepository implements SessionContext.Source {
 	
 	public HgManifest getManifest() {
 		if (manifest == null) {
-			File manifestFile = impl.getFileFromStoreDir("00manifest.i");
-			RevlogStream content = new RevlogStream(impl.getDataAccess(), manifestFile);
+			RevlogStream content = impl.createManifestStream();
 			manifest = new HgManifest(this, content, impl.buildFileNameEncodingHelper());
 		}
 		return manifest;
@@ -271,7 +272,7 @@ public final class HgRepository implements SessionContext.Source {
 	}
 
 	public HgDataFile getFileNode(Path path) {
-		RevlogStream content = resolveStoreFile(path);
+		RevlogStream content = impl.resolveStoreFile(path);
 		if (content == null) {
 			return new HgDataFile(this, path);
 		}
@@ -485,45 +486,6 @@ public final class HgRepository implements SessionContext.Source {
 	 */
 	public SessionContext getSessionContext() {
 		return sessionContext;
-	}
-
-	/**
-	 * Perhaps, should be separate interface, like ContentLookup
-	 * @param path - normalized file name
-	 * @return <code>null</code> if path doesn't resolve to a existing file
-	 */
-	/*package-local*/ RevlogStream resolveStoreFile(Path path) {
-		final SoftReference<RevlogStream> ref = streamsCache.get(path);
-		RevlogStream cached = ref == null ? null : ref.get();
-		if (cached != null) {
-			return cached;
-		}
-		File f = impl.getFileFromDataDir(path);
-		if (f.exists()) {
-			RevlogStream s = new RevlogStream(impl.getDataAccess(), f);
-			if (impl.shallCacheRevlogs()) {
-				streamsCache.put(path, new SoftReference<RevlogStream>(s));
-			}
-			return s;
-		}
-		return null;
-	}
-	
-	/*package-local*/ RevlogStream createStoreFile(Path path) throws HgInvalidControlFileException {
-		File f = impl.getFileFromDataDir(path);
-		try {
-			if (!f.exists()) {
-				f.getParentFile().mkdirs();
-				f.createNewFile();
-			}
-			RevlogStream s = new RevlogStream(impl.getDataAccess(), f);
-			if (impl.shallCacheRevlogs()) {
-				streamsCache.put(path, new SoftReference<RevlogStream>(s));
-			}
-			return s;
-		} catch (IOException ex) {
-			throw new HgInvalidControlFileException("Can't create a file in the storage", ex, f);
-		}
 	}
 	
 	/*package-local*/ List<Filter> getFiltersFromRepoToWorkingDir(Path p) {

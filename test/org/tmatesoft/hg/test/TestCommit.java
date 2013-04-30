@@ -35,8 +35,9 @@ import org.tmatesoft.hg.core.HgStatus.Kind;
 import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.CommitFacility;
 import org.tmatesoft.hg.internal.FileContentSupplier;
-import org.tmatesoft.hg.repo.CommitFacility;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -62,7 +63,7 @@ public class TestCommit {
 		new ExecHelper(new OutputParser.Stub(), repoLoc).run("hg", "commit", "--addremove", "-m", "FIRST");
 		//
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
-		CommitFacility cf = new CommitFacility(hgRepo, 0);
+		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), 0);
 		// FIXME test diff for processing changed newlines (ie \r\n -> \n or vice verse) - if a whole line or 
 		// just changed endings are in the patch!
 		HgDataFile df = hgRepo.getFileNode("file1");
@@ -90,7 +91,7 @@ public class TestCommit {
 		//
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
 		assertEquals("[sanity]", 0, new HgLogCommand(hgRepo).execute().size());
-		CommitFacility cf = new CommitFacility(hgRepo, NO_REVISION);
+		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), NO_REVISION);
 		HgDataFile df = hgRepo.getFileNode(fname);
 		final byte[] initialContent = "hello\nworld".getBytes();
 		cf.add(df, new ByteArraySupplier(initialContent));
@@ -125,7 +126,7 @@ public class TestCommit {
 		assertEquals("[sanity]", DEFAULT_BRANCH_NAME, parentCset.getBranch());
 		//
 		RepoUtils.modifyFileAppend(fileD, "A CHANGE\n");
-		CommitFacility cf = new CommitFacility(hgRepo, parentCsetRevIndex);
+		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), parentCsetRevIndex);
 		FileContentSupplier contentProvider = new FileContentSupplier(fileD);
 		cf.add(dfD, contentProvider);
 		cf.branch("branch1");
@@ -155,7 +156,7 @@ public class TestCommit {
 		assertTrue("[sanity]", new File(repoLoc, "d").canRead());
 		RepoUtils.createFile(new File(repoLoc, "xx"), "xyz");
 		new HgAddRemoveCommand(hgRepo).add(Path.create("xx")).remove(Path.create("d")).execute();
-		CommitFacility cf = new CommitFacility(hgRepo, hgRepo.getChangelog().getLastRevision());
+		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), hgRepo.getChangelog().getLastRevision());
 		FileContentSupplier contentProvider = new FileContentSupplier(new File(repoLoc, "xx"));
 		cf.add(hgRepo.getFileNode("xx"), contentProvider);
 		cf.forget(hgRepo.getFileNode("d"));
@@ -191,7 +192,7 @@ public class TestCommit {
 		//
 		RepoUtils.modifyFileAppend(fileD, " 1 \n");
 		final int parentCsetRevIndex = hgRepo.getChangelog().getLastRevision();
-		CommitFacility cf = new CommitFacility(hgRepo, parentCsetRevIndex);
+		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), parentCsetRevIndex);
 		FileContentSupplier contentProvider = new FileContentSupplier(fileD);
 		cf.add(dfD, contentProvider);
 		cf.branch("branch1");

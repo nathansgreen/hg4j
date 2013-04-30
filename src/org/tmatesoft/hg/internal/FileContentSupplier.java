@@ -24,7 +24,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.core.HgIOException;
-import org.tmatesoft.hg.repo.CommitFacility;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 

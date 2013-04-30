@@ -23,9 +23,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.CommitFacility;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileContentSupplier;
-import org.tmatesoft.hg.repo.CommitFacility;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -104,7 +105,7 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 				newRevision = Nodeid.NULL;
 				return new Outcome(Kind.Failure, "nothing to add");
 			}
-			CommitFacility cf = new CommitFacility(repo, parentRevs[0], parentRevs[1]);
+			CommitFacility cf = new CommitFacility(Internals.getInstance(repo), parentRevs[0], parentRevs[1]);
 			for (Path m : status.getModified()) {
 				HgDataFile df = repo.getFileNode(m);
 				cf.add(df, new WorkingCopyContent(df));

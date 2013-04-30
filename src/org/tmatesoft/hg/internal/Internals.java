@@ -32,11 +32,13 @@ import java.util.StringTokenizer;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRepositoryFiles;
 import org.tmatesoft.hg.repo.HgRepositoryLock;
 import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 
 /**
@@ -115,25 +117,29 @@ public final class Internals implements SessionContext.Source {
 	private final HgRepository repo;
 	private final File repoDir;
 	private final boolean isCaseSensitiveFileSystem;
-	private final boolean shallCacheRevlogsInRepo;
 	private final DataAccessProvider dataAccess;
+	private final ImplAccess implAccess;
 	
 	private final int requiresFlags;
 
 	private final PathRewrite dataPathHelper; // access to file storage area (usually under .hg/store/data/), with filenames mangled  
 	private final PathRewrite repoPathHelper; // access to system files (under .hg/store if requires has 'store' flag)
 
-	public Internals(HgRepository hgRepo, File hgDir) throws HgRuntimeException {
+	private final RevlogStreamFactory streamProvider;
+
+	public Internals(HgRepository hgRepo, File hgDir, ImplAccess implementationAccess) throws HgRuntimeException {
 		repo = hgRepo;
 		repoDir = hgDir;
+		implAccess = implementationAccess;
 		isCaseSensitiveFileSystem = !runningOnWindows();
 		SessionContext ctx = repo.getSessionContext();
-		shallCacheRevlogsInRepo = new PropertyMarshal(ctx).getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
 		dataAccess = new DataAccessProvider(ctx);
 		RepoInitializer repoInit = new RepoInitializer().initRequiresFromFile(repoDir);
 		requiresFlags = repoInit.getRequires();
 		dataPathHelper = repoInit.buildDataFilesHelper(getSessionContext());
 		repoPathHelper = repoInit.buildStoreFilesHelper();
+		boolean shallCacheRevlogsInRepo = new PropertyMarshal(ctx).getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
+		streamProvider = new RevlogStreamFactory(this, shallCacheRevlogsInRepo); 
 	}
 	
 	public boolean isInvalid() {
@@ -371,6 +377,9 @@ public final class Internals implements SessionContext.Source {
 		return configFile;
 	}
 
+	/*package-local*/ImplAccess getImplAccess() {
+		return implAccess;
+	}
 	
 	private static List<File> getWindowsConfigFilesPerInstall(File hgInstallDir) {
 		File f = new File(hgInstallDir, "Mercurial.ini");
@@ -454,11 +463,25 @@ public final class Internals implements SessionContext.Source {
 		// fallback to default, let calling code fail with Exception if can't write
 		return new File(System.getProperty("user.home"), ".hgrc");
 	}
+	
+	public RevlogStream createManifestStream() {
+		File manifestFile = getFileFromStoreDir("00manifest.i");
+		return streamProvider.create(manifestFile);
+	}
 
-	public boolean shallCacheRevlogs() {
-		return shallCacheRevlogsInRepo;
+	public RevlogStream createChangelogStream() {
+		File chlogFile = getFileFromStoreDir("00changelog.i");
+		return streamProvider.create(chlogFile);
+	}
+
+	public RevlogStream resolveStoreFile(Path path) {
+		return streamProvider.resolveStoreFile(path);
 	}
 	
+	/*package-local*/ RevlogStream createStoreFile(Path path) throws HgInvalidControlFileException {
+		return streamProvider.createStoreFile(path);
+	}
+
 	// marker method
 	public static IllegalStateException notImplemented() {
 		return new IllegalStateException("Not implemented");
@@ -495,5 +518,12 @@ public final class Internals implements SessionContext.Source {
 		int i = (int) l;
 		assert ((long) i) == l : "Loss of data!";
 		return i;
+	}
+
+	// access implementation details (fields, methods) of oth.repo package
+	public interface ImplAccess {
+		public RevlogStream getStream(HgDataFile df);
+		public RevlogStream getManifestStream();
+		public RevlogStream getChangelogStream();
 	}
 }

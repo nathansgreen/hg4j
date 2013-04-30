@@ -14,7 +14,7 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.repo;
+package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
@@ -32,17 +32,9 @@ import org.tmatesoft.hg.core.HgCommitCommand;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.ByteArrayChannel;
-import org.tmatesoft.hg.internal.ChangelogEntryBuilder;
-import org.tmatesoft.hg.internal.DirstateBuilder;
-import org.tmatesoft.hg.internal.DirstateReader;
-import org.tmatesoft.hg.internal.Experimental;
-import org.tmatesoft.hg.internal.FNCacheFile;
-import org.tmatesoft.hg.internal.Internals;
-import org.tmatesoft.hg.internal.ManifestEntryBuilder;
-import org.tmatesoft.hg.internal.ManifestRevision;
-import org.tmatesoft.hg.internal.RevlogStream;
-import org.tmatesoft.hg.internal.RevlogStreamWriter;
+import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.LogFacility.Severity;
@@ -50,24 +42,24 @@ import org.tmatesoft.hg.util.LogFacility.Severity;
 /**
  * WORK IN PROGRESS
  * Name: CommitObject, FutureCommit or PendingCommit
- * Only public API now: {@link HgCommitCommand}. TEMPORARILY lives in the oth.repo public packages, until code interdependencies are resolved
+ * Only public API now: {@link HgCommitCommand}.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 @Experimental(reason="Work in progress")
 public final class CommitFacility {
-	private final HgRepository repo;
+	private final Internals repo;
 	private final int p1Commit, p2Commit;
 	private Map<Path, Pair<HgDataFile, ByteDataSupplier>> files = new LinkedHashMap<Path, Pair<HgDataFile, ByteDataSupplier>>();
 	private Set<Path> removals = new TreeSet<Path>();
 	private String branch, user;
 
-	public CommitFacility(HgRepository hgRepo, int parentCommit) {
+	public CommitFacility(Internals hgRepo, int parentCommit) {
 		this(hgRepo, parentCommit, NO_REVISION);
 	}
 	
-	public CommitFacility(HgRepository hgRepo, int parent1Commit, int parent2Commit) {
+	public CommitFacility(Internals hgRepo, int parent1Commit, int parent2Commit) {
 		repo = hgRepo;
 		p1Commit = parent1Commit;
 		p2Commit = parent2Commit;
@@ -102,23 +94,22 @@ public final class CommitFacility {
 	}
 	
 	public Nodeid commit(String message) throws HgIOException, HgRepositoryLockException {
-		
-		final HgChangelog clog = repo.getChangelog();
+		final HgChangelog clog = repo.getRepo().getChangelog();
 		final int clogRevisionIndex = clog.getRevisionCount();
 		ManifestRevision c1Manifest = new ManifestRevision(null, null);
 		ManifestRevision c2Manifest = new ManifestRevision(null, null);
 		if (p1Commit != NO_REVISION) {
-			repo.getManifest().walk(p1Commit, p1Commit, c1Manifest);
+			repo.getRepo().getManifest().walk(p1Commit, p1Commit, c1Manifest);
 		}
 		if (p2Commit != NO_REVISION) {
-			repo.getManifest().walk(p2Commit, p2Commit, c2Manifest);
+			repo.getRepo().getManifest().walk(p2Commit, p2Commit, c2Manifest);
 		}
 //		Pair<Integer, Integer> manifestParents = getManifestParents();
 		Pair<Integer, Integer> manifestParents = new Pair<Integer, Integer>(c1Manifest.revisionIndex(), c2Manifest.revisionIndex());
 		TreeMap<Path, Nodeid> newManifestRevision = new TreeMap<Path, Nodeid>();
 		HashMap<Path, Pair<Integer, Integer>> fileParents = new HashMap<Path, Pair<Integer,Integer>>();
 		for (Path f : c1Manifest.files()) {
-			HgDataFile df = repo.getFileNode(f);
+			HgDataFile df = repo.getRepo().getFileNode(f);
 			Nodeid fileKnownRev1 = c1Manifest.nodeid(f), fileKnownRev2;
 			final int fileRevIndex1 = df.getRevisionIndex(fileKnownRev1);
 			final int fileRevIndex2;
@@ -159,7 +150,7 @@ public final class CommitFacility {
 			}
 			RevlogStream contentStream;
 			if (df.exists()) {
-				contentStream = df.content;
+				contentStream = repo.getImplAccess().getStream(df);
 			} else {
 				contentStream = repo.createStoreFile(df.getPath());
 				newlyAddedFiles.add(df.getPath());
@@ -167,7 +158,7 @@ public final class CommitFacility {
 				// that would attempt to access newly added file after commit would fail
 				// (despite the fact the file is in there)
 			}
-			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo.getSessionContext(), contentStream);
+			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream);
 			Nodeid fileRev = fileWriter.addRevision(bac.toArray(), clogRevisionIndex, fp.first(), fp.second());
 			newManifestRevision.put(df.getPath(), fileRev);
 			touchInDirstate.add(df.getPath());
@@ -178,7 +169,7 @@ public final class CommitFacility {
 		for (Map.Entry<Path, Nodeid> me : newManifestRevision.entrySet()) {
 			manifestBuilder.add(me.getKey().toString(), me.getValue());
 		}
-		RevlogStreamWriter manifestWriter = new RevlogStreamWriter(repo.getSessionContext(), repo.getManifest().content);
+		RevlogStreamWriter manifestWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getManifestStream());
 		Nodeid manifestRev = manifestWriter.addRevision(manifestBuilder.build(), clogRevisionIndex, manifestParents.first(), manifestParents.second());
 		//
 		// Changelog
@@ -187,11 +178,11 @@ public final class CommitFacility {
 		changelogBuilder.branch(branch == null ? HgRepository.DEFAULT_BRANCH_NAME : branch);
 		changelogBuilder.user(String.valueOf(user));
 		byte[] clogContent = changelogBuilder.build(manifestRev, message);
-		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo.getSessionContext(), clog.content);
+		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream());
 		Nodeid changesetRev = changelogWriter.addRevision(clogContent, clogRevisionIndex, p1Commit, p2Commit);
 		// FIXME move fncache update to an external facility, along with dirstate update
-		if (!newlyAddedFiles.isEmpty() && repo.getImplHelper().fncacheInUse()) {
-			FNCacheFile fncache = new FNCacheFile(repo.getImplHelper());
+		if (!newlyAddedFiles.isEmpty() && repo.fncacheInUse()) {
+			FNCacheFile fncache = new FNCacheFile(repo);
 			for (Path p : newlyAddedFiles) {
 				fncache.add(p);
 			}
@@ -203,9 +194,8 @@ public final class CommitFacility {
 			}
 		}
 		// bring dirstate up to commit state
-		Internals implRepo = Internals.getInstance(repo);
-		final DirstateBuilder dirstateBuilder = new DirstateBuilder(implRepo);
-		dirstateBuilder.fillFrom(new DirstateReader(implRepo, new Path.SimpleSource()));
+		final DirstateBuilder dirstateBuilder = new DirstateBuilder(repo);
+		dirstateBuilder.fillFrom(new DirstateReader(repo, new Path.SimpleSource()));
 		for (Path p : removals) {
 			dirstateBuilder.recordRemoved(p);
 		}

@@ -44,11 +44,11 @@ public class RevlogStreamWriter {
 	private IntMap<Nodeid> revisionCache = new IntMap<Nodeid>(32);
 	private RevlogStream revlogStream;
 	
-	public RevlogStreamWriter(SessionContext ctx, RevlogStream stream) {
-		assert ctx != null;
+	public RevlogStreamWriter(SessionContext.Source ctxSource, RevlogStream stream) {
+		assert ctxSource != null;
 		assert stream != null;
 				
-		revlogDataZip = new RevlogCompressor(ctx);
+		revlogDataZip = new RevlogCompressor(ctxSource.getSessionContext());
 		revlogStream = stream;
 	}
 	
