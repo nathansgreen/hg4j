@@ -16,15 +16,10 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.core.HgIterateDirection.NewToOld;
 import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
-import static org.tmatesoft.hg.repo.HgRepository.*;
-
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.LinkedList;
+import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
@@ -32,7 +27,8 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.BlameHelper;
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.Experimental;
-import org.tmatesoft.hg.internal.IntVector;
+import org.tmatesoft.hg.internal.FileHistory;
+import org.tmatesoft.hg.internal.FileRevisionHistoryChunk;
 import org.tmatesoft.hg.util.Adaptable;
 
 /**
@@ -89,72 +85,23 @@ public final class HgBlameFacility {
 		if (!df.exists()) {
 			return;
 		}
+		FileHistory fileHistory = new FileHistory(df, changelogRevIndexStart, changelogRevIndexEnd);
+		fileHistory.build();
 		BlameHelper bh = new BlameHelper(insp, 10);
-		HgDataFile currentFile = df;
-		int fileLastClogRevIndex = changelogRevIndexEnd;
-		FileRevisionHistoryChunk nextChunk = null;
-		LinkedList<FileRevisionHistoryChunk> fileCompleteHistory = new LinkedList<FileRevisionHistoryChunk>();
-		do {
-			FileRevisionHistoryChunk fileHistory = new FileRevisionHistoryChunk(currentFile);
-			fileHistory.init(fileLastClogRevIndex);
-			fileHistory.linkTo(nextChunk);
-			fileCompleteHistory.addFirst(fileHistory); // to get the list in old-to-new order
-			nextChunk = fileHistory;
-			bh.useFileUpTo(currentFile, fileLastClogRevIndex);
-			if (fileHistory.changeset(0) > changelogRevIndexStart && currentFile.isCopy()) {
-				// fileHistory.changeset(0) is the earliest revision we know about so far,
-				// once we get to revisions earlier than the requested start, stop digging.
-				// The reason there's NO == (i.e. not >=) because:
-				// (easy): once it's equal, we've reached our intended start
-				// (hard): if changelogRevIndexStart happens to be exact start of one of renames in the 
-				// chain of renames (test-annotate2 repository, file1->file1a->file1b, i.e. points 
-				// to the very start of file1a or file1 history), presence of == would get us to the next 
-				// chunk and hence changed parents of present chunk's first element. Our annotate alg 
-				// relies on parents only (i.e. knows nothing about 'last iteration element') to find out 
-				// what to compare, and hence won't report all lines of 'last iteration element' (which is the
-				// first revision of the renamed file) as "added in this revision", leaving gaps in annotate
-				HgRepository repo = currentFile.getRepo();
-				Nodeid originLastRev = currentFile.getCopySourceRevision();
-				currentFile = repo.getFileNode(currentFile.getCopySourceName());
-				fileLastClogRevIndex = currentFile.getChangesetRevisionIndex(currentFile.getRevisionIndex(originLastRev));
-				// XXX perhaps, shall fail with meaningful exception if new file doesn't exist (.i/.d not found for whatever reason)
-				// or source revision is missing?
-			} else {
-				fileHistory.chopAtChangeset(changelogRevIndexStart);
-				currentFile = null; // stop iterating
-			}
-		} while (currentFile != null && fileLastClogRevIndex > changelogRevIndexStart);
-		// fileCompleteHistory is in (origin, intermediate target, ultimate target) order
-
+		for (FileRevisionHistoryChunk fhc : fileHistory.iterate(OldToNew)) {
+			// iteration order is not important here
+			bh.useFileUpTo(fhc.getFile(), fhc.getEndChangeset());
+		}
 		int[] fileClogParentRevs = new int[2];
 		int[] fileParentRevs = new int[2];
-		if (iterateOrder == NewToOld) {
-			Collections.reverse(fileCompleteHistory);
-		}
-		boolean shallFilterStart = changelogRevIndexStart != 0; // no reason if complete history is walked
-		for (FileRevisionHistoryChunk fileHistory : fileCompleteHistory) {
-			for (int fri : fileHistory.fileRevisions(iterateOrder)) {
-				int clogRevIndex = fileHistory.changeset(fri);
-				if (shallFilterStart) {
-					if (iterateOrder == NewToOld) {
-						// clogRevIndex decreases
-						if (clogRevIndex < changelogRevIndexStart) {
-							break;
-						}
-						// fall-through, clogRevIndex is in the [start..end] range
-					} else { // old to new
-						// the way we built fileHistory ensures we won't walk past changelogRevIndexEnd
-						// here we ensure we start from the right one, the one indicated with changelogRevIndexStart
-						if (clogRevIndex < changelogRevIndexStart) {
-							continue;
-						} else {
-							shallFilterStart = false; // once boundary is crossed, no need to check
-							// fall-through
-						}
-					}
-				}
-				fileHistory.fillFileParents(fri, fileParentRevs);
-				fileHistory.fillCsetParents(fri, fileClogParentRevs);
+		for (FileRevisionHistoryChunk fhc : fileHistory.iterate(iterateOrder)) {
+			for (int fri : fhc.fileRevisions(iterateOrder)) {
+				int clogRevIndex = fhc.changeset(fri);
+				// the way we built fileHistory ensures we won't walk past [changelogRevIndexStart..changelogRevIndexEnd]
+				assert clogRevIndex >= changelogRevIndexStart;
+				assert clogRevIndex <= changelogRevIndexEnd;
+				fhc.fillFileParents(fri, fileParentRevs);
+				fhc.fillCsetParents(fri, fileClogParentRevs);
 				bh.annotateChange(fri, clogRevIndex, fileParentRevs, fileClogParentRevs);
 			}
 		}
@@ -195,13 +142,6 @@ public final class HgBlameFacility {
 		void added(AddBlock block) throws HgCallbackTargetException;
 		void changed(ChangeBlock block) throws HgCallbackTargetException;
 		void deleted(DeleteBlock block) throws HgCallbackTargetException;
-	}
-	
-	/**
-	 * No need to keep "Block" prefix as long as there's only one {@link Inspector}
-	 */
-	@Deprecated
-	public interface BlockInspector extends Inspector {
 	}
 	
 	/**
@@ -352,136 +292,5 @@ public final class HgBlameFacility {
 	private static int fileRevIndex(HgDataFile df, int csetRevIndex) {
 		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(csetRevIndex, df.getPath());
 		return df.getRevisionIndex(fileRev);
-	}
-	
-	private static class FileRevisionHistoryChunk {
-		private final HgDataFile df;
-		// change ancestry, sequence of file revisions
-		private IntVector fileRevsToVisit;
-		// parent pairs of complete file history
-		private IntVector fileParentRevs;
-		// map file revision to changelog revision (sparse array, only file revisions to visit are set)
-		private int[] file2changelog;
-		private int originChangelogRev = BAD_REVISION, originFileRev = BAD_REVISION;
-
-		public FileRevisionHistoryChunk(HgDataFile file) {
-			df = file;
-		}
-		
-		public void init(int changelogRevisionIndex) {
-			// XXX df.indexWalk(0, fileRevIndex, ) might be more effective
-			int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
-			int[] fileRevParents = new int[2];
-			fileParentRevs = new IntVector((fileRevIndex+1) * 2, 0);
-			fileParentRevs.add(NO_REVISION, NO_REVISION); // parents of fileRevIndex == 0
-			for (int i = 1; i <= fileRevIndex; i++) {
-				df.parents(i, fileRevParents, null, null);
-				fileParentRevs.add(fileRevParents[0], fileRevParents[1]);
-			}
-			// fileRevsToVisit keep file change ancestry from new to old
-			fileRevsToVisit = new IntVector(fileRevIndex + 1, 0);
-			// keep map of file revision to changelog revision
-			file2changelog = new int[fileRevIndex+1];
-			// only elements worth visit would get mapped, so there would be unfilled areas in the file2changelog,
-			// prevent from error (make it explicit) by bad value
-			Arrays.fill(file2changelog, BAD_REVISION);
-			LinkedList<Integer> queue = new LinkedList<Integer>();
-			BitSet seen = new BitSet(fileRevIndex + 1);
-			queue.add(fileRevIndex);
-			do {
-				int x = queue.removeFirst();
-				if (seen.get(x)) {
-					continue;
-				}
-				seen.set(x);
-				fileRevsToVisit.add(x);
-				file2changelog[x] = df.getChangesetRevisionIndex(x);
-				int p1 = fileParentRevs.get(2*x);
-				int p2 = fileParentRevs.get(2*x + 1);
-				if (p1 != NO_REVISION) {
-					queue.addLast(p1);
-				}
-				if (p2 != NO_REVISION) {
-					queue.addLast(p2);
-				}
-			} while (!queue.isEmpty());
-			// make sure no child is processed before we handled all (grand-)parents of the element
-			fileRevsToVisit.sort(false);
-		}
-		
-		public void linkTo(FileRevisionHistoryChunk target) {
-			// assume that target.init() has been called already 
-			if (target == null) {
-				return;
-			}
-			target.originFileRev = fileRevsToVisit.get(0); // files to visit are new to old
-			target.originChangelogRev = changeset(target.originFileRev);
-		}
-
-		/**
-		 * Mark revision closest(ceil) to specified as the very first one (no parents) 
-		 */
-		public void chopAtChangeset(int firstChangelogRevOfInterest) {
-			if (firstChangelogRevOfInterest == 0) {
-				return; // nothing to do
-			}
-			int i = 0, x = fileRevsToVisit.size(), fileRev = BAD_REVISION;
-			// fileRevsToVisit is new to old, greater numbers to smaller
-			while (i < x && changeset(fileRev = fileRevsToVisit.get(i)) >= firstChangelogRevOfInterest) {
-				i++;
-			}
-			assert fileRev != BAD_REVISION; // there's at least 1 revision in fileRevsToVisit
-			if (i == x && changeset(fileRev) != firstChangelogRevOfInterest) {
-				assert false : "Requested changeset shall belong to the chunk";
-				return;
-			}
-			fileRevsToVisit.trimTo(i); // no need to iterate more
-			// pretend fileRev got no parents
-			fileParentRevs.set(fileRev * 2, NO_REVISION);
-			fileParentRevs.set(fileRev, NO_REVISION);
-		}
-
-		public int[] fileRevisions(HgIterateDirection iterateOrder) {
-			// fileRevsToVisit is { r10, r7, r6, r5, r0 }, new to old
-			int[] rv = fileRevsToVisit.toArray();
-			if (iterateOrder == OldToNew) {
-				// reverse return value
-				for (int a = 0, b = rv.length-1; a < b; a++, b--) {
-					int t = rv[b];
-					rv[b] = rv[a];
-					rv[a] = t;
-				}
-			}
-			return rv;
-		}
-		
-		public int changeset(int fileRevIndex) {
-			return file2changelog[fileRevIndex];
-		}
-		
-		public void fillFileParents(int fileRevIndex, int[] fileParents) {
-			if (fileRevIndex == 0 && originFileRev != BAD_REVISION) {
-				// this chunk continues another file
-				assert originFileRev != NO_REVISION;
-				fileParents[0] = originFileRev;
-				fileParents[1] = NO_REVISION;
-				return;
-			}
-			fileParents[0] = fileParentRevs.get(fileRevIndex * 2);
-			fileParents[1] = fileParentRevs.get(fileRevIndex * 2 + 1);
-		}
-		
-		public void fillCsetParents(int fileRevIndex, int[] csetParents) {
-			if (fileRevIndex == 0 && originFileRev != BAD_REVISION) {
-				assert originFileRev != NO_REVISION;
-				csetParents[0] = originChangelogRev;
-				csetParents[1] = NO_REVISION; // I wonder if possible to start a copy with two parents?
-				return;
-			}
-			int fp1 = fileParentRevs.get(fileRevIndex * 2);
-			int fp2 = fileParentRevs.get(fileRevIndex * 2 + 1);
-			csetParents[0] = fp1 == NO_REVISION ? NO_REVISION : changeset(fp1);
-			csetParents[1] = fp2 == NO_REVISION ? NO_REVISION : changeset(fp2);
-		}
 	}
 }

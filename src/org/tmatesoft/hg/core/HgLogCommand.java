@@ -30,7 +30,6 @@ import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -42,6 +41,7 @@ import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.LifecycleProxy;
+import org.tmatesoft.hg.internal.ReverseIterator;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -446,12 +446,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		}
 		
 		public Iterable<BatchRecord> iterate(final boolean reverse) {
-			return new Iterable<BatchRecord>() {
-				
-				public Iterator<BatchRecord> iterator() {
-					return reverse ? new ReverseIterator<BatchRecord>(batch) : batch.iterator();
-				}
-			};
+			return reverse ? ReverseIterator.reversed(batch) : batch;
 		}
 		
 		// alternative would be dispatch(HgChangelog.Inspector) and dispatchReverse()
@@ -563,24 +558,6 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		progressHelper.done();
 	}
 	
-	private static class ReverseIterator<E> implements Iterator<E> {
-		private final ListIterator<E> listIterator;
-		
-		public ReverseIterator(List<E> list) {
-			listIterator = list.listIterator(list.size());
-		}
-
-		public boolean hasNext() {
-			return listIterator.hasPrevious();
-		}
-		public E next() {
-			return listIterator.previous();
-		}
-		public void remove() {
-			listIterator.remove();
-		}
-	}
-
 	/**
 	 * Utility to build sequence of file renames
 	 */
