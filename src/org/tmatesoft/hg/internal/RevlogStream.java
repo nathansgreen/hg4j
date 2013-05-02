@@ -323,7 +323,7 @@ public class RevlogStream {
 
 		ReaderN1 r = new ReaderN1(needData, inspector, dataAccess.shallMergePatches());
 		try {
-			r.start(sortedRevisions.length, lastRevisionRead == null ? null : lastRevisionRead.get());
+			r.start(sortedRevisions.length, getLastRevisionRead());
 			for (int i = 0; i < sortedRevisions.length; ) {
 				int x = i;
 				i++;
@@ -571,7 +571,16 @@ public class RevlogStream {
 		public CachedRevision finish() {
 			CachedRevision rv = null;
 			if (lastUserData != null) {
-				rv = new CachedRevision(lastRevisionRead, lastUserData);
+				if (lastUserData instanceof ByteArrayDataAccess) {
+					// it's safe to cache only in-memory revision texts,
+					// if lastUserData is merely a filter over file stream,
+					// we'd need to keep file open, and this is bad.
+					// XXX perhaps, wrap any DataAccess.byteArray into
+					// ByteArrayDataAccess?
+					rv = new CachedRevision(lastRevisionRead, lastUserData);
+				} else {
+					lastUserData.done();
+				}
 				lastUserData = null;
 			}
 			if (lifecycleListener != null) {
