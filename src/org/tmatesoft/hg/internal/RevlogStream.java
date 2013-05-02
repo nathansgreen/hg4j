@@ -22,6 +22,9 @@ import static org.tmatesoft.hg.internal.Internals.REVLOGV1_RECORD_SIZE;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.SoftReference;
 import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.Nodeid;
@@ -59,6 +62,14 @@ public class RevlogStream {
 	private final File indexFile;
 	private File dataFile;
 	private final DataAccessProvider dataAccess;
+	// keeps last complete revision we've read. Note, this cached revision doesn't help
+	// for subsequent #iterate() calls with the same revision (Inspector needs more data than 
+	// we currently cache here, perhaps, we shall cache everything it wants to cover same 
+	// revision case as well). Now this helps when second #iterate() call is for a revision greater
+	// than one from the first call, and both revisions got same base rev. It's often the case when
+	// parents/children are analyzed.
+	private SoftReference<CachedRevision> lastRevisionRead;
+	private final ReferenceQueue<CachedRevision> lastRevisionQueue = new ReferenceQueue<CachedRevision>();
 
 	// if we need anything else from HgRepo, might replace DAP parameter with HgRepo and query it for DAP.
 	public RevlogStream(DataAccessProvider dap, File indexFile) {
@@ -260,8 +271,6 @@ public class RevlogStream {
 		}
 	}
 
-
-
 	// should be possible to use TIP, ALL, or -1, -2, -n notation of Hg
 	// ? boolean needsNodeid
 	public void iterate(int start, int end, boolean needData, Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
@@ -281,14 +290,15 @@ public class RevlogStream {
 		
 		ReaderN1 r = new ReaderN1(needData, inspector, dataAccess.shallMergePatches());
 		try {
-			r.start(end - start + 1);
+			r.start(end - start + 1, getLastRevisionRead());
 			r.range(start, end);
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException(String.format("Failed reading [%d..%d]", start, end), ex, indexFile);
 		} catch (HgInvalidControlFileException ex) {
 			throw ex;
 		} finally {
-			r.finish();
+			CachedRevision cr = r.finish();
+			setLastRevisionRead(cr);
 		}
 	}
 	
@@ -313,7 +323,7 @@ public class RevlogStream {
 
 		ReaderN1 r = new ReaderN1(needData, inspector, dataAccess.shallMergePatches());
 		try {
-			r.start(sortedRevisions.length);
+			r.start(sortedRevisions.length, lastRevisionRead == null ? null : lastRevisionRead.get());
 			for (int i = 0; i < sortedRevisions.length; ) {
 				int x = i;
 				i++;
@@ -336,7 +346,8 @@ public class RevlogStream {
 			// TODO post-1.0 fill HgRuntimeException with appropriate file (either index or data, depending on error source)
 			throw ex;
 		} finally {
-			r.finish();
+			CachedRevision cr = r.finish();
+			setLastRevisionRead(cr);
 		}
 	}
 
@@ -471,6 +482,37 @@ public class RevlogStream {
 		}
 	}
 	
+	private CachedRevision getLastRevisionRead() {
+		return lastRevisionRead == null ? null : lastRevisionRead.get();
+	}
+	
+	private void setLastRevisionRead(CachedRevision cr) {
+		// done() for lastRevisionRead.userData has been called by ReaderN1 once
+		// it noticed unsuitable DataAccess.
+		// Now, done() for any CachedRevision cleared by GC:
+		for (Reference<? extends CachedRevision> r; (r = lastRevisionQueue.poll()) != null;) {
+			CachedRevision toClean = r.get();
+			if (toClean != null && toClean.userData != null) {
+				toClean.userData.done();
+			}
+		}
+		if (cr != null) {
+			lastRevisionRead = new SoftReference<CachedRevision>(cr, lastRevisionQueue);
+		} else {
+			lastRevisionRead = null;
+		}
+	}
+	
+	final static class CachedRevision {
+		final int revision;
+		final DataAccess userData;
+		
+		public CachedRevision(int lastRevisionRead, DataAccess lastUserData) {
+			revision = lastRevisionRead;
+			userData = lastUserData;
+		}
+	}
+
 	/**
 	 * operation with single file open/close and multiple diverse reads.
 	 * XXX initOutline might need similar extraction to keep N1 format knowledge  
@@ -500,8 +542,6 @@ public class RevlogStream {
 		private int linkRevision;
 		private int parent1Revision;
 		private int parent2Revision;
-		// next are to track two major bottlenecks - patch application and actual time spent in inspector 
-//		private long applyTime, inspectorTime; // TIMING
 		
 		public ReaderN1(boolean dataRequested, Inspector insp, boolean usePatchMerge) {
 			assert insp != null;
@@ -510,7 +550,7 @@ public class RevlogStream {
 			mergePatches = usePatchMerge;
 		}
 		
-		public void start(int totalWork) {
+		public void start(int totalWork, CachedRevision cachedRevision) {
 			daIndex = getIndexStream();
 			if (needData && !inline) {
 				daData = getDataStream();
@@ -520,13 +560,18 @@ public class RevlogStream {
 				cb = new Lifecycle.BasicCallback();
 				lifecycleListener.start(totalWork, cb, cb);
 			}
-//			applyTime = inspectorTime = 0; // TIMING
+			if (needData && cachedRevision != null) {
+				lastUserData = cachedRevision.userData;
+				lastRevisionRead = cachedRevision.revision;
+				assert lastUserData != null;
+			}
 		}
 
 		// invoked only once per instance
-		public void finish() {
+		public CachedRevision finish() {
+			CachedRevision rv = null;
 			if (lastUserData != null) {
-				lastUserData.done();
+				rv = new CachedRevision(lastRevisionRead, lastUserData);
 				lastUserData = null;
 			}
 			if (lifecycleListener != null) {
@@ -540,7 +585,7 @@ public class RevlogStream {
 				daData.done();
 				daData = null;
 			}
-//			System.out.printf("applyTime:%d ms, inspectorTime: %d ms\n", applyTime, inspectorTime); // TIMING
+			return rv;
 		}
 		
 		private void readHeaderRecord(int i) throws IOException {
