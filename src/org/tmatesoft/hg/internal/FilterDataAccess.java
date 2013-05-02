@@ -45,6 +45,7 @@ public class FilterDataAccess extends DataAccess {
 
 	@Override
 	public FilterDataAccess reset() throws IOException {
+		dataAccess.reset();
 		count = length;
 		return this;
 	}
