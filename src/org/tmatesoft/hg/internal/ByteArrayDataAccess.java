@@ -54,8 +54,31 @@ public class ByteArrayDataAccess extends DataAccess {
 		if (len > (this.length - pos)) {
 			throw new IOException();
 		}
-		System.arraycopy(data, pos, buf, off, len);
+		System.arraycopy(data, offset+pos, buf, off, len);
 		pos += len;
+	}
+	@Override
+	public int readInt() throws IOException {
+		// overridden not to create an intermediate array
+		if (length - pos < 4) {
+			throw new IOException();
+		}
+		int x = offset + pos;
+		int rv = data[x++] << 24 | (data[x++] & 0xFF) << 16 | (data[x++] & 0xFF) << 8 | (data[x] & 0xFF);
+		pos += 4;
+		return rv;
+	}
+	@Override
+	public long readLong() throws IOException {
+		// overridden not to create an intermediate array
+		if (length - pos < 8) {
+			throw new IOException();
+		}
+		int x = offset + pos;
+		int i1 = data[x++] << 24 | (data[x++] & 0xFF) << 16 | (data[x++] & 0xFF) << 8 | (data[x++] & 0xFF);
+		int i2 = data[x++] << 24 | (data[x++] & 0xFF) << 16 | (data[x++] & 0xFF) << 8 | (data[x] & 0xFF);
+		pos += 8;
+		return ((long) i1) << 32 | ((long) i2 & 0x0FFFFFFFFl);
 	}
 
 	@Override
