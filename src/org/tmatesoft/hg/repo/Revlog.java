@@ -30,6 +30,7 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.Preview;
+import org.tmatesoft.hg.internal.RevisionLookup;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
@@ -53,8 +54,10 @@ abstract class Revlog {
 
 	private final HgRepository repo;
 	protected final RevlogStream content;
+	protected final boolean useRevisionLookup;
+	protected RevisionLookup revisionLookup;
 
-	protected Revlog(HgRepository hgRepo, RevlogStream contentStream) {
+	protected Revlog(HgRepository hgRepo, RevlogStream contentStream, boolean needRevisionLookup) {
 		if (hgRepo == null) {
 			throw new IllegalArgumentException();
 		}
@@ -63,12 +66,14 @@ abstract class Revlog {
 		}
 		repo = hgRepo;
 		content = contentStream;
+		useRevisionLookup = needRevisionLookup;
 	}
 	
 	// invalid Revlog
 	protected Revlog(HgRepository hgRepo) {
 		repo = hgRepo;
 		content = null;
+		useRevisionLookup = false;
 	}
 
 	public final HgRepository getRepo() {
@@ -145,13 +150,24 @@ abstract class Revlog {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public final int getRevisionIndex(Nodeid nid) throws HgRuntimeException {
-		int revision = content.findRevisionIndex(nid);
+//		final long t1 = System.nanoTime();
+		int revision;
+		if (useRevisionLookup) {
+			if (revisionLookup == null) {
+				revisionLookup = RevisionLookup.createFor(content);
+			}
+			revision = revisionLookup.findIndex(nid);
+		} else {
+			revision = content.findRevisionIndex(nid);
+		}
 		if (revision == BAD_REVISION) {
 			// using toString() to identify revlog. HgDataFile.toString includes path, HgManifest and HgChangelog instances 
 			// are fine with default (class name)
 			// Perhaps, more tailored description method would be suitable here
 			throw new HgInvalidRevisionException(String.format("Can't find revision %s in %s", nid.shortNotation(), this), nid, null);
 		}
+//		final long t2 = System.nanoTime();
+//		System.out.printf("\tgetRevisionIndex(%s): %d us\n", nid.shortNotation(), (t2-t1)/1000);
 		return revision;
 	}
 	

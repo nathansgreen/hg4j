@@ -67,7 +67,7 @@ public final class HgDataFile extends Revlog {
 	private Metadata metadata; // get initialized on first access to file content.
 	
 	/*package-local*/HgDataFile(HgRepository hgRepo, Path filePath, RevlogStream content) {
-		super(hgRepo, content);
+		super(hgRepo, content, false);
 		path = filePath;
 	}
 

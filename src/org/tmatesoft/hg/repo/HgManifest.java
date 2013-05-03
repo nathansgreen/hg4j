@@ -35,6 +35,7 @@ import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
+import org.tmatesoft.hg.internal.RevisionLookup;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -123,7 +124,7 @@ public final class HgManifest extends Revlog {
 	}
 
 	/*package-local*/ HgManifest(HgRepository hgRepo, RevlogStream content, EncodingHelper eh) {
-		super(hgRepo, content);
+		super(hgRepo, content, true);
 		encodingHelper = eh;
 		pathFactory = hgRepo.getSessionContext().getPathFactory();
 	}
@@ -244,8 +245,14 @@ public final class HgManifest extends Revlog {
 		}
 		// revisionNumber == TIP is processed by RevisionMapper 
 		if (revisionMap == null) {
-			revisionMap = new RevisionMapper(getRepo());
+			revisionMap = new RevisionMapper(super.revisionLookup == null);
 			content.iterate(0, TIP, false, revisionMap);
+			revisionMap.fixReusedManifests();
+			if (super.useRevisionLookup && super.revisionLookup == null) {
+				// reuse RevisionLookup if there's none yet
+				super.revisionLookup = revisionMap.manifestNodeids;
+			}
+			revisionMap.manifestNodeids = null;
 		}
 		return revisionMap.at(changesetRevisionIndex);
 	}
@@ -572,18 +579,19 @@ public final class HgManifest extends Revlog {
 		}
 	}
 	
-	private static class RevisionMapper implements RevlogStream.Inspector, Lifecycle {
+	private class RevisionMapper implements RevlogStream.Inspector, Lifecycle {
 		
 		private final int changelogRevisionCount;
 		private int[] changelog2manifest;
-		private final HgRepository repo;
-		private int[] manifestNodeidHashes; // first 4 bytes of manifest nodeid at corresponding index
+		RevisionLookup manifestNodeids;
 
-		public RevisionMapper(HgRepository hgRepo) {
-			repo = hgRepo;
-			changelogRevisionCount = repo.getChangelog().getRevisionCount();
+		private RevisionMapper(boolean useOwnRevisionLookup) {
+			changelogRevisionCount = HgManifest.this.getRepo().getChangelog().getRevisionCount();
+			if (useOwnRevisionLookup) {
+				manifestNodeids = new RevisionLookup(HgManifest.this.content);
+			}
 		}
-
+		
 		/**
 		 * Get index of manifest revision that corresponds to specified changeset
 		 * @param changesetRevisionIndex non-negative index of changelog revision, or {@link HgRepository#TIP}
@@ -603,7 +611,7 @@ public final class HgManifest extends Revlog {
 			return changesetRevisionIndex;
 		}
 
-		// XXX likely can be replaced with Revlog.RevisionInspector
+		// XXX can be replaced with Revlog.RevisionInspector, but I don't want Nodeid instances
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 			if (changelog2manifest != null) {
 				// next assertion is not an error, rather assumption check, which is too development-related to be explicit exception - 
@@ -620,7 +628,9 @@ public final class HgManifest extends Revlog {
 					changelog2manifest[linkRevision] = revisionNumber;
 				}
 			}
-			manifestNodeidHashes[revisionNumber] = Nodeid.hashCode(nodeid);
+			if (manifestNodeids != null) {
+				manifestNodeids.next(revisionNumber, nodeid);
+			}
 		}
 		
 		public void start(int count, Callback callback, Object token) {
@@ -633,11 +643,19 @@ public final class HgManifest extends Revlog {
 				changelog2manifest = new int[changelogRevisionCount];
 				Arrays.fill(changelog2manifest, BAD_REVISION);
 			}
-			manifestNodeidHashes = new int[count];
+			if (manifestNodeids != null) {
+				manifestNodeids.prepare(count);
+			}
 		}
 
 		public void finish(Object token) {
+			// it's not a nice idea to fix changesets that reuse existing manifest entries from inside
+			// #finish, as the manifest read operation is not complete at the moment.
+		}
+		
+		public void fixReusedManifests() {
 			if (changelog2manifest == null) {
+				// direct, 1-1 mapping of changeset indexes to manifest
 				return;
 			}
 			// I assume there'd be not too many revisions we don't know manifest of
@@ -652,7 +670,7 @@ public final class HgManifest extends Revlog {
 				final IntMap<Nodeid> missingCsetToManifest = new IntMap<Nodeid>(undefinedChangelogRevision.size());
 				int[] undefinedClogRevs = undefinedChangelogRevision.toArray();
 				// undefinedChangelogRevision is sorted by the nature it's created
-				repo.getChangelog().rangeInternal(new HgChangelog.Inspector() {
+				HgManifest.this.getRepo().getChangelog().rangeInternal(new HgChangelog.Inspector() {
 					
 					public void next(int revisionIndex, Nodeid nodeid, RawChangeset cset) {
 						missingCsetToManifest.put(revisionIndex, cset.manifest());
@@ -663,25 +681,24 @@ public final class HgManifest extends Revlog {
 				for (int u : undefinedClogRevs) {
 					Nodeid manifest = missingCsetToManifest.get(u);
 					if (manifest == null || manifest.isNull()) {
-						repo.getSessionContext().getLog().dump(getClass(), Severity.Warn, "Changeset %d has no associated manifest entry", u);
-						// keep -1 in the changelog2manifest map.
+						HgManifest.this.getRepo().getSessionContext().getLog().dump(getClass(), Severity.Warn, "Changeset %d has no associated manifest entry", u);
+						// keep BAD_REVISION in the changelog2manifest map.
 						continue;
 					}
-					int hash = manifest.hashCode();
-					for (int i = 0; i < manifestNodeidHashes.length; i++) {
-						if (manifestNodeidHashes[i] == hash) {
-							if (manifest.equals(repo.getManifest().getRevision(i))) {
-								changelog2manifest[u] = i;
-								break;
-							}
-							// else false match (only 4 head bytes matched, continue loop
+					if (manifestNodeids != null) {
+						int manifestRevIndex = manifestNodeids.findIndex(manifest);
+						// mimic HgManifest#getRevisionIndex() to keep behavior the same 
+						if (manifestRevIndex == BAD_REVISION) {
+							throw new HgInvalidRevisionException(String.format("Can't find index of revision %s", manifest.shortNotation()), manifest, null);
 						}
+						changelog2manifest[u] = manifestRevIndex;
+					} else {
+						changelog2manifest[u] = HgManifest.this.getRevisionIndex(manifest);
 					}
 				}
 				final long t3 = System.nanoTime();
 				System.out.printf("\tRevisionMapper#finish(), %d missing revs: %d + %d us\n", undefinedChangelogRevision.size(), (t2-t1) / 1000, (t3-t2) / 1000);
 			}
-			manifestNodeidHashes = null;
 		}
 	}
 	

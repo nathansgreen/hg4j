@@ -50,7 +50,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 public final class HgChangelog extends Revlog {
 
 	/* package-local */HgChangelog(HgRepository hgRepo, RevlogStream content) {
-		super(hgRepo, content);
+		super(hgRepo, content, true);
 	}
 
 	public void all(final HgChangelog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
