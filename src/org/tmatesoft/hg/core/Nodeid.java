@@ -33,11 +33,21 @@ import org.tmatesoft.hg.internal.DigestHelper;
  *
  */
 public final class Nodeid implements Comparable<Nodeid> {
-	
+
+	/**
+	 * Length of the nodeid in bytes
+	 */
+	public static final int SIZE = 20;
+
+	/**
+	 * Length of nodeid string representation, in bytes
+	 */
+	public static final int SIZE_ASCII = 40;
+
 	/**
 	 * <b>nullid</b>, empty root revision.
 	 */
-	public static final Nodeid NULL = new Nodeid(new byte[20], false);
+	public static final Nodeid NULL = new Nodeid(new byte[SIZE], false);
 
 	private final byte[] binaryData; 
 
@@ -49,7 +59,7 @@ public final class Nodeid implements Comparable<Nodeid> {
 	public Nodeid(byte[] binaryRepresentation, boolean shallClone) {
 		// 5 int fields => 32 bytes
 		// byte[20] => 48 bytes (16 bytes is Nodeid with one field, 32 bytes for byte[20] 
-		if (binaryRepresentation == null || binaryRepresentation.length != 20) {
+		if (binaryRepresentation == null || binaryRepresentation.length != SIZE) {
 			throw new HgBadNodeidFormatException(String.format("Bad value: %s", String.valueOf(binaryRepresentation)));
 		}
 		/*
@@ -69,8 +79,18 @@ public final class Nodeid implements Comparable<Nodeid> {
 
 	@Override
 	public int hashCode() {
+		return hashCode(binaryData);
+	}
+	
+	/**
+	 * Handy alternative to calculate hashcode without need to get {@link Nodeid} instance
+	 * @param binaryNodeid array of exactly 20 bytes
+	 * @return same value as <code>new Nodeid(binaryNodeid, false).hashCode()</code>
+	 */
+	public static int hashCode(byte[] binaryNodeid) {
+		assert binaryNodeid.length == SIZE;
 		// digest (part thereof) seems to be nice candidate for the hashCode
-		byte[] b = binaryData;
+		byte[] b = binaryNodeid;
 		return b[0] << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
 	}
 	
@@ -93,7 +113,7 @@ public final class Nodeid implements Comparable<Nodeid> {
 		if (this == o) {
 			return 0;
 		}
-		for (int i = 0; i < 20; i++) {
+		for (int i = 0; i < SIZE; i++) {
 			if (binaryData[i] != o.binaryData[i]) {
 				// if we need truly ascending sort, need to respect byte sign 
 				// return (binaryData[i] & 0xFF) < (o.binaryData[i] & 0xFF) ? -1 : 1;
@@ -121,7 +141,7 @@ public final class Nodeid implements Comparable<Nodeid> {
 		if (this == NULL) {
 			return true;
 		}
-		for (int i = 0; i < 20; i++) {
+		for (int i = 0; i < SIZE; i++) {
 			if (this.binaryData[i] != 0) {
 				return false;
 			}
@@ -143,19 +163,19 @@ public final class Nodeid implements Comparable<Nodeid> {
 	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass when arguments don't select 20 bytes
 	 */
 	public static Nodeid fromBinary(byte[] binaryRepresentation, int offset) {
-		if (binaryRepresentation == null || binaryRepresentation.length - offset < 20) {
+		if (binaryRepresentation == null || binaryRepresentation.length - offset < SIZE) {
 			throw new HgBadNodeidFormatException(String.format("Bad value: %s", String.valueOf(binaryRepresentation)));
 		}
 		int i = 0;
-		while (i < 20 && binaryRepresentation[offset+i] == 0) i++;
-		if (i == 20) {
+		while (i < SIZE && binaryRepresentation[offset+i] == 0) i++;
+		if (i == SIZE) {
 			return NULL;
 		}
-		if (offset == 0 && binaryRepresentation.length == 20) {
+		if (offset == 0 && binaryRepresentation.length == SIZE) {
 			return new Nodeid(binaryRepresentation, true);
 		}
-		byte[] b = new byte[20]; // create new instance if no other reasonable guesses possible
-		System.arraycopy(binaryRepresentation, offset, b, 0, 20);
+		byte[] b = new byte[SIZE]; // create new instance if no other reasonable guesses possible
+		System.arraycopy(binaryRepresentation, offset, b, 0, SIZE);
 		return new Nodeid(b, false);
 	}
 
@@ -167,11 +187,11 @@ public final class Nodeid implements Comparable<Nodeid> {
 	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass when argument doesn't match encoded form of 20-bytes sha1 digest. 
 	 */
 	public static Nodeid fromAscii(String asciiRepresentation) throws HgBadNodeidFormatException {
-		if (asciiRepresentation.length() != 40) {
+		if (asciiRepresentation.length() != SIZE_ASCII) {
 			throw new HgBadNodeidFormatException(String.format("Bad value: %s", asciiRepresentation));
 		}
 		// XXX is better impl for String possible?
-		return fromAscii(asciiRepresentation.toCharArray(), 0, 40);
+		return fromAscii(asciiRepresentation.toCharArray(), 0, SIZE_ASCII);
 	}
 	
 	/**
@@ -179,11 +199,11 @@ public final class Nodeid implements Comparable<Nodeid> {
 	 * @throws HgBadNodeidFormatException custom {@link IllegalArgumentException} subclass when bytes are not hex digits or number of bytes != 40 (160 bits) 
 	 */
 	public static Nodeid fromAscii(byte[] asciiRepresentation, int offset, int length) throws HgBadNodeidFormatException {
-		if (length != 40) {
-			throw new HgBadNodeidFormatException(String.format("Expected 40 hex characters for nodeid, not %d", length));
+		if (length != SIZE_ASCII) {
+			throw new HgBadNodeidFormatException(String.format("Expected %d hex characters for nodeid, not %d", SIZE_ASCII, length));
 		}
 		try {
-			byte[] data = new byte[20];
+			byte[] data = new byte[SIZE];
 			boolean zeroBytes = DigestHelper.ascii2bin(asciiRepresentation, offset, length, data);
 			if (zeroBytes) {
 				return NULL;

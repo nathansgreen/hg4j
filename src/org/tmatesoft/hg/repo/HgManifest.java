@@ -577,6 +577,7 @@ public final class HgManifest extends Revlog {
 		private final int changelogRevisionCount;
 		private int[] changelog2manifest;
 		private final HgRepository repo;
+		private int[] manifestNodeidHashes; // first 4 bytes of manifest nodeid at corresponding index
 
 		public RevisionMapper(HgRepository hgRepo) {
 			repo = hgRepo;
@@ -619,6 +620,7 @@ public final class HgManifest extends Revlog {
 					changelog2manifest[linkRevision] = revisionNumber;
 				}
 			}
+			manifestNodeidHashes[revisionNumber] = Nodeid.hashCode(nodeid);
 		}
 		
 		public void start(int count, Callback callback, Object token) {
@@ -631,6 +633,7 @@ public final class HgManifest extends Revlog {
 				changelog2manifest = new int[changelogRevisionCount];
 				Arrays.fill(changelog2manifest, BAD_REVISION);
 			}
+			manifestNodeidHashes = new int[count];
 		}
 
 		public void finish(Object token) {
@@ -645,6 +648,7 @@ public final class HgManifest extends Revlog {
 				}
 			}
 			if (undefinedChangelogRevision.size() > 0) {
+				final long t1 = System.nanoTime();
 				final IntMap<Nodeid> missingCsetToManifest = new IntMap<Nodeid>(undefinedChangelogRevision.size());
 				int[] undefinedClogRevs = undefinedChangelogRevision.toArray();
 				// undefinedChangelogRevision is sorted by the nature it's created
@@ -655,18 +659,29 @@ public final class HgManifest extends Revlog {
 					}
 				}, undefinedClogRevs);
 				assert missingCsetToManifest.size() == undefinedChangelogRevision.size();
+				final long t2 = System.nanoTime();
 				for (int u : undefinedClogRevs) {
 					Nodeid manifest = missingCsetToManifest.get(u);
-					// TODO calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
-					// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
 					if (manifest == null || manifest.isNull()) {
 						repo.getSessionContext().getLog().dump(getClass(), Severity.Warn, "Changeset %d has no associated manifest entry", u);
 						// keep -1 in the changelog2manifest map.
-					} else {
-						changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
+						continue;
+					}
+					int hash = manifest.hashCode();
+					for (int i = 0; i < manifestNodeidHashes.length; i++) {
+						if (manifestNodeidHashes[i] == hash) {
+							if (manifest.equals(repo.getManifest().getRevision(i))) {
+								changelog2manifest[u] = i;
+								break;
+							}
+							// else false match (only 4 head bytes matched, continue loop
+						}
 					}
 				}
+				final long t3 = System.nanoTime();
+				System.out.printf("\tRevisionMapper#finish(), %d missing revs: %d + %d us\n", undefinedChangelogRevision.size(), (t2-t1) / 1000, (t3-t2) / 1000);
 			}
+			manifestNodeidHashes = null;
 		}
 	}
 	
