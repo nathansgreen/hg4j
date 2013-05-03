@@ -21,7 +21,6 @@ import static org.tmatesoft.hg.repo.HgRepository.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
@@ -33,9 +32,11 @@ import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.IdentityPool;
 import org.tmatesoft.hg.internal.IntMap;
+import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.IterateControlMediator;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.RevlogStream;
+import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.LogFacility.Severity;
 import org.tmatesoft.hg.util.Path;
@@ -637,21 +638,33 @@ public final class HgManifest extends Revlog {
 				return;
 			}
 			// I assume there'd be not too many revisions we don't know manifest of
-			ArrayList<Integer> undefinedChangelogRevision = new ArrayList<Integer>();
+			IntVector undefinedChangelogRevision = new IntVector();
 			for (int i = 0; i < changelog2manifest.length; i++) {
 				if (changelog2manifest[i] == BAD_REVISION) {
 					undefinedChangelogRevision.add(i);
 				}
 			}
-			for (int u : undefinedChangelogRevision) {
-				Nodeid manifest = repo.getChangelog().range(u, u).get(0).manifest();
-				// TODO calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
-				// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
-				if (manifest.isNull()) {
-					repo.getSessionContext().getLog().dump(getClass(), Severity.Warn, "Changeset %d has no associated manifest entry", u);
-					// keep -1 in the changelog2manifest map.
-				} else {
-					changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
+			if (undefinedChangelogRevision.size() > 0) {
+				final IntMap<Nodeid> missingCsetToManifest = new IntMap<Nodeid>(undefinedChangelogRevision.size());
+				int[] undefinedClogRevs = undefinedChangelogRevision.toArray();
+				// undefinedChangelogRevision is sorted by the nature it's created
+				repo.getChangelog().rangeInternal(new HgChangelog.Inspector() {
+					
+					public void next(int revisionIndex, Nodeid nodeid, RawChangeset cset) {
+						missingCsetToManifest.put(revisionIndex, cset.manifest());
+					}
+				}, undefinedClogRevs);
+				assert missingCsetToManifest.size() == undefinedChangelogRevision.size();
+				for (int u : undefinedClogRevs) {
+					Nodeid manifest = missingCsetToManifest.get(u);
+					// TODO calculate those missing effectively (e.g. cache and sort nodeids to speed lookup
+					// right away in the #next (may refactor ParentWalker's sequential and sorted into dedicated helper and reuse here)
+					if (manifest == null || manifest.isNull()) {
+						repo.getSessionContext().getLog().dump(getClass(), Severity.Warn, "Changeset %d has no associated manifest entry", u);
+						// keep -1 in the changelog2manifest map.
+					} else {
+						changelog2manifest[u] = repo.getManifest().getRevisionIndex(manifest);
+					}
 				}
 			}
 		}
