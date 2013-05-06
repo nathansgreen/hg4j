@@ -277,6 +277,37 @@ public class TestCommit {
 		assertHgVerifyOk(repoLoc);
 	}
 	
+	@Test
+	public void testUpdateActiveBookmark() throws Exception {
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit-cmd", false);
+		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), repoLoc);
+		String activeBookmark = "bm1";
+		eh.run("hg", "bookmarks", activeBookmark);
+
+		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		assertEquals("[sanity]", activeBookmark, hgRepo.getBookmarks().getActiveBookmarkName());
+		Nodeid activeBookmarkRevision = hgRepo.getBookmarks().getRevision(activeBookmark);
+		assertEquals("[sanity]", activeBookmarkRevision, hgRepo.getWorkingCopyParents().first());
+		
+		HgDataFile dfD = hgRepo.getFileNode("d");
+		File fileD = new File(repoLoc, "d");
+		assertTrue("[sanity]", dfD.exists());
+		assertTrue("[sanity]", fileD.canRead());
+
+		RepoUtils.modifyFileAppend(fileD, " 1 \n");
+		HgCommitCommand cmd = new HgCommitCommand(hgRepo).message("FIRST");
+		Outcome r = cmd.execute();
+		errorCollector.assertTrue(r.isOk());
+		Nodeid c = cmd.getCommittedRevision();
+		
+		errorCollector.assertEquals(activeBookmark, hgRepo.getBookmarks().getActiveBookmarkName());
+		errorCollector.assertEquals(c, hgRepo.getBookmarks().getRevision(activeBookmark));
+		// reload repo, and repeat the check
+		hgRepo = new HgLookup().detect(repoLoc);
+		errorCollector.assertEquals(activeBookmark, hgRepo.getBookmarks().getActiveBookmarkName());
+		errorCollector.assertEquals(c, hgRepo.getBookmarks().getRevision(activeBookmark));
+	}
+	
 	private void assertHgVerifyOk(File repoLoc) throws InterruptedException, IOException {
 		ExecHelper verifyRun = new ExecHelper(new OutputParser.Stub(), repoLoc);
 		verifyRun.run("hg", "verify");

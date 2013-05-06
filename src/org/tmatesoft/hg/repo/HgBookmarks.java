@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,20 +16,28 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
+
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.tmatesoft.hg.core.HgIOException;
+import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
 import org.tmatesoft.hg.util.LogFacility;
 
 /**
  * 
+ * @see http://mercurial.selenic.com/wiki/Bookmarks
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -113,5 +121,62 @@ public final class HgBookmarks {
 		// bookmarks are initialized with atomic assignment,
 		// hence can use view (not a synchronized copy) here
 		return Collections.unmodifiableSet(bookmarks.keySet());
+	}
+
+	/**
+	 * Update currently bookmark with new commit.
+	 * Note, child has to be descendant of a p1 or p2
+	 * 
+	 * @param p1 first parent, or <code>null</code>
+	 * @param p2 second parent, or <code>null</code>
+	 * @param child new commit, descendant of one of the parents, not <code>null</code>
+	 * @throws HgIOException if failed to write updated bookmark information 
+	 * @throws HgRepositoryLockException  if failed to lock repository for modifications
+	 */
+	@Experimental(reason="Provisional API")
+	public void updateActive(Nodeid p1, Nodeid p2, Nodeid child) throws HgIOException, HgRepositoryLockException {
+		if (activeBookmark == null) {
+			return;
+		}
+		Nodeid activeRev = getRevision(activeBookmark);
+		if (!activeRev.equals(p1) && !activeRev.equals(p2)) {
+			// from the wiki:
+			// "active bookmarks are automatically updated when committing to the changeset they are pointing to"
+			// FIXME: test ci 1, hg bookmark active, ci 2, hg bookmark -f -r 0 active, ci 3, check active still points to r0 
+			return;
+		}
+		if (child.equals(activeRev)) {
+			return;
+		}
+		LinkedHashMap<String, Nodeid> copy = new LinkedHashMap<String, Nodeid>(bookmarks);
+		copy.put(activeBookmark, child);
+		bookmarks = copy;
+		write();
+	}
+	
+	private void write() throws HgIOException, HgRepositoryLockException {
+		File bookmarksFile = internalRepo.getRepositoryFile(HgRepositoryFiles.Bookmarks);
+		HgRepositoryLock workingDirLock = internalRepo.getRepo().getWorkingDirLock();
+		FileWriter fileWriter = null;
+		workingDirLock.acquire();
+		try {
+			fileWriter = new FileWriter(bookmarksFile);
+			for (String bm : bookmarks.keySet()) {
+				Nodeid nid = bookmarks.get(bm);
+				fileWriter.write(String.format("%s %s\n", nid.toString(), bm));
+			}
+			fileWriter.flush();
+		} catch (IOException ex) {
+			throw new HgIOException("Failed to serialize bookmarks", ex, bookmarksFile);
+		} finally {
+			try {
+				if (fileWriter != null) {
+					fileWriter.close();
+				}
+			} catch (IOException ex) {
+				internalRepo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
+			}
+			workingDirLock.release();
+		}
 	}
 }

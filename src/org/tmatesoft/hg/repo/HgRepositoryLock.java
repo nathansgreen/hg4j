@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,7 +99,7 @@ public class HgRepositoryLock {
 
 	/**
 	 * Perform actual locking. Waits for timeout (if specified at construction time)
-	 * before throwing {@link HgInvalidStateException} in case lock is not available 
+	 * before throwing {@link HgRepositoryLockException} in case lock is not available 
 	 * immediately.
 	 * 
 	 * <p>Multiple calls are possible, but corresponding number of {@link #release()} 

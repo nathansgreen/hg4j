@@ -180,7 +180,7 @@ public final class CommitFacility {
 		byte[] clogContent = changelogBuilder.build(manifestRev, message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream());
 		Nodeid changesetRev = changelogWriter.addRevision(clogContent, clogRevisionIndex, p1Commit, p2Commit);
-		// FIXME move fncache update to an external facility, along with dirstate update
+		// FIXME move fncache update to an external facility, along with dirstate and bookmark update
 		if (!newlyAddedFiles.isEmpty() && repo.fncacheInUse()) {
 			FNCacheFile fncache = new FNCacheFile(repo);
 			for (Path p : newlyAddedFiles) {
@@ -204,6 +204,12 @@ public final class CommitFacility {
 		}
 		dirstateBuilder.parents(changesetRev, Nodeid.NULL);
 		dirstateBuilder.serialize();
+		// update bookmarks
+		Nodeid p1Cset = p1Commit == NO_REVISION ? null : clog.getRevision(p1Commit);
+		Nodeid p2Cset = p2Commit == NO_REVISION ? null : clog.getRevision(p2Commit);
+		if (p1Commit != NO_REVISION || p2Commit != NO_REVISION) {
+			repo.getRepo().getBookmarks().updateActive(p1Cset, p2Cset, changesetRev);
+		}
 		return changesetRev;
 	}
 /*
