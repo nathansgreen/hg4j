@@ -18,25 +18,23 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
 import static org.tmatesoft.hg.repo.HgRepository.*;
-import static org.tmatesoft.hg.util.LogFacility.Severity.*;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.FilterDataAccess;
-import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.Metadata;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -279,7 +277,7 @@ public final class HgDataFile extends Revlog {
 			throw new IllegalArgumentException();
 		}
 		if (metadata == null) {
-			metadata = new Metadata();
+			metadata = new Metadata(getRepo());
 		}
 		ErrorHandlingInspector insp;
 		final LogFacility lf = getRepo().getSessionContext().getLog();
@@ -289,7 +287,7 @@ public final class HgDataFile extends Revlog {
 			insp = new ContentPipe(sink, metadata.dataOffset(fileRevisionIndex), lf);
 		} else {
 			// do not know if there's metadata
-			insp = new MetadataInspector(metadata, lf, new ContentPipe(sink, 0, lf));
+			insp = new MetadataInspector(metadata, new ContentPipe(sink, 0, lf));
 		}
 		insp.checkCancelled();
 		super.content.iterate(fileRevisionIndex, fileRevisionIndex, true, insp);
@@ -441,134 +439,38 @@ public final class HgDataFile extends Revlog {
 	
 	private void checkAndRecordMetadata(int localRev) throws HgInvalidControlFileException {
 		if (metadata == null) {
-			metadata = new Metadata();
+			metadata = new Metadata(getRepo());
 		}
 		// use MetadataInspector without delegate to process metadata only
-		RevlogStream.Inspector insp = new MetadataInspector(metadata, getRepo().getSessionContext().getLog(), null);
+		RevlogStream.Inspector insp = new MetadataInspector(metadata, null);
 		super.content.iterate(localRev, localRev, true, insp);
-	}
-
-	private static final class MetadataEntry {
-		private final String entry;
-		private final int valueStart;
-
-		// key may be null
-		/*package-local*/MetadataEntry(String key, String value) {
-			if (key == null) {
-				entry = value;
-				valueStart = -1; // not 0 to tell between key == null and key == ""
-			} else {
-				entry = key + value;
-				valueStart = key.length();
-			}
-		}
-		/*package-local*/boolean matchKey(String key) {
-			return key == null ? valueStart == -1 : key.length() == valueStart && entry.startsWith(key);
-		}
-//		uncomment once/if needed
-//		public String key() {
-//			return entry.substring(0, valueStart);
-//		}
-		public String value() {
-			return valueStart == -1 ? entry : entry.substring(valueStart);
-		}
-	}
-
-	private static class Metadata {
-		private static class Record {
-			public final int offset;
-			public final MetadataEntry[] entries;
-			
-			public Record(int off, MetadataEntry[] entr) {
-				offset = off;
-				entries = entr;
-			}
-		}
-		// XXX sparse array needed
-		private final IntMap<Record> entries = new IntMap<Record>(5);
-		
-		private final Record NONE = new Record(-1, null); // don't want statics
-
-		// true when there's metadata for given revision
-		boolean known(int revision) {
-			Record i = entries.get(revision);
-			return i != null && NONE != i;
-		}
-
-		// true when revision has been checked for metadata presence.
-		public boolean checked(int revision) {
-			return entries.containsKey(revision);
-		}
-
-		// true when revision has been checked and found not having any metadata
-		boolean none(int revision) {
-			Record i = entries.get(revision);
-			return i == NONE;
-		}
-
-		// mark revision as having no metadata.
-		void recordNone(int revision) {
-			Record i = entries.get(revision);
-			if (i == NONE) {
-				return; // already there
-			} 
-			if (i != null) {
-				throw new IllegalStateException(String.format("Trying to override Metadata state for revision %d (known offset: %d)", revision, i));
-			}
-			entries.put(revision, NONE);
-		}
-
-		// since this is internal class, callers are supposed to ensure arg correctness (i.e. ask known() before)
-		int dataOffset(int revision) {
-			return entries.get(revision).offset;
-		}
-		void add(int revision, int dataOffset, Collection<MetadataEntry> e) {
-			assert !entries.containsKey(revision);
-			entries.put(revision, new Record(dataOffset, e.toArray(new MetadataEntry[e.size()])));
-		}
-
-		String find(int revision, String key) {
-			for (MetadataEntry me : entries.get(revision).entries) {
-				if (me.matchKey(key)) {
-					return me.value();
-				}
-			}
-			return null;
-		}
 	}
 
 	private static class MetadataInspector extends ErrorHandlingInspector implements RevlogStream.Inspector {
 		private final Metadata metadata;
 		private final RevlogStream.Inspector delegate;
-		private final LogFacility log;
 
 		/**
 		 * @param _metadata never <code>null</code>
-		 * @param logFacility log facility from the session context
 		 * @param chain <code>null</code> if no further data processing other than metadata is desired
 		 */
-		public MetadataInspector(Metadata _metadata, LogFacility logFacility, RevlogStream.Inspector chain) {
+		public MetadataInspector(Metadata _metadata, RevlogStream.Inspector chain) {
 			metadata = _metadata;
-			log = logFacility;
 			delegate = chain;
 			setCancelSupport(CancelSupport.Factory.get(chain));
 		}
 
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
 			try {
-				final int daLength = data.length();
-				if (daLength < 4 || data.readByte() != 1 || data.readByte() != 10) {
-					metadata.recordNone(revisionNumber);
-					data.reset();
-				} else {
-					ArrayList<MetadataEntry> _metadata = new ArrayList<MetadataEntry>();
-					int offset = parseMetadata(data, daLength, _metadata);
-					metadata.add(revisionNumber, offset, _metadata);
+				if (metadata.tryRead(revisionNumber, data)) {
 					// da is in prepared state (i.e. we consumed all bytes up to metadata end).
 					// However, it's not safe to assume delegate won't call da.reset() for some reason,
 					// and we need to ensure predictable result.
 					data.reset();
-					data = new FilterDataAccess(data, offset, daLength - offset);
+					int offset = metadata.dataOffset(revisionNumber);
+					data = new FilterDataAccess(data, offset, data.length() - offset);
+				} else {
+					data.reset();
 				}
 				if (delegate != null) {
 					delegate.next(revisionNumber, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeid, data);
@@ -579,63 +481,6 @@ public final class HgDataFile extends Revlog {
 				// TODO RevlogStream, where this RevlogStream.Inspector goes, shall set File (as it's the only one having access to it)
 				recordFailure(ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(revisionNumber));
 			}
-		}
-
-		private int parseMetadata(DataAccess data, final int daLength, ArrayList<MetadataEntry> _metadata) throws IOException, HgInvalidControlFileException {
-			int lastEntryStart = 2;
-			int lastColon = -1;
-			// XXX in fact, need smth like ByteArrayBuilder, similar to StringBuilder,
-			// which can't be used here because we can't convert bytes to chars as we read them
-			// (there might be multi-byte encoding), and we need to collect all bytes before converting to string 
-			ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			String key = null, value = null;
-			boolean byteOne = false;
-			boolean metadataIsComplete = false;
-			for (int i = 2; i < daLength; i++) {
-				byte b = data.readByte();
-				if (b == '\n') {
-					if (byteOne) { // i.e. \n follows 1
-						lastEntryStart = i+1;
-						metadataIsComplete = true;
-						// XXX is it possible to have here incomplete key/value (i.e. if last pair didn't end with \n)
-						// if yes, need to set metadataIsComplete to true in that case as well
-						break;
-					}
-					if (key == null || lastColon == -1 || i <= lastColon) {
-						log.dump(getClass(), Error, "Missing key in file revision metadata at index %d", i);
-					}
-					value = new String(bos.toByteArray()).trim();
-					bos.reset();
-					_metadata.add(new MetadataEntry(key, value));
-					key = value = null;
-					lastColon = -1;
-					lastEntryStart = i+1;
-					continue;
-				} 
-				// byteOne has to be consumed up to this line, if not yet, consume it
-				if (byteOne) {
-					// insert 1 we've read on previous step into the byte builder
-					bos.write(1);
-					byteOne = false;
-					// fall-through to consume current byte
-				}
-				if (b == (int) ':') {
-					assert value == null;
-					key = new String(bos.toByteArray());
-					bos.reset();
-					lastColon = i;
-				} else if (b == 1) {
-					byteOne = true;
-				} else {
-					bos.write(b);
-				}
-			}
-			// data.isEmpty is not reliable, renamed files of size==0 keep only metadata
-			if (!metadataIsComplete) {
-				// XXX perhaps, worth a testcase (empty file, renamed, read or ask ifCopy
-				throw new HgInvalidControlFileException("Metadata is not closed properly", null, null);
-			}
-			return lastEntryStart;
 		}
 
 		@Override
