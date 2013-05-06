@@ -49,13 +49,8 @@ import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
 import org.tmatesoft.hg.internal.IntVector;
-import org.tmatesoft.hg.repo.HgBlameFacility;
-import org.tmatesoft.hg.repo.HgBlameFacility.AddBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.Block;
-import org.tmatesoft.hg.repo.HgBlameFacility.BlockData;
-import org.tmatesoft.hg.repo.HgBlameFacility.ChangeBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.DeleteBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.EqualBlock;
+import org.tmatesoft.hg.repo.HgBlameInspector;
+import org.tmatesoft.hg.repo.HgBlameInspector.BlockData;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -79,7 +74,7 @@ public class TestBlame {
 		final int checkChangeset = 539;
 		HgDataFile df = repo.getFileNode(fname);
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		new HgBlameFacility(df).annotateSingleRevision(checkChangeset, new DiffOutInspector(new PrintStream(bos)));
+		df.annotateSingleRevision(checkChangeset, new DiffOutInspector(new PrintStream(bos)));
 		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
 		ExecHelper eh = new ExecHelper(gp, null);
 		eh.run("hg", "diff", "-c", String.valueOf(checkChangeset), "-U", "0", fname);
@@ -135,10 +130,9 @@ public class TestBlame {
 	public void testComplexHistoryAnnotate() throws Exception {
 		HgRepository repo = Configuration.get().find("test-annotate");
 		HgDataFile df = repo.getFileNode("file1");
-		HgBlameFacility af = new HgBlameFacility(df);
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		DiffOutInspector dump = new DiffOutInspector(new PrintStream(bos));
-		af.annotate(TIP, dump, HgIterateDirection.OldToNew);
+		df.annotate(TIP, dump, HgIterateDirection.OldToNew);
 		LinkedList<String> apiResult = new LinkedList<String>(Arrays.asList(splitLines(bos.toString())));
 		
 		/*
@@ -196,7 +190,6 @@ public class TestBlame {
 		HgRepository repo = Configuration.get().find("test-annotate2");
 		HgDataFile df = repo.getFileNode("file1b.txt");
 		// rev3: file1 -> file1a,  rev7: file1a -> file1b, tip: rev10
-		HgBlameFacility bf = new HgBlameFacility(df);
 		DiffOutInspector insp = new DiffOutInspector(new PrintStream(new OutputStream() {
 			@Override
 			public void write(int b) throws IOException {
@@ -207,19 +200,19 @@ public class TestBlame {
 		// earlier than rev2 shall be reported as new from change3
 		int[] change_2_8_new2old = new int[] {4, 6, 3, 4, -1, 3}; 
 		int[] change_2_8_old2new = new int[] {-1, 3, 3, 4, 4, 6 };
-		bf.annotate(2, 8, insp, NewToOld);
+		df.annotate(2, 8, insp, NewToOld);
 		Assert.assertArrayEquals(change_2_8_new2old, insp.getReportedRevisionPairs());
 		insp.reset();
-		bf.annotate(2, 8, insp, OldToNew);
+		df.annotate(2, 8, insp, OldToNew);
 		Assert.assertArrayEquals(change_2_8_old2new, insp.getReportedRevisionPairs());
 		// same as 2 to 8, with addition of rev9 changes rev7  (rev6 to rev7 didn't change content, only name)
 		int[] change_3_9_new2old = new int[] {7, 9, 4, 6, 3, 4, -1, 3 }; 
 		int[] change_3_9_old2new = new int[] {-1, 3, 3, 4, 4, 6, 7, 9 };
 		insp.reset();
-		bf.annotate(3, 9, insp, NewToOld);
+		df.annotate(3, 9, insp, NewToOld);
 		Assert.assertArrayEquals(change_3_9_new2old, insp.getReportedRevisionPairs());
 		insp.reset();
-		bf.annotate(3, 9, insp, OldToNew);
+		df.annotate(3, 9, insp, OldToNew);
 		Assert.assertArrayEquals(change_3_9_old2new, insp.getReportedRevisionPairs());
 	}
 
@@ -297,18 +290,17 @@ public class TestBlame {
 		final String fname = "src/org/tmatesoft/hg/internal/PatchGenerator.java";
 		final int checkChangeset = 539;
 		HgDataFile df = repo.getFileNode(fname);
-		HgBlameFacility af = new HgBlameFacility(df);
 		DiffOutInspector dump = new DiffOutInspector(System.out);
 		System.out.println("541 -> 543");
-		af.annotateSingleRevision(543, dump);
+		df.annotateSingleRevision(543, dump);
 		System.out.println("539 -> 541");
-		af.annotateSingleRevision(541, dump);
+		df.annotateSingleRevision(541, dump);
 		System.out.println("536 -> 539");
-		af.annotateSingleRevision(checkChangeset, dump);
+		df.annotateSingleRevision(checkChangeset, dump);
 		System.out.println("531 -> 536");
-		af.annotateSingleRevision(536, dump);
+		df.annotateSingleRevision(536, dump);
 		System.out.println(" -1 -> 531");
-		af.annotateSingleRevision(531, dump);
+		df.annotateSingleRevision(531, dump);
 		
 		FileAnnotateInspector fai = new FileAnnotateInspector();
 		FileAnnotation.annotate(df, 541, fai);
@@ -322,7 +314,6 @@ public class TestBlame {
 		final String fname = "src/org/tmatesoft/hg/repo/HgManifest.java";
 		final int checkChangeset = 415;
 		HgDataFile df = repo.getFileNode(fname);
-		HgBlameFacility af = new HgBlameFacility(df);
 		DiffOutInspector dump = new DiffOutInspector(System.out);
 //		System.out.println("413 -> 415");
 //		af.diff(df, 413, 415, dump);
@@ -332,16 +323,15 @@ public class TestBlame {
 //		dump.needRevisions(true);
 //		af.annotateChange(df, checkChangeset, dump);
 		dump.needRevisions(true);
-		af.annotate(checkChangeset, dump, HgIterateDirection.OldToNew);
+		df.annotate(checkChangeset, dump, HgIterateDirection.OldToNew);
 	}
 	
 	private void ccc() throws Throwable {
 		HgRepository repo = new HgLookup().detect("/home/artem/hg/hgtest-annotate-merge/");
 		HgDataFile df = repo.getFileNode("file.txt");
-		HgBlameFacility af = new HgBlameFacility(df);
 		DiffOutInspector dump = new DiffOutInspector(System.out);
 		dump.needRevisions(true);
-		af.annotate(8, dump, HgIterateDirection.NewToOld);
+		df.annotate(8, dump, HgIterateDirection.NewToOld);
 //		af.annotateSingleRevision(df, 113, dump);
 //		System.out.println();
 //		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
@@ -372,7 +362,7 @@ public class TestBlame {
 		tt.ccc();
 	}
 
-	private static class DiffOutInspector implements HgBlameFacility.Inspector {
+	private static class DiffOutInspector implements HgBlameInspector {
 		private final PrintStream out;
 		private boolean dumpRevs;
 		private IntVector reportedRevisionPairs = new IntVector();
@@ -490,7 +480,8 @@ public class TestBlame {
 		}
 	}
 
-	private static class LineDumpInspector implements HgBlameFacility.Inspector {
+	@SuppressWarnings("unused")
+	private static class LineDumpInspector implements HgBlameInspector {
 		
 		private final boolean lineByLine;
 

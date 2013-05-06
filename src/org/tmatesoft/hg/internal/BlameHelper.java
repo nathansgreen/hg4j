@@ -24,14 +24,13 @@ import java.util.ListIterator;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
-import org.tmatesoft.hg.repo.HgBlameFacility.Block;
-import org.tmatesoft.hg.repo.HgBlameFacility.BlockData;
-import org.tmatesoft.hg.repo.HgBlameFacility.ChangeBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.EqualBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.Inspector;
-import org.tmatesoft.hg.repo.HgBlameFacility.RevisionDescriptor;
-import org.tmatesoft.hg.repo.HgBlameFacility.RevisionDescriptor.Recipient;
-import org.tmatesoft.hg.repo.HgBlameFacility;
+import org.tmatesoft.hg.repo.HgBlameInspector.Block;
+import org.tmatesoft.hg.repo.HgBlameInspector.BlockData;
+import org.tmatesoft.hg.repo.HgBlameInspector.ChangeBlock;
+import org.tmatesoft.hg.repo.HgBlameInspector.EqualBlock;
+import org.tmatesoft.hg.repo.HgBlameInspector.RevisionDescriptor;
+import org.tmatesoft.hg.repo.HgBlameInspector.RevisionDescriptor.Recipient;
+import org.tmatesoft.hg.repo.HgBlameInspector;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.util.Adaptable;
@@ -40,18 +39,18 @@ import org.tmatesoft.hg.util.Pair;
 
 /**
  * Blame implementation
- * @see HgBlameFacility
+ * @see HgBlameInspector
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 public class BlameHelper {
 	
-	private final Inspector insp;
+	private final HgBlameInspector insp;
 	private FileLinesCache linesCache;
 
 	// FIXME exposing internals (use of FileLinesCache through cons arg and #useFileUpTo) smells bad, refactor!
 
-	public BlameHelper(Inspector inspector, int cacheHint) {
+	public BlameHelper(HgBlameInspector inspector, int cacheHint) {
 		insp = inspector;
 		linesCache = new FileLinesCache(cacheHint);
 	}
@@ -192,7 +191,7 @@ public class BlameHelper {
 	}
 
 	private static class BlameBlockInspector extends DiffHelper.DeltaInspector<LineSequence> {
-		private final Inspector insp;
+		private final HgBlameInspector insp;
 		private final int csetOrigin;
 		private final int csetTarget;
 		private EqualBlocksCollector p2MergeCommon;
@@ -201,7 +200,7 @@ public class BlameHelper {
 		private final AnnotateRev annotatedRevision;
 		private HgCallbackTargetException error;
 
-		public BlameBlockInspector(HgDataFile df, int fileRevIndex, Inspector inspector, int originCset, int targetCset) {
+		public BlameBlockInspector(HgDataFile df, int fileRevIndex, HgBlameInspector inspector, int originCset, int targetCset) {
 			assert inspector != null;
 			insp = inspector;
 			annotatedRevision = new AnnotateRev();

@@ -26,8 +26,7 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
-import org.tmatesoft.hg.repo.HgBlameFacility.BlockData;
-import org.tmatesoft.hg.repo.HgBlameFacility;
+import org.tmatesoft.hg.repo.HgBlameInspector.BlockData;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -42,6 +41,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
+ * @since 1.1
  */
 @Experimental(reason="Work in progress. Unstable API")
 public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
@@ -118,8 +118,7 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		final int changesetStart = followRename ? 0 : df.getChangesetRevisionIndex(0);
 		Collector c = new Collector(cancellation);
 		FileAnnotation fa = new FileAnnotation(c);
-		HgBlameFacility af = new HgBlameFacility(df);
-		af.annotate(changesetStart, annotateRevision.get(), fa, HgIterateDirection.NewToOld);
+		df.annotate(changesetStart, annotateRevision.get(), fa, HgIterateDirection.NewToOld);
 		progress.worked(1);
 		c.throwIfCancelled();
 		cancellation.checkCancelled();

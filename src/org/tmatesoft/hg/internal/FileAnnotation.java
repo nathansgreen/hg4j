@@ -19,15 +19,10 @@ package org.tmatesoft.hg.internal;
 
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
-import org.tmatesoft.hg.repo.HgBlameFacility;
-import org.tmatesoft.hg.repo.HgInvalidStateException;
-import org.tmatesoft.hg.repo.HgBlameFacility.AddBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.BlockData;
-import org.tmatesoft.hg.repo.HgBlameFacility.ChangeBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.DeleteBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.EqualBlock;
-import org.tmatesoft.hg.repo.HgBlameFacility.RevisionDescriptor;
+import org.tmatesoft.hg.repo.HgBlameInspector;
+import org.tmatesoft.hg.repo.HgBlameInspector.RevisionDescriptor;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 
 /**
  * Produce output like 'hg annotate' does
@@ -35,7 +30,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class FileAnnotation implements HgBlameFacility.Inspector, RevisionDescriptor.Recipient {
+public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Recipient {
 
 	@Experimental(reason="The line-by-line inspector likely to become part of core/command API")
 	@Callback
@@ -58,8 +53,7 @@ public class FileAnnotation implements HgBlameFacility.Inspector, RevisionDescri
 			return;
 		}
 		FileAnnotation fa = new FileAnnotation(insp);
-		HgBlameFacility af = new HgBlameFacility(df);
-		af.annotate(changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
+		df.annotate(changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
 	}
 
 	// keeps <startSeq1, startSeq2, len> of equal blocks, origin to target, from some previous step
