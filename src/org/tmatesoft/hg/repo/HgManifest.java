@@ -666,7 +666,6 @@ public final class HgManifest extends Revlog {
 				}
 			}
 			if (undefinedChangelogRevision.size() > 0) {
-				final long t1 = System.nanoTime();
 				final IntMap<Nodeid> missingCsetToManifest = new IntMap<Nodeid>(undefinedChangelogRevision.size());
 				int[] undefinedClogRevs = undefinedChangelogRevision.toArray();
 				// undefinedChangelogRevision is sorted by the nature it's created
@@ -677,7 +676,6 @@ public final class HgManifest extends Revlog {
 					}
 				}, undefinedClogRevs);
 				assert missingCsetToManifest.size() == undefinedChangelogRevision.size();
-				final long t2 = System.nanoTime();
 				for (int u : undefinedClogRevs) {
 					Nodeid manifest = missingCsetToManifest.get(u);
 					if (manifest == null || manifest.isNull()) {
@@ -696,8 +694,6 @@ public final class HgManifest extends Revlog {
 						changelog2manifest[u] = HgManifest.this.getRevisionIndex(manifest);
 					}
 				}
-				final long t3 = System.nanoTime();
-				System.out.printf("\tRevisionMapper#finish(), %d missing revs: %d + %d us\n", undefinedChangelogRevision.size(), (t2-t1) / 1000, (t3-t2) / 1000);
 			}
 		}
 	}

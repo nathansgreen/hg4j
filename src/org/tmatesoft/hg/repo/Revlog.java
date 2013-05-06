@@ -150,7 +150,6 @@ abstract class Revlog {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public final int getRevisionIndex(Nodeid nid) throws HgRuntimeException {
-//		final long t1 = System.nanoTime();
 		int revision;
 		if (useRevisionLookup) {
 			if (revisionLookup == null) {
@@ -166,8 +165,6 @@ abstract class Revlog {
 			// Perhaps, more tailored description method would be suitable here
 			throw new HgInvalidRevisionException(String.format("Can't find revision %s in %s", nid.shortNotation(), this), nid, null);
 		}
-//		final long t2 = System.nanoTime();
-//		System.out.printf("\tgetRevisionIndex(%s): %d us\n", nid.shortNotation(), (t2-t1)/1000);
 		return revision;
 	}
 	
