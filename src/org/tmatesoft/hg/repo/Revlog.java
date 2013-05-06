@@ -150,15 +150,7 @@ abstract class Revlog {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public final int getRevisionIndex(Nodeid nid) throws HgRuntimeException {
-		int revision;
-		if (useRevisionLookup) {
-			if (revisionLookup == null) {
-				revisionLookup = RevisionLookup.createFor(content);
-			}
-			revision = revisionLookup.findIndex(nid);
-		} else {
-			revision = content.findRevisionIndex(nid);
-		}
+		final int revision = doFindWithCache(nid);
 		if (revision == BAD_REVISION) {
 			// using toString() to identify revlog. HgDataFile.toString includes path, HgManifest and HgChangelog instances 
 			// are fine with default (class name)
@@ -166,6 +158,17 @@ abstract class Revlog {
 			throw new HgInvalidRevisionException(String.format("Can't find revision %s in %s", nid.shortNotation(), this), nid, null);
 		}
 		return revision;
+	}
+	
+	private int doFindWithCache(Nodeid nid) {
+		if (useRevisionLookup) {
+			if (revisionLookup == null) {
+				revisionLookup = RevisionLookup.createFor(content);
+			}
+			return revisionLookup.findIndex(nid);
+		} else {
+			return content.findRevisionIndex(nid);
+		}
 	}
 	
 	/**
@@ -176,7 +179,7 @@ abstract class Revlog {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public final boolean isKnown(Nodeid nodeid) throws HgRuntimeException {
-		final int rn = content.findRevisionIndex(nodeid);
+		final int rn = doFindWithCache(nodeid);
 		if (BAD_REVISION == rn) {
 			return false;
 		}
