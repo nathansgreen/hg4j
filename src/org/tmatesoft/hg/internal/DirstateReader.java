@@ -66,7 +66,7 @@ public final class DirstateReader {
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return;
 		}
-		DataAccess da = repo.getDataAccess().createReader(dirstateFile);
+		DataAccess da = repo.getDataAccess().createReader(dirstateFile, false);
 		try {
 			if (da.isEmpty()) {
 				return;
@@ -142,7 +142,7 @@ public final class DirstateReader {
 		if (dirstateFile == null || !dirstateFile.exists()) {
 			return new Pair<Nodeid,Nodeid>(NULL, NULL);
 		}
-		DataAccess da = internalRepo.getDataAccess().createReader(dirstateFile);
+		DataAccess da = internalRepo.getDataAccess().createReader(dirstateFile, false);
 		try {
 			if (da.isEmpty()) {
 				return new Pair<Nodeid,Nodeid>(NULL, NULL);

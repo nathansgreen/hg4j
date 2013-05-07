@@ -60,7 +60,7 @@ public class HgBundle {
 	}
 
 	private DataAccess getDataStream() throws IOException {
-		DataAccess da = accessProvider.createReader(bundleFile);
+		DataAccess da = accessProvider.createReader(bundleFile, false);
 		byte[] signature = new byte[6];
 		if (da.length() > 6) {
 			da.readBytes(signature, 0, 6);

@@ -77,14 +77,18 @@ public class RevlogStream {
 		this.indexFile = indexFile;
 	}
 
-	/*package*/ DataAccess getIndexStream() {
-		// FIXME [1.1] must supply a hint that I'll need really few bytes of data (perhaps, at some offset) 
-		// to avoid mmap files when only few bytes are to be read (i.e. #dataLength())
-		return dataAccess.createReader(indexFile);
+	/**
+	 * @param shortRead pass <code>true</code> to indicate intention to read few revisions only (as opposed to reading most of/complete revlog)
+	 * @return never <code>null</code>, empty {@link DataAccess} if no stream is available
+	 */
+	/*package*/ DataAccess getIndexStream(boolean shortRead) {
+		// shortRead hint helps  to avoid mmap files when only 
+		// few bytes are to be read (i.e. #dataLength())
+		return dataAccess.createReader(indexFile, shortRead);
 	}
 
 	/*package*/ DataAccess getDataStream() {
-		return dataAccess.createReader(getDataFile());
+		return dataAccess.createReader(getDataFile(), false);
 	}
 	
 	/*package*/ DataSerializer getIndexStreamWriter() {
@@ -147,7 +151,7 @@ public class RevlogStream {
 		// XXX in fact, use of iterate() instead of this implementation may be quite reasonable.
 		//
 		revisionIndex = checkRevisionIndex(revisionIndex);
-		DataAccess daIndex = getIndexStream();
+		DataAccess daIndex = getIndexStream(true);
 		try {
 			int recordOffset = getIndexOffsetInt(revisionIndex);
 			daIndex.seek(recordOffset + 12); // 6+2+4
@@ -168,7 +172,7 @@ public class RevlogStream {
 	 */
 	public byte[] nodeid(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		revisionIndex = checkRevisionIndex(revisionIndex);
-		DataAccess daIndex = getIndexStream();
+		DataAccess daIndex = getIndexStream(true);
 		try {
 			int recordOffset = getIndexOffsetInt(revisionIndex);
 			daIndex.seek(recordOffset + 32);
@@ -190,7 +194,7 @@ public class RevlogStream {
 	 */
 	public int linkRevision(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		revisionIndex = checkRevisionIndex(revisionIndex);
-		DataAccess daIndex = getIndexStream();
+		DataAccess daIndex = getIndexStream(true);
 		try {
 			int recordOffset = getIndexOffsetInt(revisionIndex);
 			daIndex.seek(recordOffset + 20);
@@ -226,7 +230,7 @@ public class RevlogStream {
 	public int findRevisionIndex(Nodeid nodeid) throws HgInvalidControlFileException {
 		// XXX this one may be implemented with iterate() once there's mechanism to stop iterations
 		final int indexSize = revisionCount();
-		DataAccess daIndex = getIndexStream();
+		DataAccess daIndex = getIndexStream(false);
 		try {
 			byte[] nodeidBuf = new byte[20];
 			for (int i = 0; i < indexSize; i++) {
@@ -255,7 +259,7 @@ public class RevlogStream {
 		if (revisionCount() == 0) {
 			return 0;
 		}
-		DataAccess daIndex = getIndexStream();
+		DataAccess daIndex = getIndexStream(true);
 		int lastRev = revisionCount() - 1;
 		try {
 			int recordOffset = getIndexOffsetInt(lastRev);
@@ -421,7 +425,7 @@ public class RevlogStream {
 		if (outlineCached()) {
 			return;
 		}
-		DataAccess da = getIndexStream();
+		DataAccess da = getIndexStream(false);
 		try {
 			if (da.isEmpty()) {
 				// do not fail with exception if stream is empty, it's likely intentional
@@ -551,7 +555,7 @@ public class RevlogStream {
 		}
 		
 		public void start(int totalWork, CachedRevision cachedRevision) {
-			daIndex = getIndexStream();
+			daIndex = getIndexStream(totalWork <= 10);
 			if (needData && !inline) {
 				daData = getDataStream();
 			}

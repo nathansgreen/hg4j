@@ -84,14 +84,14 @@ public class DataAccessProvider {
 		return mapioBoundary == 0 ? Integer.MAX_VALUE : mapioBoundary;
 	}
 
-	public DataAccess createReader(File f) {
+	public DataAccess createReader(File f, boolean shortRead) {
 		if (!f.exists()) {
 			return new DataAccess();
 		}
 		try {
 			FileChannel fc = new FileInputStream(f).getChannel();
 			long flen = fc.size();
-			if (flen > mapioMagicBoundary) {
+			if (!shortRead && flen > mapioMagicBoundary) {
 				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
 				return new MemoryMapFileAccess(fc, flen, mapioBufSize, context.getLog());
 			} else {
