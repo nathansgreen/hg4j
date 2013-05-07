@@ -572,7 +572,6 @@ public final class HgDataFile extends Revlog {
 			} catch (IOException ex) {
 				recordFailure(ex);
 			} catch (HgInvalidControlFileException ex) {
-				// TODO RevlogStream, where this RevlogStream.Inspector goes, shall set File (as it's the only one having access to it)
 				recordFailure(ex.isRevisionIndexSet() ? ex : ex.setRevisionIndex(revisionNumber));
 			}
 		}

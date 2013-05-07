@@ -65,7 +65,7 @@ public class TestFileFlags {
 	public void testFlagsInWorkingCopy() throws Exception {
 		File repoRoot = repo.getWorkingDir();
 		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(repoRoot), repo.getToRepoPathHelper()));
-		FileWalker fw = new FileWalker(repo.getSessionContext(), repoRoot, pathSrc);
+		FileWalker fw = new FileWalker(repo, repoRoot, pathSrc, null);
 		
 		if (Internals.runningOnWindows()) {
 			System.out.println("Executing tests on Windows, no actual file flags in working area are checked");

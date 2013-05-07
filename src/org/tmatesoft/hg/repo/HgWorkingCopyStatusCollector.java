@@ -375,8 +375,7 @@ public class HgWorkingCopyStatusCollector {
 					} else {
 						HgDataFile df = repo.getFileNode(fname);
 						if (!df.exists()) {
-							// TODO pass Internals right into HgWCSC cons
-							Internals implRepo = HgInternals.getImplementationRepo(repo);
+							Internals implRepo = repo.getImplHelper();
 							String msg = String.format("File %s known as normal in dirstate (%d, %d), doesn't exist at %s", fname, r.modificationTime(), r.size(), implRepo.getStoragePath(df));
 							throw new HgInvalidFileException(msg, null).setFileName(fname);
 						}
@@ -496,7 +495,7 @@ public class HgWorkingCopyStatusCollector {
 			// only those left in baseRevNames after processing are reported as removed 
 		}
 
-		// TODO think over if content comparison may be done more effectively by e.g. calculating nodeid for a local file and comparing it with nodeid from manifest
+		// TODO [post-1.1] think over if content comparison may be done more effectively by e.g. calculating nodeid for a local file and comparing it with nodeid from manifest
 		// we don't need to tell exact difference, hash should be enough to detect difference, and it doesn't involve reading historical file content, and it's relatively 
 		// cheap to calc hash on a file (no need to keep it completely in memory). OTOH, if I'm right that the next approach is used for nodeids: 
 		// changeset nodeid + hash(actual content) => entry (Nodeid) in the next Manifest
@@ -624,16 +623,7 @@ public class HgWorkingCopyStatusCollector {
 	}
 	
 	private boolean checkFlagsEqual(FileInfo f, int dirstateFileMode) {
-		// source/include/linux/stat.h
-		final int S_IFLNK = 0120000, S_IXUSR = 00100;
-		// TODO post-1.0 HgManifest.Flags.parse(int)
-		if ((dirstateFileMode & S_IFLNK) == S_IFLNK) {
-			return checkFlagsEqual(f, HgManifest.Flags.Link);
-		}
-		if ((dirstateFileMode & S_IXUSR) == S_IXUSR) {
-			return checkFlagsEqual(f, HgManifest.Flags.Exec);
-		}
-		return checkFlagsEqual(f, HgManifest.Flags.RegularFile); // no flags
+		return checkFlagsEqual(f, HgManifest.Flags.parse(dirstateFileMode)); 
 	}
 
 	/**

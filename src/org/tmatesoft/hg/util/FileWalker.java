@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,19 +41,25 @@ public class FileWalker implements FileIterator {
 	private RegularFileInfo nextFile;
 	private Path nextPath;
 
-	// TODO FileWalker to accept SessionContext.Source and SessionContext to implement SessionContext.Source
-	// (if it doesn't break binary compatibility)
 	public FileWalker(SessionContext ctx, File dir, Path.Source pathFactory) {
 		this(ctx, dir, pathFactory, null);
 	}
+	
+	/**
+	 * @see FileWalker#FileWalker(SessionContext, File, Path.Source, Matcher)
+	 */
+	public FileWalker(SessionContext.Source ctxSource, File dir, Path.Source pathFactory, Path.Matcher scopeMatcher) {
+		this(ctxSource.getSessionContext(), dir, pathFactory, scopeMatcher);
+	}
 
 	/**
+	 * Implementation of {@link FileIterator} with regular {@link java.io.File}.
 	 * 
-	 * @param dir
-	 * @param pathFactory
+	 * @param dir directory to start at, not <code>null</code>
+	 * @param pathFactory factory to create {@link Path} instances, not <code>null</code>
 	 * @param scopeMatcher - this matcher shall be capable to tell not only files of interest, but
 	 * also whether directories shall be traversed or not (Paths it gets in {@link Path.Matcher#accept(Path)} may 
-	 * point to directories)   
+	 * point to directories); may be <code>null</code>
 	 */
 	public FileWalker(SessionContext ctx, File dir, Path.Source pathFactory, Path.Matcher scopeMatcher) {
 		sessionContext = ctx;

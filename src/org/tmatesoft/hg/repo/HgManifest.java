@@ -109,7 +109,19 @@ public final class HgManifest extends Revlog {
 			}
 			throw new IllegalStateException(new String(data, start, length));
 		}
-
+		
+		static Flags parse(int dirstateFileMode) {
+			// source/include/linux/stat.h
+			final int S_IFLNK = 0120000, S_IXUSR = 00100;
+			if ((dirstateFileMode & S_IFLNK) == S_IFLNK) {
+				return Link;
+			}
+			if ((dirstateFileMode & S_IXUSR) == S_IXUSR) {
+				return Exec;
+			}
+			return RegularFile;
+		}
+		
 		String nativeString() {
 			if (this == Exec) {
 				return "x";

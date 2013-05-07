@@ -124,7 +124,7 @@ public class TestCheckout {
 		repo = new HgLookup().detect(testRepoLoc);
 		new HgCheckoutCommand(repo).clean(true).changeset(0).execute();
 		
-		FileWalker fw = new FileWalker(repo.getSessionContext(), testRepoLoc, new Path.SimpleSource());
+		FileWalker fw = new FileWalker(repo, testRepoLoc, new Path.SimpleSource(), null);
 		int execFound, linkFound, regularFound;
 		execFound = linkFound = regularFound = 0;
 		while(fw.hasNext()) {

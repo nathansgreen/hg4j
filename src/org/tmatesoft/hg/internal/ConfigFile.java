@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -183,7 +183,7 @@ public class ConfigFile {
 		private Map<String,String> section = new LinkedHashMap<String, String>();
 		private File contextFile;
 
-		// TODO "" and lists
+		// TODO [post-1.1] "" and lists
 		// XXX perhaps, single string to keep whole section with substrings for keys/values to minimize number of arrays (String.value)
 		public boolean consume(String line, ConfigFile cfg) throws IOException {
 			int x;
@@ -237,7 +237,7 @@ public class ConfigFile {
 		// include failure doesn't propagate
 		private void processInclude(String includeValue, ConfigFile cfg) {
 			File f; 
-			// TODO handle environment variable expansion
+			// TODO [post-1.1] handle environment variable expansion
 			if (includeValue.startsWith("~/")) {
 				f = new File(System.getProperty("user.home"), includeValue.substring(2));
 			} else {

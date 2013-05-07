@@ -54,8 +54,6 @@ public class DataAccessProvider {
 	private final int mapioMagicBoundary;
 	private final int bufferSize, mapioBufSize;
 	private final SessionContext context;
-	// not the right place for the property, but DAP is the only place currently available to RevlogStream to get the value
-	private final boolean shallMergePatches;
 	
 	public DataAccessProvider(SessionContext ctx) {
 		context = ctx;
@@ -63,7 +61,6 @@ public class DataAccessProvider {
 		mapioMagicBoundary = mapioBoundaryValue(pm.getInt(CFG_PROPERTY_MAPIO_LIMIT, DEFAULT_MAPIO_LIMIT));
 		bufferSize = pm.getInt(CFG_PROPERTY_FILE_BUFFER_SIZE, DEFAULT_FILE_BUFFER);
 		mapioBufSize = pm.getInt(CFG_PROPERTY_MAPIO_BUFFER_SIZE, DEFAULT_MAPIO_BUFFER);
-		shallMergePatches = pm.getBoolean(Internals.CFG_PROPERTY_PATCH_MERGE, false);
 	}
 	
 	public DataAccessProvider(SessionContext ctx, int mapioBoundary, int regularBufferSize, int mapioBufferSize) {
@@ -71,14 +68,8 @@ public class DataAccessProvider {
 		mapioMagicBoundary = mapioBoundaryValue(mapioBoundary);
 		bufferSize = regularBufferSize;
 		mapioBufSize = mapioBufferSize;
-		shallMergePatches = new PropertyMarshal(ctx).getBoolean(Internals.CFG_PROPERTY_PATCH_MERGE, false);
 	}
 	
-	// TODO [post-1.1] find a better place for this option, it's unrelated to the DAP
-	public boolean shallMergePatches() {
-		return shallMergePatches;
-	}
-
 	// ensure contract of CFG_PROPERTY_MAPIO_LIMIT, for mapioBoundary == 0 use MAX_VALUE so that no file is memmap-ed
 	private static int mapioBoundaryValue(int mapioBoundary) {
 		return mapioBoundary == 0 ? Integer.MAX_VALUE : mapioBoundary;

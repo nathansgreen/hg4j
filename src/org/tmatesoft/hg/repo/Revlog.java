@@ -251,7 +251,7 @@ abstract class Revlog {
 		} catch (IOException ex) {
 			HgInvalidControlFileException e = new HgInvalidControlFileException(String.format("Access to revision %d content failed", revisionIndex), ex, null);
 			e.setRevisionIndex(revisionIndex);
-			// TODO post 1.0 e.setFileName(content.getIndexFile() or this.getHumanFriendlyPath()) - shall decide whether 
+			// TODO [post 1.1] e.setFileName(content.getIndexFile() or this.getHumanFriendlyPath()) - shall decide whether 
 			// protected abstract getHFPath() with impl in HgDataFile, HgManifest and HgChangelog or path is data of either Revlog or RevlogStream
 			// Do the same (add file name) below
 			throw e;
@@ -375,7 +375,7 @@ abstract class Revlog {
 		});
 		if (parentInsp != null && _start > 0) {
 			assert missingParents.size() > 0; // in fact, more relaxed than assert. rather 'assume'
-			// TODO int[] IntMap#keys() or even sort of iterator that can modify values
+			// TODO [post-1.1] int[] IntMap#keys() or even sort of iterator that can modify values
 			for (int k = missingParents.firstKey(), l = missingParents.lastKey(); k <= l; k++) {
 				if (missingParents.containsKey(k)) {
 					Nodeid nid = getRepo().getChangelog().getRevision(k);
@@ -433,7 +433,8 @@ abstract class Revlog {
 	}
 	
 	/*
-	 * class with cancel and few other exceptions support. TODO consider general superclass to share with e.g. HgManifestCommand.Mediator
+	 * class with cancel and few other exceptions support. 
+	 * TODO [post-1.1] consider general superclass to share with e.g. HgManifestCommand.Mediator
 	 */
 	protected abstract static class ErrorHandlingInspector implements RevlogStream.Inspector, CancelSupport {
 		private Exception failure;

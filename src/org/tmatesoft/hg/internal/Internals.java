@@ -125,6 +125,7 @@ public final class Internals implements SessionContext.Source {
 	private final PathRewrite dataPathHelper; // access to file storage area (usually under .hg/store/data/), with filenames mangled  
 	private final PathRewrite repoPathHelper; // access to system files (under .hg/store if requires has 'store' flag)
 
+	private final boolean shallMergePatches;
 	private final RevlogStreamFactory streamProvider;
 
 	public Internals(HgRepository hgRepo, File hgDir, ImplAccess implementationAccess) throws HgRuntimeException {
@@ -138,8 +139,10 @@ public final class Internals implements SessionContext.Source {
 		requiresFlags = repoInit.getRequires();
 		dataPathHelper = repoInit.buildDataFilesHelper(getSessionContext());
 		repoPathHelper = repoInit.buildStoreFilesHelper();
-		boolean shallCacheRevlogsInRepo = new PropertyMarshal(ctx).getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
+		final PropertyMarshal pm = new PropertyMarshal(ctx);
+		boolean shallCacheRevlogsInRepo = pm.getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
 		streamProvider = new RevlogStreamFactory(this, shallCacheRevlogsInRepo); 
+		shallMergePatches = pm.getBoolean(Internals.CFG_PROPERTY_PATCH_MERGE, false);
 	}
 	
 	public boolean isInvalid() {
@@ -266,6 +269,16 @@ public final class Internals implements SessionContext.Source {
 		return requiresFlags;
 	}
 	
+	boolean shallMergePatches() {
+		return shallMergePatches;
+	}
+
+	RevlogChangeMonitor getRevlogTracker(File f) {
+		// TODO decide whether to use one monitor per multiple files or 
+		// an instance per file; and let SessionContext pass alternative implementation)
+		return new RevlogChangeMonitor(f);
+	}
+	
 	public static boolean runningOnWindows() {
 		return System.getProperty("os.name").indexOf("Windows") != -1;
 	}
@@ -390,7 +403,7 @@ public final class Internals implements SessionContext.Source {
 		if (f.canRead() && f.isDirectory()) {
 			return listConfigFiles(f);
 		}
-		// TODO post-1.0 query registry, e.g. with
+		// TODO [post-1.1] query registry, e.g. with
 		// Runtime.exec("reg query HKLM\Software\Mercurial")
 		//
 		f = new File("C:\\Mercurial\\Mercurial.ini");

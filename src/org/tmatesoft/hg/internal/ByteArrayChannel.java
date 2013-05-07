@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,8 @@ import java.util.List;
 import org.tmatesoft.hg.util.ByteChannel;
 
 /**
- *
+ * {@link ByteChannel} implementation that serializes data into a byte array
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -48,7 +49,10 @@ public class ByteArrayChannel implements ByteChannel {
 		}
 	}
 
-	// TODO document what happens on write after toArray() in each case
+	/*
+	 * {@link #toArray()} calls do not clear data collected so far, subsequent {@link #write(ByteBuffer)}  
+	 * augment collected content.
+	 */
 	public int write(ByteBuffer buffer) {
 		int rv = buffer.remaining();
 		if (buffers == null) {
@@ -58,9 +62,13 @@ public class ByteArrayChannel implements ByteChannel {
 			copy.put(buffer);
 			buffers.add(copy);
 		}
+		result = null;
 		return rv;
 	}
 
+	/**
+	 * @return content accumulated so far
+	 */
 	public byte[] toArray() {
 		if (result != null) {
 			return result;
@@ -84,7 +92,6 @@ public class ByteArrayChannel implements ByteChannel {
 				bb.get(result, off, bb.limit());
 				off += bb.limit();
 			}
-			buffers.clear();
 			return result;
 		}
 	}

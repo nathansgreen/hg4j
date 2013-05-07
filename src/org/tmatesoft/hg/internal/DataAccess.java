@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,9 +99,10 @@ public class DataAccess {
 		}
 		throw new IOException(String.format("No data, can't read %d bytes", length));
 	}
-	// reads bytes into ByteBuffer, up to its limit or total data length, whichever smaller
-	// TODO post-1.0 perhaps, in DataAccess paradigm (when we read known number of bytes, we shall pass specific byte count to read)
-	// for 1.0, it's ok as it's our internal class
+	/**
+	 * reads bytes into ByteBuffer, up to its limit or total data length, whichever smaller.
+	 * XXX perhaps, in DataAccess paradigm (when we read known number of bytes, we shall pass specific byte count to read)
+	 */
 	public void readBytes(ByteBuffer buf) throws IOException {
 //		int toRead = Math.min(buf.remaining(), (int) length());
 //		if (buf.hasArray()) {
@@ -111,7 +112,7 @@ public class DataAccess {
 //			readBytes(bb, 0, bb.length);
 //			buf.put(bb);
 //		}
-		// TODO post-1.0 optimize to read as much as possible at once
+		// TODO [post-1.1] optimize to read as much as possible at once
 		while (!isEmpty() && buf.hasRemaining()) {
 			buf.put(readByte());
 		}
@@ -120,8 +121,14 @@ public class DataAccess {
 		throw new UnsupportedOperationException();
 	}
 
-	// XXX decide whether may or may not change position in the DataAccess
-	// TODO REVISIT exception handling may not be right, initially just for the sake of quick test
+	/**
+	 * Content of this DataAccess as byte array.
+	 * Note, likely changes position in the DataAccess.
+	 * Might provide direct access to underlying data structure in certain cases, do not alter.
+	 * 
+	 * @return byte array of {@link #length()} size, filled with data   
+	 * @throws IOException
+	 */
 	public byte[] byteArray() throws IOException {
 		reset();
 		byte[] rv = new byte[length()];

@@ -49,7 +49,7 @@ public final class RevlogStreamFactory {
 	 * Creates a stream for specified file, doesn't cache stream
 	 */
 	/*package-local*/ RevlogStream create(File f) {
-		return new RevlogStream(repo.getDataAccess(), f);
+		return new RevlogStream(repo, f);
 	}
 
 	/**

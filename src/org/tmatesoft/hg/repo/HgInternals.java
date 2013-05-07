@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -144,7 +144,7 @@ public class HgInternals {
 		// Impl note: simple source is enough as files in the working dir are all unique
 		// even if they might get reused (i.e. after FileIterator#reset() and walking once again),
 		// path caching is better to be done in the code which knows that path are being reused 
-		return new FileWalker(repo.getSessionContext(), repoRoot, pathSrc, workindDirScope);
+		return new FileWalker(repo, repoRoot, pathSrc, workindDirScope);
 	}
 	
 	// Convenient check of revision index for validity (not all negative values are wrong as long as we use negative constants)

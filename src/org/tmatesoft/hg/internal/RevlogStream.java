@@ -50,6 +50,8 @@ import org.tmatesoft.hg.util.Adaptable;
  */
 public class RevlogStream {
 
+	static final int INLINEDATA = 1 << 16;
+
 	/*
 	 * makes sense for index with inline data only - actual offset of the record in the .i file (record entry + revision * record size))
 	 * 
@@ -63,7 +65,7 @@ public class RevlogStream {
 	private boolean inline = false;
 	private final File indexFile;
 	private File dataFile;
-	private final DataAccessProvider dataAccess;
+	private final Internals repo;
 	// keeps last complete revision we've read. Note, this cached revision doesn't help
 	// for subsequent #iterate() calls with the same revision (Inspector needs more data than 
 	// we currently cache here, perhaps, we shall cache everything it wants to cover same 
@@ -77,14 +79,10 @@ public class RevlogStream {
 	private List<Observer> observers;
 	private boolean shallDropDerivedCaches = false;
 
-	// if we need anything else from HgRepo, might replace DAP parameter with HgRepo and query it for DAP.
-	public RevlogStream(DataAccessProvider dap, File indexFile) {
-		this.dataAccess = dap;
+	public RevlogStream(Internals hgRepo, File indexFile) {
+		repo = hgRepo;
 		this.indexFile = indexFile;
-		// TODO in fact, shall ask Internals for an instance (there we'll decide whether to use
-		// one monitor per multiple files or an instance per file; and let SessionContext pass
-		// alternative implementation)
-		changeTracker = new RevlogChangeMonitor(indexFile);
+		changeTracker = repo.getRevlogTracker(indexFile);
 	}
 
 	/**
@@ -94,18 +92,22 @@ public class RevlogStream {
 	/*package*/ DataAccess getIndexStream(boolean shortRead) {
 		// shortRead hint helps  to avoid mmap files when only 
 		// few bytes are to be read (i.e. #dataLength())
+		DataAccessProvider dataAccess = repo.getDataAccess();
 		return dataAccess.createReader(indexFile, shortRead);
 	}
 
 	/*package*/ DataAccess getDataStream() {
+		DataAccessProvider dataAccess = repo.getDataAccess();
 		return dataAccess.createReader(getDataFile(), false);
 	}
 	
 	/*package*/ DataSerializer getIndexStreamWriter() {
+		DataAccessProvider dataAccess = repo.getDataAccess();
 		return dataAccess.createWriter(indexFile, true);
 	}
 	
 	/*package*/ DataSerializer getDataStreamWriter() {
+		DataAccessProvider dataAccess = repo.getDataAccess();
 		return dataAccess.createWriter(getDataFile(), true);
 	}
 	
@@ -301,14 +303,12 @@ public class RevlogStream {
 		HgInternals.checkRevlogRange(start, end, indexSize-1);
 		// XXX may cache [start .. end] from index with a single read (pre-read)
 		
-		ReaderN1 r = new ReaderN1(needData, inspector, dataAccess.shallMergePatches());
+		ReaderN1 r = new ReaderN1(needData, inspector, repo.shallMergePatches());
 		try {
 			r.start(end - start + 1, getLastRevisionRead());
 			r.range(start, end);
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException(String.format("Failed reading [%d..%d]", start, end), ex, indexFile);
-		} catch (HgInvalidControlFileException ex) {
-			throw ex;
 		} finally {
 			CachedRevision cr = r.finish();
 			setLastRevisionRead(cr);
@@ -334,7 +334,7 @@ public class RevlogStream {
 			throw new HgInvalidRevisionException(String.format("Can't iterate [%d, %d] in range [0..%d]", sortedRevisions[0], sortedRevisions[sortedRevisions.length - 1], indexSize), null, sortedRevisions[sortedRevisions.length - 1]);
 		}
 
-		ReaderN1 r = new ReaderN1(needData, inspector, dataAccess.shallMergePatches());
+		ReaderN1 r = new ReaderN1(needData, inspector, repo.shallMergePatches());
 		try {
 			r.start(sortedRevisions.length, getLastRevisionRead());
 			for (int i = 0; i < sortedRevisions.length; ) {
@@ -354,10 +354,7 @@ public class RevlogStream {
 			}
 		} catch (IOException ex) {
 			final int c = sortedRevisions.length;
-			throw new HgInvalidControlFileException(String.format("Failed reading %d revisions in [%d; %d]",c, sortedRevisions[0], sortedRevisions[c-1]), ex, indexFile);
-		} catch (HgInvalidControlFileException ex) {
-			// TODO post-1.0 fill HgRuntimeException with appropriate file (either index or data, depending on error source)
-			throw ex;
+			throw new HgInvalidControlFileException(String.format("Failed reading %d revisions in [%d; %d]", c, sortedRevisions[0], sortedRevisions[c-1]), ex, indexFile);
 		} finally {
 			CachedRevision cr = r.finish();
 			setLastRevisionRead(cr);
@@ -488,7 +485,6 @@ public class RevlogStream {
 			}
 			int versionField = da.readInt();
 			da.readInt(); // just to skip next 4 bytes of offset + flags
-			final int INLINEDATA = 1 << 16;
 			inline = (versionField & INLINEDATA) != 0;
 			IntVector resBases, resOffsets = null;
 			int entryCountGuess = Internals.ltoi(da.longLength() / REVLOGV1_RECORD_SIZE);
@@ -592,7 +588,7 @@ public class RevlogStream {
 		// next are transient values, for range() use only
 		private final Inflater inflater = new Inflater();
 		// can share buffer between instances of InflaterDataAccess as I never read any two of them in parallel
-		private final byte[] inflaterBuffer = new byte[10 * 1024]; // TODO consider using DAP.DEFAULT_FILE_BUFFER
+		private final byte[] inflaterBuffer = new byte[10 * 1024]; // TODO [post-1.1] consider using DAP.DEFAULT_FILE_BUFFER
 		private final byte[] nodeidBuf = new byte[20];
 		// revlog record fields
 		private long offset;
@@ -829,9 +825,22 @@ public class RevlogStream {
 
 	
 	public interface Inspector {
-		// XXX boolean retVal to indicate whether to continue?
-		// TODO specify nodeid and data length, and reuse policy (i.e. if revlog stream doesn't reuse nodeid[] for each call)
-		// implementers shall not invoke DataAccess.done(), it's accomplished by #iterate at appropraite moment
+		/**
+		 * XXX boolean retVal to indicate whether to continue?
+		 * 
+		 * Implementers shall not invoke DataAccess.done(), it's accomplished by #iterate at appropriate moment
+		 * 
+		 * @param revisionIndex absolute index of revision in revlog being iterated
+		 * @param actualLen length of the user data at this revision
+		 * @param baseRevision last revision known to hold complete revision (other hold patches). 
+		 *        if baseRevision != revisionIndex, data for this revision is a result of a sequence of patches
+		 * @param linkRevision index of corresponding changeset revision
+		 * @param parent1Revision index of first parent revision in this revlog, or {@link HgRepository#NO_REVISION}
+		 * @param parent2Revision index of second parent revision in this revlog, or {@link HgRepository#NO_REVISION}
+		 * @param nodeid 20-byte buffer, shared between invocations 
+		 * @param data access to revision content of actualLen size, or <code>null</code> if no data has been requested with 
+		 *        {@link RevlogStream#iterate(int[], boolean, Inspector)}
+		 */
 		void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data);
 	}
 

@@ -29,7 +29,7 @@ import org.tmatesoft.hg.repo.HgInvalidStateException;
 
 /**
  * 
- * TODO separate operation to check if index is too big and split into index+data
+ * TODO [post-1.1] separate operation to check if index is too big and split into index+data
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -255,8 +255,7 @@ public class RevlogStreamWriter {
 			if (offset == 0) {
 				int version = 1 /* RevlogNG */;
 				if (isInline) {
-					final int INLINEDATA = 1 << 16; // FIXME extract constant
-					version |= INLINEDATA;
+					version |= RevlogStream.INLINEDATA;
 				}
 				header.putInt(version);
 				header.putInt(0);
