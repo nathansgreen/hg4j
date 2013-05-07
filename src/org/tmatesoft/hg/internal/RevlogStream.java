@@ -25,6 +25,8 @@ import java.io.IOException;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.SoftReference;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.Inflater;
 
 import org.tmatesoft.hg.core.Nodeid;
@@ -70,11 +72,19 @@ public class RevlogStream {
 	// parents/children are analyzed.
 	private SoftReference<CachedRevision> lastRevisionRead;
 	private final ReferenceQueue<CachedRevision> lastRevisionQueue = new ReferenceQueue<CachedRevision>();
+	//
+	private final RevlogChangeMonitor changeTracker;
+	private List<Observer> observers;
+	private boolean shallDropDerivedCaches = false;
 
 	// if we need anything else from HgRepo, might replace DAP parameter with HgRepo and query it for DAP.
 	public RevlogStream(DataAccessProvider dap, File indexFile) {
 		this.dataAccess = dap;
 		this.indexFile = indexFile;
+		// TODO in fact, shall ask Internals for an instance (there we'll decide whether to use
+		// one monitor per multiple files or an instance per file; and let SessionContext pass
+		// alternative implementation)
+		changeTracker = new RevlogChangeMonitor(indexFile);
 	}
 
 	/**
@@ -214,7 +224,6 @@ public class RevlogStream {
 	 * @throws HgInvalidRevisionException if revisionIndex argument doesn't represent a valid record in the revlog
 	 */
 	public int baseRevision(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
-		initOutline();
 		revisionIndex = checkRevisionIndex(revisionIndex);
 		return getBaseRevision(revisionIndex);
 	}
@@ -354,8 +363,41 @@ public class RevlogStream {
 			setLastRevisionRead(cr);
 		}
 	}
+	
+	public void attach(Observer listener) {
+		assert listener != null;
+		if (observers == null) {
+			observers = new ArrayList<Observer>(3);
+		}
+		observers.add(listener);
+	}
+	
+	public void detach(Observer listener) {
+		assert listener != null;
+		if (observers != null) {
+			observers.remove(listener);
+		}
+	}
+	
+	/*
+	 * Note, this method IS NOT a replacement for Observer. It has to be invoked when the validity of any
+	 * cache built using revision information is in doubt, but it provides reasonable value only till the
+	 * first initOutline() to be invoked, i.e. in [change..revlog read operation] time frame. If your code
+	 * accesses cached information without any prior explicit read operation, you shall consult this method
+	 * if next read operation would in fact bring changed content.
+	 * Observer is needed in addition to this method because any revlog read operation (e.g. Revlog#getLastRevision)
+	 * would clear shallDropDerivedCaches(), and if code relies only on this method to clear its derived caches,
+	 * it would miss the update.
+	 */
+	public boolean shallDropDerivedCaches() {
+		if (shallDropDerivedCaches) {
+			return shallDropDerivedCaches;
+		}
+		return shallDropDerivedCaches = changeTracker.hasChanged(indexFile);
+	}
 
 	void revisionAdded(int revisionIndex, Nodeid revision, int baseRevisionIndex, long revisionOffset) throws HgInvalidControlFileException {
+		shallDropDerivedCaches = true;
 		if (!outlineCached()) {
 			return;
 		}
@@ -421,10 +463,20 @@ public class RevlogStream {
 		return o + REVLOGV1_RECORD_SIZE * recordIndex;
 	}
 
+	// every access to index revlog goes after this method only.
 	private void initOutline() throws HgInvalidControlFileException {
+		// true to send out 'drop-your-caches' event after outline has been built
+		final boolean notifyReload;
 		if (outlineCached()) {
-			return;
+			if (!changeTracker.hasChanged(indexFile)) {
+				return;
+			}
+			notifyReload = true;
+		} else {
+			// no cached outline - inital read, do not send any reload/invalidate notifications
+			notifyReload = false;
 		}
+		changeTracker.touch(indexFile);
 		DataAccess da = getIndexStream(false);
 		try {
 			if (da.isEmpty()) {
@@ -483,6 +535,12 @@ public class RevlogStream {
 			throw new HgInvalidControlFileException("Failed to analyze revlog index", ex, indexFile);
 		} finally {
 			da.done();
+			if (notifyReload && observers != null) {
+				for (Observer l : observers) {
+					l.reloaded(this);
+				}
+				shallDropDerivedCaches = false;
+			}
 		}
 	}
 	
@@ -777,4 +835,8 @@ public class RevlogStream {
 		void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data);
 	}
 
+	public interface Observer {
+		// notify observer of invalidate/reload event in the stream
+		public void reloaded(RevlogStream src);
+	}
 }

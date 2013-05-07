@@ -55,6 +55,14 @@ public final class HgManifest extends Revlog {
 	private RevisionMapper revisionMap;
 	private final EncodingHelper encodingHelper;
 	private final Path.Source pathFactory; 
+	private final RevlogStream.Observer revisionMapCleaner = new RevlogStream.Observer() {
+		public void reloaded(RevlogStream src) {
+			revisionMap = null;
+			// TODO RevlogDerivedCache<T> class, to wrap revisionMap and super.revisionLookup
+			// and their respective cleanup observers, or any other all-in-one alternative
+			// not to keep both field and it's cleaner
+		}
+	};
 	
 	/**
 	 * File flags recorded in manifest
@@ -244,15 +252,24 @@ public final class HgManifest extends Revlog {
 			throw new HgInvalidRevisionException("Can't use constants like WORKING_COPY or BAD_REVISION", null, changesetRevisionIndex);
 		}
 		// revisionNumber == TIP is processed by RevisionMapper 
-		if (revisionMap == null) {
-			revisionMap = new RevisionMapper(super.revisionLookup == null);
-			content.iterate(0, TIP, false, revisionMap);
-			revisionMap.fixReusedManifests();
-			if (super.useRevisionLookup && super.revisionLookup == null) {
+		if (revisionMap == null || content.shallDropDerivedCaches()) {
+			content.detach(revisionMapCleaner);
+			final boolean buildOwnLookup = super.revisionLookup == null;
+			RevisionMapper rmap = new RevisionMapper(buildOwnLookup);
+			content.iterate(0, TIP, false, rmap);
+			rmap.fixReusedManifests();
+			if (buildOwnLookup && super.useRevisionLookup) {
 				// reuse RevisionLookup if there's none yet
-				super.revisionLookup = revisionMap.manifestNodeids;
+				super.setRevisionLookup(rmap.manifestNodeids);
 			}
-			revisionMap.manifestNodeids = null;
+			rmap.manifestNodeids = null;
+			revisionMap = rmap;
+			// although in most cases modified manifest is accessed through one of the methods in this class
+			// and hence won't have a chance till this moment to be reloaded via revisionMapCleaner
+			// (RevlogStream sends events on attempt to read revlog, and so far we haven't tried to read anything,
+			// it's still reasonable to have this cleaner attached, just in case any method from Revlog base class
+			// has been called (e.g. getLastRevision())
+			content.attach(revisionMapCleaner);
 		}
 		return revisionMap.at(changesetRevisionIndex);
 	}
@@ -332,6 +349,15 @@ public final class HgManifest extends Revlog {
 		return resMap.size() == 0 ? null : resMap.get(resMap.firstKey());
 	}
 
+
+	/*package-local*/ void dropCachesOnChangelogChange() {
+		// sort of a hack as it may happen that #fromChangelog()
+		// is invoked for modified repository where revisionMap still points to an old state
+		// Since there's no access to RevlogStream in #fromChangelog() if there's revisionMap 
+		// in place, there's no chance for RevlogStream to detect the change and to dispatch 
+		// change notification so that revisionMap got cleared.
+		revisionMap = null;
+	}
 
 	/**
 	 * @param changelogRevisionIndexes non-null

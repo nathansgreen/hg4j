@@ -1,0 +1,71 @@
+/*
+ * Copyright (c) 2013 TMate Software Ltd
+ *  
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * For information on how to redistribute this software under
+ * the terms of a license other than GNU General Public License
+ * contact TMate Software at support@hg4j.com
+ */
+package org.tmatesoft.hg.internal;
+
+import java.io.File;
+import java.util.WeakHashMap;
+
+/**
+ * Detect changes to revlog files. Not a general file change monitoring as we utilize the fact revlogs are append-only (and even in case
+ * of stripped-off tail revisions, with e.g. mq, detection approach is still valid).
+ * 
+ * @author Artem Tikhomirov
+ * @author TMate Software Ltd.
+ */
+public class RevlogChangeMonitor {
+	
+	private final WeakHashMap<File, Long> lastKnownSize;
+	private final File soleFile;
+	private long soleFileLength = -1;
+	
+	// use single for multiple files. TODO repository/session context shall provide
+	// alternative (configurable) implementations, so that Java7 users may supply better one
+	public RevlogChangeMonitor() {
+		lastKnownSize = new WeakHashMap<File, Long>();
+		soleFile = null;
+	}
+	
+	public RevlogChangeMonitor(File f) {
+		assert f != null;
+		lastKnownSize = null;
+		soleFile = f;
+	}
+	
+	public void touch(File f) {
+		assert f != null;
+		if (lastKnownSize == null) {
+			assert f == soleFile;
+			soleFileLength = f.length();
+		} else {
+			lastKnownSize.put(f, f.length());
+		}
+	}
+	
+	public boolean hasChanged(File f) {
+		assert f != null;
+		if (lastKnownSize == null) {
+			assert f == soleFile;
+			return soleFileLength != f.length();
+		} else {
+			Long lastSize = lastKnownSize.get(f);
+			if (lastSize == null) {
+				return true;
+			}
+			return f.length() != lastSize;
+		}
+	}
+}

@@ -133,8 +133,6 @@ public class TestCommit {
 		Nodeid commitRev1 = cf.commit("FIRST");
 		contentProvider.done();
 		//
-		// FIXME requirement to reload repository is disgusting 
-		hgRepo = new HgLookup().detect(repoLoc);
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).range(parentCsetRevIndex+1, TIP).execute();
 		assertEquals(1, commits.size());
 		HgChangeset c1 = commits.get(0);
@@ -164,8 +162,6 @@ public class TestCommit {
 		contentProvider.done();
 		// Note, working directory still points to original revision, CommitFacility doesn't update dirstate
 		//
-		// FIXME requirement to reload repository is disgusting 
-		hgRepo = new HgLookup().detect(repoLoc);
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).changeset(commitRev).execute();
 		HgChangeset cmt = commits.get(0);
 		errorCollector.assertEquals(1, cmt.getAddedFiles().size());
@@ -211,8 +207,6 @@ public class TestCommit {
 		Nodeid commitRev3 = cf.commit("THIRD");
 		contentProvider.done();
 		//
-		// FIXME requirement to reload repository is disgusting 
-		hgRepo = new HgLookup().detect(repoLoc);
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).range(parentCsetRevIndex+1, TIP).execute();
 		assertEquals(3, commits.size());
 		HgChangeset c1 = commits.get(0);
@@ -247,7 +241,6 @@ public class TestCommit {
 		Nodeid c1 = cmd.getCommittedRevision();
 		
 		// check that modified files are no longer reported as such
-		hgRepo = new HgLookup().detect(repoLoc);
 		TestStatus.StatusCollector status = new TestStatus.StatusCollector();
 		new HgStatusCommand(hgRepo).all().execute(status);
 		errorCollector.assertTrue(status.getErrors().isEmpty());
@@ -267,7 +260,6 @@ public class TestCommit {
 		errorCollector.assertTrue(r.isOk());
 		Nodeid c2 = cmd.getCommittedRevision();
 		//
-		hgRepo = new HgLookup().detect(repoLoc);
 		int lastRev = hgRepo.getChangelog().getLastRevision();
 		List<HgChangeset> csets = new HgLogCommand(hgRepo).range(lastRev-1, lastRev).execute();
 		errorCollector.assertEquals(csets.get(0).getNodeid(), c1);

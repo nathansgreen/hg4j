@@ -98,6 +98,8 @@ public final class CommitFacility {
 		final int clogRevisionIndex = clog.getRevisionCount();
 		ManifestRevision c1Manifest = new ManifestRevision(null, null);
 		ManifestRevision c2Manifest = new ManifestRevision(null, null);
+		final Nodeid p1Cset = p1Commit == NO_REVISION ? null : clog.getRevision(p1Commit);
+		final Nodeid p2Cset = p2Commit == NO_REVISION ? null : clog.getRevision(p2Commit);
 		if (p1Commit != NO_REVISION) {
 			repo.getRepo().getManifest().walk(p1Commit, p1Commit, c1Manifest);
 		}
@@ -205,8 +207,6 @@ public final class CommitFacility {
 		dirstateBuilder.parents(changesetRev, Nodeid.NULL);
 		dirstateBuilder.serialize();
 		// update bookmarks
-		Nodeid p1Cset = p1Commit == NO_REVISION ? null : clog.getRevision(p1Commit);
-		Nodeid p2Cset = p2Commit == NO_REVISION ? null : clog.getRevision(p2Commit);
 		if (p1Commit != NO_REVISION || p2Commit != NO_REVISION) {
 			repo.getRepo().getBookmarks().updateActive(p1Cset, p2Cset, changesetRev);
 		}

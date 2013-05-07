@@ -56,6 +56,7 @@ abstract class Revlog {
 	protected final RevlogStream content;
 	protected final boolean useRevisionLookup;
 	protected RevisionLookup revisionLookup;
+	private final RevlogStream.Observer revisionLookupCleaner;
 
 	protected Revlog(HgRepository hgRepo, RevlogStream contentStream, boolean needRevisionLookup) {
 		if (hgRepo == null) {
@@ -67,6 +68,16 @@ abstract class Revlog {
 		repo = hgRepo;
 		content = contentStream;
 		useRevisionLookup = needRevisionLookup;
+		if (needRevisionLookup) {
+			revisionLookupCleaner = new RevlogStream.Observer() {
+				
+				public void reloaded(RevlogStream src) {
+					revisionLookup = null;
+				}
+			};
+		} else {
+			revisionLookupCleaner = null;
+		}
 	}
 	
 	// invalid Revlog
@@ -74,6 +85,7 @@ abstract class Revlog {
 		repo = hgRepo;
 		content = null;
 		useRevisionLookup = false;
+		revisionLookupCleaner = null;
 	}
 
 	public final HgRepository getRepo() {
@@ -162,13 +174,24 @@ abstract class Revlog {
 	
 	private int doFindWithCache(Nodeid nid) {
 		if (useRevisionLookup) {
-			if (revisionLookup == null) {
-				revisionLookup = RevisionLookup.createFor(content);
+			if (revisionLookup == null || content.shallDropDerivedCaches()) {
+				content.detach(revisionLookupCleaner);
+				setRevisionLookup(RevisionLookup.createFor(content));
 			}
 			return revisionLookup.findIndex(nid);
 		} else {
 			return content.findRevisionIndex(nid);
 		}
+	}
+	
+	/**
+	 * use selected helper for revision lookup, register appropriate listeners to clear cache on revlog changes
+	 * @param rl not <code>null</code>
+	 */
+	protected void setRevisionLookup(RevisionLookup rl) {
+		assert rl != null;
+		revisionLookup = rl;
+		content.attach(revisionLookupCleaner);
 	}
 	
 	/**
