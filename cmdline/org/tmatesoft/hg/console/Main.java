@@ -107,7 +107,6 @@ public class Main {
 //		m.testCheckout();
 //		m.tryExtensions();
 //		m.dumpBookmarks();
-//		m.readConfigFile();
 //		m.dumpCommitLastMessage();
 //		m.buildFileLog();
 //		m.testConsoleLog();
@@ -208,19 +207,6 @@ public class Main {
 			}
 			System.out.printf("%-26s (%s)\n", bmname, bm.getRevision(bmname).shortNotation());
 		}
-	}
-
-	// TODO as test
-	private void readConfigFile() throws Exception {
-		ConfigFile configFile = new ConfigFile(hgRepo.getSessionContext());
-		configFile.addLocation(new File(System.getProperty("user.home"), "test-cfg/aaa/config1"));
-		for (String s : configFile.getSectionNames()) {
-			System.out.printf("[%s]\n", s);
-			for (Map.Entry<String, String> e : configFile.getSection(s).entrySet()) {
-				System.out.printf("%s = %s\n", e.getKey(), e.getValue());
-			}
-		}
-		
 	}
 
 	private void dumpCommitLastMessage() throws Exception {

@@ -1,0 +1,15 @@
+[section1]
+# comment
+key1=value 1
+key2=value 2
+key3=value 3#comment
+
+%include ./included.rc
+
+[section3]
+key1=value 1-3
+
+[section1]
+key4=value 4
+%unset key1 
+

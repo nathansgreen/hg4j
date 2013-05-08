@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,7 @@
 package org.tmatesoft.hg.test;
 
 import static java.lang.Character.*;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 import java.util.TreeSet;
 
@@ -46,10 +45,13 @@ public class TestDirstate {
 	public void testParents() throws Exception {
 		repo = Configuration.get().find("log-branches");
 		final Pair<Nodeid, Nodeid> wcParents = repo.getWorkingCopyParents();
-		Assert.assertEquals("5f24ef64e9dfb1540db524f88cb5c3d265e1a3b5", wcParents.first().toString());
-		Assert.assertTrue(wcParents.second().isNull());
+		assertEquals("5f24ef64e9dfb1540db524f88cb5c3d265e1a3b5", wcParents.first().toString());
+		assertTrue(wcParents.second().isNull());
 		//
-		// TODO same static and non-static
+		HgDirstate ds = new HgInternals(repo).getDirstate();
+		final Pair<Nodeid, Nodeid> wcParents2 = ds.parents();
+		assertEquals(wcParents.first(), wcParents2.first());
+		assertEquals(wcParents.second(), wcParents2.second());
 	}
 
 	@Test

@@ -1,0 +1,6 @@
+[section1]
+key2 = alternative value 2
+
+
+[section2]
+key1=value 1-2 # comment 

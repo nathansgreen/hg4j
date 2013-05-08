@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCatCommand;
@@ -41,15 +40,11 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
-import org.tmatesoft.hg.repo.HgRepoConfig;
-import org.tmatesoft.hg.repo.HgRepoConfig.PathsSection;
-import org.tmatesoft.hg.repo.HgRepoConfig.Section;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
-import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -387,29 +382,6 @@ public class TestAuxUtilities {
 				}
 			}
 		}
-	}
-
-
-	@Test
-	@Ignore("just a dump for now, to compare values visually")
-	public void testRepositoryConfig() throws Exception {
-		HgRepository repo = Configuration.get().own();
-		final HgRepoConfig cfg = repo.getConfiguration();
-		Assert.assertNotNull(cfg.getPaths());
-		Assert.assertNotNull(cfg.getExtensions());
-		final Section dne = cfg.getSection("does-not-exist");
-		Assert.assertNotNull(dne);
-		Assert.assertFalse(dne.exists());
-		for (Pair<String, String> p : cfg.getSection("ui")) {
-			System.out.printf("%s = %s\n", p.first(), p.second());
-		}
-		final PathsSection p = cfg.getPaths();
-		System.out.printf("Known paths: %d. default: %s(%s), default-push: %s(%s)\n", p.getKeys().size(), p.getDefault(), p.hasDefault(), p.getDefaultPush(), p.hasDefaultPush());
-		for (String k : cfg.getPaths().getKeys()) {
-			System.out.println(k);
-		}
-		Assert.assertFalse(p.hasDefault() ^ p.getDefault() != null);
-		Assert.assertFalse(p.hasDefaultPush() ^ p.getDefaultPush() != null);
 	}
 	
 	@Test
