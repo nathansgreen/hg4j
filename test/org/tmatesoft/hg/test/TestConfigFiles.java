@@ -16,21 +16,23 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.junit.Assert.*;
+
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
+import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepoConfig;
+import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepoConfig.PathsSection;
 import org.tmatesoft.hg.repo.HgRepoConfig.Section;
 import org.tmatesoft.hg.repo.HgRepository;
-import org.tmatesoft.hg.util.Pair;
 
 /**
  * 
@@ -81,24 +83,40 @@ public class TestConfigFiles {
 	}
 
 	@Test
-	@Ignore("just a dump for now, to compare values visually")
 	public void testRepositoryConfig() throws Exception {
-		HgRepository repo = Configuration.get().own();
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-repocfg", false);
+		File hgrc = new File(repoLoc, ".hg/hgrc");
+		String username = "John Q. Public <john.public@acme.com>";
+		String path1_key = "hg4j.gc";
+		String path1_value = "https://code.google.com/p/hg4j/";
+		String ext1_key = "ext.one";
+		String ext2_key = "ext.disabled"; // disabled
+		String ext3_key = "hgext.two"; // check if found by "two" key 
+		String hgrcContent = String.format("#comment\n[ui]\nusername = %s\n\n[paths]\n%s = %s\ndefault=%3$s\n\n[extensions]\n%s = \n%s = !\n%s=\n", username, path1_key, path1_value, ext1_key, ext2_key, ext3_key);
+		RepoUtils.createFile(hgrc, hgrcContent);
+		//
+		HgRepository repo = new HgLookup().detect(repoLoc);
 		final HgRepoConfig cfg = repo.getConfiguration();
-		Assert.assertNotNull(cfg.getPaths());
-		Assert.assertNotNull(cfg.getExtensions());
+		assertNotNull(cfg.getPaths());
+		assertNotNull(cfg.getExtensions());
 		final Section dne = cfg.getSection("does-not-exist");
-		Assert.assertNotNull(dne);
-		Assert.assertFalse(dne.exists());
-		for (Pair<String, String> p : cfg.getSection("ui")) {
-			System.out.printf("%s = %s\n", p.first(), p.second());
-		}
+		assertNotNull(dne);
+		assertFalse(dne.exists());
+		assertEquals(username, cfg.getSection("ui").getString("username", null));
 		final PathsSection p = cfg.getPaths();
-		System.out.printf("Known paths: %d. default: %s(%s), default-push: %s(%s)\n", p.getKeys().size(), p.getDefault(), p.hasDefault(), p.getDefaultPush(), p.hasDefaultPush());
-		for (String k : cfg.getPaths().getKeys()) {
-			System.out.println(k);
-		}
-		Assert.assertFalse(p.hasDefault() ^ p.getDefault() != null);
-		Assert.assertFalse(p.hasDefaultPush() ^ p.getDefaultPush() != null);
+		assertTrue(p.getPathSymbolicNames().contains(path1_key));
+		assertEquals(path1_value, p.getString(path1_key, null));
+		assertTrue(p.hasDefault());
+		assertEquals(path1_value, p.getDefault());
+		assertFalse(p.hasDefault() ^ p.getDefault() != null);
+		assertFalse(p.hasDefaultPush() ^ p.getDefaultPush() != null);
+		final ExtensionsSection e = cfg.getExtensions();
+		assertTrue(e.isEnabled(ext1_key));
+		assertTrue(e.getString(ext2_key, null).length() > 0);
+		assertFalse(e.isEnabled(ext2_key));
+		assertNotNull(e.getString(ext3_key, null));
+		assertTrue(e.isEnabled(ext3_key.substring("hgext.".length())));
+		//
+		assertEquals(username, new HgInternals(repo).getNextCommitUsername());
 	}
 }
