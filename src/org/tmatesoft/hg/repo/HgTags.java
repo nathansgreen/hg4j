@@ -16,6 +16,9 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.HgLocalTags;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.HgTags;
+import static org.tmatesoft.hg.util.LogFacility.Severity.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
@@ -24,6 +27,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,6 +38,11 @@ import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.HgBadNodeidFormatException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.ChangelogMonitor;
+import org.tmatesoft.hg.internal.FileChangeMonitor;
+import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.util.CancelledException;
 
 /**
  * @see http://mercurial.selenic.com/wiki/TagDesign
@@ -45,38 +54,83 @@ public class HgTags {
 	// global tags come from ".hgtags"
 	// local come from ".hg/localtags"
 
-	private final HgRepository repo;
+	private final Internals repo;
 
 	private final Map<Nodeid, List<String>> globalToName;
 	private final Map<Nodeid, List<String>> localToName;
 	private final Map<String, List<Nodeid>> globalFromName;
 	private final Map<String, List<Nodeid>> localFromName;
 	
+	private FileChangeMonitor globalTagsFileMonitor, localTagsFileMonitor;
+	private ChangelogMonitor repoChangeMonitor;
+	
 	private Map<String, TagInfo> tags;
 	
-	/*package-local*/ HgTags(HgRepository hgRepo) {
-		repo = hgRepo;
+	/*package-local*/ HgTags(Internals internalRepo) {
+		repo = internalRepo;
 		globalToName =  new HashMap<Nodeid, List<String>>();
 		localToName  =  new HashMap<Nodeid, List<String>>();
 		globalFromName = new TreeMap<String, List<Nodeid>>();
 		localFromName  = new TreeMap<String, List<Nodeid>>();
 	}
 	
-	/*package-local*/ void readLocal(File localTags) throws IOException {
-		if (localTags == null || localTags.isDirectory()) {
-			throw new IllegalArgumentException(String.valueOf(localTags));
-		}
-		read(localTags, localToName, localFromName);
+	/*package-local*/ void read() throws HgInvalidControlFileException {
+		readTagsFromHistory();
+		readGlobal();
+		readLocal();
 	}
 	
-	/*package-local*/ void readGlobal(File globalTags) throws IOException {
-		if (globalTags == null || globalTags.isDirectory()) {
-			throw new IllegalArgumentException(String.valueOf(globalTags));
+	private void readTagsFromHistory() throws HgInvalidControlFileException {
+		HgDataFile hgTags = repo.getRepo().getFileNode(HgTags.getPath());
+		if (hgTags.exists()) {
+			for (int i = 0; i <= hgTags.getLastRevision(); i++) { // TODO post-1.0 in fact, would be handy to have walk(start,end) 
+				// method for data files as well, though it looks odd.
+				try {
+					ByteArrayChannel sink = new ByteArrayChannel();
+					hgTags.content(i, sink);
+					final String content = new String(sink.toArray(), "UTF8");
+					readGlobal(new StringReader(content));
+				} catch (CancelledException ex) {
+					 // IGNORE, can't happen, we did not configure cancellation
+					repo.getLog().dump(getClass(), Debug, ex, null);
+				} catch (IOException ex) {
+					// UnsupportedEncodingException can't happen (UTF8)
+					// only from readGlobal. Need to reconsider exceptions thrown from there:
+					// BufferedReader wraps String and unlikely to throw IOException, perhaps, log is enough?
+					repo.getLog().dump(getClass(), Error, ex, null);
+					// XXX need to decide what to do this. failure to read single revision shall not break complete cycle
+				}
+			}
 		}
-		read(globalTags, globalToName, globalFromName);
+		if (repoChangeMonitor == null) {
+			repoChangeMonitor = new ChangelogMonitor(repo.getRepo());
+		}
+		repoChangeMonitor.touch();
+	}
+	
+	private void readLocal() throws HgInvalidControlFileException {
+		File localTags = repo.getRepositoryFile(HgLocalTags);
+		if (localTags.canRead() && localTags.isFile()) {
+			read(localTags, localToName, localFromName);
+		}
+		if (localTagsFileMonitor == null) { 
+			localTagsFileMonitor = new FileChangeMonitor(localTags);
+		}
+		localTagsFileMonitor.touch(this);
+	}
+	
+	private void readGlobal() throws HgInvalidControlFileException {
+		File globalTags = repo.getRepositoryFile(HgTags); // XXX replace with HgDataFile.workingCopy
+		if (globalTags.canRead() && globalTags.isFile()) {
+			read(globalTags, globalToName, globalFromName);
+		}
+		if (globalTagsFileMonitor == null) {
+			globalTagsFileMonitor = new FileChangeMonitor(globalTags);
+		}
+		globalTagsFileMonitor.touch(this);
 	}
 
-	/*package-local*/ void readGlobal(Reader globalTags) throws IOException {
+	private void readGlobal(Reader globalTags) throws IOException {
 		BufferedReader r = null;
 		try {
 			r = new BufferedReader(globalTags);
@@ -88,7 +142,7 @@ public class HgTags {
 		}
 	}
 	
-	private void read(File f, Map<Nodeid,List<String>> nid2name, Map<String, List<Nodeid>> name2nid) throws IOException {
+	private void read(File f, Map<Nodeid,List<String>> nid2name, Map<String, List<Nodeid>> name2nid) throws HgInvalidControlFileException {
 		if (!f.canRead()) {
 			return;
 		}
@@ -96,9 +150,17 @@ public class HgTags {
 		try {
 			r = new BufferedReader(new FileReader(f));
 			read(r, nid2name, name2nid);
+		} catch (IOException ex) {
+			repo.getLog().dump(getClass(), Error, ex, null);
+			throw new HgInvalidControlFileException("Failed to read tags", ex, f);
 		} finally {
 			if (r != null) {
-				r.close();
+				try {
+					r.close();
+				} catch (IOException ex) {
+					// since it's read operation, do not treat close failure as error, but let user know, anyway
+					repo.getLog().dump(getClass(), Warn, ex, null);
+				}
 			}
 		}
 	}
@@ -112,7 +174,7 @@ public class HgTags {
 			}
 			final int spacePos = line.indexOf(' ');
 			if (line.length() < 40+2 /*nodeid, space and at least single-char tagname*/ || spacePos != 40) {
-				repo.getSessionContext().getLog().dump(getClass(), Warn, "Bad tags line: %s", line); 
+				repo.getLog().dump(getClass(), Warn, "Bad tags line: %s", line); 
 				continue;
 			}
 			try {
@@ -154,7 +216,7 @@ public class HgTags {
 					revTags.add(tagName);
 				}
 			} catch (HgBadNodeidFormatException ex) {
-				repo.getSessionContext().getLog().dump(getClass(), Error, "Bad revision '%s' in line '%s':%s", line.substring(0, spacePos), line, ex.getMessage()); 
+				repo.getLog().dump(getClass(), Error, "Bad revision '%s' in line '%s':%s", line.substring(0, spacePos), line, ex.getMessage()); 
 			}
 		}
 	}
@@ -217,6 +279,23 @@ public class HgTags {
 		return rv;
 	}
 
+	// can be called only after instance has been initialized (#read() invoked) 
+	/*package-local*/void reloadIfChanged() throws HgInvalidControlFileException {
+		assert repoChangeMonitor != null;
+		assert localTagsFileMonitor != null;
+		assert globalTagsFileMonitor != null;
+		if (repoChangeMonitor.isChanged() || globalTagsFileMonitor.changed(this)) {
+			globalFromName.clear();
+			globalToName.clear();
+			readTagsFromHistory();
+			readGlobal();
+			tags = null;
+		}
+		if (localTagsFileMonitor.changed(this)) {
+			readLocal();
+			tags = null;
+		}
+	}
 	
 	public final class TagInfo {
 		private final String name;
@@ -235,8 +314,8 @@ public class HgTags {
 
 		public String branch() throws HgInvalidControlFileException {
 			if (branch == null) {
-				int x = repo.getChangelog().getRevisionIndex(revision());
-				branch = repo.getChangelog().range(x, x).get(0).branch();
+				int x = repo.getRepo().getChangelog().getRevisionIndex(revision());
+				branch = repo.getRepo().getChangelog().range(x, x).get(0).branch();
 			}
 			return branch;
 		}

@@ -16,13 +16,12 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.repo.HgRepositoryFiles.*;
-import static org.tmatesoft.hg.util.LogFacility.Severity.*;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.LastMessage;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.StringReader;
 import java.nio.CharBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,7 +29,6 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.Experimental;
@@ -40,7 +38,6 @@ import org.tmatesoft.hg.internal.PropertyMarshal;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.internal.SubrepoManager;
 import org.tmatesoft.hg.repo.ext.HgExtensionsManager;
-import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -110,10 +107,10 @@ public final class HgRepository implements SessionContext.Source {
 	private SubrepoManager subRepos;
 	private HgBookmarks bookmarks;
 	private HgExtensionsManager extManager;
-
-	private final org.tmatesoft.hg.internal.Internals impl;
 	private HgIgnore ignore;
 	private HgRepoConfig repoConfig;
+	
+	private final org.tmatesoft.hg.internal.Internals impl;
 	
 	/*
 	 * TODO [post-1.0] move to a better place, e.g. WorkingCopy container that tracks both dirstate and branches 
@@ -157,7 +154,7 @@ public final class HgRepository implements SessionContext.Source {
 				return HgRepository.this.getChangelog().content;
 			}
 		});
-		normalizePath = impl.buildNormalizePathRewrite(); 
+		normalizePath = impl.buildNormalizePathRewrite();
 	}
 
 	@Override
@@ -201,55 +198,34 @@ public final class HgRepository implements SessionContext.Source {
 	}
 	
 	/**
+	 * Access snapshot of repository tags.
+	 * 
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public HgTags getTags() throws HgInvalidControlFileException {
 		if (tags == null) {
-			tags = new HgTags(this);
-			HgDataFile hgTags = getFileNode(HgTags.getPath());
-			if (hgTags.exists()) {
-				for (int i = 0; i <= hgTags.getLastRevision(); i++) { // TODO post-1.0 in fact, would be handy to have walk(start,end) 
-					// method for data files as well, though it looks odd.
-					try {
-						ByteArrayChannel sink = new ByteArrayChannel();
-						hgTags.content(i, sink);
-						final String content = new String(sink.toArray(), "UTF8");
-						tags.readGlobal(new StringReader(content));
-					} catch (CancelledException ex) {
-						 // IGNORE, can't happen, we did not configure cancellation
-						getSessionContext().getLog().dump(getClass(), Debug, ex, null);
-					} catch (IOException ex) {
-						// UnsupportedEncodingException can't happen (UTF8)
-						// only from readGlobal. Need to reconsider exceptions thrown from there:
-						// BufferedReader wraps String and unlikely to throw IOException, perhaps, log is enough?
-						getSessionContext().getLog().dump(getClass(), Error, ex, null);
-						// XXX need to decide what to do this. failure to read single revision shall not break complete cycle
-					}
-				}
-			}
-			File file2read = null;
-			try {
-				file2read = new File(getWorkingDir(), HgTags.getPath());
-				tags.readGlobal(file2read); // XXX replace with HgDataFile.workingCopy
-				file2read = impl.getFileFromRepoDir(HgLocalTags.getName()); // XXX pass internalrepo to readLocal, keep filename there
-				tags.readLocal(file2read);
-			} catch (IOException ex) {
-				getSessionContext().getLog().dump(getClass(), Error, ex, null);
-				throw new HgInvalidControlFileException("Failed to read tags", ex, file2read);
-			}
+			tags = new HgTags(impl);
+			tags.read();
+		} else {
+			tags.reloadIfChanged();
 		}
 		return tags;
 	}
 	
 	/**
-	 * Access branch information
+	 * Access branch information. Returns a snapshot of branch information as it's available at the time of the call.
+	 * If repository get changed, use this method to obtain an up-to-date state. 
+	 * 
 	 * @return branch manager instance, never <code>null</code>
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public HgBranches getBranches() throws HgInvalidControlFileException {
+		final ProgressSupport ps = ProgressSupport.Factory.get(null);
 		if (branches == null) {
 			branches = new HgBranches(impl);
-			branches.collect(ProgressSupport.Factory.get(null));
+			branches.collect(ps);
+		} else {
+			branches.reloadIfChanged(ps);
 		}
 		return branches;
 	}
@@ -370,16 +346,9 @@ public final class HgRepository implements SessionContext.Source {
 		// TODO read config for additional locations
 		if (ignore == null) {
 			ignore = new HgIgnore(getToRepoPathHelper());
-			File ignoreFile = new File(getWorkingDir(), HgIgnore.getPath());
-			try {
-				final List<String> errors = ignore.read(ignoreFile);
-				if (errors != null) {
-					getSessionContext().getLog().dump(getClass(), Warn, "Syntax errors parsing %s:\n%s", ignoreFile.getName(), Internals.join(errors, ",\n"));
-				}
-			} catch (IOException ex) {
-				final String m = String.format("Error reading %s file", ignoreFile);
-				throw new HgInvalidControlFileException(m, ex, ignoreFile);
-			}
+			ignore.read(impl);
+		} else {
+			ignore.reloadIfChanged(impl);
 		}
 		return ignore;
 	}
@@ -465,6 +434,8 @@ public final class HgRepository implements SessionContext.Source {
 		if (bookmarks == null) {
 			bookmarks = new HgBookmarks(impl);
 			bookmarks.read();
+		} else {
+			bookmarks.reloadIfChanged();
 		}
 		return bookmarks;
 	}

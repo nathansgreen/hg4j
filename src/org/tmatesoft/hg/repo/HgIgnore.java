@@ -16,6 +16,9 @@
  */
 package org.tmatesoft.hg.repo;
 
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.HgIgnore;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -26,6 +29,8 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import org.tmatesoft.hg.internal.FileChangeMonitor;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -39,21 +44,47 @@ public class HgIgnore implements Path.Matcher {
 
 	private List<Pattern> entries;
 	private final PathRewrite globPathHelper;
+	private FileChangeMonitor ignoreFileTracker; 
 
 	HgIgnore(PathRewrite globPathRewrite) {
 		entries = Collections.emptyList();
 		globPathHelper = globPathRewrite;
 	}
 
-	/* package-local */ List<String> read(File hgignoreFile) throws IOException {
-		if (!hgignoreFile.exists()) {
-			return null;
-		}
-		BufferedReader fr = new BufferedReader(new FileReader(hgignoreFile));
+	/* package-local */ void read(Internals repo) throws HgInvalidControlFileException {
+		File ignoreFile = repo.getRepositoryFile(HgIgnore);
+		BufferedReader fr = null;
 		try {
-			return read(fr);
+			if (ignoreFile.canRead() && ignoreFile.isFile()) {
+				fr = new BufferedReader(new FileReader(ignoreFile));
+				final List<String> errors = read(fr);
+				if (errors != null) {
+					repo.getLog().dump(getClass(), Warn, "Syntax errors parsing %s:\n%s", ignoreFile.getName(), Internals.join(errors, ",\n"));
+				}
+			}
+			if (ignoreFileTracker == null) {
+				ignoreFileTracker = new FileChangeMonitor(ignoreFile);
+			}
+			ignoreFileTracker.touch(this);
+		} catch (IOException ex) {
+			final String m = String.format("Error reading %s file", ignoreFile);
+			throw new HgInvalidControlFileException(m, ex, ignoreFile);
 		} finally {
-			fr.close();
+			try {
+				if (fr != null) {
+					fr.close();
+				}
+			} catch (IOException ex) {
+				repo.getLog().dump(getClass(), Warn, ex, null); // it's read, don't treat as error
+			}
+		}
+	}
+	
+	/*package-local*/ void reloadIfChanged(Internals repo) throws HgInvalidControlFileException {
+		assert ignoreFileTracker != null;
+		if (ignoreFileTracker.changed(this)) {
+			entries = Collections.emptyList();
+			read(repo);
 		}
 	}
 

@@ -192,7 +192,7 @@ public final class CommitFacility {
 				fncache.write();
 			} catch (IOException ex) {
 				// see comment above for fnchache.read()
-				repo.getSessionContext().getLog().dump(getClass(), Severity.Error, ex, "Failed to write fncache, error ignored");
+				repo.getLog().dump(getClass(), Severity.Error, ex, "Failed to write fncache, error ignored");
 			}
 		}
 		// bring dirstate up to commit state
@@ -210,6 +210,9 @@ public final class CommitFacility {
 		if (p1Commit != NO_REVISION || p2Commit != NO_REVISION) {
 			repo.getRepo().getBookmarks().updateActive(p1Cset, p2Cset, changesetRev);
 		}
+		// TODO Revisit: might be reasonable to send out a "Repo changed" notification, to clear
+		// e.g. cached branch, tags and so on, not to rely on file change detection methods?
+		// The same notificaion might come useful once Pull is implemented
 		return changesetRev;
 	}
 /*

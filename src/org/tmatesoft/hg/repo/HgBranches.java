@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,6 +38,7 @@ import java.util.TreeMap;
 import java.util.regex.Pattern;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ChangelogMonitor;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -50,17 +51,18 @@ import org.tmatesoft.hg.util.ProgressSupport;
  */
 public class HgBranches {
 	
-	private final Map<String, BranchInfo> branches = new TreeMap<String, BranchInfo>();
-	private final HgRepository repo;
 	private final Internals internalRepo;
+	private final ChangelogMonitor repoChangeTracker;
+	private final Map<String, BranchInfo> branches = new TreeMap<String, BranchInfo>();
 	private boolean isCacheActual = false;
 
 	HgBranches(Internals internals) {
 		internalRepo = internals;
-		repo = internals.getRepo(); // merely a cached value
+		repoChangeTracker = new ChangelogMonitor(internals.getRepo());
 	}
 
 	private int readCache() {
+		final HgRepository repo = internalRepo.getRepo();
 		File branchheadsCache = getCacheFile();
 		int lastInCache = -1;
 		if (!branchheadsCache.canRead()) {
@@ -130,6 +132,7 @@ public class HgBranches {
 
 	void collect(final ProgressSupport ps) throws HgInvalidControlFileException {
 		branches.clear();
+		final HgRepository repo = internalRepo.getRepo();
 		ps.start(1 + repo.getChangelog().getRevisionCount() * 2);
 		//
 		int lastCached = readCache();
@@ -227,15 +230,16 @@ public class HgBranches {
 		for (BranchInfo bi : branches.values()) {
 			bi.validate(clog, rmap);
 		}
+		repoChangeTracker.touch();
 		ps.done();
 	}
 
-	public List<BranchInfo> getAllBranches() {
+	public List<BranchInfo> getAllBranches() throws HgInvalidControlFileException {
 		return new LinkedList<BranchInfo>(branches.values());
 				
 	}
 
-	public BranchInfo getBranch(String name) {
+	public BranchInfo getBranch(String name) throws HgInvalidControlFileException {
 		return branches.get(name);
 	}
 
@@ -258,6 +262,7 @@ public class HgBranches {
 		if (!branchheadsCache.canWrite()) {
 			return;
 		}
+		final HgRepository repo = internalRepo.getRepo();
 		final int lastRev = repo.getChangelog().getLastRevision();
 		final Nodeid lastNid = repo.getChangelog().getRevision(lastRev);
 		BufferedWriter bw = new BufferedWriter(new FileWriter(branchheadsCache));
@@ -279,6 +284,12 @@ public class HgBranches {
 	private File getCacheFile() {
 		// prior to 1.8 used to be .hg/branchheads.cache
 		return internalRepo.getFileFromRepoDir("cache/branchheads");
+	}
+	
+	/*package-local*/ void reloadIfChanged(ProgressSupport ps) throws HgInvalidControlFileException {
+		if (repoChangeTracker.isChanged()) {
+			collect(ps);
+		}
 	}
 
 	public static class BranchInfo {

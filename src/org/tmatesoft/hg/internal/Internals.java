@@ -38,6 +38,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRepositoryFiles;
 import org.tmatesoft.hg.repo.HgRepositoryLock;
 import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -150,7 +151,7 @@ public final class Internals implements SessionContext.Source {
 	}
 	
 	public File getRepositoryFile(HgRepositoryFiles f) {
-		return f.residesUnderRepositoryRoot() ? getFileFromRepoDir(f.getName()) : getFileFromDataDir(f.getName());
+		return f.residesUnderRepositoryRoot() ? getFileFromRepoDir(f.getName()) : new File(repo.getWorkingDir(), f.getName());
 	}
 
 	/**
@@ -187,6 +188,10 @@ public final class Internals implements SessionContext.Source {
 	
 	public SessionContext getSessionContext() {
 		return repo.getSessionContext();
+	}
+	
+	public LogFacility getLog() {
+		return getSessionContext().getLog();
 	}
 	
 	public HgRepository getRepo() {

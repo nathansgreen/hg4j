@@ -31,31 +31,38 @@ import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.FileChangeMonitor;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
 import org.tmatesoft.hg.util.LogFacility;
 
 /**
+ * Access to bookmarks state
  * 
  * @see http://mercurial.selenic.com/wiki/Bookmarks
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 public final class HgBookmarks {
-	private final Internals internalRepo;
+	private final Internals repo;
 	private Map<String, Nodeid> bookmarks = Collections.emptyMap();
-	private String activeBookmark; 
+	private String activeBookmark;
+	private FileChangeMonitor activeTracker, bmFileTracker;
 
 	HgBookmarks(Internals internals) {
-		internalRepo = internals;
+		repo = internals;
 	}
 	
 	/*package-local*/ void read() throws HgInvalidControlFileException {
-		final LogFacility log = internalRepo.getSessionContext().getLog();
-		final HgRepository repo = internalRepo.getRepo();
-		File all = internalRepo.getFileFromRepoDir(HgRepositoryFiles.Bookmarks.getName());
+		readBookmarks();
+		readActiveBookmark();
+	}
+	
+	private void readBookmarks() throws HgInvalidControlFileException {
+		final LogFacility log = repo.getLog();
+		File all = repo.getRepositoryFile(HgRepositoryFiles.Bookmarks);
 		LinkedHashMap<String, Nodeid> bm = new LinkedHashMap<String, Nodeid>();
-		if (all.canRead()) {
+		if (all.canRead() && all.isFile()) {
 			LineReader lr1 = new LineReader(all, log);
 			ArrayList<String> c = new ArrayList<String>();
 			lr1.read(new LineReader.SimpleLineCollector(), c);
@@ -65,7 +72,7 @@ public final class HgBookmarks {
 					if (x > 0) {
 						Nodeid nid = Nodeid.fromAscii(s.substring(0, x));
 						String name = new String(s.substring(x+1));
-						if (repo.getChangelog().isKnown(nid)) {
+						if (repo.getRepo().getChangelog().isKnown(nid)) {
 							// copy name part not to drag complete line
 							bm.put(name, nid);
 						} else {
@@ -82,18 +89,40 @@ public final class HgBookmarks {
 		} else {
 			bookmarks = Collections.emptyMap();
 		}
+		if (bmFileTracker == null) {
+			bmFileTracker = new FileChangeMonitor(all);
+		}
+		bmFileTracker.touch(this);
+	}
 		
+	private void readActiveBookmark() throws HgInvalidControlFileException { 
 		activeBookmark = null;
-		File active = internalRepo.getFileFromRepoDir(HgRepositoryFiles.BookmarksCurrent.getName());
-		if (active.canRead()) {
-			LineReader lr2 = new LineReader(active, log);
+		File active = repo.getRepositoryFile(HgRepositoryFiles.BookmarksCurrent);
+		if (active.canRead() && active.isFile()) {
+			LineReader lr2 = new LineReader(active, repo.getLog());
 			ArrayList<String> c = new ArrayList<String>(2);
 			lr2.read(new LineReader.SimpleLineCollector(), c);
 			if (c.size() > 0) {
 				activeBookmark = c.get(0);
 			}
 		}
+		if (activeTracker == null) {
+			activeTracker = new FileChangeMonitor(active);
+		}
+		activeTracker.touch(this);
 	}
+	
+	/*package-local*/void reloadIfChanged() throws HgInvalidControlFileException {
+		assert activeTracker != null;
+		assert bmFileTracker != null;
+		if (bmFileTracker.changed(this)) {
+			readBookmarks();
+		}
+		if (activeTracker.changed(this)) {
+			readActiveBookmark();
+		}
+	}
+
 
 	/**
 	 * Tell name of the active bookmark 
@@ -155,8 +184,8 @@ public final class HgBookmarks {
 	}
 	
 	private void write() throws HgIOException, HgRepositoryLockException {
-		File bookmarksFile = internalRepo.getRepositoryFile(HgRepositoryFiles.Bookmarks);
-		HgRepositoryLock workingDirLock = internalRepo.getRepo().getWorkingDirLock();
+		File bookmarksFile = repo.getRepositoryFile(HgRepositoryFiles.Bookmarks);
+		HgRepositoryLock workingDirLock = repo.getRepo().getWorkingDirLock();
 		FileWriter fileWriter = null;
 		workingDirLock.acquire();
 		try {
@@ -174,7 +203,7 @@ public final class HgBookmarks {
 					fileWriter.close();
 				}
 			} catch (IOException ex) {
-				internalRepo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
+				repo.getLog().dump(getClass(), Error, ex, null);
 			}
 			workingDirLock.release();
 		}
