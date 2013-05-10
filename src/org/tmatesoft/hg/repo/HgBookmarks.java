@@ -30,7 +30,6 @@ import java.util.Map;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileChangeMonitor;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
@@ -162,7 +161,6 @@ public final class HgBookmarks {
 	 * @throws HgIOException if failed to write updated bookmark information 
 	 * @throws HgRepositoryLockException  if failed to lock repository for modifications
 	 */
-	@Experimental(reason="Provisional API")
 	public void updateActive(Nodeid p1, Nodeid p2, Nodeid child) throws HgIOException, HgRepositoryLockException {
 		if (activeBookmark == null) {
 			return;

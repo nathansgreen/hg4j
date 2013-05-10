@@ -34,7 +34,6 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ManifestRevision;
@@ -333,7 +332,6 @@ public class HgWorkingCopyStatusCollector {
 	 * @param fileInfo file content mediator 
 	 * @return <code>true</code> when content in working dir differs from that of manifest-recorded revision 
 	 */
-	@Experimental(reason="Perhaps, HgDataFile#isWorkingCopyChanged() would be better - no need to pass any arguments?")
 	public boolean hasTangibleChanges(Path fname, FileInfo fileInfo) throws HgRuntimeException {
 		// see #checkLocalStatusAgainstFile() below for the origin of changed file check
 		HgDataFile df = repo.getFileNode(fname);

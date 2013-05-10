@@ -20,7 +20,6 @@ import java.util.LinkedHashSet;
 
 import org.tmatesoft.hg.internal.DirstateBuilder;
 import org.tmatesoft.hg.internal.DirstateReader;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -31,8 +30,6 @@ import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
- * WORK IN PROGRESS
- * 
  * Schedule files for addition and removal 
  * XXX and, perhaps, forget() functionality shall be here as well?
  * 
@@ -40,7 +37,6 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="Work in progress")
 public class HgAddRemoveCommand extends HgAbstractCommand<HgAddRemoveCommand> {
 	
 	private final HgRepository repo;

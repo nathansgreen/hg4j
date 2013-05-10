@@ -136,7 +136,6 @@ public class IntMap<V> {
 	/**
 	 * Forget first N entries (in natural order) in the map.
 	 */
-	@Experimental
 	public void removeFromStart(int count) {
 		if (count > 0 && count <= size) {
 			if (count < size) {

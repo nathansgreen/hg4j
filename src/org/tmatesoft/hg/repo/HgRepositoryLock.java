@@ -26,12 +26,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.core.HgRepositoryLockException;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 
 /**
- * NOT SAFE FOR MULTITHREAD USE!
- * 
  * <p>Usage:
  * <pre>
  * HgRepositoryLock lock = hgRepo.getWorkingDirLock();
@@ -52,11 +49,13 @@ import org.tmatesoft.hg.internal.Internals;
  * 
  * Unlike original mechanism, we don't use symlinks, rather files, as it's easier to implement
  * 
+ * <p>
+ * NOT SAFE FOR MULTITHREAD USE!
+ * 
  * @see http://code.google.com/p/hg4j/issues/detail?id=35
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="Work in progress")
 public class HgRepositoryLock {
 	/*
 	 * Lock .hg/ except .hg/store/      .hg/wlock (new File(hgRepo.getRepoRoot(),"wlock"))

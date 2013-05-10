@@ -31,7 +31,6 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DirstateReader;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.PropertyMarshal;
@@ -110,6 +109,8 @@ public final class HgRepository implements SessionContext.Source {
 	private HgIgnore ignore;
 	private HgRepoConfig repoConfig;
 	
+	private HgRepositoryLock wdLock, storeLock;
+
 	private final org.tmatesoft.hg.internal.Internals impl;
 	
 	/*
@@ -384,11 +385,7 @@ public final class HgRepository implements SessionContext.Source {
 		}
 	}
 
-	private HgRepositoryLock wdLock, storeLock;
-
 	/**
-	 * PROVISIONAL CODE, DO NOT USE
-	 * 
 	 * Access repository lock that covers non-store parts of the repository (dirstate, branches, etc - 
 	 * everything that has to do with working directory state).
 	 * 
@@ -397,7 +394,6 @@ public final class HgRepository implements SessionContext.Source {
 	 *   
 	 * @return lock object, never <code>null</code>
 	 */
-	@Experimental(reason="WORK IN PROGRESS")
 	public HgRepositoryLock getWorkingDirLock() {
 		if (wdLock == null) {
 			int timeout = getLockTimeout();
@@ -411,7 +407,11 @@ public final class HgRepository implements SessionContext.Source {
 		return wdLock;
 	}
 
-	@Experimental(reason="WORK IN PROGRESS")
+	/**
+	 * Access repository lock that covers repository intrinsic files, unrelated to 
+	 * the state of working directory
+	 * @return lock object, never <code>null</code>
+	 */
 	public HgRepositoryLock getStoreLock() {
 		if (storeLock == null) {
 			int timeout = getLockTimeout();

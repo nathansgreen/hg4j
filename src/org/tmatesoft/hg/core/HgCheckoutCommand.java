@@ -28,7 +28,6 @@ import java.nio.channels.FileChannel;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.DirstateBuilder;
 import org.tmatesoft.hg.internal.EncodingHelper;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.WorkingDirFileWriter;
 import org.tmatesoft.hg.repo.HgDataFile;
@@ -46,8 +45,6 @@ import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
- * WORK IN PROGRESS.
- * 
  * Update working directory to specific state, 'hg checkout' counterpart.
  * For the time being, only 'clean' checkout is supported ('hg co --clean')
  * 
@@ -55,7 +52,6 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="Work in progress")
 public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 
 	private final HgRepository repo;

@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.core;
 
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.repo.HgRepositoryLock;
 
 /**
@@ -26,7 +25,6 @@ import org.tmatesoft.hg.repo.HgRepositoryLock;
  * @author TMate Software Ltd.
  */
 @SuppressWarnings("serial")
-@Experimental(reason="Work in progress")
 public class HgRepositoryLockException extends HgException {
 	
 	public HgRepositoryLockException(String message) {

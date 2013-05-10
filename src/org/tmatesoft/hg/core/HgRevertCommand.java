@@ -24,7 +24,6 @@ import java.util.Set;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.DirstateBuilder;
 import org.tmatesoft.hg.internal.DirstateReader;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
@@ -36,14 +35,12 @@ import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
- * WORK IN PROGRESS.
- * 
  * Restore files to their checkout state, 'hg revert' counterpart.
  * 
+ * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="Work in progress")
 public class HgRevertCommand extends HgAbstractCommand<HgRevertCommand> {
 
 	private final HgRepository repo;

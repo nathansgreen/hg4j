@@ -149,7 +149,7 @@
 
 	<target name="build-tests" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="test" destdir="bin" debug="${compile-with-debug}" >
+		<javac srcdir="test" destdir="bin" debug="${compile-with-debug}" includeantruntime="no">
 			<classpath>
 				<pathelement location="${hg4j.jar}"/>
 				<pathelement location="${junit.jar}"/>
@@ -165,7 +165,7 @@
 
 	<target name="build-cmdline" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="cmdline" destdir="bin" debug="${compile-with-debug}">
+		<javac srcdir="cmdline" destdir="bin" debug="${compile-with-debug}" includeantruntime="no">
 			<classpath>
 				<pathelement location="${hg4j.jar}"/>
 				<pathelement location="${junit.jar}"/>

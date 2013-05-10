@@ -35,13 +35,11 @@ import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
- * WORK IN PROGRESS. UNSTABLE API
- * 
  * 'hg annotate' counterpart, report origin revision and file line-by-line 
  * 
+ * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
- * @since 1.1
  */
 @Experimental(reason="Work in progress. Unstable API")
 public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {

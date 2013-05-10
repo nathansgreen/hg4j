@@ -130,7 +130,6 @@ public class IntVector {
 	/**
 	 * Use only when this instance won't be used any longer
 	 */
-	@Experimental
 	int[] toArray(boolean internalIfSizeMatchCapacity) {
 		if (count == data.length) {
 			return data;

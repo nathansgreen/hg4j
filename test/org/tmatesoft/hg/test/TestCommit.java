@@ -115,7 +115,7 @@ public class TestCommit {
 	
 	@Test
 	public void testCommitIntoBranch() throws Exception {
-		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-add-remove-commit", false);
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit2branch", false);
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
 		HgDataFile dfD = hgRepo.getFileNode("d");
 		assertTrue("[sanity]", dfD.exists());
@@ -160,7 +160,6 @@ public class TestCommit {
 		cf.forget(hgRepo.getFileNode("d"));
 		Nodeid commitRev = cf.commit("Commit with add/remove cmd");
 		contentProvider.done();
-		// Note, working directory still points to original revision, CommitFacility doesn't update dirstate
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).changeset(commitRev).execute();
 		HgChangeset cmt = commits.get(0);
@@ -179,7 +178,7 @@ public class TestCommit {
 	 */
 	@Test
 	public void testSequentialCommits() throws Exception {
-		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-add-remove-commit", false);
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-sequential-commits", false);
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
 		HgDataFile dfD = hgRepo.getFileNode("d");
 		assertTrue("[sanity]", dfD.exists());

@@ -43,14 +43,12 @@ import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * WORK IN PROGRESS
  * Name: CommitObject, FutureCommit or PendingCommit
- * Only public API now: {@link HgCommitCommand}.
+ * The only public API now: {@link HgCommitCommand}.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="Work in progress")
 public final class CommitFacility {
 	private final Internals repo;
 	private final int p1Commit, p2Commit;
