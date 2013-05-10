@@ -271,7 +271,7 @@ public class TestCommit {
 	
 	@Test
 	public void testUpdateActiveBookmark() throws Exception {
-		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit-cmd", false);
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit-bookmark-update", false);
 		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), repoLoc);
 		String activeBookmark = "bm1";
 		eh.run("hg", "bookmarks", activeBookmark);
@@ -298,6 +298,33 @@ public class TestCommit {
 		hgRepo = new HgLookup().detect(repoLoc);
 		errorCollector.assertEquals(activeBookmark, hgRepo.getBookmarks().getActiveBookmarkName());
 		errorCollector.assertEquals(c, hgRepo.getBookmarks().getRevision(activeBookmark));
+	}
+
+	@Test
+	public void testRefreshTagsAndBranches() throws Exception {
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-branches", "test-refresh-after-commit", false);
+		final String tag = "tag.refresh", branch = "branch-refresh";
+		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		assertFalse(hgRepo.getTags().getAllTags().containsKey(tag));
+		assertNull(hgRepo.getBranches().getBranch(branch));
+		RepoUtils.modifyFileAppend(new File(repoLoc, "a"), "whatever");
+		//
+		final int parentCsetRevIndex = hgRepo.getChangelog().getLastRevision();
+		// HgCommitCommand can't do branch yet
+		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), parentCsetRevIndex);
+		cf.add(hgRepo.getFileNode("a"), new FileContentSupplier(new File(repoLoc, "a")));
+		cf.branch(branch);
+		Nodeid commit = cf.commit("FIRST");
+		errorCollector.assertEquals("commit with branch shall update WC", branch, hgRepo.getWorkingCopyBranchName());
+		
+		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), repoLoc);
+		eh.run("hg", "tag", tag);
+		assertEquals("[sanity]", 0, eh.getExitValue());
+		
+		errorCollector.assertTrue(hgRepo.getTags().getAllTags().containsKey(tag));
+		errorCollector.assertFalse(hgRepo.getBranches().getBranch(branch) == null);
+		errorCollector.assertTrue(hgRepo.getTags().tagged(tag).contains(commit));
+		errorCollector.assertTrue(hgRepo.getTags().tags(commit).contains(tag));
 	}
 	
 	private void assertHgVerifyOk(File repoLoc) throws InterruptedException, IOException {

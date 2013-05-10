@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,6 +28,9 @@ import org.junit.Test;
 import org.tmatesoft.hg.internal.WinToNixPathRewrite;
 import org.tmatesoft.hg.repo.HgIgnore;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRepositoryFiles;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -187,6 +190,26 @@ public class TestIgnore {
 				create("src/_ReSharper-1/file/x"),
 		};
 		doAssert(hgIgnore, toIgnore, toPass);
+	}
+	
+	@Test
+	public void testRefreshOnChange() throws Exception {
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-refresh-hgignore", false);
+		File hgignoreFile = new File(repoLoc, HgRepositoryFiles.HgIgnore.getPath());
+		RepoUtils.createFile(hgignoreFile, "bin/");
+		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		final Path p1 = Path.create("bin/a/b/c");
+		final Path p2 = Path.create("src/a/b/c");
+		HgIgnore ignore = hgRepo.getIgnore();
+		errorCollector.assertTrue(ignore.isIgnored(p1));
+		errorCollector.assertFalse(ignore.isIgnored(p2));
+		Thread.sleep(1000); // Linux granularity for modification time is 1 second 
+		// file of the same length
+		RepoUtils.createFile(hgignoreFile, "src/");
+		ignore = hgRepo.getIgnore();
+		errorCollector.assertFalse(ignore.isIgnored(p1));
+		errorCollector.assertTrue(ignore.isIgnored(p2));
+		
 	}
 	
 	private void doAssert(HgIgnore hgIgnore, Path[] toIgnore, Path[] toPass) {

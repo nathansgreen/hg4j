@@ -16,8 +16,13 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.repo.HgRepository.DEFAULT_BRANCH_NAME;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.Branch;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -34,10 +39,8 @@ import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
-import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * WORK IN PROGRESS
@@ -177,7 +180,7 @@ public final class CommitFacility {
 		// Changelog
 		final ChangelogEntryBuilder changelogBuilder = new ChangelogEntryBuilder();
 		changelogBuilder.setModified(files.keySet());
-		changelogBuilder.branch(branch == null ? HgRepository.DEFAULT_BRANCH_NAME : branch);
+		changelogBuilder.branch(branch == null ? DEFAULT_BRANCH_NAME : branch);
 		changelogBuilder.user(String.valueOf(user));
 		byte[] clogContent = changelogBuilder.build(manifestRev, message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream());
@@ -192,7 +195,28 @@ public final class CommitFacility {
 				fncache.write();
 			} catch (IOException ex) {
 				// see comment above for fnchache.read()
-				repo.getLog().dump(getClass(), Severity.Error, ex, "Failed to write fncache, error ignored");
+				repo.getLog().dump(getClass(), Error, ex, "Failed to write fncache, error ignored");
+			}
+		}
+		String oldBranchValue = DirstateReader.readBranch(repo);
+		String newBranchValue = branch == null ? DEFAULT_BRANCH_NAME : branch;
+		if (!oldBranchValue.equals(newBranchValue)) {
+			File branchFile = repo.getRepositoryFile(Branch);
+			FileOutputStream fos = null;
+			try {
+				fos = new FileOutputStream(branchFile);
+				fos.write(newBranchValue.getBytes(EncodingHelper.getUTF8()));
+				fos.flush();
+			} catch (IOException ex) {
+				repo.getLog().dump(getClass(), Error, ex, "Failed to write branch information, error ignored");
+			} finally {
+				try {
+					if (fos != null) {
+						fos.close();
+					}
+				} catch (IOException ex) {
+					repo.getLog().dump(getClass(), Error, ex, null);
+				}
 			}
 		}
 		// bring dirstate up to commit state
