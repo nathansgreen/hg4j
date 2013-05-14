@@ -37,13 +37,15 @@ public class TestRepositoryLock {
 		// turn off lock timeout, to fail fast
 		File hgrc = new File(repoLoc, ".hg/hgrc");
 		RepoUtils.createFile(hgrc, "[ui]\ntimeout=0\n"); // or 1
-		ExecHelper eh = new ExecHelper(new OutputParser.Stub(true), repoLoc);
+		final OutputParser.Stub p = new OutputParser.Stub();
+		ExecHelper eh = new ExecHelper(p, repoLoc);
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
 		final HgRepositoryLock wdLock = hgRepo.getWorkingDirLock();
 		try {
 			wdLock.acquire();
 			eh.run("hg", "tag", "tag-aaa");
 			Assert.assertNotSame(0 /*returns 0 on success*/, eh.getExitValue());
+			Assert.assertTrue(p.result().toString().contains("abort"));
 		} finally {
 			wdLock.release();
 		}

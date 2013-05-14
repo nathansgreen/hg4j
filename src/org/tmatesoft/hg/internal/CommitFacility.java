@@ -133,7 +133,7 @@ public final class CommitFacility {
 		}
 		//
 		// Register new/changed
-		ArrayList<Path> newlyAddedFiles = new ArrayList<Path>();
+		LinkedHashMap<Path, RevlogStream> newlyAddedFiles = new LinkedHashMap<Path, RevlogStream>();
 		ArrayList<Path> touchInDirstate = new ArrayList<Path>();
 		for (Pair<HgDataFile, ByteDataSupplier> e : files.values()) {
 			HgDataFile df = e.first();
@@ -156,7 +156,7 @@ public final class CommitFacility {
 				contentStream = repo.getImplAccess().getStream(df);
 			} else {
 				contentStream = repo.createStoreFile(df.getPath());
-				newlyAddedFiles.add(df.getPath());
+				newlyAddedFiles.put(df.getPath(), contentStream);
 				// FIXME df doesn't get df.content updated, and clients
 				// that would attempt to access newly added file after commit would fail
 				// (despite the fact the file is in there)
@@ -183,11 +183,14 @@ public final class CommitFacility {
 		byte[] clogContent = changelogBuilder.build(manifestRev, message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream());
 		Nodeid changesetRev = changelogWriter.addRevision(clogContent, clogRevisionIndex, p1Commit, p2Commit);
-		// FIXME move fncache update to an external facility, along with dirstate and bookmark update
+		// TODO move fncache update to an external facility, along with dirstate and bookmark update
 		if (!newlyAddedFiles.isEmpty() && repo.fncacheInUse()) {
 			FNCacheFile fncache = new FNCacheFile(repo);
-			for (Path p : newlyAddedFiles) {
-				fncache.add(p);
+			for (Path p : newlyAddedFiles.keySet()) {
+				fncache.addIndex(p);
+				if (!newlyAddedFiles.get(p).isInlineData()) {
+					fncache.addData(p);
+				}
 			}
 			try {
 				fncache.write();
@@ -232,9 +235,10 @@ public final class CommitFacility {
 		if (p1Commit != NO_REVISION || p2Commit != NO_REVISION) {
 			repo.getRepo().getBookmarks().updateActive(p1Cset, p2Cset, changesetRev);
 		}
+		// TODO undo.dirstate and undo.branch as described in http://mercurial.selenic.com/wiki/FileFormats#undo..2A
 		// TODO Revisit: might be reasonable to send out a "Repo changed" notification, to clear
 		// e.g. cached branch, tags and so on, not to rely on file change detection methods?
-		// The same notificaion might come useful once Pull is implemented
+		// The same notification might come useful once Pull is implemented
 		return changesetRev;
 	}
 /*

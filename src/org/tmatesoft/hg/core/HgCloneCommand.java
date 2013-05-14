@@ -245,7 +245,6 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			try {
 				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
-				fncacheFile.add(pathFactory.path(name)); 
 				File file = new File(hgDir, filename = storagePathHelper.rewrite(name).toString());
 				file.getParentFile().mkdirs();
 				indexFile = new FileOutputStream(file);
@@ -258,6 +257,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 
 		public void fileEnd(String name) {
 			try {
+				fncacheFile.addIndex(pathFactory.path(name)); 
 				clearPreviousContent();
 				closeIndexFile();
 			} catch (IOException ex) {

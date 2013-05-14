@@ -19,6 +19,9 @@ package org.tmatesoft.hg.internal;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,11 +44,16 @@ public class FNCacheFile {
 	
 	private final Internals repo;
 //	private final List<Path> files;
-	private List<Path> added;
+	private final List<Path> addedDotI;
+	private final List<Path> addedDotD;
+	private final FNCachePathHelper pathHelper;
 
 	public FNCacheFile(Internals internalRepo) {
 		repo = internalRepo;
 //		files = new ArrayList<Path>();
+		pathHelper = new FNCachePathHelper();
+		addedDotI = new ArrayList<Path>(5);
+		addedDotD = new ArrayList<Path>(5);
 	}
 
 	/*
@@ -67,26 +75,42 @@ public class FNCacheFile {
 	*/
 	
 	public void write() throws IOException {
-		if (added == null || added.isEmpty()) {
+		if (addedDotI.isEmpty() && addedDotD.isEmpty()) {
 			return;
 		}
 		File f = fncacheFile();
 		f.getParentFile().mkdirs();
 		final Charset filenameEncoding = repo.getFilenameEncoding();
-		FileOutputStream fncacheFile = new FileOutputStream(f, true);
-		for (Path p : added) {
-			String s = "data/" + p.toString() + ".i"; // TODO post-1.0 this is plain wrong. (a) need .d files, too; (b) what about dh/ location? 
-			fncacheFile.write(s.getBytes(filenameEncoding));
-			fncacheFile.write(0x0A); // http://mercurial.selenic.com/wiki/fncacheRepoFormat
+		ArrayList<CharBuffer> added = new ArrayList<CharBuffer>();
+		for (Path p : addedDotI) {
+			added.add(CharBuffer.wrap(pathHelper.rewrite(p)));
+		}
+		for (Path p : addedDotD) {
+			// XXX FNCachePathHelper always return name of an index file, need to change it into a name of data file,
+			// although the approach (to replace last char) is depressingly awful
+			CharSequence cs = pathHelper.rewrite(p);
+			CharBuffer cb = CharBuffer.allocate(cs.length());
+			cb.append(cs);
+			cb.put(cs.length()-1, 'd');
+			cb.flip();
+			added.add(cb);
+		}
+		FileChannel fncacheFile = new FileOutputStream(f, true).getChannel();
+		ByteBuffer lf = ByteBuffer.wrap(new byte[] { 0x0A });
+		for (CharBuffer b : added) {
+			fncacheFile.write(filenameEncoding.encode(b));
+			fncacheFile.write(lf);
+			lf.rewind();
 		}
 		fncacheFile.close();
 	}
 
-	public void add(Path p) {
-		if (added == null) {
-			added = new ArrayList<Path>();
-		}
-		added.add(p);
+	public void addIndex(Path p) {
+		addedDotI.add(p);
+	}
+
+	public void addData(Path p) {
+		addedDotD.add(p);
 	}
 
 	private File fncacheFile() {

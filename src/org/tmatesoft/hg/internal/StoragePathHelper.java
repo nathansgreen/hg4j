@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.util.Arrays;
 import java.util.TreeSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.tmatesoft.hg.util.PathRewrite;
 
@@ -36,11 +34,15 @@ import org.tmatesoft.hg.util.PathRewrite;
  * @author TMate Software Ltd.
  */
 class StoragePathHelper implements PathRewrite {
-	
+
+	static final String STR_STORE = "store/";
+	static final String STR_DATA = "data/";
+	static final String STR_DH = "dh/";
+
 	private final boolean store;
 	private final boolean fncache;
 	private final boolean dotencode;
-	private final Pattern suffix2replace;
+	private final EncodeDirPathHelper dirPathRewrite;
 	private final CharsetEncoder csEncoder;
 	private final char[] hexEncodedByte = new char[] {'~', '0', '0'};
 	private final ByteBuffer byteEncodingBuf;
@@ -55,7 +57,7 @@ class StoragePathHelper implements PathRewrite {
 		store = isStore;
 		fncache = isFncache;
 		dotencode = isDotencode;
-		suffix2replace = Pattern.compile("\\.([id]|hg)/");
+		dirPathRewrite = new EncodeDirPathHelper();
 		csEncoder = fsEncoding.newEncoder();
 		byteEncodingBuf = ByteBuffer.allocate(Math.round(csEncoder.maxBytesPerChar()) + 1/*in fact, need ceil, hence +1*/);
 		charEncodingBuf = CharBuffer.allocate(1);
@@ -66,25 +68,9 @@ class StoragePathHelper implements PathRewrite {
 	 * It has to be normalized (slashes) and shall not include extension .i or .d.
 	 */
 	public CharSequence rewrite(CharSequence p) {
-		final String STR_STORE = "store/";
-		final String STR_DATA = "data/";
-		final String STR_DH = "dh/";
 		final String reservedChars = "\\:*?\"<>|";
 		
-		Matcher suffixMatcher = suffix2replace.matcher(p);
-		CharSequence path;
-		// Matcher.replaceAll, but without extra toString
-		boolean found = suffixMatcher.find();
-		if (found) {
-			StringBuffer sb = new StringBuffer(p.length()  + 20);
-			do {
-				suffixMatcher.appendReplacement(sb, ".$1.hg/");
-			} while (found = suffixMatcher.find());
-			suffixMatcher.appendTail(sb);
-			path = sb;
-		} else {
-			path = p;
-		}
+		CharSequence path = dirPathRewrite.rewrite(p);
 		
 		StringBuilder sb = new StringBuilder(path.length() << 1);
 		if (store || fncache) {
