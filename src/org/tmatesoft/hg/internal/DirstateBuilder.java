@@ -16,6 +16,9 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.Dirstate;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.UndoDirstate;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -32,7 +35,6 @@ import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
 import org.tmatesoft.hg.repo.HgDirstate.Record;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
-import org.tmatesoft.hg.repo.HgRepositoryFiles;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -149,13 +151,15 @@ public class DirstateBuilder {
 		}
 	}
 	
-	public void serialize() throws HgIOException {
-		File dirstateFile = hgRepo.getRepositoryFile(HgRepositoryFiles.Dirstate);
+	public void serialize(Transaction tr) throws HgIOException {
+		File dirstateFile = tr.prepare(hgRepo.getRepositoryFile(Dirstate), hgRepo.getRepositoryFile(UndoDirstate));
 		try {
 			FileChannel dirstate = new FileOutputStream(dirstateFile).getChannel();
 			serialize(dirstate);
 			dirstate.close();
+			tr.done(dirstateFile);
 		} catch (IOException ex) {
+			tr.failure(dirstateFile, ex);
 			throw new HgIOException("Can't write down new directory state", ex, dirstateFile);
 		}
 	}

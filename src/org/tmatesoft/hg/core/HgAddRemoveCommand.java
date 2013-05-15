@@ -18,11 +18,14 @@ package org.tmatesoft.hg.core;
 
 import java.util.LinkedHashSet;
 
+import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.DirstateBuilder;
 import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.Transaction;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRepositoryLock;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
@@ -94,9 +97,12 @@ public class HgAddRemoveCommand extends HgAbstractCommand<HgAddRemoveCommand> {
 	 * Perform scheduled addition/removal
 	 * 
 	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 * @throws HgRepositoryLockException if failed to lock the repo for modifications
 	 * @throws CancelledException if execution of the command was cancelled
 	 */
-	public void execute() throws HgException, CancelledException {
+	public void execute() throws HgException, HgRepositoryLockException, CancelledException {
+		final HgRepositoryLock wdLock = repo.getWorkingDirLock();
+		wdLock.acquire();
 		try {
 			final ProgressSupport progress = getProgressSupport(null);
 			final CancelSupport cancellation = getCancelSupport(null, true);
@@ -117,11 +123,24 @@ public class HgAddRemoveCommand extends HgAbstractCommand<HgAddRemoveCommand> {
 				progress.worked(1);
 				cancellation.checkCancelled();
 			}
-			dirstateBuilder.serialize();
+			Transaction.Factory trFactory = new COWTransaction.Factory();
+			Transaction tr = trFactory.create(repo);
+			try {
+				dirstateBuilder.serialize(tr);
+				tr.commit();
+			} catch (RuntimeException ex) {
+				tr.rollback();
+				throw ex;
+			} catch (HgException ex) {
+				tr.rollback();
+				throw ex;
+			}
 			progress.worked(1);
 			progress.done();
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
+		} finally {
+			wdLock.release();
 		}
 	}
 }

@@ -19,6 +19,7 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.repo.HgRepository.DEFAULT_BRANCH_NAME;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepositoryFiles.Branch;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.UndoBranch;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.io.File;
@@ -94,7 +95,9 @@ public final class CommitFacility {
 		user = userName;
 	}
 	
-	public Nodeid commit(String message) throws HgIOException, HgRepositoryLockException {
+	// this method doesn't roll transaction back in case of failure, caller's responsibility
+	// this method expects repository to be locked, if needed
+	public Nodeid commit(String message, Transaction transaction) throws HgIOException, HgRepositoryLockException {
 		final HgChangelog clog = repo.getRepo().getChangelog();
 		final int clogRevisionIndex = clog.getRevisionCount();
 		ManifestRevision c1Manifest = new ManifestRevision(null, null);
@@ -161,7 +164,7 @@ public final class CommitFacility {
 				// that would attempt to access newly added file after commit would fail
 				// (despite the fact the file is in there)
 			}
-			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream);
+			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream, transaction);
 			Nodeid fileRev = fileWriter.addRevision(bac.toArray(), clogRevisionIndex, fp.first(), fp.second());
 			newManifestRevision.put(df.getPath(), fileRev);
 			touchInDirstate.add(df.getPath());
@@ -172,7 +175,7 @@ public final class CommitFacility {
 		for (Map.Entry<Path, Nodeid> me : newManifestRevision.entrySet()) {
 			manifestBuilder.add(me.getKey().toString(), me.getValue());
 		}
-		RevlogStreamWriter manifestWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getManifestStream());
+		RevlogStreamWriter manifestWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getManifestStream(), transaction);
 		Nodeid manifestRev = manifestWriter.addRevision(manifestBuilder.build(), clogRevisionIndex, manifestParents.first(), manifestParents.second());
 		//
 		// Changelog
@@ -181,7 +184,7 @@ public final class CommitFacility {
 		changelogBuilder.branch(branch == null ? DEFAULT_BRANCH_NAME : branch);
 		changelogBuilder.user(String.valueOf(user));
 		byte[] clogContent = changelogBuilder.build(manifestRev, message);
-		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream());
+		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream(), transaction);
 		Nodeid changesetRev = changelogWriter.addRevision(clogContent, clogRevisionIndex, p1Commit, p2Commit);
 		// TODO move fncache update to an external facility, along with dirstate and bookmark update
 		if (!newlyAddedFiles.isEmpty() && repo.fncacheInUse()) {
@@ -201,14 +204,19 @@ public final class CommitFacility {
 		}
 		String oldBranchValue = DirstateReader.readBranch(repo);
 		String newBranchValue = branch == null ? DEFAULT_BRANCH_NAME : branch;
+		// TODO undo.dirstate and undo.branch as described in http://mercurial.selenic.com/wiki/FileFormats#undo..2A
 		if (!oldBranchValue.equals(newBranchValue)) {
-			File branchFile = repo.getRepositoryFile(Branch);
+			File branchFile = transaction.prepare(repo.getRepositoryFile(Branch), repo.getRepositoryFile(UndoBranch));
 			FileOutputStream fos = null;
 			try {
 				fos = new FileOutputStream(branchFile);
 				fos.write(newBranchValue.getBytes(EncodingHelper.getUTF8()));
 				fos.flush();
+				fos.close();
+				fos = null;
+				transaction.done(branchFile);
 			} catch (IOException ex) {
+				transaction.failure(branchFile, ex);
 				repo.getLog().dump(getClass(), Error, ex, "Failed to write branch information, error ignored");
 			} finally {
 				try {
@@ -220,7 +228,7 @@ public final class CommitFacility {
 				}
 			}
 		}
-		// bring dirstate up to commit state
+		// bring dirstate up to commit state, TODO share this code with HgAddRemoveCommand
 		final DirstateBuilder dirstateBuilder = new DirstateBuilder(repo);
 		dirstateBuilder.fillFrom(new DirstateReader(repo, new Path.SimpleSource()));
 		for (Path p : removals) {
@@ -230,12 +238,11 @@ public final class CommitFacility {
 			dirstateBuilder.recordUncertain(p);
 		}
 		dirstateBuilder.parents(changesetRev, Nodeid.NULL);
-		dirstateBuilder.serialize();
+		dirstateBuilder.serialize(transaction);
 		// update bookmarks
 		if (p1Commit != NO_REVISION || p2Commit != NO_REVISION) {
 			repo.getRepo().getBookmarks().updateActive(p1Cset, p2Cset, changesetRev);
 		}
-		// TODO undo.dirstate and undo.branch as described in http://mercurial.selenic.com/wiki/FileFormats#undo..2A
 		// TODO Revisit: might be reasonable to send out a "Repo changed" notification, to clear
 		// e.g. cached branch, tags and so on, not to rely on file change detection methods?
 		// The same notification might come useful once Pull is implemented

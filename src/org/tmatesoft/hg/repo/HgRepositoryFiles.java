@@ -30,7 +30,8 @@ public enum HgRepositoryFiles {
 	HgSub(".hgsub"), HgSubstate(".hgsubstate"),
 	LastMessage(false, "last-message.txt"),
 	Bookmarks(false, "bookmarks"), BookmarksCurrent(false, "bookmarks.current"),
-	Branch(false, "branch");
+	Branch(false, "branch"), 
+	UndoBranch(false, "undo.branch"), UndoDirstate(false, "undo.dirstate");
 
 	private final String fname;
 	private final boolean livesInWC; 

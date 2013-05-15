@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.Inflater;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
@@ -101,14 +102,14 @@ public class RevlogStream {
 		return dataAccess.createReader(getDataFile(), false);
 	}
 	
-	/*package*/ DataSerializer getIndexStreamWriter() {
+	/*package*/ DataSerializer getIndexStreamWriter(Transaction tr) throws HgIOException {
 		DataAccessProvider dataAccess = repo.getDataAccess();
-		return dataAccess.createWriter(indexFile, true);
+		return dataAccess.createWriter(tr, indexFile, true);
 	}
 	
-	/*package*/ DataSerializer getDataStreamWriter() {
+	/*package*/ DataSerializer getDataStreamWriter(Transaction tr) throws HgIOException {
 		DataAccessProvider dataAccess = repo.getDataAccess();
-		return dataAccess.createWriter(getDataFile(), true);
+		return dataAccess.createWriter(tr, getDataFile(), true);
 	}
 	
 	/**

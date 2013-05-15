@@ -23,10 +23,13 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CommitFacility;
+import org.tmatesoft.hg.internal.CompleteRepoLock;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileContentSupplier;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.Transaction;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -86,6 +89,7 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 
 	/**
 	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
+	 * @throws HgRepositoryLockException if failed to lock the repo for modifications
 	 * @throws IOException propagated IO errors from status walker over working directory
 	 * @throws CancelledException if execution of the command was cancelled
 	 */
@@ -93,6 +97,8 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 		if (message == null) {
 			throw new HgBadArgumentException("Shall supply commit message", null);
 		}
+		final CompleteRepoLock repoLock = new CompleteRepoLock(repo);
+		repoLock.acquire();
 		try {
 			int[] parentRevs = new int[2];
 			detectParentFromDirstate(parentRevs);
@@ -127,7 +133,18 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 			}
 			cf.branch(detectBranch());
 			cf.user(detectUser());
-			newRevision = cf.commit(message);
+			Transaction.Factory trFactory = new COWTransaction.Factory();
+			Transaction tr = trFactory.create(repo);
+			try {
+				newRevision = cf.commit(message, tr);
+				tr.commit();
+			} catch (RuntimeException ex) {
+				tr.rollback();
+				throw ex;
+			} catch (HgException ex) {
+				tr.rollback();
+				throw ex;
+			}
 			// TODO toClear list is awful
 			for (FileContentSupplier fcs : toClear) {
 				fcs.done();
@@ -135,6 +152,8 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 			return new Outcome(Kind.Success, "Commit ok");
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
+		} finally {
+			repoLock.release();
 		}
 	}
 

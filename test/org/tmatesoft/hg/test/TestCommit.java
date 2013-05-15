@@ -34,10 +34,13 @@ import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.core.HgStatus.Kind;
 import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CommitFacility;
 import org.tmatesoft.hg.internal.FileContentSupplier;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.Transaction;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -55,7 +58,14 @@ public class TestCommit {
 
 	@Rule
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
-
+	
+	private final Transaction.Factory trFactory = new COWTransaction.Factory();
+//	{
+//		public Transaction create(Source ctxSource) {
+//			return new Transaction.NoRollback();
+//		}
+//	};
+	
 	@Test
 	public void testCommitToNonEmpty() throws Exception {
 		File repoLoc = RepoUtils.initEmptyTempRepo("test-commit2non-empty");
@@ -68,7 +78,9 @@ public class TestCommit {
 		// just changed endings are in the patch!
 		HgDataFile df = hgRepo.getFileNode("file1");
 		cf.add(df, new ByteArraySupplier("hello\nworld".getBytes()));
-		Nodeid secondRev = cf.commit("SECOND");
+		Transaction tr = newTransaction(hgRepo);
+		Nodeid secondRev = cf.commit("SECOND", tr);
+		tr.commit();
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).execute();
 		errorCollector.assertEquals(2, commits.size());
@@ -96,7 +108,9 @@ public class TestCommit {
 		final byte[] initialContent = "hello\nworld".getBytes();
 		cf.add(df, new ByteArraySupplier(initialContent));
 		String comment = "commit 1";
-		Nodeid c1Rev = cf.commit(comment);
+		Transaction tr = newTransaction(hgRepo);
+		Nodeid c1Rev = cf.commit(comment,  tr);
+		tr.commit();
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).execute();
 		errorCollector.assertEquals(1, commits.size());
 		HgChangeset c1 = commits.get(0);
@@ -130,7 +144,9 @@ public class TestCommit {
 		FileContentSupplier contentProvider = new FileContentSupplier(fileD);
 		cf.add(dfD, contentProvider);
 		cf.branch("branch1");
-		Nodeid commitRev1 = cf.commit("FIRST");
+		Transaction tr = newTransaction(hgRepo);
+		Nodeid commitRev1 = cf.commit("FIRST",  tr);
+		tr.commit();
 		contentProvider.done();
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).range(parentCsetRevIndex+1, TIP).execute();
@@ -158,7 +174,9 @@ public class TestCommit {
 		FileContentSupplier contentProvider = new FileContentSupplier(new File(repoLoc, "xx"));
 		cf.add(hgRepo.getFileNode("xx"), contentProvider);
 		cf.forget(hgRepo.getFileNode("d"));
-		Nodeid commitRev = cf.commit("Commit with add/remove cmd");
+		Transaction tr = newTransaction(hgRepo);
+		Nodeid commitRev = cf.commit("Commit with add/remove cmd",  tr);
+		tr.commit();
 		contentProvider.done();
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).changeset(commitRev).execute();
@@ -191,20 +209,22 @@ public class TestCommit {
 		FileContentSupplier contentProvider = new FileContentSupplier(fileD);
 		cf.add(dfD, contentProvider);
 		cf.branch("branch1");
-		Nodeid commitRev1 = cf.commit("FIRST");
+		Transaction tr = newTransaction(hgRepo);
+		Nodeid commitRev1 = cf.commit("FIRST",  tr);
 		contentProvider.done();
 		//
 		RepoUtils.modifyFileAppend(fileD, " 2 \n");
 		cf.add(dfD, contentProvider = new FileContentSupplier(fileD));
 		cf.branch("branch2");
-		Nodeid commitRev2 = cf.commit("SECOND");
+		Nodeid commitRev2 = cf.commit("SECOND",  tr);
 		contentProvider.done();
 		//
 		RepoUtils.modifyFileAppend(fileD, " 2 \n");
 		cf.add(dfD, contentProvider = new FileContentSupplier(fileD));
 		cf.branch(DEFAULT_BRANCH_NAME);
-		Nodeid commitRev3 = cf.commit("THIRD");
+		Nodeid commitRev3 = cf.commit("THIRD",  tr);
 		contentProvider.done();
+		tr.commit();
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).range(parentCsetRevIndex+1, TIP).execute();
 		assertEquals(3, commits.size());
@@ -313,7 +333,9 @@ public class TestCommit {
 		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), parentCsetRevIndex);
 		cf.add(hgRepo.getFileNode("a"), new FileContentSupplier(new File(repoLoc, "a")));
 		cf.branch(branch);
-		Nodeid commit = cf.commit("FIRST");
+		Transaction tr = newTransaction(hgRepo);
+		Nodeid commit = cf.commit("FIRST",  tr);
+		tr.commit();
 		errorCollector.assertEquals("commit with branch shall update WC", branch, hgRepo.getWorkingCopyBranchName());
 		
 		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), repoLoc);
@@ -330,6 +352,10 @@ public class TestCommit {
 		ExecHelper verifyRun = new ExecHelper(new OutputParser.Stub(), repoLoc);
 		verifyRun.run("hg", "verify");
 		errorCollector.assertEquals("hg verify", 0, verifyRun.getExitValue());
+	}
+	
+	private Transaction newTransaction(SessionContext.Source ctxSource) {
+		return trFactory.create(ctxSource);
 	}
 
 	public static void main(String[] args) throws Exception {

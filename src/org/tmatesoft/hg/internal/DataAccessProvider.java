@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.util.LogFacility;
 
@@ -80,7 +81,7 @@ public class DataAccessProvider {
 			return new DataAccess();
 		}
 		try {
-			FileChannel fc = new FileInputStream(f).getChannel();
+			FileChannel fc = new FileInputStream(f).getChannel(); // FIXME SHALL CLOSE FIS, not only channel
 			long flen = fc.size();
 			if (!shortRead && flen > mapioMagicBoundary) {
 				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
@@ -100,12 +101,26 @@ public class DataAccessProvider {
 		return new DataAccess(); // non-null, empty.
 	}
 	
-	public DataSerializer createWriter(File f, boolean createNewIfDoesntExist) {
+	public DataSerializer createWriter(final Transaction tr, File f, boolean createNewIfDoesntExist) throws HgIOException {
 		if (!f.exists() && !createNewIfDoesntExist) {
 			return new DataSerializer();
 		}
 		try {
-			return new StreamDataSerializer(context.getLog(), new FileOutputStream(f, true));
+			final File transactionFile = tr.prepare(f);
+			return new StreamDataSerializer(context.getLog(), new FileOutputStream(transactionFile, true)) {
+				@Override
+				public void done() {
+					super.done();
+					// FIXME invert RevlogStreamWriter to send DataSource here instead of grabbing DataSerializer
+					// besides, DataSerializer#done is invoked regardless of whether write was successful or not,
+					// while Transaction#done() assumes there's no error
+					try {
+						tr.done(transactionFile);
+					} catch (HgIOException ex) {
+						context.getLog().dump(DataAccessProvider.class, Error, ex, null);
+					}
+				}
+			};
 		} catch (final FileNotFoundException ex) {
 			context.getLog().dump(getClass(), Error, ex, null);
 			return new DataSerializer() {

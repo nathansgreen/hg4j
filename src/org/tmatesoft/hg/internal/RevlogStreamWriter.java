@@ -19,9 +19,11 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.internal.Internals.REVLOGV1_RECORD_SIZE;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
@@ -38,24 +40,27 @@ public class RevlogStreamWriter {
 
 	private final DigestHelper dh = new DigestHelper();
 	private final RevlogCompressor revlogDataZip;
+	private final Transaction transaction;
 	private int lastEntryBase, lastEntryIndex;
 	private byte[] lastEntryContent;
 	private Nodeid lastEntryRevision;
 	private IntMap<Nodeid> revisionCache = new IntMap<Nodeid>(32);
 	private RevlogStream revlogStream;
 	
-	public RevlogStreamWriter(SessionContext.Source ctxSource, RevlogStream stream) {
+	public RevlogStreamWriter(SessionContext.Source ctxSource, RevlogStream stream, Transaction tr) {
 		assert ctxSource != null;
 		assert stream != null;
+		assert tr != null;
 				
 		revlogDataZip = new RevlogCompressor(ctxSource.getSessionContext());
 		revlogStream = stream;
+		transaction = tr;
 	}
 	
 	/**
 	 * @return nodeid of added revision
 	 */
-	public Nodeid addRevision(byte[] content, int linkRevision, int p1, int p2) {
+	public Nodeid addRevision(byte[] content, int linkRevision, int p1, int p2) throws HgIOException {
 		lastEntryRevision = Nodeid.NULL;
 		int revCount = revlogStream.revisionCount();
 		lastEntryIndex = revCount == 0 ? NO_REVISION : revCount - 1;
@@ -85,7 +90,7 @@ public class RevlogStreamWriter {
 		indexFile = dataFile = activeFile = null;
 		try {
 			//
-			activeFile = indexFile = revlogStream.getIndexStreamWriter();
+			activeFile = indexFile = revlogStream.getIndexStreamWriter(transaction);
 			final boolean isInlineData = revlogStream.isInlineData();
 			HeaderWriter revlogHeader = new HeaderWriter(isInlineData);
 			revlogHeader.length(content.length, compressedLen);
@@ -101,7 +106,7 @@ public class RevlogStreamWriter {
 			if (isInlineData) {
 				dataFile = indexFile;
 			} else {
-				dataFile = revlogStream.getDataStreamWriter();
+				dataFile = revlogStream.getDataStreamWriter(transaction);
 			}
 			activeFile = dataFile;
 			if (useCompressedData) {
@@ -124,12 +129,8 @@ public class RevlogStreamWriter {
 			revlogStream.revisionAdded(lastEntryIndex, lastEntryRevision, lastEntryBase, lastEntryOffset);
 		} catch (IOException ex) {
 			String m = String.format("Failed to write revision %d", lastEntryIndex+1, null);
-			HgInvalidControlFileException t = new HgInvalidControlFileException(m, ex, null);
-			if (activeFile == dataFile) {
-				throw revlogStream.initWithDataFile(t);
-			} else {
-				throw revlogStream.initWithIndexFile(t);
-			}
+			// FIXME proper file in the exception based on activeFile == dataFile || indexFile 
+			throw new HgIOException(m, ex, new File(revlogStream.getDataFileName()));
 		} finally {
 			indexFile.done();
 			if (dataFile != null && dataFile != indexFile) {
