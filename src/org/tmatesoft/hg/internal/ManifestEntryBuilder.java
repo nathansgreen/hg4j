@@ -18,7 +18,9 @@ package org.tmatesoft.hg.internal;
 
 import java.io.ByteArrayOutputStream;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 
 /**
  * Create binary manifest entry ready to write down into 00manifest.i
@@ -36,16 +38,20 @@ import org.tmatesoft.hg.core.Nodeid;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class ManifestEntryBuilder {
-	private ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+public class ManifestEntryBuilder implements DataSource {
+	private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+	private final EncodingHelper encHelper;
 
+	public ManifestEntryBuilder(EncodingHelper encodingHelper) {
+		encHelper = encodingHelper;
+	}
 	
 	public ManifestEntryBuilder reset() {
 		buffer.reset();
 		return this;
 	}
 	public ManifestEntryBuilder add(String fname, Nodeid revision) {
-		byte[] b = fname.getBytes();
+		byte[] b = encHelper.toManifest(fname);
 		buffer.write(b, 0, b.length);
 		buffer.write('\0');
 		b = revision.toString().getBytes();
@@ -56,6 +62,15 @@ public class ManifestEntryBuilder {
 
 	public byte[] build() {
 		return buffer.toByteArray();
+	}
+
+	public void serialize(DataSerializer out) throws HgIOException {
+		byte[] r = build();
+		out.write(r, 0 , r.length);
+	}
+
+	public int serializeLength() {
+		return buffer.size();
 	}
 
 }

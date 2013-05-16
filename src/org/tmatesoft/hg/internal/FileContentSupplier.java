@@ -18,56 +18,55 @@ package org.tmatesoft.hg.internal;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.core.HgIOException;
+import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * FIXME files are opened at the moment of instantiation, though the moment the data is requested might be distant
+ * {@link DataSource} that reads from regular files
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class FileContentSupplier implements CommitFacility.ByteDataSupplier {
-	private final FileChannel channel;
-	private IOException error;
+public class FileContentSupplier implements DataSource {
+	private final File file;
+	private final SessionContext ctx;
 	
-	public FileContentSupplier(HgRepository repo, Path file) throws HgIOException {
-		this(new File(repo.getWorkingDir(), file.toString()));
+	public FileContentSupplier(HgRepository repo, Path file) {
+		this(repo, new File(repo.getWorkingDir(), file.toString()));
 	}
 
-	public FileContentSupplier(File f) throws HgIOException {
-		if (!f.canRead()) {
-			throw new HgIOException(String.format("Can't read file %s", f), f);
-		}
-		try {
-			channel = new FileInputStream(f).getChannel();
-		} catch (FileNotFoundException ex) {
-			throw new HgIOException("Can't open file", ex, f);
-		}
+	public FileContentSupplier(SessionContext.Source ctxSource, File f) {
+		ctx = ctxSource.getSessionContext();
+		file = f;
 	}
-
-	public int read(ByteBuffer buf) {
-		if (error != null) {
-			return -1;
-		}
+	
+	public void serialize(DataSerializer out) throws HgIOException {
+		FileInputStream fis = null;
 		try {
-			return channel.read(buf);
+			fis = new FileInputStream(file);
+			FileChannel fc = fis.getChannel();
+			ByteBuffer buffer = ByteBuffer.allocate((int) Math.min(100*1024, fc.size()));
+			while (fc.read(buffer) != -1) {
+				buffer.flip();
+				// #allocate() above ensures backing array
+				out.write(buffer.array(), 0, buffer.limit());
+				buffer.clear();
+			}
 		} catch (IOException ex) {
-			error = ex;
+			throw new HgIOException("Failed to get content of the file", ex, file);
+		} finally {
+			new FileUtils(ctx.getLog()).closeQuietly(fis);
 		}
-		return -1;
 	}
 	
-	public void done() throws IOException {
-		channel.close();
-		if (error != null) {
-			throw error;
-		}
+	public int serializeLength() {
+		return Internals.ltoi(file.length());
 	}
 }

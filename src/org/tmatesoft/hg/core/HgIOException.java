@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,9 @@ public class HgIOException extends HgException {
 		file = troubleFile;
 	}
 
+	/**
+	 * @return file that causes trouble, may be <code>null</code>
+	 */
 	public File getFile() {
 		return file;
 	}

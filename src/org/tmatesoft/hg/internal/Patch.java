@@ -20,6 +20,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Formatter;
 
+import org.tmatesoft.hg.core.HgIOException;
+
 /**
  * @see http://mercurial.selenic.com/wiki/BundleFormat
  * in Changelog group description
@@ -177,7 +179,7 @@ public final class Patch {
 		return prefix + totalDataLen;
 	}
 	
-	/*package-local*/ void serialize(DataSerializer out) throws IOException {
+	/*package-local*/ void serialize(DataSerializer out) throws HgIOException {
 		for (int i = 0, x = data.size(); i < x; i++) {
 			final int start = starts.get(i);
 			final int end = ends.get(i);
@@ -462,7 +464,7 @@ L1:			while (p1 < p1Max) {
 
 	public class PatchDataSource implements DataSerializer.DataSource {
 
-		public void serialize(DataSerializer out) throws IOException {
+		public void serialize(DataSerializer out) throws HgIOException {
 			Patch.this.serialize(out);
 		}
 

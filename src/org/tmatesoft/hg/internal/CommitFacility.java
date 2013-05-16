@@ -25,7 +25,6 @@ import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -38,6 +37,7 @@ import org.tmatesoft.hg.core.HgCommitCommand;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.util.Pair;
@@ -53,7 +53,7 @@ import org.tmatesoft.hg.util.Path;
 public final class CommitFacility {
 	private final Internals repo;
 	private final int p1Commit, p2Commit;
-	private Map<Path, Pair<HgDataFile, ByteDataSupplier>> files = new LinkedHashMap<Path, Pair<HgDataFile, ByteDataSupplier>>();
+	private Map<Path, Pair<HgDataFile, DataSource>> files = new LinkedHashMap<Path, Pair<HgDataFile, DataSource>>();
 	private Set<Path> removals = new TreeSet<Path>();
 	private String branch, user;
 
@@ -74,12 +74,12 @@ public final class CommitFacility {
 		return p1Commit != NO_REVISION && p2Commit != NO_REVISION;
 	}
 
-	public void add(HgDataFile dataFile, ByteDataSupplier content) {
+	public void add(HgDataFile dataFile, DataSource content) {
 		if (content == null) {
 			throw new IllegalArgumentException();
 		}
 		removals.remove(dataFile.getPath());
-		files.put(dataFile.getPath(), new Pair<HgDataFile, ByteDataSupplier>(dataFile, content));
+		files.put(dataFile.getPath(), new Pair<HgDataFile, DataSource>(dataFile, content));
 	}
 
 	public void forget(HgDataFile dataFile) {
@@ -138,21 +138,13 @@ public final class CommitFacility {
 		// Register new/changed
 		LinkedHashMap<Path, RevlogStream> newlyAddedFiles = new LinkedHashMap<Path, RevlogStream>();
 		ArrayList<Path> touchInDirstate = new ArrayList<Path>();
-		for (Pair<HgDataFile, ByteDataSupplier> e : files.values()) {
+		for (Pair<HgDataFile, DataSource> e : files.values()) {
 			HgDataFile df = e.first();
+			DataSource bds = e.second();
 			Pair<Integer, Integer> fp = fileParents.get(df.getPath());
 			if (fp == null) {
 				// NEW FILE
 				fp = new Pair<Integer, Integer>(NO_REVISION, NO_REVISION);
-			}
-			ByteDataSupplier bds = e.second();
-			// FIXME quickfix, instead, pass ByteDataSupplier directly to RevlogStreamWriter
-			ByteBuffer bb = ByteBuffer.allocate(2048);
-			ByteArrayChannel bac = new ByteArrayChannel();
-			while (bds.read(bb) != -1) {
-				bb.flip();
-				bac.write(bb);
-				bb.clear();
 			}
 			RevlogStream contentStream;
 			if (df.exists()) {
@@ -165,27 +157,27 @@ public final class CommitFacility {
 				// (despite the fact the file is in there)
 			}
 			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream, transaction);
-			Nodeid fileRev = fileWriter.addRevision(bac.toArray(), clogRevisionIndex, fp.first(), fp.second());
+			Nodeid fileRev = fileWriter.addRevision(bds, clogRevisionIndex, fp.first(), fp.second());
 			newManifestRevision.put(df.getPath(), fileRev);
 			touchInDirstate.add(df.getPath());
 		}
 		//
 		// Manifest
-		final ManifestEntryBuilder manifestBuilder = new ManifestEntryBuilder();
+		final ManifestEntryBuilder manifestBuilder = new ManifestEntryBuilder(repo.buildFileNameEncodingHelper());
 		for (Map.Entry<Path, Nodeid> me : newManifestRevision.entrySet()) {
 			manifestBuilder.add(me.getKey().toString(), me.getValue());
 		}
 		RevlogStreamWriter manifestWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getManifestStream(), transaction);
-		Nodeid manifestRev = manifestWriter.addRevision(manifestBuilder.build(), clogRevisionIndex, manifestParents.first(), manifestParents.second());
+		Nodeid manifestRev = manifestWriter.addRevision(manifestBuilder, clogRevisionIndex, manifestParents.first(), manifestParents.second());
 		//
 		// Changelog
 		final ChangelogEntryBuilder changelogBuilder = new ChangelogEntryBuilder();
 		changelogBuilder.setModified(files.keySet());
 		changelogBuilder.branch(branch == null ? DEFAULT_BRANCH_NAME : branch);
 		changelogBuilder.user(String.valueOf(user));
-		byte[] clogContent = changelogBuilder.build(manifestRev, message);
+		changelogBuilder.manifest(manifestRev).comment(message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream(), transaction);
-		Nodeid changesetRev = changelogWriter.addRevision(clogContent, clogRevisionIndex, p1Commit, p2Commit);
+		Nodeid changesetRev = changelogWriter.addRevision(changelogBuilder, clogRevisionIndex, p1Commit, p2Commit);
 		// TODO move fncache update to an external facility, along with dirstate and bookmark update
 		if (!newlyAddedFiles.isEmpty() && repo.fncacheInUse()) {
 			FNCacheFile fncache = new FNCacheFile(repo);
@@ -265,18 +257,4 @@ public final class CommitFacility {
 		return repo.getManifest().getRevisionIndex(manifestRev);
 	}
 */
-
-	// unlike DataAccess (which provides structured access), this one 
-	// deals with a sequence of bytes, when there's no need in structure of the data
-	// FIXME java.nio.ReadableByteChannel or ByteStream/ByteSequence(read, length, reset)
-	// SHALL be inline with util.ByteChannel, reading bytes from HgDataFile, preferably DataAccess#readBytes(BB) to match API,
-	// and a wrap for ByteVector
-	public interface ByteDataSupplier { // TODO look if can resolve DataAccess in HgCloneCommand visibility issue
-		// FIXME needs lifecycle, e.g. for supplier that reads from WC
-		int read(ByteBuffer buf);
-	}
-	
-	public interface ByteDataConsumer {
-		void write(ByteBuffer buf);
-	}
 }

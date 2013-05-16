@@ -30,7 +30,6 @@ import java.util.TreeMap;
 
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
-import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DataSerializer;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.FNCacheFile;
@@ -148,6 +147,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		private final SessionContext ctx;
 		private final Path.Source pathFactory;
 		private FileOutputStream indexFile;
+		private File currentFile;
 		private String filename; // human-readable name of the file being written, for log/exception purposes 
 
 		private final TreeMap<Nodeid, Integer> changelogIndexes = new TreeMap<Nodeid, Integer>();
@@ -199,7 +199,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			try {
 				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
-				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00changelog.i"));
+				indexFile = new FileOutputStream(currentFile = new File(hgDir, filename = "store/00changelog.i"));
 				collectChangelogIndexes = true;
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Failed to write changelog", ex, new File(hgDir, filename));
@@ -223,7 +223,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			try {
 				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
-				indexFile = new FileOutputStream(new File(hgDir, filename = "store/00manifest.i"));
+				indexFile = new FileOutputStream(currentFile = new File(hgDir, filename = "store/00manifest.i"));
 			} catch (IOException ex) {
 				throw new HgInvalidControlFileException("Failed to write manifest", ex, new File(hgDir, filename));
 			}
@@ -247,7 +247,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				revisionSequence.clear();
 				File file = new File(hgDir, filename = storagePathHelper.rewrite(name).toString());
 				file.getParentFile().mkdirs();
-				indexFile = new FileOutputStream(file);
+				indexFile = new FileOutputStream(currentFile = file);
 			} catch (IOException ex) {
 				String m = String.format("Failed to write file %s", filename);
 				throw new HgInvalidControlFileException(m, ex, new File(filename));
@@ -279,6 +279,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			indexFile.close();
 			indexFile = null;
 			filename = null;
+			currentFile = null;
 		}
 
 		private int knownRevision(Nodeid p) {
@@ -367,11 +368,15 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				revlogHeader.length(content.length, compressedLen);
 				
 				// XXX may be wise not to create DataSerializer for each revision, but for a file
-				DataAccessProvider.StreamDataSerializer sds = new DataAccessProvider.StreamDataSerializer(ctx.getLog(), indexFile) {
+				DataSerializer sds = new DataSerializer() {
 					@Override
-					public void done() {
-						// override parent behavior not to close stream in use
-					}
+						public void write(byte[] data, int offset, int length) throws HgIOException {
+							try {
+								indexFile.write(data, offset, length);
+							} catch (IOException ex) {
+								throw new HgIOException("Write failure", ex, currentFile);
+							}
+						}
 				};
 				revlogHeader.serialize(sds);
 
@@ -389,9 +394,12 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				revisionSequence.add(node);
 				prevRevContent.done();
 				prevRevContent = new ByteArrayDataAccess(content);
+			} catch (HgIOException ex) {
+				String m = String.format("Failed to write revision %s of file %s", ge.node().shortNotation(), filename);
+				throw new HgInvalidControlFileException(m, ex, currentFile);
 			} catch (IOException ex) {
 				String m = String.format("Failed to write revision %s of file %s", ge.node().shortNotation(), filename);
-				throw new HgInvalidControlFileException(m, ex, new File(hgDir, filename));
+				throw new HgInvalidControlFileException(m, ex, currentFile);
 			}
 			return cancelException == null;
 		}

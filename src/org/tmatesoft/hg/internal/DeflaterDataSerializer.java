@@ -16,9 +16,10 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.IOException;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
+
+import org.tmatesoft.hg.core.HgIOException;
 
 /**
  * {@link DeflaterOutputStream} counterpart for {@link DataSerializer} API
@@ -43,7 +44,7 @@ class DeflaterDataSerializer extends DataSerializer {
 	}
 
 	@Override
-	public void writeInt(int... values) throws IOException {
+	public void writeInt(int... values) throws HgIOException {
 		for (int i = 0; i < values.length; i+= AUX_BUFFER_CAPACITY) {
 			int idx = 0;
 			for (int j = i, x = Math.min(values.length, i + AUX_BUFFER_CAPACITY); j < x; j++) {
@@ -58,7 +59,7 @@ class DeflaterDataSerializer extends DataSerializer {
 	}
 
 	@Override
-	public void write(byte[] data, int offset, int length) throws IOException {
+	public void write(byte[] data, int offset, int length) throws HgIOException {
 		// @see DeflaterOutputStream#write(byte[], int, int)
 		int stride = deflateOutBuffer.length;
 		for (int i = 0; i < length; i += stride) {
@@ -66,7 +67,7 @@ class DeflaterDataSerializer extends DataSerializer {
 		}
 	}
 	
-	private void internalWrite(byte[] data, int offset, int length) throws IOException {
+	private void internalWrite(byte[] data, int offset, int length) throws HgIOException {
 		deflater.setInput(data, offset, length);
 		while (!deflater.needsInput()) {
 			deflate();
@@ -74,11 +75,11 @@ class DeflaterDataSerializer extends DataSerializer {
 	}
 
 	@Override
-	public void done() {
+	public void done() throws HgIOException {
 		delegate.done();
 	}
 
-	public void finish() throws IOException {
+	public void finish() throws HgIOException {
 		if (!deflater.finished()) {
 			deflater.finish();
 			while (!deflater.finished()) {
@@ -87,7 +88,7 @@ class DeflaterDataSerializer extends DataSerializer {
 		}
 	}
 
-	protected void deflate() throws IOException {
+	protected void deflate() throws HgIOException {
 		int len = deflater.deflate(deflateOutBuffer, 0, deflateOutBuffer.length);
 		if (len > 0) {
 			delegate.write(deflateOutBuffer, 0, len);

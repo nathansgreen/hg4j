@@ -19,13 +19,15 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.internal.Internals.REVLOGV1_RECORD_SIZE;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSerializer;
+import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSource;
+import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 
@@ -60,17 +62,18 @@ public class RevlogStreamWriter {
 	/**
 	 * @return nodeid of added revision
 	 */
-	public Nodeid addRevision(byte[] content, int linkRevision, int p1, int p2) throws HgIOException {
+	public Nodeid addRevision(DataSource content, int linkRevision, int p1, int p2) throws HgIOException {
 		lastEntryRevision = Nodeid.NULL;
 		int revCount = revlogStream.revisionCount();
 		lastEntryIndex = revCount == 0 ? NO_REVISION : revCount - 1;
 		populateLastEntry();
 		//
-		Patch patch = GeneratePatchInspector.delta(lastEntryContent, content);
+		byte[] contentByteArray = toByteArray(content);
+		Patch patch = GeneratePatchInspector.delta(lastEntryContent, contentByteArray);
 		int patchSerializedLength = patch.serializedLength();
 		
-		final boolean writeComplete = preferCompleteOverPatch(patchSerializedLength, content.length);
-		DataSerializer.DataSource dataSource = writeComplete ? new DataSerializer.ByteArrayDataSource(content) : patch.new PatchDataSource();
+		final boolean writeComplete = preferCompleteOverPatch(patchSerializedLength, contentByteArray.length);
+		DataSerializer.DataSource dataSource = writeComplete ? new ByteArrayDataSource(contentByteArray) : patch.new PatchDataSource();
 		revlogDataZip.reset(dataSource);
 		final int compressedLen;
 		final boolean useCompressedData = preferCompressedOverComplete(revlogDataZip.getCompressedLength(), dataSource.serializeLength());
@@ -83,17 +86,17 @@ public class RevlogStreamWriter {
 		//
 		Nodeid p1Rev = revision(p1);
 		Nodeid p2Rev = revision(p2);
-		byte[] revisionNodeidBytes = dh.sha1(p1Rev, p2Rev, content).asBinary();
+		byte[] revisionNodeidBytes = dh.sha1(p1Rev, p2Rev, contentByteArray).asBinary();
 		//
 
-		DataSerializer indexFile, dataFile, activeFile;
-		indexFile = dataFile = activeFile = null;
+		DataSerializer indexFile, dataFile;
+		indexFile = dataFile = null;
 		try {
 			//
-			activeFile = indexFile = revlogStream.getIndexStreamWriter(transaction);
+			indexFile = revlogStream.getIndexStreamWriter(transaction);
 			final boolean isInlineData = revlogStream.isInlineData();
 			HeaderWriter revlogHeader = new HeaderWriter(isInlineData);
-			revlogHeader.length(content.length, compressedLen);
+			revlogHeader.length(contentByteArray.length, compressedLen);
 			revlogHeader.nodeid(revisionNodeidBytes);
 			revlogHeader.linkRevision(linkRevision);
 			revlogHeader.parents(p1, p2);
@@ -108,7 +111,6 @@ public class RevlogStreamWriter {
 			} else {
 				dataFile = revlogStream.getDataStreamWriter(transaction);
 			}
-			activeFile = dataFile;
 			if (useCompressedData) {
 				int actualCompressedLenWritten = revlogDataZip.writeCompressedData(dataFile);
 				if (actualCompressedLenWritten != compressedLen) {
@@ -120,17 +122,13 @@ public class RevlogStreamWriter {
 			}
 			
 			
-			lastEntryContent = content;
+			lastEntryContent = contentByteArray;
 			lastEntryBase = revlogHeader.baseRevision();
 			lastEntryIndex++;
 			lastEntryRevision = Nodeid.fromBinary(revisionNodeidBytes, 0);
 			revisionCache.put(lastEntryIndex, lastEntryRevision);
 
 			revlogStream.revisionAdded(lastEntryIndex, lastEntryRevision, lastEntryBase, lastEntryOffset);
-		} catch (IOException ex) {
-			String m = String.format("Failed to write revision %d", lastEntryIndex+1, null);
-			// FIXME proper file in the exception based on activeFile == dataFile || indexFile 
-			throw new HgIOException(m, ex, new File(revlogStream.getDataFileName()));
 		} finally {
 			indexFile.done();
 			if (dataFile != null && dataFile != indexFile) {
@@ -140,6 +138,12 @@ public class RevlogStreamWriter {
 		return lastEntryRevision;
 	}
 	
+	private byte[] toByteArray(DataSource content) throws HgIOException {
+		ByteArrayDataSerializer ba = new ByteArrayDataSerializer();
+		content.serialize(ba);
+		return ba.toByteArray();
+	}
+
 	private Nodeid revision(int revisionIndex) {
 		if (revisionIndex == NO_REVISION) {
 			return Nodeid.NULL;
@@ -251,7 +255,7 @@ public class RevlogStreamWriter {
 			return this;
 		}
 		
-		public void serialize(DataSerializer out) throws IOException {
+		public void serialize(DataSerializer out) throws HgIOException {
 			header.clear();
 			if (offset == 0) {
 				int version = 1 /* RevlogNG */;

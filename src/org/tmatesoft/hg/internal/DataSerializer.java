@@ -16,7 +16,9 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.IOException;
+import java.io.ByteArrayOutputStream;
+
+import org.tmatesoft.hg.core.HgIOException;
 
 /**
  * Serialization friend of {@link DataAccess}
@@ -26,28 +28,36 @@ import java.io.IOException;
  */
 @Experimental(reason="Work in progress")
 public class DataSerializer {
+	private byte[] buffer;
 	
-	public void writeByte(byte... values) throws IOException {
+	public void writeByte(byte... values) throws HgIOException {
 		write(values, 0, values.length);
 	}
 
-	public void writeInt(int... values) throws IOException {
-		byte[] buf = new byte[4];
+	public void writeInt(int... values) throws HgIOException {
+		ensureBufferSize(4*values.length); // sizeof(int)
+		int idx = 0;
 		for (int v : values) {
-			bigEndian(v, buf, 0);
-			write(buf, 0, buf.length);
+			bigEndian(v, buffer, idx);
+			idx += 4;
 		}
+		write(buffer, 0, idx);
 	}
 
-	public void write(byte[] data, int offset, int length) throws IOException {
-		throw new IOException("Attempt to write to non-existent file");
+	public void write(byte[] data, int offset, int length) throws HgIOException {
+		throw new HgIOException("Attempt to write to non-existent file", null);
 	}
 
-	public void done() {
-		// FIXME perhaps, shall allow IOException, too
+	public void done() throws HgIOException {
 		// no-op
 	}
 	
+	private void ensureBufferSize(int bytesNeeded) {
+		if (buffer == null || buffer.length < bytesNeeded) {
+			buffer = new byte[bytesNeeded];
+		}
+	}
+
 	/**
 	 * Writes 4 bytes of supplied value into the buffer at given offset, big-endian. 
 	 */
@@ -64,7 +74,11 @@ public class DataSerializer {
 	 */
 	@Experimental(reason="Work in progress")
 	interface DataSource {
-		public void serialize(DataSerializer out) throws IOException;
+		/**
+		 * Invoked once for a single write operation, 
+		 * although the source itself may get serialized several times
+		 */
+		public void serialize(DataSerializer out) throws HgIOException;
 
 		/**
 		 * Hint of data length it would like to writes
@@ -81,7 +95,7 @@ public class DataSerializer {
 			data = bytes;
 		}
 
-		public void serialize(DataSerializer out) throws IOException {
+		public void serialize(DataSerializer out) throws HgIOException {
 			if (data != null) {
 				out.write(data, 0, data.length);
 			}
@@ -90,6 +104,18 @@ public class DataSerializer {
 		public int serializeLength() {
 			return data == null ? 0 : data.length;
 		}
+	}
+	
+	public static class ByteArrayDataSerializer extends DataSerializer {
+		private final ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+		@Override
+		public void write(byte[] data, int offset, int length) {
+			out.write(data, offset, length);
+		}
 		
+		public byte[] toByteArray() {
+			return out.toByteArray();
+		}
 	}
 }

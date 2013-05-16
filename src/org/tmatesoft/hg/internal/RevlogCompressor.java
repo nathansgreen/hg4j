@@ -16,9 +16,9 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.IOException;
 import java.util.zip.Deflater;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.util.LogFacility.Severity;
 
@@ -44,7 +44,7 @@ public class RevlogCompressor {
 	}
 	
 	// out stream is not closed!
-	public int writeCompressedData(DataSerializer out) throws IOException {
+	public int writeCompressedData(DataSerializer out) throws HgIOException {
 		zip.reset();
 		DeflaterDataSerializer dds = new DeflaterDataSerializer(out, zip, sourceData.serializeLength());
 		sourceData.serialize(dds);
@@ -61,7 +61,7 @@ public class RevlogCompressor {
 			compressedLen = writeCompressedData(counter);
 			assert counter.totalWritten == compressedLen;
 	        return compressedLen;
-		} catch (IOException ex) {
+		} catch (HgIOException ex) {
 			// can't happen provided we write to our stream that does nothing but byte counting
 			ctx.getLog().dump(getClass(), Severity.Error, ex, "Failed estimating compressed length of revlog data");
 			return counter.totalWritten; // use best known value so far
@@ -71,15 +71,15 @@ public class RevlogCompressor {
 	private static class Counter extends DataSerializer {
 		public int totalWritten = 0;
 
-		public void writeByte(byte... values) throws IOException {
+		public void writeByte(byte... values) throws HgIOException {
 			totalWritten += values.length;
 		}
 
-		public void writeInt(int... values) throws IOException {
+		public void writeInt(int... values) throws HgIOException {
 			totalWritten += 4 * values.length;
 		}
 
-		public void write(byte[] data, int offset, int length) throws IOException {
+		public void write(byte[] data, int offset, int length) throws HgIOException {
 			totalWritten += length;
 		}
 	}

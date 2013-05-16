@@ -38,7 +38,7 @@ import org.tmatesoft.hg.repo.HgRepoConfig.PathsSection;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HgLookup {
+public class HgLookup implements SessionContext.Source {
 
 	private ConfigFile globalCfg;
 	private SessionContext sessionContext;
@@ -81,7 +81,7 @@ public class HgLookup {
 			throw new HgRepositoryNotFoundException(String.format("Can't locate .hg/ directory of Mercurial repository in %s nor in parent dirs", location)).setLocation(location.getPath());
 		}
 		String repoPath = repository.getParentFile().getAbsolutePath();
-		HgRepository rv = new HgRepository(getContext(), repoPath, repository);
+		HgRepository rv = new HgRepository(getSessionContext(), repoPath, repository);
 		int requiresFlags = rv.getImplHelper().getRequiresFlags();
 		if ((requiresFlags & RequiresFile.REVLOGV1) == 0) {
 			throw new HgRepositoryNotFoundException(String.format("%s: repository version is not supported (Mercurial <0.9?)", repoPath)).setLocation(location.getPath());
@@ -93,7 +93,7 @@ public class HgLookup {
 		if (location == null || !location.canRead()) {
 			throw new HgRepositoryNotFoundException(String.format("Can't read file %s", location)).setLocation(String.valueOf(location));
 		}
-		return new HgBundle(getContext(), new DataAccessProvider(getContext()), location).link();
+		return new HgBundle(getSessionContext(), new DataAccessProvider(getSessionContext()), location).link();
 	}
 	
 	/**
@@ -134,7 +134,7 @@ public class HgLookup {
 				throw new HgBadArgumentException(String.format("Found %s server spec in the config, but failed to initialize with it", key), ex);
 			}
 		}
-		return new HgRemoteRepository(getContext(), url);
+		return new HgRemoteRepository(getSessionContext(), url);
 	}
 	
 	public HgRemoteRepository detect(URL url) throws HgBadArgumentException {
@@ -144,23 +144,23 @@ public class HgLookup {
 		if (Boolean.FALSE.booleanValue()) {
 			throw Internals.notImplemented();
 		}
-		return new HgRemoteRepository(getContext(), url);
+		return new HgRemoteRepository(getSessionContext(), url);
 	}
 
 	private ConfigFile getGlobalConfig() {
 		if (globalCfg == null) {
-			globalCfg = new ConfigFile(getContext());
+			globalCfg = new ConfigFile(getSessionContext());
 			try {
 				globalCfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
 			} catch (HgInvalidFileException ex) {
 				// XXX perhaps, makes sense to let caller/client know that we've failed to read global config? 
-				getContext().getLog().dump(getClass(), Warn, ex, null);
+				getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 			}
 		}
 		return globalCfg;
 	}
 
-	private SessionContext getContext() {
+	public SessionContext getSessionContext() {
 		if (sessionContext == null) {
 			sessionContext = new BasicSessionContext(null);
 		}

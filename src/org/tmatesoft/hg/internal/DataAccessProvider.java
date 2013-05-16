@@ -21,10 +21,8 @@ import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -101,34 +99,13 @@ public class DataAccessProvider {
 		return new DataAccess(); // non-null, empty.
 	}
 	
-	public DataSerializer createWriter(final Transaction tr, File f, boolean createNewIfDoesntExist) throws HgIOException {
+	public DataSerializer createWriter(final Transaction tr, File f, boolean createNewIfDoesntExist) {
 		if (!f.exists() && !createNewIfDoesntExist) {
 			return new DataSerializer();
 		}
-		try {
-			final File transactionFile = tr.prepare(f);
-			return new StreamDataSerializer(context.getLog(), new FileOutputStream(transactionFile, true)) {
-				@Override
-				public void done() {
-					super.done();
-					// FIXME invert RevlogStreamWriter to send DataSource here instead of grabbing DataSerializer
-					// besides, DataSerializer#done is invoked regardless of whether write was successful or not,
-					// while Transaction#done() assumes there's no error
-					try {
-						tr.done(transactionFile);
-					} catch (HgIOException ex) {
-						context.getLog().dump(DataAccessProvider.class, Error, ex, null);
-					}
-				}
-			};
-		} catch (final FileNotFoundException ex) {
-			context.getLog().dump(getClass(), Error, ex, null);
-			return new DataSerializer() {
-				public void write(byte[] data, int offset, int length) throws IOException {
-					throw ex;
-				}
-			};
-		}
+		// TODO invert RevlogStreamWriter to send DataSource here instead of grabbing DataSerializer
+		// to control the moment transaction gets into play and whether it fails or not
+		return new TransactionAwareFileSerializer(tr, f);
 	}
 
 	private static class MemoryMapFileAccess extends DataAccess {
@@ -408,56 +385,58 @@ public class DataAccessProvider {
 			}
 		}
 	}
+	
+	/**
+	 * Appends serialized changes to the end of the file
+	 */
+	private static class TransactionAwareFileSerializer extends DataSerializer {
+		
+		private final Transaction transaction;
+		private final File file;
+		private FileOutputStream fos;
+		private File transactionFile;
+		private boolean writeFailed = false;
 
-	public/*XXX, private, once HgCloneCommand stops using it */ static class StreamDataSerializer extends DataSerializer {
-		private final OutputStream out;
-		private final LogFacility log;
-		private byte[] buffer;
-	
-		public StreamDataSerializer(LogFacility logFacility, OutputStream os) {
-			assert os != null;
-			out = os;
-			log = logFacility;
+		public TransactionAwareFileSerializer(Transaction tr, File f) {
+			transaction = tr;
+			file = f;
 		}
 		
 		@Override
-		public void write(byte[] data, int offset, int length) throws IOException {
-			out.write(data, offset, length);
-		}
-	
-		@Override
-		public void writeInt(int... values) throws IOException {
-			ensureBufferSize(4*values.length); // sizeof(int)
-			int idx = 0;
-			for (int v : values) {
-				DataSerializer.bigEndian(v, buffer, idx);
-				idx += 4;
-			}
-			out.write(buffer, 0, idx);
-		}
-		
-		@Override
-		public void writeByte(byte... values) throws IOException {
-			if (values.length == 1) {
-				out.write(values[0]);
-			} else {
-				out.write(values, 0, values.length);
-			}
-		}
-		
-		private void ensureBufferSize(int bytesNeeded) {
-			if (buffer == null || buffer.length < bytesNeeded) {
-				buffer = new byte[bytesNeeded];
-			}
-		}
-	
-		@Override
-		public void done() {
+		public void write(byte[] data, int offset, int length) throws HgIOException {
 			try {
-				out.flush();
-				out.close();
+				if (fos == null) {
+					transactionFile = transaction.prepare(file);
+					fos = new FileOutputStream(transactionFile, true);
+				}
+				fos.write(data, offset, length);
+				fos.flush();
 			} catch (IOException ex) {
-				log.dump(getClass(), Error, ex, "Failure to close stream");
+				writeFailed = true;
+				transaction.failure(transactionFile, ex);
+				throw new HgIOException("Write failure", ex, transactionFile);
+			}
+		}
+		
+		@Override
+		public void done() throws HgIOException {
+			if (fos != null) {
+				assert transactionFile != null;
+				try {
+					fos.close();
+					if (!writeFailed) {
+						// XXX, Transaction#done() assumes there's no error , but perhaps it's easier to 
+						// rely on #failure(), and call #done() always (or change #done() to #success()
+						transaction.done(transactionFile);
+					}
+					fos = null;
+				} catch (IOException ex) {
+					if (!writeFailed) {
+						// do not eclipse original exception
+						transaction.failure(transactionFile, ex);
+					}
+					throw new HgIOException("Write failure", ex, transactionFile);
+				}
 			}
 		}
 	}

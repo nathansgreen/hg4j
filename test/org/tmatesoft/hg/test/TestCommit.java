@@ -21,7 +21,6 @@ import static org.tmatesoft.hg.repo.HgRepository.*;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 import org.junit.Rule;
@@ -38,6 +37,7 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CommitFacility;
+import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSource;
 import org.tmatesoft.hg.internal.FileContentSupplier;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Transaction;
@@ -77,7 +77,7 @@ public class TestCommit {
 		// FIXME test diff for processing changed newlines (ie \r\n -> \n or vice verse) - if a whole line or 
 		// just changed endings are in the patch!
 		HgDataFile df = hgRepo.getFileNode("file1");
-		cf.add(df, new ByteArraySupplier("hello\nworld".getBytes()));
+		cf.add(df, new ByteArrayDataSource("hello\nworld".getBytes()));
 		Transaction tr = newTransaction(hgRepo);
 		Nodeid secondRev = cf.commit("SECOND", tr);
 		tr.commit();
@@ -106,7 +106,7 @@ public class TestCommit {
 		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), NO_REVISION);
 		HgDataFile df = hgRepo.getFileNode(fname);
 		final byte[] initialContent = "hello\nworld".getBytes();
-		cf.add(df, new ByteArraySupplier(initialContent));
+		cf.add(df, new ByteArrayDataSource(initialContent));
 		String comment = "commit 1";
 		Transaction tr = newTransaction(hgRepo);
 		Nodeid c1Rev = cf.commit(comment,  tr);
@@ -141,13 +141,12 @@ public class TestCommit {
 		//
 		RepoUtils.modifyFileAppend(fileD, "A CHANGE\n");
 		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), parentCsetRevIndex);
-		FileContentSupplier contentProvider = new FileContentSupplier(fileD);
+		FileContentSupplier contentProvider = new FileContentSupplier(hgRepo, fileD);
 		cf.add(dfD, contentProvider);
 		cf.branch("branch1");
 		Transaction tr = newTransaction(hgRepo);
 		Nodeid commitRev1 = cf.commit("FIRST",  tr);
 		tr.commit();
-		contentProvider.done();
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).range(parentCsetRevIndex+1, TIP).execute();
 		assertEquals(1, commits.size());
@@ -171,13 +170,12 @@ public class TestCommit {
 		RepoUtils.createFile(new File(repoLoc, "xx"), "xyz");
 		new HgAddRemoveCommand(hgRepo).add(Path.create("xx")).remove(Path.create("d")).execute();
 		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), hgRepo.getChangelog().getLastRevision());
-		FileContentSupplier contentProvider = new FileContentSupplier(new File(repoLoc, "xx"));
+		FileContentSupplier contentProvider = new FileContentSupplier(hgRepo, new File(repoLoc, "xx"));
 		cf.add(hgRepo.getFileNode("xx"), contentProvider);
 		cf.forget(hgRepo.getFileNode("d"));
 		Transaction tr = newTransaction(hgRepo);
 		Nodeid commitRev = cf.commit("Commit with add/remove cmd",  tr);
 		tr.commit();
-		contentProvider.done();
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).changeset(commitRev).execute();
 		HgChangeset cmt = commits.get(0);
@@ -206,24 +204,21 @@ public class TestCommit {
 		RepoUtils.modifyFileAppend(fileD, " 1 \n");
 		final int parentCsetRevIndex = hgRepo.getChangelog().getLastRevision();
 		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), parentCsetRevIndex);
-		FileContentSupplier contentProvider = new FileContentSupplier(fileD);
+		FileContentSupplier contentProvider = new FileContentSupplier(hgRepo, fileD);
 		cf.add(dfD, contentProvider);
 		cf.branch("branch1");
 		Transaction tr = newTransaction(hgRepo);
 		Nodeid commitRev1 = cf.commit("FIRST",  tr);
-		contentProvider.done();
 		//
 		RepoUtils.modifyFileAppend(fileD, " 2 \n");
-		cf.add(dfD, contentProvider = new FileContentSupplier(fileD));
+		cf.add(dfD, contentProvider = new FileContentSupplier(hgRepo, fileD));
 		cf.branch("branch2");
 		Nodeid commitRev2 = cf.commit("SECOND",  tr);
-		contentProvider.done();
 		//
 		RepoUtils.modifyFileAppend(fileD, " 2 \n");
-		cf.add(dfD, contentProvider = new FileContentSupplier(fileD));
+		cf.add(dfD, contentProvider = new FileContentSupplier(hgRepo, fileD));
 		cf.branch(DEFAULT_BRANCH_NAME);
 		Nodeid commitRev3 = cf.commit("THIRD",  tr);
-		contentProvider.done();
 		tr.commit();
 		//
 		List<HgChangeset> commits = new HgLogCommand(hgRepo).range(parentCsetRevIndex+1, TIP).execute();
@@ -331,7 +326,7 @@ public class TestCommit {
 		final int parentCsetRevIndex = hgRepo.getChangelog().getLastRevision();
 		// HgCommitCommand can't do branch yet
 		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), parentCsetRevIndex);
-		cf.add(hgRepo.getFileNode("a"), new FileContentSupplier(new File(repoLoc, "a")));
+		cf.add(hgRepo.getFileNode("a"), new FileContentSupplier(hgRepo, new File(repoLoc, "a")));
 		cf.branch(branch);
 		Transaction tr = newTransaction(hgRepo);
 		Nodeid commit = cf.commit("FIRST",  tr);
@@ -360,47 +355,5 @@ public class TestCommit {
 
 	public static void main(String[] args) throws Exception {
 		new TestCommit().testCommitToEmpty();
-		if (Boolean.TRUE.booleanValue()) {
-			return;
-		}
-		String input = "abcdefghijklmnopqrstuvwxyz";
-		ByteArraySupplier bas = new ByteArraySupplier(input.getBytes());
-		ByteBuffer bb = ByteBuffer.allocate(7);
-		byte[] result = new byte[26];
-		int rpos = 0;
-		while (bas.read(bb) != -1) {
-			bb.flip();
-			bb.get(result, rpos, bb.limit());
-			rpos += bb.limit();
-			bb.clear();
-		}
-		if (input.length() != rpos) {
-			throw new AssertionError();
-		}
-		String output = new String(result);
-		if (!input.equals(output)) {
-			throw new AssertionError();
-		}
-		System.out.println(output);
-	}
-
-	static class ByteArraySupplier implements CommitFacility.ByteDataSupplier {
-
-		private final byte[] data;
-		private int pos = 0;
-
-		public ByteArraySupplier(byte[] source) {
-			data = source;
-		}
-
-		public int read(ByteBuffer buf) {
-			if (pos >= data.length) {
-				return -1;
-			}
-			int count = Math.min(buf.remaining(), data.length - pos);
-			buf.put(data, pos, count);
-			pos += count;
-			return count;
-		}
 	}
 }

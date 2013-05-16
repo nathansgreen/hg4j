@@ -19,10 +19,7 @@ package org.tmatesoft.hg.core;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
 
-import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CommitFacility;
 import org.tmatesoft.hg.internal.CompleteRepoLock;
@@ -30,6 +27,7 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileContentSupplier;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Transaction;
+import org.tmatesoft.hg.internal.WorkingCopyContent;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -116,16 +114,13 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 				HgDataFile df = repo.getFileNode(m);
 				cf.add(df, new WorkingCopyContent(df));
 			}
-			ArrayList<FileContentSupplier> toClear = new ArrayList<FileContentSupplier>();
 			for (Path a : status.getAdded()) {
 				HgDataFile df = repo.getFileNode(a); // TODO need smth explicit, like repo.createNewFileNode(Path) here
 				// XXX might be an interesting exercise not to demand a content supplier, but instead return a "DataRequester"
 				// object, that would indicate interest in data, and this code would "push" it to requester, so that any exception
 				// is handled here, right away, and won't need to travel supplier and CommitFacility. (although try/catch inside
 				// supplier.read (with empty throws declaration)
-				FileContentSupplier fcs = new FileContentSupplier(repo, a);
-				cf.add(df, fcs);
-				toClear.add(fcs);
+				cf.add(df, new FileContentSupplier(repo, a));
 			}
 			for (Path r : status.getRemoved()) {
 				HgDataFile df = repo.getFileNode(r); 
@@ -144,10 +139,6 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 			} catch (HgException ex) {
 				tr.rollback();
 				throw ex;
-			}
-			// TODO toClear list is awful
-			for (FileContentSupplier fcs : toClear) {
-				fcs.done();
 			}
 			return new Outcome(Kind.Success, "Commit ok");
 		} catch (HgRuntimeException ex) {
@@ -181,45 +172,5 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 		HgChangelog clog = repo.getChangelog();
 		parents[0] = pn.first().isNull() ? NO_REVISION : clog.getRevisionIndex(pn.first());
 		parents[1] = pn.second().isNull() ? NO_REVISION : clog.getRevisionIndex(pn.second());
-	}
-
-	private static class WorkingCopyContent implements CommitFacility.ByteDataSupplier {
-		private final HgDataFile file;
-		private ByteBuffer fileContent; 
-
-		public WorkingCopyContent(HgDataFile dataFile) {
-			file = dataFile;
-			if (!dataFile.exists()) {
-				throw new IllegalArgumentException();
-			}
-		}
-
-		public int read(ByteBuffer dst) {
-			if (fileContent == null) {
-				try {
-					ByteArrayChannel sink = new ByteArrayChannel();
-					// TODO desperately need partial read here
-					file.workingCopy(sink);
-					fileContent = ByteBuffer.wrap(sink.toArray());
-				} catch (CancelledException ex) {
-					// ByteArrayChannel doesn't cancel, never happens
-					assert false;
-				}
-			}
-			if (fileContent.remaining() == 0) {
-				return -1;
-			}
-			int dstCap = dst.remaining();
-			if (fileContent.remaining() > dstCap) {
-				// save actual limit, and pretend we've got exactly desired amount of bytes
-				final int lim = fileContent.limit();
-				fileContent.limit(dstCap);
-				dst.put(fileContent);
-				fileContent.limit(lim);
-			} else {
-				dst.put(fileContent);
-			}
-			return dstCap - dst.remaining();
-		}
 	}
 }
