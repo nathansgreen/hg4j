@@ -34,7 +34,7 @@ import org.tmatesoft.hg.util.LogFacility.Severity;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-final class FileUtils {
+public final class FileUtils {
 	
 	private final LogFacility log;
 	

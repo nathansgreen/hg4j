@@ -20,7 +20,6 @@ import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
-import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -37,12 +36,12 @@ import org.tmatesoft.hg.internal.BlameHelper;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FileHistory;
 import org.tmatesoft.hg.internal.FileRevisionHistoryChunk;
+import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.FilterDataAccess;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Metadata;
 import org.tmatesoft.hg.internal.RevlogStream;
-import org.tmatesoft.hg.repo.HgBlameInspector;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
@@ -168,9 +167,10 @@ public final class HgDataFile extends Revlog {
 			final int bsize = (int) Math.min(flength, 32*1024);
 			progress.start((int) (flength > Integer.MAX_VALUE ? flength >>> 15 /*32 kb buf size*/ : flength));
 			ByteBuffer buf = ByteBuffer.allocate(bsize);
-			FileChannel fc = null;
+			FileInputStream fis = null;
 			try {
-				fc = new FileInputStream(f).getChannel();
+				fis = new FileInputStream(f);
+				FileChannel fc = fis.getChannel();
 				while (fc.read(buf) != -1) {
 					cs.checkCancelled();
 					buf.flip();
@@ -182,12 +182,8 @@ public final class HgDataFile extends Revlog {
 				throw new HgInvalidFileException("Working copy read failed", ex, f);
 			} finally {
 				progress.done();
-				if (fc != null) {
-					try {
-						fc.close();
-					} catch (IOException ex) {
-						getRepo().getSessionContext().getLog().dump(getClass(), Warn, ex, null);
-					}
+				if (fis != null) {
+					new FileUtils(getRepo().getSessionContext().getLog()).closeQuietly(fis);
 				}
 			}
 		} else {

@@ -66,7 +66,7 @@ public class RegularFileInfo implements FileInfo {
 	}
 
 	public int lastModified() {
-		// TODO post-1.0 for symlinks, this returns incorrect mtime of the target file, not that of link itself
+		// TODO [post-1.1] for symlinks, this returns incorrect mtime of the target file, not that of link itself
 		// Besides, timestame if link points to non-existing file is 0.
 		// However, it result only in slowdown in WCStatusCollector, as it need to perform additional content check
 		return (int) (file.lastModified() / 1000);
@@ -84,6 +84,10 @@ public class RegularFileInfo implements FileInfo {
 			if (isSymlink()) {
 				return new ByteArrayReadableChannel(getLinkTargetBytes());
 			} else {
+				// TODO [2.0 API break]  might be good idea replace channel with smth 
+				// else, to ensure #close() disposes FileDescriptor. Now
+				// FD has usage count of two (new FileInputStream + getChannel),
+				// and FileChannel#close decrements only 1, second has to wait FIS#finalize() 
 				return new FileInputStream(file).getChannel();
 			}
 		} catch (FileNotFoundException ex) {

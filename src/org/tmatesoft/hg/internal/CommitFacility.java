@@ -196,8 +196,8 @@ public final class CommitFacility {
 		}
 		String oldBranchValue = DirstateReader.readBranch(repo);
 		String newBranchValue = branch == null ? DEFAULT_BRANCH_NAME : branch;
-		// TODO undo.dirstate and undo.branch as described in http://mercurial.selenic.com/wiki/FileFormats#undo..2A
 		if (!oldBranchValue.equals(newBranchValue)) {
+			// prepare undo.branch as described in http://mercurial.selenic.com/wiki/FileFormats#undo..2A
 			File branchFile = transaction.prepare(repo.getRepositoryFile(Branch), repo.getRepositoryFile(UndoBranch));
 			FileOutputStream fos = null;
 			try {

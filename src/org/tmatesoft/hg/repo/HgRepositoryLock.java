@@ -191,10 +191,11 @@ public class HgRepositoryLock {
 	}
 
 	private static byte[] read(File f) throws IOException {
-		FileChannel fc = new FileInputStream(f).getChannel();
+		FileInputStream fis = new FileInputStream(f);
+		FileChannel fc = fis.getChannel();
 		ByteBuffer bb = ByteBuffer.allocate(Internals.ltoi(fc.size()));
 		fc.read(bb);
-		fc.close();
+		fis.close();
 		return bb.array();
 	}
 }

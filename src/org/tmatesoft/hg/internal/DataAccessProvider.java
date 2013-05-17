@@ -79,18 +79,18 @@ public class DataAccessProvider {
 			return new DataAccess();
 		}
 		try {
-			FileChannel fc = new FileInputStream(f).getChannel(); // FIXME SHALL CLOSE FIS, not only channel
-			long flen = fc.size();
+			FileInputStream fis = new FileInputStream(f);
+			long flen = f.length();
 			if (!shortRead && flen > mapioMagicBoundary) {
 				// TESTS: bufLen of 1024 was used to test MemMapFileAccess
-				return new MemoryMapFileAccess(fc, flen, mapioBufSize, context.getLog());
+				return new MemoryMapFileAccess(fis, flen, mapioBufSize, context.getLog());
 			} else {
 				// XXX once implementation is more or less stable,
 				// may want to try ByteBuffer.allocateDirect() to see
 				// if there's any performance gain. 
 				boolean useDirectBuffer = false; // XXX might be another config option
 				// TESTS: bufferSize of 100 was used to check buffer underflow states when readBytes reads chunks bigger than bufSize
-				return new FileAccess(fc, flen, bufferSize, useDirectBuffer, context.getLog());
+				return new FileAccess(fis, flen, bufferSize, useDirectBuffer, context.getLog());
 			}
 		} catch (IOException ex) {
 			// unlikely to happen, we've made sure file exists.
@@ -109,6 +109,7 @@ public class DataAccessProvider {
 	}
 
 	private static class MemoryMapFileAccess extends DataAccess {
+		private FileInputStream fileStream;
 		private FileChannel fileChannel;
 		private long position = 0; // always points to buffer's absolute position in the file
 		private MappedByteBuffer buffer;
@@ -116,8 +117,9 @@ public class DataAccessProvider {
 		private final int memBufferSize;
 		private final LogFacility logFacility;
 
-		public MemoryMapFileAccess(FileChannel fc, long channelSize, int bufferSize, LogFacility log) {
-			fileChannel = fc;
+		public MemoryMapFileAccess(FileInputStream fis, long channelSize, int bufferSize, LogFacility log) {
+			fileStream = fis;
+			fileChannel = fis.getChannel();
 			size = channelSize;
 			logFacility = log;
 			memBufferSize = bufferSize > channelSize ? (int) channelSize : bufferSize; // no reason to waste memory more than there's data 
@@ -241,27 +243,26 @@ public class DataAccessProvider {
 		@Override
 		public void done() {
 			buffer = null;
-			if (fileChannel != null) {
-				try {
-					fileChannel.close();
-				} catch (IOException ex) {
-					logFacility.dump(getClass(), Warn, ex, null);
-				}
-				fileChannel = null;
+			if (fileStream != null) {
+				new FileUtils(logFacility).closeQuietly(fileStream);
+				fileStream = null;
+				fileChannel = null; // channel is closed together with stream
 			}
 		}
 	}
 
 	// (almost) regular file access - FileChannel and buffers.
 	private static class FileAccess extends DataAccess {
+		private FileInputStream fileStream;
 		private FileChannel fileChannel;
 		private ByteBuffer buffer;
 		private long bufferStartInFile = 0; // offset of this.buffer in the file.
 		private final long size;
 		private final LogFacility logFacility;
 
-		public FileAccess(FileChannel fc, long channelSize, int bufferSizeHint, boolean useDirect, LogFacility log) {
-			fileChannel = fc;
+		public FileAccess(FileInputStream fis, long channelSize, int bufferSizeHint, boolean useDirect, LogFacility log) {
+			fileStream = fis;
+			fileChannel = fis.getChannel();
 			size = channelSize;
 			logFacility = log;
 			final int capacity = size < bufferSizeHint ? (int) size : bufferSizeHint;
@@ -372,15 +373,10 @@ public class DataAccessProvider {
 
 		@Override
 		public void done() {
-			if (buffer != null) {
-				buffer = null;
-			}
-			if (fileChannel != null) {
-				try {
-					fileChannel.close();
-				} catch (IOException ex) {
-					logFacility.dump(getClass(), Warn, ex, null);
-				}
+			buffer = null;
+			if (fileStream != null) {
+				new FileUtils(logFacility).closeQuietly(fileStream);
+				fileStream = null;
 				fileChannel = null;
 			}
 		}
