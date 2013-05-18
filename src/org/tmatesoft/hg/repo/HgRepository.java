@@ -113,14 +113,6 @@ public final class HgRepository implements SessionContext.Source {
 
 	private final org.tmatesoft.hg.internal.Internals impl;
 	
-	/*
-	 * TODO [post-1.0] move to a better place, e.g. WorkingCopy container that tracks both dirstate and branches 
-	 * (and, perhaps, undo, lastcommit and other similar information), and is change listener so that we don't need to
-	 * worry about this cached value become stale
-	 */
-	private String wcBranch;
-
-	
 	HgRepository(String repositoryPath) {
 		workingDir = null;
 		repoLocation = repositoryPath;
@@ -274,9 +266,13 @@ public final class HgRepository implements SessionContext.Source {
 	 * @throws HgInvalidControlFileException if attempt to read branch name failed.
 	 */
 	public String getWorkingCopyBranchName() throws HgInvalidControlFileException {
-		if (wcBranch == null) {
-			wcBranch = DirstateReader.readBranch(impl);
-		}
+		/*
+		 * TODO [post-1.1] 1) cache value (now if cached, is not updated after commit)
+		 * 2) move to a better place, e.g. WorkingCopy container that tracks both dirstate and branches 
+		 * (and, perhaps, undo, lastcommit and other similar information), and is change listener so that we don't need to
+		 * worry about this cached value become stale
+		 */
+		String wcBranch = DirstateReader.readBranch(impl);
 		return wcBranch;
 	}
 
