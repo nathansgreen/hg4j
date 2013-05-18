@@ -85,6 +85,10 @@ public class RevlogStream {
 		this.indexFile = indexFile;
 		changeTracker = repo.getRevlogTracker(indexFile);
 	}
+	
+	public boolean exists() {
+		return indexFile.exists();
+	}
 
 	/**
 	 * @param shortRead pass <code>true</code> to indicate intention to read few revisions only (as opposed to reading most of/complete revlog)
@@ -408,6 +412,10 @@ public class RevlogStream {
 		}
 		assert revision != null;
 		assert !revision.isNull();
+		// next effort doesn't seem to be of any value at least in case of regular commit
+		// as the next call to #initOutline would recognize the file change and reload complete revlog anyway
+		// OTOH, there might be transaction strategy that doesn't update the file until its completion,
+		// while it's handy to know new revisions meanwhile.
 		int[] baseRevisionsCopy = new int[baseRevisions.length + 1];
 		System.arraycopy(baseRevisions, 0, baseRevisionsCopy, 0, baseRevisions.length);
 		baseRevisionsCopy[baseRevisions.length] = baseRevisionIndex;

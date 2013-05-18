@@ -75,16 +75,11 @@ public final class HgDataFile extends Revlog {
 		path = filePath;
 	}
 
-	/*package-local*/HgDataFile(HgRepository hgRepo, Path filePath) {
-		super(hgRepo);
-		path = filePath;
-	}
-
 	// exists is not the best name possible. now it means no file with such name was ever known to the repo.
 	// it might be confused with files existed before but lately removed. TODO HgFileNode.exists makes more sense.
 	// or HgDataFile.known()
 	public boolean exists() {
-		return content != null; // XXX need better impl
+		return content.exists();
 	}
 
 	/**

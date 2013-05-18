@@ -44,6 +44,7 @@ public abstract class Transaction {
 	/**
 	 * Record the file is going to be modified during this transaction, obtain actual
 	 * destination to write to.
+	 * The file to be modified not necessarily exists, might be just a name of an added file  
 	 */
 	public abstract File prepare(File f) throws HgIOException;
 	/**

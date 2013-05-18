@@ -29,19 +29,22 @@ import java.util.WeakHashMap;
 public class RevlogChangeMonitor {
 	
 	private final WeakHashMap<File, Long> lastKnownSize;
+	private final WeakHashMap<File, Long> lastKnownTime;
 	private final File soleFile;
-	private long soleFileLength = -1;
+	private long soleFileSize = -1;
+	private long soleFileTime = -1;
 	
-	// use single for multiple files. TODO repository/session context shall provide
+	// use single for multiple files. TODO [1.2] repository/session context shall provide
 	// alternative (configurable) implementations, so that Java7 users may supply better one
 	public RevlogChangeMonitor() {
 		lastKnownSize = new WeakHashMap<File, Long>();
+		lastKnownTime= new WeakHashMap<File, Long>();
 		soleFile = null;
 	}
 	
 	public RevlogChangeMonitor(File f) {
 		assert f != null;
-		lastKnownSize = null;
+		lastKnownSize = lastKnownTime = null;
 		soleFile = f;
 	}
 	
@@ -49,9 +52,11 @@ public class RevlogChangeMonitor {
 		assert f != null;
 		if (lastKnownSize == null) {
 			assert f == soleFile;
-			soleFileLength = f.length();
+			soleFileSize = f.length();
+			soleFileTime = f.lastModified();
 		} else {
 			lastKnownSize.put(f, f.length());
+			lastKnownTime.put(f, f.lastModified());
 		}
 	}
 	
@@ -59,13 +64,14 @@ public class RevlogChangeMonitor {
 		assert f != null;
 		if (lastKnownSize == null) {
 			assert f == soleFile;
-			return soleFileLength != f.length();
+			return soleFileSize != f.length() || soleFileTime != f.lastModified();
 		} else {
 			Long lastSize = lastKnownSize.get(f);
-			if (lastSize == null) {
+			Long lastTime = lastKnownTime.get(f);
+			if (lastSize == null || lastTime == null) {
 				return true;
 			}
-			return f.length() != lastSize;
+			return f.length() != lastSize || f.lastModified() != lastTime;
 		}
 	}
 }

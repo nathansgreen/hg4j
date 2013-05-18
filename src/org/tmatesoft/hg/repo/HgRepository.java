@@ -242,9 +242,7 @@ public final class HgRepository implements SessionContext.Source {
 
 	public HgDataFile getFileNode(Path path) {
 		RevlogStream content = impl.resolveStoreFile(path);
-		if (content == null) {
-			return new HgDataFile(this, path);
-		}
+		assert content != null;
 		return new HgDataFile(this, path, content);
 	}
 

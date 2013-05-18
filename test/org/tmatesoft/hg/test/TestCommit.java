@@ -37,6 +37,7 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CommitFacility;
+import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSource;
 import org.tmatesoft.hg.internal.FileContentSupplier;
 import org.tmatesoft.hg.internal.Internals;
@@ -138,6 +139,7 @@ public class TestCommit {
 		final int parentCsetRevIndex = hgRepo.getChangelog().getLastRevision();
 		HgChangeset parentCset = new HgLogCommand(hgRepo).range(parentCsetRevIndex, parentCsetRevIndex).execute().get(0);
 		assertEquals("[sanity]", DEFAULT_BRANCH_NAME, parentCset.getBranch());
+		assertEquals("[sanity]", DEFAULT_BRANCH_NAME, hgRepo.getWorkingCopyBranchName());
 		//
 		RepoUtils.modifyFileAppend(fileD, "A CHANGE\n");
 		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), parentCsetRevIndex);
@@ -154,6 +156,9 @@ public class TestCommit {
 		errorCollector.assertEquals(c1.getNodeid(), commitRev1);
 		errorCollector.assertEquals("branch1", c1.getBranch());
 		errorCollector.assertEquals("FIRST", c1.getComment());
+		//
+		// check if cached value in hgRepo got updated
+		errorCollector.assertEquals("branch1", hgRepo.getWorkingCopyBranchName());
 		//
 		assertHgVerifyOk(repoLoc);
 	}
@@ -341,6 +346,92 @@ public class TestCommit {
 		errorCollector.assertFalse(hgRepo.getBranches().getBranch(branch) == null);
 		errorCollector.assertTrue(hgRepo.getTags().tagged(tag).contains(commit));
 		errorCollector.assertTrue(hgRepo.getTags().tags(commit).contains(tag));
+	}
+	
+	@Test
+	public void testAddedFilesGetStream() throws Exception {
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit-addfile-stream", false);
+		final File newFile = new File(repoLoc, "xx");
+		final byte[] newFileContent = "xyz".getBytes();
+		RepoUtils.createFile(newFile, newFileContent);
+		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		new HgAddRemoveCommand(hgRepo).add(Path.create("xx")).execute();
+		// save the reference to HgDataFile without valid RevlogStream (entry in the dirstate
+		// doesn't make it valid)
+		final HgDataFile newFileNode = hgRepo.getFileNode("xx");
+		assertFalse(newFileNode.exists());
+		HgCommitCommand cmd = new HgCommitCommand(hgRepo).message("FIRST");
+		Outcome r = cmd.execute();
+		errorCollector.assertTrue(r.isOk());
+		TestStatus.StatusCollector status = new TestStatus.StatusCollector();
+		new HgStatusCommand(hgRepo).all().execute(status);
+		errorCollector.assertTrue(status.getErrors().isEmpty());
+		errorCollector.assertTrue(status.get(Kind.Added).isEmpty());
+		errorCollector.assertTrue(status.get(newFileNode.getPath()).contains(Kind.Clean));
+		//
+		errorCollector.assertTrue(newFileNode.exists());
+		final ByteArrayChannel read1 = new ByteArrayChannel();
+		newFileNode.content(0, read1);
+		errorCollector.assertEquals("Read from existing HgDataFile instance", newFileContent, read1.toArray());
+		final ByteArrayChannel read2 = new ByteArrayChannel();
+		hgRepo.getFileNode(newFileNode.getPath()).content(0, read2);
+		errorCollector.assertEquals("Read from fresh HgDataFile instance", newFileContent, read2.toArray());
+	}
+	
+	@Test
+	public void testRollback() throws Exception {
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit-rollback", false);
+		final Path newFilePath = Path.create("xx");
+		final File newFile = new File(repoLoc, newFilePath.toString());
+		RepoUtils.createFile(newFile, "xyz");
+		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		HgDataFile dfB = hgRepo.getFileNode("b");
+		HgDataFile dfD = hgRepo.getFileNode("d");
+		assertTrue("[sanity]", dfB.exists());
+		assertTrue("[sanity]", dfD.exists());
+		final File modifiedFile = new File(repoLoc, "b");
+		RepoUtils.modifyFileAppend(modifiedFile, " 1 \n");
+		//
+		new HgAddRemoveCommand(hgRepo).add(newFilePath).remove(dfD.getPath()).execute();
+		//
+		TestStatus.StatusCollector status = new TestStatus.StatusCollector();
+		new HgStatusCommand(hgRepo).all().execute(status);
+		assertTrue(status.getErrors().isEmpty());
+		assertTrue(status.get(Kind.Added).contains(newFilePath));
+		assertTrue(status.get(Kind.Modified).contains(dfB.getPath()));
+		assertTrue(status.get(Kind.Removed).contains(dfD.getPath()));
+		assertEquals(DEFAULT_BRANCH_NAME, hgRepo.getWorkingCopyBranchName());
+		//
+		final int lastClogRevision = hgRepo.getChangelog().getLastRevision();
+		final int lastManifestRev = hgRepo.getManifest().getLastRevision();
+		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), lastClogRevision);
+		cf.add(hgRepo.getFileNode("xx"), new FileContentSupplier(hgRepo, newFile));
+		cf.add(dfB, new FileContentSupplier(hgRepo, modifiedFile));
+		cf.forget(dfD);
+		cf.branch("another-branch");
+		Transaction tr = newTransaction(hgRepo);
+		Nodeid commitRev = cf.commit("Commit to fail",  tr);
+		// with 1 second timestamp granularity, HgChangelog doesn't 
+		// recognize the fact the underlying file got changed twice within
+		// a second, doesn't discard new revision obtained via revisionAdded,
+		// and eventually fails trying to read more revisions than there're in the file
+		Thread.sleep(1000); // FIXME this is a hack to make test pass
+		tr.rollback();
+		//
+		errorCollector.assertEquals(lastClogRevision, hgRepo.getChangelog().getLastRevision());
+		errorCollector.assertEquals(lastManifestRev, hgRepo.getManifest().getLastRevision());
+		errorCollector.assertEquals(DEFAULT_BRANCH_NAME, DirstateReader.readBranch(Internals.getInstance(hgRepo)));
+		errorCollector.assertFalse(hgRepo.getChangelog().isKnown(commitRev));
+		errorCollector.assertFalse(hgRepo.getFileNode("xx").exists());
+		// check dirstate
+		status = new TestStatus.StatusCollector();
+		new HgStatusCommand(hgRepo).all().execute(status);
+		errorCollector.assertTrue(status.getErrors().isEmpty());
+		errorCollector.assertTrue(status.get(Kind.Added).contains(newFilePath));
+		errorCollector.assertTrue(status.get(Kind.Modified).contains(dfB.getPath()));
+		errorCollector.assertTrue(status.get(Kind.Removed).contains(dfD.getPath()));
+		
+		assertHgVerifyOk(repoLoc);
 	}
 	
 	private void assertHgVerifyOk(File repoLoc) throws InterruptedException, IOException {

@@ -17,11 +17,9 @@
 package org.tmatesoft.hg.internal;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.ref.SoftReference;
 import java.util.HashMap;
 
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -57,14 +55,14 @@ public final class RevlogStreamFactory {
 	 * @param path - normalized file name
 	 * @return <code>null</code> if path doesn't resolve to a existing file
 	 */
-	/*package-local*/ RevlogStream resolveStoreFile(Path path) {
+	/*package-local*/ RevlogStream getStoreFile(Path path, boolean onlyIfExists) {
 		final SoftReference<RevlogStream> ref = shallCacheRevlogs() ? streamsCache.get(path) : null;
 		RevlogStream cached = ref == null ? null : ref.get();
 		if (cached != null) {
 			return cached;
 		}
 		File f = repo.getFileFromDataDir(path);
-		if (f.exists()) {
+		if (!onlyIfExists || f.exists()) {
 			RevlogStream s = create(f);
 			if (shallCacheRevlogs()) {
 				streamsCache.put(path, new SoftReference<RevlogStream>(s));
@@ -74,23 +72,6 @@ public final class RevlogStreamFactory {
 		return null;
 	}
 	
-	/*package-local*/ RevlogStream createStoreFile(Path path) throws HgInvalidControlFileException {
-		File f = repo.getFileFromDataDir(path);
-		try {
-			if (!f.exists()) {
-				f.getParentFile().mkdirs();
-				f.createNewFile();
-			}
-			RevlogStream s = create(f);
-			if (shallCacheRevlogs()) {
-				streamsCache.put(path, new SoftReference<RevlogStream>(s));
-			}
-			return s;
-		} catch (IOException ex) {
-			throw new HgInvalidControlFileException("Can't create a file in the storage", ex, f);
-		}
-	}
-
 	private boolean shallCacheRevlogs() {
 		return streamsCache != null;
 	}

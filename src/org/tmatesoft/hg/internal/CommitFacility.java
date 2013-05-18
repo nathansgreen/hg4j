@@ -146,15 +146,9 @@ public final class CommitFacility {
 				// NEW FILE
 				fp = new Pair<Integer, Integer>(NO_REVISION, NO_REVISION);
 			}
-			RevlogStream contentStream;
-			if (df.exists()) {
-				contentStream = repo.getImplAccess().getStream(df);
-			} else {
-				contentStream = repo.createStoreFile(df.getPath());
+			RevlogStream contentStream = repo.getImplAccess().getStream(df);
+			if (!df.exists()) {
 				newlyAddedFiles.put(df.getPath(), contentStream);
-				// FIXME df doesn't get df.content updated, and clients
-				// that would attempt to access newly added file after commit would fail
-				// (despite the fact the file is in there)
 			}
 			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream, transaction);
 			Nodeid fileRev = fileWriter.addRevision(bds, clogRevisionIndex, fp.first(), fp.second());

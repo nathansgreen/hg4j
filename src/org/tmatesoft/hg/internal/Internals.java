@@ -32,7 +32,6 @@ import java.util.StringTokenizer;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepoConfig.ExtensionsSection;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRepositoryFiles;
@@ -493,11 +492,7 @@ public final class Internals implements SessionContext.Source {
 	}
 
 	public RevlogStream resolveStoreFile(Path path) {
-		return streamProvider.resolveStoreFile(path);
-	}
-	
-	/*package-local*/ RevlogStream createStoreFile(Path path) throws HgInvalidControlFileException {
-		return streamProvider.createStoreFile(path);
+		return streamProvider.getStoreFile(path, false);
 	}
 
 	// marker method

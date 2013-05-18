@@ -48,7 +48,13 @@ public final class COWTransaction extends Transaction {
 	public File prepare(File f) throws HgIOException {
 		if (!f.exists()) {
 			record(f, null);
-			return f;
+			try {
+				f.getParentFile().mkdirs();
+				f.createNewFile();
+				return f;
+			} catch (IOException ex) {
+				throw new HgIOException("Failed to create new file", ex, f);
+			}
 		}
 		if (known(f)) {
 			return f;
@@ -123,6 +129,10 @@ public final class COWTransaction extends Transaction {
 					String msg = String.format("Transaction rollback failed, could not rename backup %s back to %s", e.backup.getName(), e.origin.getName());
 					throw new HgIOException(msg, e.origin);
 				}
+				// renameTo() doesn't update timestamp, while the rest of the code relies
+				// on file timestamp to detect revlog changes. Rollback *is* a change,
+				// even if it brings the old state.
+				e.origin.setLastModified(System.currentTimeMillis());
 			}
 			success.add(e);
 			it.remove();
