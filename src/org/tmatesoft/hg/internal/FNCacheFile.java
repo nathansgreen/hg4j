@@ -68,7 +68,7 @@ public class FNCacheFile {
 		// names in fncache are in local encoding, shall translate to unicode
 		new LineReader(f, repo.getSessionContext().getLog(), repo.getFilenameEncoding()).read(new LineReader.SimpleLineCollector(), entries);
 		for (String e : entries) {
-			// FIXME plain wrong, need either to decode paths and strip off .i/.d or (if keep names as is) change write()
+			// XXX plain wrong, need either to decode paths and strip off .i/.d or (if keep names as is) change write()
 			files.add(pathFactory.path(e));
 		}
 	}

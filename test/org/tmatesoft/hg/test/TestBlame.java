@@ -255,7 +255,7 @@ public class TestBlame {
 		}
 	}
 
-	// FIXME HgWorkingCopyStatusCollector (and HgStatusCollector), with their ancestors (rev 59/69) have examples
+	// TODO HgWorkingCopyStatusCollector (and HgStatusCollector), with their ancestors (rev 59/69) have examples
 	// of *incorrect* assignment of common lines (like "}") - our impl doesn't process common lines in any special way
 	// while original diff lib does. Would be nice to behave as close to original, as possible.
 	

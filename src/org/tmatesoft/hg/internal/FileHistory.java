@@ -30,7 +30,7 @@ import org.tmatesoft.hg.repo.HgRepository;
  * History of a file, with copy/renames, and corresponding revision information.
  * Facility for file history iteration. 
  * 
- * FIXME [post-1.1] Utilize in HgLogCommand and anywhere else we need to follow file history
+ * TODO [post-1.1] Utilize in HgLogCommand and anywhere else we need to follow file history
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

@@ -75,8 +75,6 @@ public class TestCommit {
 		//
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
 		CommitFacility cf = new CommitFacility(Internals.getInstance(hgRepo), 0);
-		// FIXME test diff for processing changed newlines (ie \r\n -> \n or vice verse) - if a whole line or 
-		// just changed endings are in the patch!
 		HgDataFile df = hgRepo.getFileNode("file1");
 		cf.add(df, new ByteArrayDataSource("hello\nworld".getBytes()));
 		Transaction tr = newTransaction(hgRepo);
@@ -317,6 +315,42 @@ public class TestCommit {
 		hgRepo = new HgLookup().detect(repoLoc);
 		errorCollector.assertEquals(activeBookmark, hgRepo.getBookmarks().getActiveBookmarkName());
 		errorCollector.assertEquals(c, hgRepo.getBookmarks().getRevision(activeBookmark));
+	}
+
+	/**
+	 * from the wiki:
+	 * "active bookmarks are automatically updated when committing to the changeset they are pointing to"
+	 * Synopsis: commit 1 (c1), hg bookmark active (points to commit1), make commit 2, hg bookmark -f -r c1 active, commit 3, check active still points to c1 
+	 */
+	@Test
+	public void testNoBookmarkUpdate() throws Exception {
+		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-no-bookmark-upd", false);
+		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		assertNull("[sanity]", hgRepo.getBookmarks().getActiveBookmarkName());
+		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), repoLoc);
+		String activeBookmark = "bm1";
+		eh.run("hg", "bookmarks", activeBookmark);
+		assertEquals("Bookmarks has to reload", activeBookmark, hgRepo.getBookmarks().getActiveBookmarkName());
+		Nodeid initialBookmarkRevision = hgRepo.getBookmarks().getRevision(activeBookmark); // c1
+		assertEquals("[sanity]", initialBookmarkRevision, hgRepo.getWorkingCopyParents().first());
+
+		File fileD = new File(repoLoc, "d");
+		assertTrue("[sanity]", fileD.canRead());
+		RepoUtils.modifyFileAppend(fileD, " 1 \n");
+		HgCommitCommand cmd = new HgCommitCommand(hgRepo).message("FIRST");
+		Outcome r = cmd.execute();
+		errorCollector.assertTrue(r.isOk());
+		Nodeid c2 = cmd.getCommittedRevision();
+		errorCollector.assertEquals(c2, hgRepo.getBookmarks().getRevision(activeBookmark));
+		//
+		eh.run("hg", "bookmark", activeBookmark, "--force", "--rev", initialBookmarkRevision.toString());
+		//
+		RepoUtils.modifyFileAppend(fileD, " 2 \n");
+		cmd = new HgCommitCommand(hgRepo).message("SECOND");
+		r = cmd.execute();
+		errorCollector.assertTrue(r.isOk());
+		//Nodeid c3 = cmd.getCommittedRevision();
+		errorCollector.assertEquals(initialBookmarkRevision, hgRepo.getBookmarks().getRevision(activeBookmark));
 	}
 
 	@Test

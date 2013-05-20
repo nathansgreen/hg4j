@@ -39,9 +39,6 @@ import org.tmatesoft.hg.util.Path;
  * Mercurial Queues Support. 
  * Access to MqExtension functionality.
  * 
- * FIXME check we don't hold any mq files for too long, close them, use
- * the same lock mechanism as mq does (if any). Check if MQ uses Mercurial's store lock
- * 
  * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -65,6 +62,8 @@ public class MqManager {
 	 * @return <code>this</code> for convenience
 	 */
 	public MqManager refresh() throws HgInvalidControlFileException {
+		// MQ doesn't seem to use any custom lock mechanism.
+		// MQ uses Mercurial's wc/store lock when updating repository (strip/new queue)
 		applied = allKnown = Collections.emptyList();
 		queueNames = Collections.emptyList();
 		final LogFacility log = repo.getSessionContext().getLog();

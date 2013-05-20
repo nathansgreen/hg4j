@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.internal;
 
-import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,7 +27,6 @@ import java.nio.charset.Charset;
 import java.util.Collection;
 
 import org.tmatesoft.hg.repo.HgInvalidFileException;
-import org.tmatesoft.hg.repo.ext.MqManager;
 import org.tmatesoft.hg.util.LogFacility;
 
 /**
@@ -125,17 +122,11 @@ public final class LineReader {
 			} catch (IOException ex) {
 				throw new HgInvalidFileException(ex.getMessage(), ex, file);
 			} finally {
-				if (statusFileReader != null) {
-					try {
-						statusFileReader.close();
-					} catch (IOException ex) {
-						log.dump(MqManager.class, Warn, ex, null);
-					}
-				}
+				new FileUtils(log).closeQuietly(statusFileReader);
 //				try {
 //					consumer.end(file, paramObj);
 //				} catch (IOException ex) {
-//					log.warn(MqManager.class, ex, null);
+//					log.warn(getClass(), ex, null);
 //				}
 			}
 		}

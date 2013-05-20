@@ -167,10 +167,7 @@ public final class HgBookmarks {
 		}
 		Nodeid activeRev = getRevision(activeBookmark);
 		if (!activeRev.equals(p1) && !activeRev.equals(p2)) {
-			// from the wiki:
-			// "active bookmarks are automatically updated when committing to the changeset they are pointing to"
-			// FIXME: test ci 1, hg bookmark active, ci 2, hg bookmark -f -r 0 active, ci 3, check active still points to r0 
-			return;
+			return; // TestCommit#testNoBookmarkUpdate
 		}
 		if (child.equals(activeRev)) {
 			return;

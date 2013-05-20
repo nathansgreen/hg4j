@@ -82,6 +82,10 @@ public final class FileUtils {
 			String m = String.format("Failed to copy %s to %s", from.getName(), to.getName());
 			throw new HgIOException(m, ex, from);
 		}
+		/* Copy of cpython's 00changelog.d, 20Mb+
+		 * Linux&Windows: 300-400 ms,
+		 * Windows uncached run: 1.6 seconds
+		 */
 	}
 	
 	public void closeQuietly(Closeable stream) {
@@ -93,13 +97,5 @@ public final class FileUtils {
 				log.dump(getClass(), Severity.Warn, ex, "Exception while closing stream quietly");
 			}
 		}
-	}
-
-	public static void main(String[] args) throws Exception {
-		final long start = System.nanoTime();
-		final File src = new File(".../hg/cpython/.hg/store/00changelog.d");
-		copyFile(src, new File("/tmp/zxczxczxc234"));
-		final long end = System.nanoTime();
-		System.out.printf("Copy of %,d bytes took %d ms", src.length(), (end-start)/1000000);
 	}
 }

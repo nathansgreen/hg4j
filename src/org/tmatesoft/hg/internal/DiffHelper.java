@@ -20,8 +20,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.tmatesoft.hg.repo.HgInvalidStateException;
-
 /**
  * Mercurial cares about changes only up to the line level, e.g. a simple file version dump in manifest looks like (RevlogDump output):
  * 
@@ -201,9 +199,7 @@ public class DiffHelper<T extends DiffHelper.ChunkSequence<?>> {
 				} else {
 					assert changeStartS2 == matchStartSeq2;
 					if (matchStartSeq1 > 0 || matchStartSeq2 > 0) {
-						// FIXME perhaps, exception is too much for the case
-						// once diff is covered with tests, replace with assert false : msg; 
-						throw new HgInvalidStateException(String.format("adjustent equal blocks %d, %d and %d,%d", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2));
+						assert false : String.format("adjustent equal blocks %d, %d and %d,%d", changeStartS1, matchStartSeq1, changeStartS2, matchStartSeq2);
 					}
 				}
 			}

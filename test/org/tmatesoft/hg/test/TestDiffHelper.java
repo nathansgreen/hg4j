@@ -118,6 +118,42 @@ public class TestDiffHelper {
 		diff.findMatchingBlocks(mc = new MatchCollector<CharSequence>());
 		assertEquals(3, mc.matchCount()); // bc, e, g
 	}
+
+	@Test
+	public void testChangedEOL() {
+		DiffHelper<LineSequence> diffHelper = new DiffHelper<LineSequence>();
+		MatchCollector<LineSequence> mc; DeltaCollector dc;
+		// all lines changed
+		diffHelper.init(newlines("one\ntwo\nthree\n".getBytes()), newlines("one\r\ntwo\r\nthree\r\n".getBytes()));
+		diffHelper.findMatchingBlocks(mc = new MatchCollector<LineSequence>());
+		assertEquals(0, mc.matchCount());
+		diffHelper.findMatchingBlocks(dc = new DeltaCollector());
+		assertEquals(0, dc.unchangedCount());
+		assertEquals(1, dc.deletedCount());
+		assertTrue(dc.deletedLine(0));
+		assertTrue(dc.deletedLine(1));
+		assertTrue(dc.deletedLine(2));
+		assertEquals(1, dc.addedCount());
+		assertTrue(dc.addedLine(0));
+		assertTrue(dc.addedLine(1));
+		assertTrue(dc.addedLine(2));
+		// one line changed
+		diffHelper.init(newlines("one\ntwo\nthree\n".getBytes()), newlines("one\ntwo\r\nthree\n".getBytes()));
+		diffHelper.findMatchingBlocks(mc = new MatchCollector<LineSequence>());
+		assertEquals(2, mc.matchCount());
+		assertTrue(mc.originLineMatched(0));
+		assertTrue(mc.targetLineMatched(0));
+		assertFalse(mc.originLineMatched(1));
+		assertFalse(mc.targetLineMatched(1));
+		assertTrue(mc.originLineMatched(2));
+		assertTrue(mc.targetLineMatched(2));
+		diffHelper.findMatchingBlocks(dc = new DeltaCollector());
+		assertEquals(2, dc.unchangedCount());
+		assertEquals(1, dc.deletedCount());
+		assertTrue(dc.deletedLine(1));
+		assertEquals(1, dc.addedCount());
+		assertTrue(dc.addedLine(1));
+	}
 	
 	// range is comprised of 3 values, range length always last, range start comes at index o (either 0 or 1)
 	static boolean includes(IntVector ranges, int o, int ln) {
@@ -188,20 +224,24 @@ public class TestDiffHelper {
 			same.add(s1From, s2From, length);
 		}
 
+		// return number of regions that didn't change
 		int unchangedCount() {
 			return same.size() / 3;
 		}
 
+		// return number of added regions
 		int addedCount() {
 			return added.size() / 3;
 		}
-
+		// return number of deleted regions
 		int deletedCount() {
 			return deleted.size() / 3;
 		}
+		// answer if 0-based line is marked as added
 		boolean addedLine(int ln) {
 			return includes(added, 1, ln);
 		}
+		// answer if 0-based line is marked as deleted
 		boolean deletedLine(int ln) {
 			return includes(deleted, 1, ln);
 		}
