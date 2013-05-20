@@ -196,7 +196,7 @@ public final class CommitFacility {
 			FileOutputStream fos = null;
 			try {
 				fos = new FileOutputStream(branchFile);
-				fos.write(newBranchValue.getBytes(EncodingHelper.getUTF8()));
+				fos.write(newBranchValue.getBytes(EncodingHelper.getUTF8().name())); // XXX Java 1.5
 				fos.flush();
 				fos.close();
 				fos = null;

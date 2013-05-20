@@ -23,6 +23,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -59,22 +60,27 @@ public class RepoInitializer {
 		return requiresFlags;
 	}
 
-	public void initEmptyRepository(File repoDir) throws IOException {
+	public void initEmptyRepository(File repoDir) throws HgIOException {
 		repoDir.mkdirs();
-		FileOutputStream requiresFile = new FileOutputStream(new File(repoDir, "requires"));
-		StringBuilder sb = new StringBuilder(40);
-		sb.append("revlogv1\n");
-		if ((requiresFlags & STORE) != 0) {
-			sb.append("store\n");
+		final File requiresFile = new File(repoDir, "requires");
+		try {
+			FileOutputStream requiresStream = new FileOutputStream(requiresFile);
+			StringBuilder sb = new StringBuilder(40);
+			sb.append("revlogv1\n");
+			if ((requiresFlags & STORE) != 0) {
+				sb.append("store\n");
+			}
+			if ((requiresFlags & FNCACHE) != 0) {
+				sb.append("fncache\n");
+			}
+			if ((requiresFlags & DOTENCODE) != 0) {
+				sb.append("dotencode\n");
+			}
+			requiresStream.write(sb.toString().getBytes());
+			requiresStream.close();
+		} catch (IOException ex) {
+			throw new HgIOException("Failed to initialize empty repo", ex, requiresFile);
 		}
-		if ((requiresFlags & FNCACHE) != 0) {
-			sb.append("fncache\n");
-		}
-		if ((requiresFlags & DOTENCODE) != 0) {
-			sb.append("dotencode\n");
-		}
-		requiresFile.write(sb.toString().getBytes());
-		requiresFile.close();
 		new File(repoDir, "store").mkdir(); // with that, hg verify says ok.
 	}
 

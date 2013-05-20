@@ -64,7 +64,9 @@ public class WorkingCopyContent implements DataSerializer.DataSource {
 						return rv;
 					} catch (HgIOException ex) {
 						failure[0] = ex;
-						throw new IOException(ex);
+						IOException e = new IOException();
+						ex.initCause(ex); // XXX Java 1.5
+						throw e;
 					}
 				}
 			});

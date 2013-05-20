@@ -118,7 +118,7 @@ public class HgLookup implements SessionContext.Source {
 			String server = null;
 			if (hgRepo != null && !hgRepo.isInvalid()) {
 				PathsSection ps = hgRepo.getConfiguration().getPaths();
-				server = key == null || key.trim().isEmpty() ? ps.getDefault() : ps.getString(key, null);
+				server = key == null || key.trim().length() == 0 ? ps.getDefault() : ps.getString(key, null); // XXX Java 1.5 isEmpty() 
 			} else if (key == null || key.trim().length() == 0) {
 				throw new HgBadArgumentException("Can't look up empty key in a global configuration", null);
 			}

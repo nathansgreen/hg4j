@@ -63,7 +63,9 @@ public class FileSystemHelper {
 		try {
 			execHelper.exec(command);
 		} catch (InterruptedException ex) {
-			throw new IOException(ex);
+			IOException e = new IOException();
+			ex.initCause(ex); // XXX Java 1.5
+			throw e;
 		}
 	}
 	
@@ -77,7 +79,9 @@ public class FileSystemHelper {
 		try {
 			execHelper.exec(command);
 		} catch (InterruptedException ex) {
-			throw new IOException(ex);
+			IOException e = new IOException();
+			ex.initCause(ex); // XXX Java 1.5
+			throw e;
 		}
 	}
 
@@ -90,12 +94,14 @@ public class FileSystemHelper {
 		String result = null;
 		try {
 			result = execHelper.exec(command).toString().trim();
-			if (result.isEmpty()) {
+			if (result.length() == 0) { // XXX Java 1.5 isEmpty()
 				return defaultValue;
 			}
 			return Integer.parseInt(result, 8);
 		} catch (InterruptedException ex) {
-			throw new IOException(ex);
+			IOException e = new IOException();
+			ex.initCause(ex); // XXX Java 1.5
+			throw e;
 		} catch (NumberFormatException ex) {
 			ctx.getLog().dump(getClass(), Warn, ex, String.format("Bad value for access rights:%s", result));
 			return defaultValue;

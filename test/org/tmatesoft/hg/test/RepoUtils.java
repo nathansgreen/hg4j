@@ -26,6 +26,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.repo.HgRepository;
 
@@ -36,7 +37,7 @@ import org.tmatesoft.hg.repo.HgRepository;
  */
 public class RepoUtils {
 
-	static File initEmptyTempRepo(String dirName) throws IOException {
+	static File initEmptyTempRepo(String dirName) throws IOException, HgIOException {
 		File dest = createEmptyDir(dirName);
 		RepoInitializer ri = new RepoInitializer();
 		ri.setRequires(STORE | FNCACHE | DOTENCODE);

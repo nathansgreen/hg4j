@@ -178,17 +178,12 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			pathFactory = ctx.getPathFactory();
 		}
 
-		public void initEmptyRepository() throws IOException {
+		public void initEmptyRepository() throws HgIOException, HgRepositoryNotFoundException {
 			repoInit.initEmptyRepository(hgDir);
-			try {
-				assert (repoInit.getRequires() & FNCACHE) != 0;
-				fncacheFile = new FNCacheFile(Internals.getInstance(new HgLookup(ctx).detect(hgDir)));
-			} catch (HgRepositoryNotFoundException ex) {
-				// SHALL NOT HAPPEN provided we initialized empty repository successfully
-				// TODO perhaps, with WriteDownMate moving to a more appropriate location,
-				// we could instantiate HgRepository (or Internals) by other means, without exception?
-				throw new IOException("Can't access fncache for newly created repository", ex);
-			}
+			assert (repoInit.getRequires() & FNCACHE) != 0;
+			// XXX perhaps, with WriteDownMate moving to a more appropriate location,
+			// we could instantiate HgRepository (or Internals) by other means, without exception?
+			fncacheFile = new FNCacheFile(Internals.getInstance(new HgLookup(ctx).detect(hgDir)));
 		}
 
 		public void complete() throws IOException {
