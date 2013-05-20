@@ -380,7 +380,19 @@ public class TestCommit {
 	
 	@Test
 	public void testRollback() throws Exception {
-		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit-rollback", false);
+		// Important: copy, not a clone of a repo to ensure old timestamps
+		// on repository files. Otherwise, there're chances transacition.rollback()
+		// would happen the very second (when fs timestamp granularity is second)
+		// repository got cloned, and RevlogChangeMonitor won't notice the file change
+		// (timestamp is the same, file size increased (CommitFacility) and decreased
+		// on rollback back to memorized value), and subsequent hgRepo access would fail
+		// trying to read more (due to Revlog#revisionAdded) revisions than there are in 
+		// the store file. 
+		// With copy and original timestamps we pretend commit happens to an existing repository
+		// in a regular manner (it's unlikely to have commits within the same second in a real life)
+		// XXX Note, once we have more robust method to detect file changes (e.g. Java7), this
+		// approach shall be abandoned.
+		File repoLoc = RepoUtils.copyRepoToTempLocation("log-1", "test-commit-rollback");
 		final Path newFilePath = Path.create("xx");
 		final File newFile = new File(repoLoc, newFilePath.toString());
 		RepoUtils.createFile(newFile, "xyz");
@@ -411,11 +423,6 @@ public class TestCommit {
 		cf.branch("another-branch");
 		Transaction tr = newTransaction(hgRepo);
 		Nodeid commitRev = cf.commit("Commit to fail",  tr);
-		// with 1 second timestamp granularity, HgChangelog doesn't 
-		// recognize the fact the underlying file got changed twice within
-		// a second, doesn't discard new revision obtained via revisionAdded,
-		// and eventually fails trying to read more revisions than there're in the file
-		Thread.sleep(1000); // FIXME this is a hack to make test pass
 		tr.rollback();
 		//
 		errorCollector.assertEquals(lastClogRevision, hgRepo.getChangelog().getLastRevision());

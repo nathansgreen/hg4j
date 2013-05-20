@@ -19,15 +19,22 @@ package org.tmatesoft.hg.test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.internal.RequiresFile.*;
+import static org.tmatesoft.hg.util.LogFacility.Severity.Debug;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
 
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgIOException;
+import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.RepoInitializer;
+import org.tmatesoft.hg.internal.StreamLogFacility;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -54,7 +61,7 @@ public class RepoUtils {
 		return dest;
 	}
 
-	static File cloneRepoToTempLocation(String configRepoName, String name, boolean noupdate) throws Exception, InterruptedException {
+	static File cloneRepoToTempLocation(String configRepoName, String name, boolean noupdate) throws HgException, IOException, InterruptedException {
 		return cloneRepoToTempLocation(Configuration.get().find(configRepoName), name, noupdate);
 	}
 
@@ -71,6 +78,45 @@ public class RepoUtils {
 		cmd.add(testRepoLoc.getName());
 		eh.run(cmd.toArray(new String[cmd.size()]));
 		assertEquals("[sanity]", 0, eh.getExitValue());
+		return testRepoLoc;
+	}
+	
+	static File copyRepoToTempLocation(String configRepoName, String newRepoName) throws HgException, IOException {
+		File testRepoLoc = createEmptyDir(newRepoName);
+		final File srcDir = Configuration.get().find(configRepoName).getWorkingDir();
+		Iterator<File> it = new Iterator<File>() {
+			private final LinkedList<File> queue = new LinkedList<File>();
+			{
+				queue.addAll(Arrays.asList(srcDir.listFiles()));
+			}
+			public boolean hasNext() {
+				return !queue.isEmpty();
+			}
+			public File next() {
+				File n = queue.removeFirst();
+				if (n.isDirectory()) {
+					queue.addAll(Arrays.asList(n.listFiles()));
+				}
+				return n;
+			}
+			public void remove() {
+				throw new UnsupportedOperationException();
+			}
+		};
+		FileUtils fu = new FileUtils(new StreamLogFacility(Debug, true, System.err));
+		String srcPrefix = srcDir.getAbsolutePath();
+		while (it.hasNext()) {
+			File next = it.next();
+			assert next.getAbsolutePath().startsWith(srcPrefix);
+			String relPath = next.getAbsolutePath().substring(srcPrefix.length());
+			File dest = new File(testRepoLoc, relPath);
+			if (next.isDirectory()) {
+				dest.mkdir();
+			} else {
+				fu.copy(next, dest);
+				dest.setLastModified(next.lastModified());
+			}
+		}
 		return testRepoLoc;
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -67,7 +68,7 @@ public class Configuration {
 	}
 
 	// fails if repo not found
-	public HgRepository find(String key) throws Exception {
+	public HgRepository find(String key) throws HgException {
 		HgRepository rv = lookup.detect(new File(getRoot(), key));
 		assertNotNull(rv);
 		assertFalse(rv.isInvalid());

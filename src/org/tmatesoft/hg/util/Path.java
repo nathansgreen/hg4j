@@ -159,7 +159,7 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 		}
 		String p = path.toString();
 		if (p.indexOf('\\') != -1) {
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException(String.format("Path '%s' contains illegal char at %d", p, p.indexOf('\\')));
 		}
 		Path rv = new Path(p);
 		return rv;

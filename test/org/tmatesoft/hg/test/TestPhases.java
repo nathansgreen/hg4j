@@ -85,6 +85,7 @@ public class TestPhases {
 		OutputParser.Stub output = new OutputParser.Stub();
 		ExecHelper eh = new ExecHelper(output, repo.getWorkingDir());
 		eh.run("hg", "phase", "-r", "0:-1");
+		assertEquals("Perhaps, older Mercurial version, with no hg phase command support?", 0, eh.getExitValue());
 		Matcher m = Pattern.compile("(\\d+): (\\w+)$", Pattern.MULTILINE).matcher(output.result());
 		int i = 0;
 		while (m.find()) {

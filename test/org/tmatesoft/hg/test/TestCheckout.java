@@ -28,12 +28,15 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCheckoutCommand;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.FileInfo;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.PathRewrite;
 
 /**
  * 
@@ -123,8 +126,9 @@ public class TestCheckout {
 		File testRepoLoc = cloneRepoToTempLocation("test-flags", "test-checkout-flags", true);
 		repo = new HgLookup().detect(testRepoLoc);
 		new HgCheckoutCommand(repo).clean(true).changeset(0).execute();
-		
-		FileWalker fw = new FileWalker(repo, testRepoLoc, new Path.SimpleSource(), null);
+
+		Path.Source pathSrc = new Path.SimpleSource(new PathRewrite.Composite(new RelativePathRewrite(testRepoLoc), repo.getToRepoPathHelper()));
+		FileWalker fw = new FileWalker(repo, testRepoLoc, pathSrc, null);
 		int execFound, linkFound, regularFound;
 		execFound = linkFound = regularFound = 0;
 		while(fw.hasNext()) {
@@ -142,10 +146,16 @@ public class TestCheckout {
 				regularFound++;
 			}
 		}
-		// TODO alter expected values to pass on Windows 
-		errorCollector.assertEquals("Executable files", 1, execFound);
-		errorCollector.assertEquals("Symlink files", 1, linkFound);
-		errorCollector.assertEquals("Regular files", 1, regularFound);
+		final int expectedExec, expectedLink, expectedRegular;
+		if (Internals.runningOnWindows()) {
+			expectedExec = expectedLink = 0;
+			expectedRegular = 2;
+		} else {
+			expectedExec = expectedLink = expectedRegular = 1;
+		}
+		errorCollector.assertEquals("Executable files", expectedExec, execFound);
+		errorCollector.assertEquals("Symlink files", expectedLink, linkFound);
+		errorCollector.assertEquals("Regular files", expectedRegular, regularFound);
 	}
 
 	private static final class FilesOnlyFilter implements FileFilter {
