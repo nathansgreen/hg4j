@@ -163,6 +163,13 @@ public final class FileRevisionHistoryChunk {
 		return rv;
 	}
 	
+	/**
+	 * @return number of file revisions in this chunk of its history
+	 */
+	public int revisionCount() {
+		return fileRevsToVisit.size();
+	}
+	
 	public int changeset(int fileRevIndex) {
 		return file2changelog[fileRevIndex];
 	}

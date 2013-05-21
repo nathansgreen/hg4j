@@ -45,12 +45,14 @@ import org.tmatesoft.hg.core.HgAnnotateCommand.LineInfo;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.HgRepoFacade;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.repo.HgBlameInspector;
 import org.tmatesoft.hg.repo.HgBlameInspector.BlockData;
+import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -71,7 +73,7 @@ public class TestBlame {
 	public void testSingleParentBlame() throws Exception {
 		HgRepository repo = new HgLookup().detectFromWorkingDir();
 		final String fname = "src/org/tmatesoft/hg/internal/PatchGenerator.java";
-		final int checkChangeset = 539;
+		final int checkChangeset = repo.getChangelog().getRevisionIndex(Nodeid.fromAscii("946b131962521f9199e1fedbdc2487d3aaef5e46")); // 539
 		HgDataFile df = repo.getFileNode(fname);
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		df.annotateSingleRevision(checkChangeset, new DiffOutInspector(new PrintStream(bos)));
@@ -91,7 +93,12 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode(fname);
 		AnnotateRunner ar = new AnnotateRunner(df.getPath(), null);
 
-		for (int cs : new int[] { 539, 541 /*, TIP */}) {
+		final HgChangelog clog = repo.getChangelog();
+		final int[] toTest = new int[] { 
+			clog.getRevisionIndex(Nodeid.fromAscii("946b131962521f9199e1fedbdc2487d3aaef5e46")), // 539
+			clog.getRevisionIndex(Nodeid.fromAscii("1e95f48d9886abe79b9711ab371bc877ca5e773e")), // 541 
+			/*, TIP */};
+		for (int cs : toTest) {
 			ar.run(cs, false);
 			FileAnnotateInspector fa = new FileAnnotateInspector();
 			FileAnnotation.annotate(df, cs, fa);
@@ -254,6 +261,45 @@ public class TestBlame {
 			errorCollector.assertEquals(hgAnnotateLine.trim(), apiLine);
 		}
 	}
+	
+	
+	@Test
+	public void testDiffTwoRevisions() throws Exception {
+		HgRepository repo = Configuration.get().find("test-annotate");
+		HgDataFile df = repo.getFileNode("file1");
+		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
+		ExecHelper eh = new ExecHelper(gp, repo.getWorkingDir());
+		int[] toTest = { 3, 4, 5 }; // p1 ancestry line, p2 ancestry line, not in ancestry line
+		for (int cs : toTest) {
+			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			df.diff(cs, 8, new DiffOutInspector(new PrintStream(bos)));
+			eh.run("hg", "diff", "-r", String.valueOf(cs), "-r", "8", "-U", "0", df.getPath().toString());
+			//
+			String[] apiResult = splitLines(bos.toString());
+			String[] expected = splitLines(gp.result());
+			Assert.assertArrayEquals(expected, apiResult);
+			gp.reset();
+		}
+	}
+	
+	/**
+	 * Make sure boundary values are ok (down to BlameHelper#prepare and FileHistory) 
+	 */
+	@Test
+	public void testAnnotateFirstFileRev() throws Exception {
+		HgRepository repo = Configuration.get().find("test-annotate");
+		HgDataFile df = repo.getFileNode("file1");
+		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
+		ExecHelper eh = new ExecHelper(gp, repo.getWorkingDir());
+		eh.run("hg", "diff", "-c", "0", "-U", "0", df.getPath().toString());
+		//
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		df.annotateSingleRevision(0, new DiffOutInspector(new PrintStream(bos)));
+		//
+		String[] apiResult = splitLines(bos.toString());
+		String[] expected = splitLines(gp.result());
+		Assert.assertArrayEquals(expected, apiResult);
+	}
 
 	// TODO HgWorkingCopyStatusCollector (and HgStatusCollector), with their ancestors (rev 59/69) have examples
 	// of *incorrect* assignment of common lines (like "}") - our impl doesn't process common lines in any special way
@@ -285,47 +331,6 @@ public class TestBlame {
 	}
 	
 	
-	private void aaa() throws Exception {
-		HgRepository repo = new HgLookup().detectFromWorkingDir();
-		final String fname = "src/org/tmatesoft/hg/internal/PatchGenerator.java";
-		final int checkChangeset = 539;
-		HgDataFile df = repo.getFileNode(fname);
-		DiffOutInspector dump = new DiffOutInspector(System.out);
-		System.out.println("541 -> 543");
-		df.annotateSingleRevision(543, dump);
-		System.out.println("539 -> 541");
-		df.annotateSingleRevision(541, dump);
-		System.out.println("536 -> 539");
-		df.annotateSingleRevision(checkChangeset, dump);
-		System.out.println("531 -> 536");
-		df.annotateSingleRevision(536, dump);
-		System.out.println(" -1 -> 531");
-		df.annotateSingleRevision(531, dump);
-		
-		FileAnnotateInspector fai = new FileAnnotateInspector();
-		FileAnnotation.annotate(df, 541, fai);
-		for (int i = 0; i < fai.lineRevisions.length; i++) {
-			System.out.printf("%3d: LINE %d\n", fai.lineRevisions[i], i+1);
-		}
-	}
-
-	private void bbb() throws Exception {
-		HgRepository repo = new HgLookup().detectFromWorkingDir();
-		final String fname = "src/org/tmatesoft/hg/repo/HgManifest.java";
-		final int checkChangeset = 415;
-		HgDataFile df = repo.getFileNode(fname);
-		DiffOutInspector dump = new DiffOutInspector(System.out);
-//		System.out.println("413 -> 415");
-//		af.diff(df, 413, 415, dump);
-//		System.out.println("408 -> 415");
-//		af.diff(df, 408, 415, dump);
-//		System.out.println("Combined (with merge):");
-//		dump.needRevisions(true);
-//		af.annotateChange(df, checkChangeset, dump);
-		dump.needRevisions(true);
-		df.annotate(checkChangeset, dump, HgIterateDirection.OldToNew);
-	}
-	
 	private void ccc() throws Throwable {
 		HgRepository repo = new HgLookup().detect("/home/artem/hg/hgtest-annotate-merge/");
 		HgDataFile df = repo.getFileNode("file.txt");
@@ -354,10 +359,6 @@ public class TestBlame {
 	}
 
 	public static void main(String[] args) throws Throwable {
-//		System.out.println(Arrays.equals(new String[0], splitLines("")));
-//		System.out.println(Arrays.equals(new String[] { "abc" }, splitLines("abc")));
-//		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc")));
-//		System.out.println(Arrays.equals(new String[] { "a", "bc" }, splitLines("a\nbc\n")));
 		TestBlame tt = new TestBlame();
 		tt.ccc();
 	}

@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
 import java.util.LinkedList;
@@ -48,15 +49,38 @@ public class BlameHelper {
 	private final HgBlameInspector insp;
 	private FileLinesCache linesCache;
 
-	// FIXME exposing internals (use of FileLinesCache through cons arg and #useFileUpTo) smells bad, refactor!
-
-	public BlameHelper(HgBlameInspector inspector, int cacheHint) {
+	public BlameHelper(HgBlameInspector inspector) {
 		insp = inspector;
-		linesCache = new FileLinesCache(cacheHint);
 	}
-	
-	public void useFileUpTo(HgDataFile df, int clogRevIndex) {
-		linesCache.useFileUpTo(df, clogRevIndex);
+
+	/**
+	 * Build history of the file for the specified range (follow renames if necessary). This history
+	 * is used to access various file revision data during subsequent {@link #diff(int, int, int, int)} and
+	 * {@link #annotateChange(int, int, int[], int[])} calls. Callers can use returned history for own approaches 
+	 * to iteration over file history.
+
+	 * <p>NOTE, clogRevIndexEnd has to list name of the supplied file in the corresponding manifest,
+	 * as it's not possible to trace rename history otherwise.
+	 */
+	public FileHistory prepare(HgDataFile df, int clogRevIndexStart, int clogRevIndexEnd) {
+		assert clogRevIndexStart <= clogRevIndexEnd;
+		FileHistory fileHistory = new FileHistory(df, clogRevIndexStart, clogRevIndexEnd);
+		fileHistory.build();
+		int cacheHint = 5; // cache comes useful when we follow merge branches and don't want to
+		// parse base revision twice. There's no easy way to determine max(distance(all(base,merge))),
+		// hence the heuristics to use the longest history chunk:
+		for (FileRevisionHistoryChunk c : fileHistory.iterate(OldToNew)) {
+			// iteration order is not important here
+			if (c.revisionCount() > cacheHint) {
+				cacheHint = c.revisionCount();
+			}
+		}
+		linesCache = new FileLinesCache(cacheHint);
+		for (FileRevisionHistoryChunk fhc : fileHistory.iterate(OldToNew)) {
+			// iteration order is not important here
+			linesCache.useFileUpTo(fhc.getFile(), fhc.getEndChangeset());
+		}
+		return fileHistory;
 	}
 	
 	// NO_REVISION is not allowed as any argument
@@ -116,6 +140,9 @@ public class BlameHelper {
 		private final int limit;
 		private final LinkedList<Pair<Integer, HgDataFile>> files; // TODO in fact, need sparse array 
 
+		/**
+		 * @param lruLimit how many parsed file revisions to keep
+		 */
 		public FileLinesCache(int lruLimit) {
 			limit = lruLimit;
 			lruCache = new LinkedList<Pair<Integer, LineSequence>>();

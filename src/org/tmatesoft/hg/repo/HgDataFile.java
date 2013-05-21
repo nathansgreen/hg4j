@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 import static org.tmatesoft.hg.repo.HgInternals.wrongRevisionIndex;
 import static org.tmatesoft.hg.repo.HgRepository.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
@@ -430,12 +429,10 @@ public final class HgDataFile extends Revlog {
 	 * mimic 'hg diff -r clogRevIndex1 -r clogRevIndex2'
 	 */
 	public void diff(int clogRevIndex1, int clogRevIndex2, HgBlameInspector insp) throws HgCallbackTargetException {
-		// FIXME clogRevIndex1 and clogRevIndex2 may point to different files, need to decide whether to throw an exception
-		// or to attempt to look up correct file node (tricky)
 		int fileRevIndex1 = fileRevIndex(this, clogRevIndex1);
 		int fileRevIndex2 = fileRevIndex(this, clogRevIndex2);
-		BlameHelper bh = new BlameHelper(insp, 5);
-		bh.useFileUpTo(this, clogRevIndex2);
+		BlameHelper bh = new BlameHelper(insp);
+		bh.prepare(this, clogRevIndex1, clogRevIndex2);
 		bh.diff(fileRevIndex1, clogRevIndex1, fileRevIndex2, clogRevIndex2);
 	}
 	
@@ -463,13 +460,9 @@ public final class HgDataFile extends Revlog {
 		if (!exists()) {
 			return;
 		}
-		FileHistory fileHistory = new FileHistory(this, changelogRevIndexStart, changelogRevIndexEnd);
-		fileHistory.build();
-		BlameHelper bh = new BlameHelper(insp, 10);
-		for (FileRevisionHistoryChunk fhc : fileHistory.iterate(OldToNew)) {
-			// iteration order is not important here
-			bh.useFileUpTo(fhc.getFile(), fhc.getEndChangeset());
-		}
+		BlameHelper bh = new BlameHelper(insp);
+		FileHistory fileHistory = bh.prepare(this, changelogRevIndexStart, changelogRevIndexEnd);
+
 		int[] fileClogParentRevs = new int[2];
 		int[] fileParentRevs = new int[2];
 		for (FileRevisionHistoryChunk fhc : fileHistory.iterate(iterateOrder)) {
@@ -498,11 +491,12 @@ public final class HgDataFile extends Revlog {
 		if (changelogRevisionIndex == TIP) {
 			changelogRevisionIndex = getChangesetRevisionIndex(fileRevIndex);
 		}
-		BlameHelper bh = new BlameHelper(insp, 5);
-		bh.useFileUpTo(this, changelogRevisionIndex);
 		int[] fileClogParentRevs = new int[2];
 		fileClogParentRevs[0] = fileRevParents[0] == NO_REVISION ? NO_REVISION : getChangesetRevisionIndex(fileRevParents[0]);
 		fileClogParentRevs[1] = fileRevParents[1] == NO_REVISION ? NO_REVISION : getChangesetRevisionIndex(fileRevParents[1]);
+		BlameHelper bh = new BlameHelper(insp);
+		int clogIndexStart = fileClogParentRevs[0] == NO_REVISION ? (fileClogParentRevs[1] == NO_REVISION ? 0 : fileClogParentRevs[1]) : fileClogParentRevs[0];
+		bh.prepare(this, clogIndexStart, changelogRevisionIndex);
 		bh.annotateChange(fileRevIndex, changelogRevisionIndex, fileRevParents, fileClogParentRevs);
 	}
 
