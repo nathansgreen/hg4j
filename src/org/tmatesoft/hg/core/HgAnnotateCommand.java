@@ -22,7 +22,6 @@ import java.util.Arrays;
 
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
@@ -41,7 +40,6 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="Work in progress. Unstable API")
 public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 	
 	private final HgRepository repo;
@@ -88,7 +86,7 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		return this;
 	}
 	
-	// TODO [1.1] set encoding and provide String line content from LineInfo
+	// TODO [post-1.1] set encoding and provide String line content from LineInfo
 
 	/**
 	 * Annotate selected file
@@ -154,7 +152,8 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		byte[] getContent();
 	}
 
-	// FIXME there's no need in FileAnnotation.LineInspector, merge it here
+	// TODO [post-1.1] there's no need in FileAnnotation.LineInspector, merge it here
+	// ok for 1.1 as this LineInspector is internal class
 	private static class Collector implements LineInspector {
 		private int[] lineRevisions;
 		private byte[][] lines;

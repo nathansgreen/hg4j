@@ -39,6 +39,7 @@ import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CommitFacility;
 import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSource;
+import org.tmatesoft.hg.internal.FileChangeMonitor;
 import org.tmatesoft.hg.internal.FileContentSupplier;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Transaction;
@@ -343,6 +344,10 @@ public class TestCommit {
 		Nodeid c2 = cmd.getCommittedRevision();
 		errorCollector.assertEquals(c2, hgRepo.getBookmarks().getRevision(activeBookmark));
 		//
+		if (!Internals.runningOnWindows()) {
+			// need change to happen not the same moment as the last commit (and read of bookmark file)
+			Thread.sleep(1000); // XXX remove once better file change detection in place
+		}
 		eh.run("hg", "bookmark", activeBookmark, "--force", "--rev", initialBookmarkRevision.toString());
 		//
 		RepoUtils.modifyFileAppend(fileD, " 2 \n");

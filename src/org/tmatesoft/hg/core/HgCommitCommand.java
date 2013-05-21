@@ -23,7 +23,6 @@ import java.io.IOException;
 import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CommitFacility;
 import org.tmatesoft.hg.internal.CompleteRepoLock;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileContentSupplier;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Transaction;
@@ -42,14 +41,12 @@ import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * WORK IN PROGRESS. UNSTABLE API
- * 
  * 'hg commit' counterpart, commit changes
  * 
+ * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="Work in progress. Unstable API")
 public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 
 	private final HgRepository repo;

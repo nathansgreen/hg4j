@@ -53,6 +53,7 @@ import org.tmatesoft.hg.internal.Internals;
  * NOT SAFE FOR MULTITHREAD USE!
  * 
  * @see http://code.google.com/p/hg4j/issues/detail?id=35
+ * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */

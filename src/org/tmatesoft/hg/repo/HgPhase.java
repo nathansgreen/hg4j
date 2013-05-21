@@ -19,6 +19,7 @@ package org.tmatesoft.hg.repo;
 /**
  * Phases for a changeset is a new functionality in Mercurial 2.1
  * 
+ * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
