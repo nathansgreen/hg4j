@@ -25,13 +25,8 @@ import java.util.ListIterator;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
-import org.tmatesoft.hg.repo.HgBlameInspector.Block;
-import org.tmatesoft.hg.repo.HgBlameInspector.BlockData;
-import org.tmatesoft.hg.repo.HgBlameInspector.ChangeBlock;
-import org.tmatesoft.hg.repo.HgBlameInspector.EqualBlock;
-import org.tmatesoft.hg.repo.HgBlameInspector.RevisionDescriptor;
-import org.tmatesoft.hg.repo.HgBlameInspector.RevisionDescriptor.Recipient;
-import org.tmatesoft.hg.repo.HgBlameInspector;
+import org.tmatesoft.hg.core.HgBlameInspector;
+import org.tmatesoft.hg.core.HgBlameInspector.*;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -253,7 +248,7 @@ public class BlameHelper {
 			ContentBlock targetContent = new ContentBlock(s2);
 			annotatedRevision.set(originContent, targetContent);
 			annotatedRevision.set(csetOrigin, csetTarget, p2MergeCommon != null ? csetMergeParent : NO_REVISION);
-			Recipient curious = Adaptable.Factory.getAdapter(insp, Recipient.class, null);
+			RevisionDescriptor.Recipient curious = Adaptable.Factory.getAdapter(insp, RevisionDescriptor.Recipient.class, null);
 			if (curious != null) {
 				try {
 					curious.start(annotatedRevision);
@@ -269,7 +264,7 @@ public class BlameHelper {
 			if (shallStop()) {
 				return;
 			}
-			Recipient curious = Adaptable.Factory.getAdapter(insp, Recipient.class, null);
+			RevisionDescriptor.Recipient curious = Adaptable.Factory.getAdapter(insp, RevisionDescriptor.Recipient.class, null);
 			if (curious != null) {
 				try {
 					curious.done(annotatedRevision);

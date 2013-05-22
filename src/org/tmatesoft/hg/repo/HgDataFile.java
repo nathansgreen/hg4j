@@ -27,14 +27,15 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 
+import org.tmatesoft.hg.core.HgBlameInspector;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
+import org.tmatesoft.hg.core.HgDiffCommand;
+import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgIterateDirection;
+import org.tmatesoft.hg.core.HgLibraryFailureException;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.BlameHelper;
 import org.tmatesoft.hg.internal.DataAccess;
-import org.tmatesoft.hg.internal.FileHistory;
-import org.tmatesoft.hg.internal.FileRevisionHistoryChunk;
 import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.FilterDataAccess;
@@ -426,80 +427,53 @@ public final class HgDataFile extends Revlog {
 		int changesetRevIndex = getChangesetRevisionIndex(fileRevisionIndex);
 		return getRepo().getManifest().getFileFlags(changesetRevIndex, getPath());
 	}
-	
+
 	/**
-	 * mimic 'hg diff -r clogRevIndex1 -r clogRevIndex2'
+	 * @deprecated use {@link HgDiffCommand} instead
 	 */
+	@Deprecated
 	public void diff(int clogRevIndex1, int clogRevIndex2, HgBlameInspector insp) throws HgRuntimeException, HgCallbackTargetException {
-		int fileRevIndex1 = fileRevIndex(this, clogRevIndex1);
-		int fileRevIndex2 = fileRevIndex(this, clogRevIndex2);
-		BlameHelper bh = new BlameHelper(insp);
-		bh.prepare(this, clogRevIndex1, clogRevIndex2);
-		bh.diff(fileRevIndex1, clogRevIndex1, fileRevIndex2, clogRevIndex2);
+		try {
+			new HgDiffCommand(getRepo()).file(this).range(clogRevIndex1, clogRevIndex2).executeDiff(insp);
+		} catch (HgLibraryFailureException ex) {
+			throw ex.getCause();
+		} catch (HgException ex) {
+			throw new HgInvalidStateException(ex.getMessage());
+		} catch (CancelledException ex) {
+			throw new HgInvalidStateException("Cancellatin is not expected");
+		}
 	}
 	
 	/**
-	 * Walk file history up/down to revision at given changeset and report changes for each revision
+	 * @deprecated use {@link HgDiffCommand} instead
 	 */
-	public void annotate(int changelogRevisionIndex, HgBlameInspector insp, HgIterateDirection iterateOrder) throws HgRuntimeException, HgCallbackTargetException {
-		annotate(0, changelogRevisionIndex, insp, iterateOrder);
-	}
-
-	/**
-	 * Walk file history range and report changes for each revision
-	 */
-	public void annotate(int changelogRevIndexStart, int changelogRevIndexEnd, HgBlameInspector insp, HgIterateDirection iterateOrder) throws HgRuntimeException, HgCallbackTargetException {
-		if (wrongRevisionIndex(changelogRevIndexStart) || wrongRevisionIndex(changelogRevIndexEnd)) {
-			throw new IllegalArgumentException();
-		}
-		// Note, changelogRevIndexEnd may be TIP, while the code below doesn't tolerate constants
-		//
-		int lastRevision = getRepo().getChangelog().getLastRevision();
-		if (changelogRevIndexEnd == TIP) {
-			changelogRevIndexEnd = lastRevision;
-		}
-		HgInternals.checkRevlogRange(changelogRevIndexStart, changelogRevIndexEnd, lastRevision);
-		if (!exists()) {
-			return;
-		}
-		BlameHelper bh = new BlameHelper(insp);
-		FileHistory fileHistory = bh.prepare(this, changelogRevIndexStart, changelogRevIndexEnd);
-
-		int[] fileClogParentRevs = new int[2];
-		int[] fileParentRevs = new int[2];
-		for (FileRevisionHistoryChunk fhc : fileHistory.iterate(iterateOrder)) {
-			for (int fri : fhc.fileRevisions(iterateOrder)) {
-				int clogRevIndex = fhc.changeset(fri);
-				// the way we built fileHistory ensures we won't walk past [changelogRevIndexStart..changelogRevIndexEnd]
-				assert clogRevIndex >= changelogRevIndexStart;
-				assert clogRevIndex <= changelogRevIndexEnd;
-				fhc.fillFileParents(fri, fileParentRevs);
-				fhc.fillCsetParents(fri, fileClogParentRevs);
-				bh.annotateChange(fri, clogRevIndex, fileParentRevs, fileClogParentRevs);
-			}
+	@Deprecated
+	public void annotate(int clogRevIndex1, int clogRevIndex2, HgBlameInspector insp, HgIterateDirection iterateOrder) throws HgRuntimeException, HgCallbackTargetException {
+		try {
+			new HgDiffCommand(getRepo()).file(this).range(clogRevIndex1, clogRevIndex2).order(iterateOrder).executeAnnotate(insp);
+		} catch (HgLibraryFailureException ex) {
+			throw ex.getCause();
+		} catch (HgException ex) {
+			throw new HgInvalidStateException(ex.getMessage());
+		} catch (CancelledException ex) {
+			throw new HgInvalidStateException("Cancellatin is not expected");
 		}
 	}
-
+	
 	/**
-	 * Annotates changes of the file against its parent(s). 
-	 * Unlike {@link #annotate(HgDataFile, int, Inspector, HgIterateDirection)}, doesn't
-	 * walk file history, looks at the specified revision only. Handles both parents (if merge revision).
+	 * @deprecated use {@link HgDiffCommand} instead
 	 */
+	@Deprecated
 	public void annotateSingleRevision(int changelogRevisionIndex, HgBlameInspector insp) throws HgRuntimeException, HgCallbackTargetException {
-		// TODO detect if file is text/binary (e.g. looking for chars < ' ' and not \t\r\n\f
-		int fileRevIndex = fileRevIndex(this, changelogRevisionIndex);
-		int[] fileRevParents = new int[2];
-		parents(fileRevIndex, fileRevParents, null, null);
-		if (changelogRevisionIndex == TIP) {
-			changelogRevisionIndex = getChangesetRevisionIndex(fileRevIndex);
+		try {
+			new HgDiffCommand(getRepo()).file(this).changeset(changelogRevisionIndex).executeAnnotateSingleRevision(insp);
+		} catch (HgLibraryFailureException ex) {
+			throw ex.getCause();
+		} catch (HgException ex) {
+			throw new HgInvalidStateException(ex.getMessage());
+		} catch (CancelledException ex) {
+			throw new HgInvalidStateException("Cancellatin is not expected");
 		}
-		int[] fileClogParentRevs = new int[2];
-		fileClogParentRevs[0] = fileRevParents[0] == NO_REVISION ? NO_REVISION : getChangesetRevisionIndex(fileRevParents[0]);
-		fileClogParentRevs[1] = fileRevParents[1] == NO_REVISION ? NO_REVISION : getChangesetRevisionIndex(fileRevParents[1]);
-		BlameHelper bh = new BlameHelper(insp);
-		int clogIndexStart = fileClogParentRevs[0] == NO_REVISION ? (fileClogParentRevs[1] == NO_REVISION ? 0 : fileClogParentRevs[1]) : fileClogParentRevs[0];
-		bh.prepare(this, clogIndexStart, changelogRevisionIndex);
-		bh.annotateChange(fileRevIndex, changelogRevisionIndex, fileRevParents, fileClogParentRevs);
 	}
 
 	@Override
@@ -519,13 +493,6 @@ public final class HgDataFile extends Revlog {
 		RevlogStream.Inspector insp = new MetadataInspector(metadata, null);
 		super.content.iterate(localRev, localRev, true, insp);
 	}
-	
-
-	private static int fileRevIndex(HgDataFile df, int csetRevIndex) throws HgRuntimeException {
-		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(csetRevIndex, df.getPath());
-		return df.getRevisionIndex(fileRev);
-	}
-
 
 	private static class MetadataInspector extends ErrorHandlingInspector implements RevlogStream.Inspector {
 		private final Metadata metadata;

@@ -19,8 +19,8 @@ package org.tmatesoft.hg.internal;
 
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
-import org.tmatesoft.hg.repo.HgBlameInspector;
-import org.tmatesoft.hg.repo.HgBlameInspector.RevisionDescriptor;
+import org.tmatesoft.hg.core.HgBlameInspector;
+import org.tmatesoft.hg.core.HgBlameInspector.RevisionDescriptor;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -54,7 +54,7 @@ public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Reci
 			return;
 		}
 		FileAnnotation fa = new FileAnnotation(insp);
-		df.annotate(changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
+		df.annotate(0, changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
 	}
 
 	// keeps <startSeq1, startSeq2, len> of equal blocks, origin to target, from some previous step

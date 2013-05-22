@@ -51,7 +51,6 @@ import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.repo.HgBlameInspector;
-import org.tmatesoft.hg.repo.HgBlameInspector.BlockData;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
@@ -139,7 +138,7 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode("file1");
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		DiffOutInspector dump = new DiffOutInspector(new PrintStream(bos));
-		df.annotate(TIP, dump, HgIterateDirection.OldToNew);
+		df.annotate(0, TIP, dump, HgIterateDirection.OldToNew);
 		LinkedList<String> apiResult = new LinkedList<String>(Arrays.asList(splitLines(bos.toString())));
 		
 		/*
@@ -336,7 +335,7 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode("file.txt");
 		DiffOutInspector dump = new DiffOutInspector(System.out);
 		dump.needRevisions(true);
-		df.annotate(8, dump, HgIterateDirection.NewToOld);
+		df.annotate(0, 8, dump, HgIterateDirection.NewToOld);
 //		af.annotateSingleRevision(df, 113, dump);
 //		System.out.println();
 //		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
@@ -466,7 +465,7 @@ public class TestBlame {
 		FileAnnotateInspector() {
 		}
 		
-		public void line(int lineNumber, int changesetRevIndex, BlockData lineContent, LineDescriptor ld) {
+		public void line(int lineNumber, int changesetRevIndex, HgBlameInspector.BlockData lineContent, LineDescriptor ld) {
 			if (lineRevisions == null) {
 				lineRevisions = new Integer[ld.totalLines()];
 				Arrays.fill(lineRevisions, NO_REVISION);

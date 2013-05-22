@@ -20,12 +20,12 @@ import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
 import java.util.Arrays;
 
+import org.tmatesoft.hg.core.HgBlameInspector.BlockData;
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
-import org.tmatesoft.hg.repo.HgBlameInspector.BlockData;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -116,7 +116,10 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 			final int changesetStart = followRename ? 0 : df.getChangesetRevisionIndex(0);
 			Collector c = new Collector(cancellation);
 			FileAnnotation fa = new FileAnnotation(c);
-			df.annotate(changesetStart, annotateRevision.get(), fa, HgIterateDirection.NewToOld);
+			HgDiffCommand cmd = new HgDiffCommand(repo);
+			cmd.file(df).order(HgIterateDirection.NewToOld);
+			cmd.range(changesetStart, annotateRevision.get());
+			cmd.executeAnnotate(fa);
 			progress.worked(1);
 			c.throwIfCancelled();
 			cancellation.checkCancelled();
