@@ -25,6 +25,7 @@ import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * History of a file, with copy/renames, and corresponding revision information.
@@ -56,7 +57,7 @@ public class FileHistory {
 		return csetTo;
 	}
 
-	public void build() {
+	public void build() throws HgRuntimeException {
 		assert fileCompleteHistory.isEmpty();
 		HgDataFile currentFile = df;
 		final int changelogRevIndexEnd = csetTo;

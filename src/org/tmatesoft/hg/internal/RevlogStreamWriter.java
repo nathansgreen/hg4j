@@ -29,7 +29,9 @@ import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSerializer;
 import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSource;
 import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * 
@@ -61,8 +63,9 @@ public class RevlogStreamWriter {
 	
 	/**
 	 * @return nodeid of added revision
+	 * @throws HgRuntimeException 
 	 */
-	public Nodeid addRevision(DataSource content, int linkRevision, int p1, int p2) throws HgIOException {
+	public Nodeid addRevision(DataSource content, int linkRevision, int p1, int p2) throws HgIOException, HgRuntimeException {
 		lastEntryRevision = Nodeid.NULL;
 		int revCount = revlogStream.revisionCount();
 		lastEntryIndex = revCount == 0 ? NO_REVISION : revCount - 1;
@@ -138,13 +141,13 @@ public class RevlogStreamWriter {
 		return lastEntryRevision;
 	}
 	
-	private byte[] toByteArray(DataSource content) throws HgIOException {
+	private byte[] toByteArray(DataSource content) throws HgIOException, HgRuntimeException {
 		ByteArrayDataSerializer ba = new ByteArrayDataSerializer();
 		content.serialize(ba);
 		return ba.toByteArray();
 	}
 
-	private Nodeid revision(int revisionIndex) {
+	private Nodeid revision(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		if (revisionIndex == NO_REVISION) {
 			return Nodeid.NULL;
 		}
@@ -156,7 +159,7 @@ public class RevlogStreamWriter {
 		return n;
 	}
 	
-	private void populateLastEntry() throws HgInvalidControlFileException {
+	private void populateLastEntry() throws HgRuntimeException {
 		if (lastEntryContent != null) {
 			return;
 		}

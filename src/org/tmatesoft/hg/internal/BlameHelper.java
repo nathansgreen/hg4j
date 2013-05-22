@@ -34,6 +34,7 @@ import org.tmatesoft.hg.repo.HgBlameInspector.RevisionDescriptor.Recipient;
 import org.tmatesoft.hg.repo.HgBlameInspector;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
@@ -62,7 +63,7 @@ public class BlameHelper {
 	 * <p>NOTE, clogRevIndexEnd has to list name of the supplied file in the corresponding manifest,
 	 * as it's not possible to trace rename history otherwise.
 	 */
-	public FileHistory prepare(HgDataFile df, int clogRevIndexStart, int clogRevIndexEnd) {
+	public FileHistory prepare(HgDataFile df, int clogRevIndexStart, int clogRevIndexEnd) throws HgRuntimeException {
 		assert clogRevIndexStart <= clogRevIndexEnd;
 		FileHistory fileHistory = new FileHistory(df, clogRevIndexStart, clogRevIndexEnd);
 		fileHistory.build();
@@ -84,7 +85,7 @@ public class BlameHelper {
 	}
 	
 	// NO_REVISION is not allowed as any argument
-	public void diff(int fileRevIndex1, int clogRevIndex1, int fileRevIndex2, int clogRevIndex2) throws HgCallbackTargetException {
+	public void diff(int fileRevIndex1, int clogRevIndex1, int fileRevIndex2, int clogRevIndex2) throws HgCallbackTargetException, HgRuntimeException {
 		HgDataFile targetFile = linesCache.getFile(clogRevIndex2);
 		LineSequence c1 = linesCache.lines(clogRevIndex1, fileRevIndex1);
 		LineSequence c2 = linesCache.lines(clogRevIndex2, fileRevIndex2);
@@ -95,7 +96,7 @@ public class BlameHelper {
 		bbi.checkErrors();
 	}
 
-	public void annotateChange(int fileRevIndex, int csetRevIndex, int[] fileParentRevs, int[] fileParentClogRevs) throws HgCallbackTargetException {
+	public void annotateChange(int fileRevIndex, int csetRevIndex, int[] fileParentRevs, int[] fileParentClogRevs) throws HgCallbackTargetException, HgRuntimeException {
 		HgDataFile targetFile = linesCache.getFile(csetRevIndex);
 		final LineSequence fileRevLines = linesCache.lines(csetRevIndex, fileRevIndex);
 		if (fileParentClogRevs[0] != NO_REVISION && fileParentClogRevs[1] != NO_REVISION) {
@@ -176,7 +177,7 @@ public class BlameHelper {
 			throw new HgInvalidStateException(String.format("Got %d file-changelog mappings, but no luck for revision %d.", files.size(), clogRevIndex));
 		}
 
-		public LineSequence lines(int clogRevIndex, int fileRevIndex) {
+		public LineSequence lines(int clogRevIndex, int fileRevIndex) throws HgRuntimeException {
 			Pair<Integer, LineSequence> cached = checkCache(clogRevIndex);
 			if (cached != null) {
 				return cached.second();

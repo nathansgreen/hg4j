@@ -94,7 +94,8 @@ abstract class Revlog {
 
 	/**
 	 * @return total number of revisions kept in this revlog
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public final int getRevisionCount() throws HgRuntimeException {
 		return content.revisionCount();
@@ -102,7 +103,8 @@ abstract class Revlog {
 	
 	/**
 	 * @return index of last known revision, a.k.a. {@link HgRepository#TIP}, or {@link HgRepository#NO_REVISION} if revlog is empty
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public final int getLastRevision() throws HgRuntimeException {
 		// although old code gives correct result when revlog is empty (NO_REVISION deliberately == -1), 
@@ -117,7 +119,9 @@ abstract class Revlog {
 	 * @param revisionIndex index of the entry in this revlog, may be {@link HgRepository#TIP}
 	 * @return revision nodeid of the entry
 	 * 
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidRevisionException if any supplied revision doesn't identify revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public final Nodeid getRevision(int revisionIndex) throws HgRuntimeException {
 		// XXX cache nodeids? Rather, if context.getCache(this).getRevisionMap(create == false) != null, use it
@@ -130,7 +134,9 @@ abstract class Revlog {
 	 * <li>ordering of the revisions in the return list is unspecified, it's likely won't match that of the method argument
 	 * <li>supplied array get modified (sorted)</ul>
 	 * @return list of mapped revisions in no particular order
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidRevisionException if any supplied revision doesn't identify revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public final List<Nodeid> getRevisions(int... revisions) throws HgRuntimeException {
 		ArrayList<Nodeid> rv = new ArrayList<Nodeid>(revisions.length);
@@ -139,7 +145,7 @@ abstract class Revlog {
 		return rv;
 	}
 	
-	/*package-local*/ void getRevisionsInternal(final List<Nodeid> retVal, int[] sortedRevs) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	/*package-local*/ void getRevisionsInternal(final List<Nodeid> retVal, int[] sortedRevs) throws HgRuntimeException {
 		// once I have getRevisionMap and may find out whether it is avalable from cache,
 		// may use it, perhaps only for small number of revisions
 		content.iterate(sortedRevs, false, new RevlogStream.Inspector() {
@@ -159,7 +165,9 @@ abstract class Revlog {
 	 * 
 	 * @param nid revision to look up 
 	 * @return revision local index in this revlog
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidRevisionException if revision was not found in this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public final int getRevisionIndex(Nodeid nid) throws HgRuntimeException {
 		final int revision = doFindWithCache(nid);
@@ -172,7 +180,7 @@ abstract class Revlog {
 		return revision;
 	}
 	
-	private int doFindWithCache(Nodeid nid) {
+	private int doFindWithCache(Nodeid nid) throws HgRuntimeException {
 		if (useRevisionLookup) {
 			if (revisionLookup == null || content.shallDropDerivedCaches()) {
 				content.detach(revisionLookupCleaner);
@@ -199,7 +207,8 @@ abstract class Revlog {
 	 * 
 	 * @param nodeid
 	 * @return <code>true</code> if revision is part of this revlog
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public final boolean isKnown(Nodeid nodeid) throws HgRuntimeException {
 		final int rn = doFindWithCache(nodeid);
@@ -219,13 +228,14 @@ abstract class Revlog {
 	 * @param nodeid revision to retrieve
 	 * @param sink data destination
 	 * 
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
-	 * @throws CancelledException if content retrieval operation was cancelled
-	 * 
 	 * @see #rawContent(int, ByteChannel)
+	 * 
+	 * @throws CancelledException if content retrieval operation was cancelled
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	protected void rawContent(Nodeid nodeid, ByteChannel sink) throws HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
+	protected void rawContent(Nodeid nodeid, ByteChannel sink) throws CancelledException, HgRuntimeException {
 		rawContent(getRevisionIndex(nodeid), sink);
 	}
 	
@@ -235,11 +245,12 @@ abstract class Revlog {
 	 * @param revisionIndex index of this revlog change (not a changelog revision index), non-negative. From predefined constants, only {@link HgRepository#TIP} makes sense.
 	 * @param sink data destination
 	 * 
-	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
 	 * @throws CancelledException if content retrieval operation was cancelled
+	 * @throws HgInvalidRevisionException if supplied argument doesn't represent revision index in this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	protected void rawContent(int revisionIndex, ByteChannel sink) throws HgInvalidControlFileException, CancelledException, HgInvalidRevisionException {
+	protected void rawContent(int revisionIndex, ByteChannel sink) throws CancelledException, HgRuntimeException {
 		if (sink == null) {
 			throw new IllegalArgumentException();
 		}
@@ -348,7 +359,7 @@ abstract class Revlog {
 		content.iterate(_start, end, false, new RevlogStream.Inspector() {
 			private int i = 0;
 			
-			public void next(int revisionIndex, int actualLen, int baseRevIndex, int linkRevIndex, int parent1RevIndex, int parent2RevIndex, byte[] nodeid, DataAccess data) {
+			public void next(int revisionIndex, int actualLen, int baseRevIndex, int linkRevIndex, int parent1RevIndex, int parent2RevIndex, byte[] nodeid, DataAccess data) throws HgRuntimeException {
 				Nodeid nid = Nodeid.fromBinary(nodeid, 0);
 				if (revisionInsp != null) {
 					revisionInsp.next(revisionIndex, nid, linkRevIndex);
@@ -417,16 +428,16 @@ abstract class Revlog {
 
 	@Experimental
 	public interface RevisionInspector extends Inspector {
-		void next(int revisionIndex, Nodeid revision, int linkedRevisionIndex);
+		void next(int revisionIndex, Nodeid revision, int linkedRevisionIndex) throws HgRuntimeException;
 	}
 
 	@Experimental
 	public interface ParentInspector extends Inspector {
 		// XXX document whether parentX is -1 or a constant (BAD_REVISION? or dedicated?)
-		void next(int revisionIndex, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2);
+		void next(int revisionIndex, Nodeid revision, int parent1, int parent2, Nodeid nidParent1, Nodeid nidParent2) throws HgRuntimeException;
 	}
 	
-	protected HgParentChildMap<? extends Revlog> getParentWalker() {
+	protected HgParentChildMap<? extends Revlog> getParentWalker() throws HgRuntimeException {
 		HgParentChildMap<Revlog> pw = new HgParentChildMap<Revlog>(this);
 		pw.init();
 		return pw;

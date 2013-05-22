@@ -34,6 +34,7 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.FilterByteChannel;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.ManifestRevision;
@@ -130,7 +131,7 @@ public class HgWorkingCopyStatusCollector {
 		return dirstate;
 	}
 	
-	private ManifestRevision getManifest(int changelogLocalRev) throws HgInvalidControlFileException {
+	private ManifestRevision getManifest(int changelogLocalRev) throws HgRuntimeException {
 		assert changelogLocalRev >= 0;
 		ManifestRevision mr;
 		if (baseRevisionCollector != null) {
@@ -142,7 +143,7 @@ public class HgWorkingCopyStatusCollector {
 		return mr;
 	}
 
-	private void initDirstateParentManifest() throws HgInvalidControlFileException {
+	private void initDirstateParentManifest() throws HgRuntimeException {
 		Nodeid dirstateParent = getDirstateImpl().parents().first();
 		if (dirstateParent.isNull()) {
 			dirstateParentManifest = baseRevisionCollector != null ? baseRevisionCollector.raw(NO_REVISION) : HgStatusCollector.createEmptyManifestRevision();
@@ -407,7 +408,7 @@ public class HgWorkingCopyStatusCollector {
 	}
 	
 	// XXX refactor checkLocalStatus methods in more OO way
-	private void checkLocalStatusAgainstBaseRevision(Set<Path> baseRevNames, ManifestRevision collect, int baseRevision, Path fname, FileInfo f, HgStatusInspector inspector) {
+	private void checkLocalStatusAgainstBaseRevision(Set<Path> baseRevNames, ManifestRevision collect, int baseRevision, Path fname, FileInfo f, HgStatusInspector inspector) throws HgRuntimeException {
 		// fname is in the dirstate, either Normal, Added, Removed or Merged
 		Nodeid nid1 = collect.nodeid(fname);
 		HgManifest.Flags flags = collect.flags(fname);
@@ -501,7 +502,7 @@ public class HgWorkingCopyStatusCollector {
 		// The question is whether original Hg treats this case (same content, different parents and hence nodeids) as 'modified' or 'clean'
 	}
 
-	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) throws HgInvalidFileException {
+	private boolean areTheSame(FileInfo f, HgDataFile dataFile, Nodeid revision) throws HgRuntimeException {
 		// XXX consider adding HgDataDile.compare(File/byte[]/whatever) operation to optimize comparison
 		ByteArrayChannel bac = new ByteArrayChannel();
 		try {
@@ -588,13 +589,7 @@ public class HgWorkingCopyStatusCollector {
 		} catch (IOException ex) {
 			throw new HgInvalidFileException("File comparison failed", ex).setFileName(p);
 		} finally {
-			if (is != null) {
-				try {
-					is.close();
-				} catch (IOException ex) {
-					repo.getSessionContext().getLog().dump(getClass(), Info, ex, null);
-				}
-			}
+			new FileUtils(repo.getSessionContext().getLog()).closeQuietly(is);
 		}
 	}
 

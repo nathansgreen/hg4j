@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,9 @@ import java.util.BitSet;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Represent indicators which revisions are descendants of the supplied root revision
@@ -39,7 +39,7 @@ public class RevisionDescendants {
 	private final BitSet descendants;
 
 	// in fact, may be refactored to deal not only with changelog, but any revlog (not sure what would be the usecase, though)
-	public RevisionDescendants(HgRepository hgRepo, int revisionIndex) {
+	public RevisionDescendants(HgRepository hgRepo, int revisionIndex) throws HgRuntimeException {
 		repo = hgRepo;
 		rootRevIndex = revisionIndex;
 		// even if tip moves, we still answer correctly for those isCandidate()
@@ -51,7 +51,7 @@ public class RevisionDescendants {
 		descendants = new BitSet(tipRevIndex - rootRevIndex + 1);
 	}
 	
-	public void build() throws HgInvalidControlFileException {
+	public void build() throws HgRuntimeException {
 		final BitSet result = descendants;
 		result.set(0);
 		if (rootRevIndex == tipRevIndex) {

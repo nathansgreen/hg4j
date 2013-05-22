@@ -74,13 +74,13 @@ public class HgTags {
 		localFromName  = new TreeMap<String, List<Nodeid>>();
 	}
 	
-	/*package-local*/ void read() throws HgInvalidControlFileException {
+	/*package-local*/ void read() throws HgRuntimeException {
 		readTagsFromHistory();
 		readGlobal();
 		readLocal();
 	}
 	
-	private void readTagsFromHistory() throws HgInvalidControlFileException {
+	private void readTagsFromHistory() throws HgRuntimeException {
 		HgDataFile hgTags = repo.getRepo().getFileNode(HgTags.getPath());
 		if (hgTags.exists()) {
 			for (int i = 0; i <= hgTags.getLastRevision(); i++) { // TODO post-1.0 in fact, would be handy to have walk(start,end) 
@@ -280,7 +280,7 @@ public class HgTags {
 	}
 
 	// can be called only after instance has been initialized (#read() invoked) 
-	/*package-local*/void reloadIfChanged() throws HgInvalidControlFileException {
+	/*package-local*/void reloadIfChanged() throws HgRuntimeException {
 		assert repoChangeMonitor != null;
 		assert localTagsFileMonitor != null;
 		assert globalTagsFileMonitor != null;
@@ -312,7 +312,13 @@ public class HgTags {
 			return localFromName.containsKey(name);
 		}
 
-		public String branch() throws HgInvalidControlFileException {
+		/**
+		 * @return name of the branch this tag belongs to, never <code>null</code>
+		 * @throws HgInvalidRevisionException if revision of the tag is not a valid changeset revision. <em>Runtime exception</em>
+		 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+		 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+		 */
+		public String branch() throws HgRuntimeException {
 			if (branch == null) {
 				int x = repo.getRepo().getChangelog().getRevisionIndex(revision());
 				branch = repo.getRepo().getChangelog().range(x, x).get(0).branch();

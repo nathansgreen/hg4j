@@ -30,6 +30,7 @@ import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.FileInfo;
 import org.tmatesoft.hg.util.FileWalker;
 import org.tmatesoft.hg.util.Path;
@@ -52,7 +53,7 @@ public class TestFileFlags {
 	private HgRepository repo;
 	
 	@Test
-	public void testFlagsInManifest() {
+	public void testFlagsInManifest() throws HgRuntimeException {
 		HgDataFile link = repo.getFileNode("file-link");
 		HgDataFile exec = repo.getFileNode("file-exec");
 		HgDataFile file = repo.getFileNode("regular-file");

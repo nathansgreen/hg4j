@@ -26,6 +26,7 @@ import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgTags;
 import org.tmatesoft.hg.repo.HgTags.TagInfo;
 import org.tmatesoft.hg.repo.HgRevisionMap;
@@ -160,7 +161,7 @@ public class MapTagsToFileRevisions {
 			final Map<Nodeid, Nodeid> changesetToNodeid_3 = new HashMap<Nodeid, Nodeid>();
 			fileNode.indexWalk(0, TIP, new HgDataFile.RevisionInspector() {
 	
-				public void next(int fileRevisionIndex, Nodeid revision, int linkedRevisionIndex) {
+				public void next(int fileRevisionIndex, Nodeid revision, int linkedRevisionIndex) throws HgRuntimeException {
 					changesetToNodeid_3.put(clog.getRevision(linkedRevisionIndex), revision);
 				}
 			});
@@ -273,7 +274,7 @@ public class MapTagsToFileRevisions {
 		return tagLocalRevs;
 	}
 
-	public void collectTagsPerFile() throws HgException, CancelledException {
+	public void collectTagsPerFile() throws HgException, CancelledException, HgRuntimeException {
 		final long start = System.currentTimeMillis();
 		final HgRepository repository = new HgLookup().detect(new File("/home/artem/hg/cpython"));
 		final HgTags tags = repository.getTags();
@@ -301,7 +302,7 @@ public class MapTagsToFileRevisions {
 		
 	// Approach 1. Build map with all files, their revisions and corresponding tags
 	//
-	private void collectTagsPerFile_Approach_1(final HgRevisionMap<HgChangelog> clogrmap, final int[] tagLocalRevs, final TagInfo[] allTags, Path targetPath) throws HgException {
+	private void collectTagsPerFile_Approach_1(final HgRevisionMap<HgChangelog> clogrmap, final int[] tagLocalRevs, final TagInfo[] allTags, Path targetPath) throws HgException, IllegalArgumentException, HgRuntimeException {
 		HgRepository repository = clogrmap.getRepo();
 		final long start = System.currentTimeMillis();
 		// file2rev2tag value is array of revisions, always of allTags.length. Revision index in the array
@@ -373,7 +374,7 @@ public class MapTagsToFileRevisions {
 		}
 	}
 	
-	private void collectTagsPerFile_Approach_2(HgRepository repository, final int[] tagLocalRevs, final IntMap<List<TagInfo>> tagRevIndex2TagInfo, Path targetPath) throws HgException {
+	private void collectTagsPerFile_Approach_2(HgRepository repository, final int[] tagLocalRevs, final IntMap<List<TagInfo>> tagRevIndex2TagInfo, Path targetPath) throws HgException, HgRuntimeException {
 		//
 		// Approach 2. No all-file map. Collect file revisions recorded at the time of tagging,
 		// then for each file revision check if it is among those above, and if yes, take corresponding tags
@@ -457,7 +458,7 @@ public class MapTagsToFileRevisions {
 		}
 	}
 	
-	public static void main2(String[] args) throws HgCallbackTargetException, HgException, CancelledException {
+	public static void main2(String[] args) throws HgCallbackTargetException, HgException, CancelledException, HgRuntimeException {
 		final HgRepository repository = new HgLookup().detect(new File("/temp/hg/cpython"));
 		final Path targetPath = Path.create("README");
 		final HgTags tags = repository.getTags();

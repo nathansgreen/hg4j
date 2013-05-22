@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@ package org.tmatesoft.hg.repo;
 
 import java.io.File;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.util.Path;
 
@@ -34,6 +35,13 @@ public class HgInvalidControlFileException extends HgInvalidFileException {
 
 	public HgInvalidControlFileException(String message, Throwable th, File file) {
 		super(message, th, file);
+	}
+	
+	public HgInvalidControlFileException(HgIOException ex, boolean replaceStackTrace) {
+		super(ex.getMessage(), ex.getCause(), ex.getFile());
+		if (replaceStackTrace) {
+			setStackTrace(ex.getStackTrace());
+		}
 	}
 
 	@Override

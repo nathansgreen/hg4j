@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ import java.util.Collection;
 
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Pair;
 
 /**
@@ -36,16 +37,18 @@ public interface HgChangesetTreeHandler {
 	 * @param entry access to various pieces of information about current tree node. Instances might be 
 	 * reused across calls and shall not be kept by client's code
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce 
+	 * @throws HgRuntimeException propagates library issues. <em>Runtime exception</em>
 	 */
-	public void treeElement(HgChangesetTreeHandler.TreeElement entry) throws HgCallbackTargetException;
+	public void treeElement(HgChangesetTreeHandler.TreeElement entry) throws HgCallbackTargetException, HgRuntimeException;
 
 	interface TreeElement {
 		/**
 		 * Revision of the revlog being iterated. For example, when walking file history, return value represents file revisions.
 		 * 
 		 * @return revision of the revlog being iterated.
+		 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		public Nodeid fileRevision();
+		public Nodeid fileRevision() throws HgRuntimeException;
 		
 		/**
 		 * File node, provided revlog being iterated is a {@link HgDataFile}; {@link #fileRevision()} 
@@ -55,19 +58,22 @@ public interface HgChangesetTreeHandler {
 		 * file name for particular revision in the history.
 		 * 
 		 * @return instance of the file being walked, or <code>null</code> if it's not a file but other revlog.
+		 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		public HgDataFile file();
+		public HgDataFile file() throws HgRuntimeException;
 
 		/**
 		 * @return changeset associated with the current file revision
+		 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		public HgChangeset changeset();
+		public HgChangeset changeset() throws HgRuntimeException;
 
 		/**
 		 * Lightweight alternative to {@link #changeset()}, identifies changeset in which current file node has been modified 
 		 * @return changeset {@link Nodeid revision} 
+		 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		public Nodeid changesetRevision();
+		public Nodeid changesetRevision() throws HgRuntimeException;
 
 		/**
 		 * Identifies parent changes, changesets where file/revlog in question was modified prior to change being visited.
@@ -91,25 +97,29 @@ public interface HgChangesetTreeHandler {
 		 * then this {@link #parents()} call would return pair with single element only, pointing to <code>D</code>
 		 * 
 		 * @return changesets that correspond to parents of the current file node, either pair element may be <code>null</code>.
+		 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		public Pair<HgChangeset, HgChangeset> parents();
+		public Pair<HgChangeset, HgChangeset> parents() throws HgRuntimeException;
 		
 		/**
 		 * Lightweight alternative to {@link #parents()}, give {@link Nodeid nodeids} only
 		 * @return two values, neither is <code>null</code>, use {@link Nodeid#isNull()} to identify parent not set
+		 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		public Pair<Nodeid, Nodeid> parentRevisions();
+		public Pair<Nodeid, Nodeid> parentRevisions() throws HgRuntimeException;
 
 		/**
 		 * Changes that originate from the given change and bear it as their parent. 
 		 * @return collection (possibly empty) of immediate children of the change
+		 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		public Collection<HgChangeset> children();
+		public Collection<HgChangeset> children() throws HgRuntimeException;
 
 		/**
 		 * Lightweight alternative to {@link #children()}.
 		 * @return never <code>null</code>
+		 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		public Collection<Nodeid> childRevisions();
+		public Collection<Nodeid> childRevisions() throws HgRuntimeException;
 	}
 }

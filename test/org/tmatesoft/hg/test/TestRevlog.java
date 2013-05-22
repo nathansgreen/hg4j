@@ -33,6 +33,7 @@ import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -187,7 +188,7 @@ public class TestRevlog {
 		return patch1;
 	}
 	
-	private byte[] getRevisionTrueContent(File repoLoc, final int manifestRev, int clogRev) throws HgRepositoryNotFoundException {
+	private byte[] getRevisionTrueContent(File repoLoc, final int manifestRev, int clogRev) throws HgRepositoryNotFoundException, IllegalArgumentException, HgRuntimeException {
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
 		final ByteArrayOutputStream out = new ByteArrayOutputStream(1024 * 1000);
 		hgRepo.getManifest().walk(clogRev, clogRev, new HgManifest.Inspector() {

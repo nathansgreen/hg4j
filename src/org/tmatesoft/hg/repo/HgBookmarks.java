@@ -52,66 +52,78 @@ public final class HgBookmarks {
 		repo = internals;
 	}
 	
-	/*package-local*/ void read() throws HgInvalidControlFileException {
+	/*package-local*/ void read() throws HgRuntimeException {
 		readBookmarks();
 		readActiveBookmark();
 	}
 	
-	private void readBookmarks() throws HgInvalidControlFileException {
+	private void readBookmarks() throws HgRuntimeException {
 		final LogFacility log = repo.getLog();
 		File all = repo.getRepositoryFile(HgRepositoryFiles.Bookmarks);
-		LinkedHashMap<String, Nodeid> bm = new LinkedHashMap<String, Nodeid>();
-		if (all.canRead() && all.isFile()) {
-			LineReader lr1 = new LineReader(all, log);
-			ArrayList<String> c = new ArrayList<String>();
-			lr1.read(new LineReader.SimpleLineCollector(), c);
-			for (String s : c) {
-				int x = s.indexOf(' ');
-				try {
-					if (x > 0) {
-						Nodeid nid = Nodeid.fromAscii(s.substring(0, x));
-						String name = new String(s.substring(x+1));
-						if (repo.getRepo().getChangelog().isKnown(nid)) {
-							// copy name part not to drag complete line
-							bm.put(name, nid);
+		try {
+			LinkedHashMap<String, Nodeid> bm = new LinkedHashMap<String, Nodeid>();
+			if (all.canRead() && all.isFile()) {
+				LineReader lr1 = new LineReader(all, log);
+				ArrayList<String> c = new ArrayList<String>();
+				lr1.read(new LineReader.SimpleLineCollector(), c);
+				for (String s : c) {
+					int x = s.indexOf(' ');
+					try {
+						if (x > 0) {
+							Nodeid nid = Nodeid.fromAscii(s.substring(0, x));
+							String name = new String(s.substring(x+1));
+							if (repo.getRepo().getChangelog().isKnown(nid)) {
+								// copy name part not to drag complete line
+								bm.put(name, nid);
+							} else {
+								log.dump(getClass(), LogFacility.Severity.Info, "Bookmark %s points to non-existent revision %s, ignored.", name, nid);
+							}
 						} else {
-							log.dump(getClass(), LogFacility.Severity.Info, "Bookmark %s points to non-existent revision %s, ignored.", name, nid);
+							log.dump(getClass(), LogFacility.Severity.Warn, "Can't parse bookmark entry: %s", s);
 						}
-					} else {
-						log.dump(getClass(), LogFacility.Severity.Warn, "Can't parse bookmark entry: %s", s);
+					} catch (IllegalArgumentException ex) {
+						log.dump(getClass(), LogFacility.Severity.Warn, ex, String.format("Can't parse bookmark entry: %s", s));
 					}
-				} catch (IllegalArgumentException ex) {
-					log.dump(getClass(), LogFacility.Severity.Warn, ex, String.format("Can't parse bookmark entry: %s", s));
 				}
+				bookmarks = bm;
+			} else {
+				bookmarks = Collections.emptyMap();
 			}
-			bookmarks = bm;
-		} else {
-			bookmarks = Collections.emptyMap();
+			if (bmFileTracker == null) {
+				bmFileTracker = new FileChangeMonitor(all);
+			}
+			bmFileTracker.touch(this);
+		} catch (HgInvalidControlFileException ex) {
+			// do not translate HgInvalidControlFileException into another HgInvalidControlFileException
+			// but only HgInvalidFileException
+			throw ex;
+		} catch (HgIOException ex) {
+			throw new HgInvalidControlFileException(ex, true);
 		}
-		if (bmFileTracker == null) {
-			bmFileTracker = new FileChangeMonitor(all);
-		}
-		bmFileTracker.touch(this);
 	}
-		
+
 	private void readActiveBookmark() throws HgInvalidControlFileException { 
 		activeBookmark = null;
 		File active = repo.getRepositoryFile(HgRepositoryFiles.BookmarksCurrent);
-		if (active.canRead() && active.isFile()) {
-			LineReader lr2 = new LineReader(active, repo.getLog());
-			ArrayList<String> c = new ArrayList<String>(2);
-			lr2.read(new LineReader.SimpleLineCollector(), c);
-			if (c.size() > 0) {
-				activeBookmark = c.get(0);
+		try {
+			if (active.canRead() && active.isFile()) {
+				LineReader lr2 = new LineReader(active, repo.getLog());
+				ArrayList<String> c = new ArrayList<String>(2);
+				lr2.read(new LineReader.SimpleLineCollector(), c);
+				if (c.size() > 0) {
+					activeBookmark = c.get(0);
+				}
 			}
+			if (activeTracker == null) {
+				activeTracker = new FileChangeMonitor(active);
+			}
+			activeTracker.touch(this);
+		} catch (HgIOException ex) {
+			throw new HgInvalidControlFileException(ex, true);
 		}
-		if (activeTracker == null) {
-			activeTracker = new FileChangeMonitor(active);
-		}
-		activeTracker.touch(this);
 	}
 	
-	/*package-local*/void reloadIfChanged() throws HgInvalidControlFileException {
+	/*package-local*/void reloadIfChanged() throws HgRuntimeException {
 		assert activeTracker != null;
 		assert bmFileTracker != null;
 		if (bmFileTracker.changed(this)) {

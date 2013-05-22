@@ -27,11 +27,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
-import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Path;
 
@@ -136,10 +136,8 @@ public class MqManager {
 					allKnown.add(pr);
 				}
 			}
-		} catch (HgInvalidFileException ex) {
-			HgInvalidControlFileException th = new HgInvalidControlFileException(ex.getMessage(), ex.getCause(), ex.getFile());
-			th.setStackTrace(ex.getStackTrace());
-			throw th;
+		} catch (HgIOException ex) {
+			throw new HgInvalidControlFileException(ex, true);
 		}
 		return this;
 	}

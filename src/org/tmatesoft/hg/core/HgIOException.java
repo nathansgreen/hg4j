@@ -40,7 +40,7 @@ public class HgIOException extends HgException {
 	 * @param cause root cause for the error, likely {@link IOException} or its subclass, but not necessarily, and may be omitted. 
 	 * @param troubleFile file we tried to deal with, never <code>null</code>
 	 */
-	public HgIOException(String message, Exception cause, File troubleFile) {
+	public HgIOException(String message, Throwable cause, File troubleFile) {
 		super(message, cause);
 		file = troubleFile;
 	}

@@ -107,7 +107,11 @@ public final class HgFileRevision {
 		return flags;
 	}
 
-	public boolean wasCopied() throws HgException {
+	/**
+	 * @return <code>true</code> if this file revision was created as a result of a copy/rename
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public boolean wasCopied() throws HgRuntimeException {
 		if (isCopy == null) {
 			checkCopy();
 		}
@@ -115,8 +119,9 @@ public final class HgFileRevision {
 	}
 	/**
 	 * @return <code>null</code> if {@link #wasCopied()} is <code>false</code>, name of the copy source otherwise.
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public Path getOriginIfCopy() throws HgException {
+	public Path getOriginIfCopy() throws HgRuntimeException {
 		if (wasCopied()) {
 			return origin;
 		}
@@ -145,7 +150,13 @@ public final class HgFileRevision {
 		return parents;
 	}
 
-	public void putContentTo(ByteChannel sink) throws HgException, CancelledException {
+	/**
+	 * Pipe content of this file revision into the sink
+	 * @param sink accepts file revision content
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws CancelledException if execution of the operation was cancelled
+	 */
+	public void putContentTo(ByteChannel sink) throws HgRuntimeException, CancelledException {
 		HgDataFile fn = repo.getFileNode(path);
 		int revisionIndex = fn.getRevisionIndex(revision);
 		fn.contentWithFilters(revisionIndex, sink);
@@ -156,7 +167,7 @@ public final class HgFileRevision {
 		return String.format("HgFileRevision(%s, %s)", getPath().toString(), revision.shortNotation());
 	}
 
-	private void checkCopy() throws HgException {
+	private void checkCopy() throws HgRuntimeException {
 		HgDataFile fn = repo.getFileNode(path);
 		if (fn.isCopy()) {
 			if (fn.getRevision(0).equals(revision)) {

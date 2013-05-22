@@ -21,7 +21,10 @@ import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import java.util.Arrays;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgRevisionMap;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Lite alternative to {@link HgRevisionMap}, to speed up nodeid to index conversion without consuming too much memory.
@@ -42,7 +45,7 @@ public class RevisionLookup implements RevlogStream.Inspector {
 		content = stream;
 	}
 	
-	public static RevisionLookup createFor(RevlogStream stream) {
+	public static RevisionLookup createFor(RevlogStream stream) throws HgRuntimeException {
 		RevisionLookup rv = new RevisionLookup(stream);
 		int revCount = stream.revisionCount();
 		rv.prepare(revCount);
@@ -62,7 +65,7 @@ public class RevisionLookup implements RevlogStream.Inspector {
 	public void next(int index, Nodeid nodeid) {
 		nodeidHashes[index] = nodeid.hashCode();
 	}
-	public int findIndex(Nodeid nodeid) {
+	public int findIndex(Nodeid nodeid) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		final int hash = nodeid.hashCode();
 		for (int i = 0; i < nodeidHashes.length; i++) {
 			if (nodeidHashes[i] == hash) {

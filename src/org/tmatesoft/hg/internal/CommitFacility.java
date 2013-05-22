@@ -40,6 +40,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
@@ -97,7 +98,7 @@ public final class CommitFacility {
 	
 	// this method doesn't roll transaction back in case of failure, caller's responsibility
 	// this method expects repository to be locked, if needed
-	public Nodeid commit(String message, Transaction transaction) throws HgIOException, HgRepositoryLockException {
+	public Nodeid commit(String message, Transaction transaction) throws HgIOException, HgRepositoryLockException, HgRuntimeException {
 		final HgChangelog clog = repo.getRepo().getChangelog();
 		final int clogRevisionIndex = clog.getRevisionCount();
 		ManifestRevision c1Manifest = new ManifestRevision(null, null);

@@ -23,6 +23,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.BasicSessionContext;
@@ -80,13 +81,19 @@ public class HgLookup implements SessionContext.Source {
 		if (repository == null) {
 			throw new HgRepositoryNotFoundException(String.format("Can't locate .hg/ directory of Mercurial repository in %s nor in parent dirs", location)).setLocation(location.getPath());
 		}
-		String repoPath = repository.getParentFile().getAbsolutePath();
-		HgRepository rv = new HgRepository(getSessionContext(), repoPath, repository);
-		int requiresFlags = rv.getImplHelper().getRequiresFlags();
-		if ((requiresFlags & RequiresFile.REVLOGV1) == 0) {
-			throw new HgRepositoryNotFoundException(String.format("%s: repository version is not supported (Mercurial <0.9?)", repoPath)).setLocation(location.getPath());
+		try {
+			String repoPath = repository.getParentFile().getAbsolutePath();
+			HgRepository rv = new HgRepository(getSessionContext(), repoPath, repository);
+			int requiresFlags = rv.getImplHelper().getRequiresFlags();
+			if ((requiresFlags & RequiresFile.REVLOGV1) == 0) {
+				throw new HgRepositoryNotFoundException(String.format("%s: repository version is not supported (Mercurial <0.9?)", repoPath)).setLocation(location.getPath());
+			}
+			return rv;
+		} catch (HgRuntimeException ex) {
+			HgRepositoryNotFoundException e = new HgRepositoryNotFoundException("Failed to initialize Hg4J library").setLocation(location.getPath());
+			e.initCause(ex);
+			throw e;
 		}
-		return rv;
 	}
 	
 	public HgBundle loadBundle(File location) throws HgRepositoryNotFoundException {
@@ -152,7 +159,7 @@ public class HgLookup implements SessionContext.Source {
 			globalCfg = new ConfigFile(getSessionContext());
 			try {
 				globalCfg.addLocation(new File(System.getProperty("user.home"), ".hgrc"));
-			} catch (HgInvalidFileException ex) {
+			} catch (HgIOException ex) {
 				// XXX perhaps, makes sense to let caller/client know that we've failed to read global config? 
 				getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 			}

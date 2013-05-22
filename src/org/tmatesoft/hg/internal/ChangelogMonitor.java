@@ -19,6 +19,7 @@ package org.tmatesoft.hg.internal;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Track changes to a repository based on recent changelog revision.
@@ -38,13 +39,13 @@ public class ChangelogMonitor {
 	}
 	
 	// memorize the state of the repository's changelog
-	public void touch() {
+	public void touch() throws HgRuntimeException {
 		changelogRevCount = repo.getChangelog().getRevisionCount();
 		changelogLastRev = safeGetRevision(changelogRevCount-1);
 	}
 	
 	// if present state doesn't match the one we remember
-	public boolean isChanged() {
+	public boolean isChanged() throws HgRuntimeException {
 		int rc = repo.getChangelog().getRevisionCount();
 		if (rc != changelogRevCount) {
 			return true;
@@ -54,7 +55,7 @@ public class ChangelogMonitor {
 	}
 	
 	// handles empty repository case
-	private Nodeid safeGetRevision(int revIndex) {
+	private Nodeid safeGetRevision(int revIndex) throws HgRuntimeException {
 		if (revIndex >= 0) {
 			return repo.getChangelog().getRevision(revIndex);
 		}

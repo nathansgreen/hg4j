@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ import java.util.Date;
 
 import org.tmatesoft.hg.internal.ChangelogHelper;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -70,8 +71,9 @@ public class HgStatus {
 
 	/**
 	 * @return <code>null</code> if author for the change can't be deduced (e.g. for clean files it's senseless)
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public String getModificationAuthor() {
+	public String getModificationAuthor() throws HgRuntimeException {
 		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			if (kind == Kind.Modified || kind == Kind.Added || kind == Kind.Removed /*&& RightBoundary is TIP*/) {
@@ -84,15 +86,20 @@ public class HgStatus {
 		return null;
 	}
 
-	public Date getModificationDate() {
+	/**
+	 * @return date when the file was last modified, never <code>null</code>. Either date of changeset the file was modified at
+	 * or timestamp of local file, if present
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public Date getModificationDate() throws HgRuntimeException {
 		RawChangeset cset = logHelper.findLatestChangeWith(path);
 		if (cset == null) {
 			File localFile = new File(logHelper.getRepo().getWorkingDir(), path.toString());
 			if (localFile.canRead()) {
 				return new Date(localFile.lastModified());
 			}
-			// TODO post-1.0 find out what to do in this case, perhaps, throw an exception?
-			// perhaps check dirstate and/or local file for tstamp
+			// TODO post-1.1 find out what to do in this case, perhaps, throw an exception?
+			// perhaps check dirstate and for timestamp
 			return new Date(); // what's correct? 
 		} else {
 			return cset.date();

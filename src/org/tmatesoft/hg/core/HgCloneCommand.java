@@ -90,7 +90,6 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 	 * @throws HgRepositoryNotFoundException
 	 * @throws HgException
 	 * @throws CancelledException
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public HgRepository execute() throws HgException, CancelledException {
 		if (destination == null) {
@@ -114,23 +113,27 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 		// if cloning remote repo, which can stream and no revision is specified -
 		// can use 'stream_out' wireproto
 		//
-		// pull all changes from the very beginning
-		// XXX consult getContext() if by any chance has a bundle ready, if not, then read and register
-		HgBundle completeChanges = srcRepo.getChanges(Collections.singletonList(NULL));
-		cancel.checkCancelled();
-		WriteDownMate mate = new WriteDownMate(srcRepo.getSessionContext(), destination, progress, cancel);
 		try {
-			// instantiate new repo in the destdir
-			mate.initEmptyRepository();
-			// pull changes
-			completeChanges.inspectAll(mate);
-			mate.checkFailure();
-			mate.complete();
-		} catch (IOException ex) {
-			throw new HgInvalidFileException(getClass().getName(), ex);
-		} finally {
-			completeChanges.unlink();
-			progress.done();
+			// pull all changes from the very beginning
+			// XXX consult getContext() if by any chance has a bundle ready, if not, then read and register
+			HgBundle completeChanges = srcRepo.getChanges(Collections.singletonList(NULL));
+			cancel.checkCancelled();
+			WriteDownMate mate = new WriteDownMate(srcRepo.getSessionContext(), destination, progress, cancel);
+			try {
+				// instantiate new repo in the destdir
+				mate.initEmptyRepository();
+				// pull changes
+				completeChanges.inspectAll(mate);
+				mate.checkFailure();
+				mate.complete();
+			} catch (IOException ex) {
+				throw new HgInvalidFileException(getClass().getName(), ex);
+			} finally {
+				completeChanges.unlink();
+				progress.done();
+			}
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		}
 		return new HgLookup().detect(destination);
 	}
@@ -190,7 +193,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			fncacheFile.write();
 		}
 
-		public void changelogStart() {
+		public void changelogStart() throws HgInvalidControlFileException {
 			try {
 				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
@@ -202,7 +205,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			stopIfCancelled();
 		}
 
-		public void changelogEnd() {
+		public void changelogEnd() throws HgInvalidControlFileException {
 			try {
 				clearPreviousContent();
 				collectChangelogIndexes = false;
@@ -214,7 +217,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			stopIfCancelled();
 		}
 
-		public void manifestStart() {
+		public void manifestStart() throws HgInvalidControlFileException {
 			try {
 				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
@@ -225,7 +228,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			stopIfCancelled();
 		}
 
-		public void manifestEnd() {
+		public void manifestEnd() throws HgInvalidControlFileException {
 			try {
 				clearPreviousContent();
 				closeIndexFile();
@@ -236,7 +239,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			stopIfCancelled();
 		}
 		
-		public void fileStart(String name) {
+		public void fileStart(String name) throws HgInvalidControlFileException {
 			try {
 				revlogHeader.offset(0).baseRevision(-1);
 				revisionSequence.clear();
@@ -250,7 +253,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			stopIfCancelled();
 		}
 
-		public void fileEnd(String name) {
+		public void fileEnd(String name) throws HgInvalidControlFileException {
 			try {
 				fncacheFile.addIndex(pathFactory.path(name)); 
 				clearPreviousContent();
@@ -277,7 +280,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			currentFile = null;
 		}
 
-		private int knownRevision(Nodeid p) {
+		private int knownRevision(Nodeid p) throws HgInvalidControlFileException {
 			if (p.isNull()) {
 				return -1;
 			} else {
@@ -291,7 +294,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			throw new HgInvalidControlFileException(m, null, new File(hgDir, filename)).setRevision(p);
 		}
 		
-		public boolean element(GroupElement ge) {
+		public boolean element(GroupElement ge) throws HgRuntimeException {
 			try {
 				assert indexFile != null;
 				boolean writeComplete = false;

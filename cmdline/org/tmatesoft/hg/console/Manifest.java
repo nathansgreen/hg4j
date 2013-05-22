@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@ import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Path;
 
 
@@ -52,7 +53,7 @@ public class Manifest {
 			}
 			public void dir(Path p) {
 			}
-			public void file(HgFileRevision fileRevision) {
+			public void file(HgFileRevision fileRevision) throws HgRuntimeException {
 				try {
 					if (debug) {
 						System.out.print(fileRevision.getRevision());;

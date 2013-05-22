@@ -19,6 +19,8 @@ package org.tmatesoft.hg.repo;
 import java.io.File;
 import java.io.IOException;
 
+import org.tmatesoft.hg.util.Path;
+
 /**
  * Thrown when there are troubles working with local file. Most likely (but not necessarily) wraps IOException. Might be 
  * perceived as specialized IOException with optional File and other repository information.
@@ -57,6 +59,12 @@ public class HgInvalidFileException extends HgRuntimeException {
 	public HgInvalidFileException setFile(File file) {
 		assert file != null; // doesn't allow null not to clear file accidentally
 		details.setFile(file);
+		return this;
+	}
+	
+	@Override
+	public HgInvalidFileException setFileName(Path name) {
+		super.setFileName(name);
 		return this;
 	}
 

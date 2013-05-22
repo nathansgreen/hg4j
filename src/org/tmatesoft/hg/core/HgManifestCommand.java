@@ -190,7 +190,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 			}
 		}
 	
-		public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) {
+		public boolean begin(int manifestRevision, Nodeid nid, int changelogRevision) throws HgRuntimeException {
 			if (needDirs && manifestContent == null) {
 				manifestContent = new LinkedList<HgFileRevision>();
 			}
@@ -206,7 +206,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 				return false;
 			}
 		}
-		public boolean end(int revision) {
+		public boolean end(int revision) throws HgRuntimeException {
 			try {
 				if (needDirs) {
 					LinkedHashMap<Path, LinkedList<HgFileRevision>> breakDown = new LinkedHashMap<Path, LinkedList<HgFileRevision>>();
@@ -243,7 +243,7 @@ public class HgManifestCommand extends HgAbstractCommand<HgManifestCommand> {
 			}
 		}
 		
-		public boolean next(Nodeid nid, Path fname, Flags flags) {
+		public boolean next(Nodeid nid, Path fname, Flags flags) throws HgRuntimeException {
 			if (matcher != null && !matcher.accept(fname)) {
 				return true;
 			}

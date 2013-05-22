@@ -237,7 +237,9 @@ public final class HgManifest extends Revlog {
 	 * 
 	 * @param inspector manifest revision visitor, can't be <code>null</code>
 	 * @param revisionIndexes local indexes of changesets to visit, non-<code>null</code>
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 * @throws InvalidArgumentException if supplied arguments are <code>null</code>s
 	 */
 	public void walk(final Inspector inspector, int... revisionIndexes) throws HgRuntimeException, IllegalArgumentException {
@@ -253,10 +255,11 @@ public final class HgManifest extends Revlog {
 	 * Tells manifest revision number that corresponds to the given changeset. May return {@link HgRepository#BAD_REVISION} 
 	 * if changeset has no associated manifest (cset records NULL nodeid for manifest).
 	 * @return manifest revision index, non-negative, or {@link HgRepository#BAD_REVISION}.
-	 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgInvalidRevisionException if method argument specifies non-existent revision index. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	/*package-local*/ int fromChangelog(int changesetRevisionIndex) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	/*package-local*/ int fromChangelog(int changesetRevisionIndex) throws HgRuntimeException {
 		if (HgInternals.wrongRevisionIndex(changesetRevisionIndex)) {
 			throw new HgInvalidRevisionException(changesetRevisionIndex);
 		}
@@ -296,9 +299,11 @@ public final class HgManifest extends Revlog {
 	 * @param changelogRevisionIndex local changeset index 
 	 * @param file path to file in question
 	 * @return file revision or <code>null</code> if manifest at specified revision doesn't list such file
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidRevisionException if supplied revision doesn't identify revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	public Nodeid getFileRevision(int changelogRevisionIndex, final Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public Nodeid getFileRevision(int changelogRevisionIndex, final Path file) throws HgRuntimeException {
 		// there's no need for HgDataFile to own this method, or get a delegate
 		// as most of HgDataFile API is using file revision indexes, and there's easy step from file revision index to
 		// both file revision and changeset revision index. But there's no easy way to go from changesetRevisionIndex to
@@ -330,7 +335,9 @@ public final class HgManifest extends Revlog {
 	 * @param file path of interest
 	 * @param inspector callback to receive details about selected file
 	 * @param changelogRevisionIndexes changeset indexes to visit
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidRevisionException if supplied revision doesn't identify revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public void walkFileRevisions(Path file, Inspector inspector, int... changelogRevisionIndexes) throws HgRuntimeException {
 		if (file == null || inspector == null || changelogRevisionIndexes == null) {
@@ -349,9 +356,11 @@ public final class HgManifest extends Revlog {
 	 * @param changesetRevIndex changeset revision index
 	 * @param file path to look up
 	 * @return one of predefined enum values, or <code>null</code> if file was not known in the specified revision
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidRevisionException if supplied revision doesn't identify revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	public Flags getFileFlags(int changesetRevIndex, Path file) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public Flags getFileFlags(int changesetRevIndex, Path file) throws HgRuntimeException {
 		int manifestRevIdx = fromChangelog(changesetRevIndex);
 		IntMap<Flags> resMap = new IntMap<Flags>(2);
 		FileLookupInspector parser = new FileLookupInspector(encodingHelper, file, null, resMap);
@@ -374,11 +383,11 @@ public final class HgManifest extends Revlog {
 	/**
 	 * @param changelogRevisionIndexes non-null
 	 * @param inspector may be null if reporting of missing manifests is not needed
-	 * @throws HgInvalidRevisionException if arguments specify non-existent revision index
-	 * @throws IllegalArgumentException if any index argument is not a revision index
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * @throws HgInvalidRevisionException if supplied revision doesn't identify revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	private int[] toManifestRevisionIndexes(int[] changelogRevisionIndexes, Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	private int[] toManifestRevisionIndexes(int[] changelogRevisionIndexes, Inspector inspector) throws HgRuntimeException {
 		int[] manifestRevs = new int[changelogRevisionIndexes.length];
 		boolean needsSort = false;
 		int j = 0;
@@ -421,8 +430,9 @@ public final class HgManifest extends Revlog {
 		 * @param manifestRevision revision of the manifest we're about to iterate through
 		 * @param changelogRevisionIndex local revision index of changelog this manifest points to 
 		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
+		 * @throws HgRuntimeException propagates library issues. <em>Runtime exception</em>
 		 */
-		boolean begin(int manifestRevisionIndex, Nodeid manifestRevision, int changelogRevisionIndex);
+		boolean begin(int manifestRevisionIndex, Nodeid manifestRevision, int changelogRevisionIndex) throws HgRuntimeException;
 
 		
 		/**
@@ -432,16 +442,18 @@ public final class HgManifest extends Revlog {
 		 * @param fname file name
 		 * @param flags one of {@link HgManifest.Flags} constants, not <code>null</code>
 		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
+		 * @throws HgRuntimeException propagates library issues. <em>Runtime exception</em>
 		 */
-		boolean next(Nodeid nid, Path fname, Flags flags);
+		boolean next(Nodeid nid, Path fname, Flags flags) throws HgRuntimeException;
 
 		/**
 		 * Denotes leaving specific manifest revision, after all entries were reported using {@link #next(Nodeid, Path, Flags)}
 		 *   
 		 * @param manifestRevisionIndex indicates manifest revision, corresponds to opening {@link #begin(int, Nodeid, int)}
 		 * @return <code>true</code> to continue iteration, <code>false</code> to stop
+		 * @throws HgRuntimeException propagates library issues. <em>Runtime exception</em>
 		 */
-		boolean end(int manifestRevisionIndex);
+		boolean end(int manifestRevisionIndex) throws HgRuntimeException;
 	}
 	
 	/**
@@ -531,7 +543,7 @@ public final class HgManifest extends Revlog {
 			progressHelper = ProgressSupport.Factory.get(delegate);
 		}
 		
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) throws HgRuntimeException {
 			try {
 				if (!inspector.begin(revisionNumber, new Nodeid(nodeid, true), linkRevision)) {
 					iterateControl.stop();
@@ -623,7 +635,7 @@ public final class HgManifest extends Revlog {
 		private int[] changelog2manifest;
 		RevisionLookup manifestNodeids;
 
-		private RevisionMapper(boolean useOwnRevisionLookup) {
+		private RevisionMapper(boolean useOwnRevisionLookup) throws HgRuntimeException {
 			changelogRevisionCount = HgManifest.this.getRepo().getChangelog().getRevisionCount();
 			if (useOwnRevisionLookup) {
 				manifestNodeids = new RevisionLookup(HgManifest.this.content);
@@ -691,7 +703,7 @@ public final class HgManifest extends Revlog {
 			// #finish, as the manifest read operation is not complete at the moment.
 		}
 		
-		public void fixReusedManifests() {
+		public void fixReusedManifests() throws HgRuntimeException {
 			if (changelog2manifest == null) {
 				// direct, 1-1 mapping of changeset indexes to manifest
 				return;
@@ -768,15 +780,15 @@ public final class HgManifest extends Revlog {
 			csetIndex2Flags = null;
 		}
 		
-		void walk(int manifestRevIndex, RevlogStream content) {
+		void walk(int manifestRevIndex, RevlogStream content) throws HgRuntimeException {
 			content.iterate(manifestRevIndex, manifestRevIndex, true, this); 
 		}
 
-		void walk(int[] manifestRevIndexes, RevlogStream content) {
+		void walk(int[] manifestRevIndexes, RevlogStream content) throws HgRuntimeException {
 			content.iterate(manifestRevIndexes, true, this);
 		}
 		
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgRuntimeException {
 			ByteVector byteVector = new ByteVector(256, 128); // allocate for long paths right away
 			try {
 				byte b;

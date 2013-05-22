@@ -19,6 +19,7 @@ package org.tmatesoft.hg.internal;
 import java.io.ByteArrayOutputStream;
 
 import org.tmatesoft.hg.core.HgIOException;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Serialization friend of {@link DataAccess}
@@ -78,13 +79,13 @@ public class DataSerializer {
 		 * Invoked once for a single write operation, 
 		 * although the source itself may get serialized several times
 		 */
-		public void serialize(DataSerializer out) throws HgIOException;
+		public void serialize(DataSerializer out) throws HgIOException, HgRuntimeException;
 
 		/**
 		 * Hint of data length it would like to writes
 		 * @return -1 if can't answer
 		 */
-		public int serializeLength();
+		public int serializeLength() throws HgRuntimeException;
 	}
 	
 	public static class ByteArrayDataSource implements DataSource {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,12 +33,12 @@ import java.util.Set;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
 import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
-import org.tmatesoft.hg.repo.HgParentChildMap;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -93,7 +93,7 @@ public class RepositoryComparator {
 	 * only its revision number. 
 	 * @param inspector delegate to analyze changesets, shall not be <code>null</code>
 	 */
-	public void visitLocalOnlyRevisions(HgChangelog.Inspector inspector) throws HgInvalidControlFileException {
+	public void visitLocalOnlyRevisions(HgChangelog.Inspector inspector) throws HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}

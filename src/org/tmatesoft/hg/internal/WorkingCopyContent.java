@@ -26,6 +26,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 
@@ -47,7 +48,7 @@ public class WorkingCopyContent implements DataSerializer.DataSource {
 		}
 	}
 
-	public void serialize(final DataSerializer out) throws HgIOException {
+	public void serialize(final DataSerializer out) throws HgIOException, HgRuntimeException {
 		final HgIOException failure[] = new HgIOException[1];
 		try {
 			// TODO #workingCopy API is very limiting, CancelledException is inconvenient, 
@@ -80,7 +81,7 @@ public class WorkingCopyContent implements DataSerializer.DataSource {
 		}
 	}
 
-	public int serializeLength() {
+	public int serializeLength() throws HgRuntimeException {
 		return file.getLength(HgRepository.WORKING_COPY);
 	}
 }

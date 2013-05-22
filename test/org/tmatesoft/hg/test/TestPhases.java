@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,6 +30,7 @@ import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * {hg4j.tests.repos}/test-phases/
@@ -67,7 +68,7 @@ public class TestPhases {
 		System.out.printf("With ParentWalker(simulates log command for whole repo): %,d μs (pw init: %,d ns)\n", (end - start1)/1000, start2 - start1);
 	}
 
-	private HgPhase[] initAndCheck(PhasesHelper ph, HgPhase[] expected) {
+	private HgPhase[] initAndCheck(PhasesHelper ph, HgPhase[] expected) throws HgRuntimeException {
 		HgChangelog clog = ph.getRepo().getChangelog();
 		HgPhase[] result = new HgPhase[clog.getRevisionCount()];
 		for (int i = 0, l = clog.getLastRevision(); i <= l; i++) {

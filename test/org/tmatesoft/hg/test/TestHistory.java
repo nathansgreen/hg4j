@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.AdapterPlug;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.test.LogOutputParser.Record;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -626,7 +627,7 @@ public class TestHistory {
 		}
 		
 
-		public void treeElement(TreeElement entry) throws HgCallbackTargetException {
+		public void treeElement(TreeElement entry) throws HgCallbackTargetException, HgRuntimeException {
 			// check consistency
 			Nodeid cset = entry.changeset().getNodeid();
 			errorCollector.assertEquals(entry.changesetRevision(), cset);

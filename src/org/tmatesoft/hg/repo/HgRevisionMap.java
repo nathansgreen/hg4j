@@ -85,7 +85,7 @@ public final class HgRevisionMap<T extends Revlog> implements RevisionInspector 
 	/**
 	 * @return <code>this</code> for convenience.
 	 */
-	public HgRevisionMap<T> init(/*XXX Pool<Nodeid> to reuse nodeids, if possible. */) throws HgInvalidControlFileException{
+	public HgRevisionMap<T> init(/*XXX Pool<Nodeid> to reuse nodeids, if possible. */) throws HgRuntimeException {
 		// XXX HgRepository.register((RepoChangeListener) this); // listen to changes in repo, re-init if needed?
 		final int revisionCount = revlog.getRevisionCount();
 		sequential = new Nodeid[revisionCount];

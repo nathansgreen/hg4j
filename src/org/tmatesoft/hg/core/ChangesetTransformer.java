@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import org.tmatesoft.hg.internal.PathPool;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.Adaptable;
@@ -63,7 +64,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
 		lifecycleBridge = new LifecycleBridge(ps, cs);
 	}
 	
-	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+	public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) throws HgRuntimeException {
 		if (branches != null && !branches.contains(cset.branch())) {
 			return;
 		}

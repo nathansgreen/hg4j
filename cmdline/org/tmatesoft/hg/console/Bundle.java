@@ -29,6 +29,7 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
 import org.tmatesoft.hg.repo.HgBundle.Inspector;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 
 /**
@@ -60,7 +61,7 @@ public class Bundle {
 		hgBundle.changes(hgRepo, new HgChangelog.Inspector() {
 			private final HgChangelog changelog = hgRepo.getChangelog();
 			
-			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+			public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) throws HgRuntimeException {
 				if (changelog.isKnown(nodeid)) {
 					System.out.print("+");
 				} else {
@@ -99,7 +100,7 @@ public class Bundle {
 
  */
 
-	public static void dump(HgBundle hgBundle) throws HgException {
+	public static void dump(HgBundle hgBundle) throws HgException, HgRuntimeException {
 		Dump dump = new Dump();
 		hgBundle.inspectAll(dump);
 		System.out.println("Total files:" + dump.names.size());

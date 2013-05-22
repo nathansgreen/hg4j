@@ -73,7 +73,7 @@ public class HgStatusCollector {
 		return repo;
 	}
 	
-	private ManifestRevision get(int rev) throws HgInvalidControlFileException {
+	private ManifestRevision get(int rev) throws HgRuntimeException {
 		ManifestRevision i = cache.get(rev);
 		if (i == null) {
 			if (rev == NO_REVISION) {
@@ -98,7 +98,7 @@ public class HgStatusCollector {
 		}
 	}
 	
-	private void initCacheRange(int minRev, int maxRev) throws HgInvalidControlFileException {
+	private void initCacheRange(int minRev, int maxRev) throws HgRuntimeException {
 		ensureCacheSize();
 		// In fact, walk(minRev, maxRev) doesn't imply
 		// there would be maxRev-minRev+1 revisions visited. For example,
@@ -159,7 +159,7 @@ public class HgStatusCollector {
 	 * @return
 	 * @throws HgInvalidControlFileException
 	 */
-	/*package-local*/ ManifestRevision raw(int rev) throws HgInvalidControlFileException {
+	/*package-local*/ ManifestRevision raw(int rev) throws HgRuntimeException {
 		return get(rev);
 	}
 	/*package-local*/ Convertor<Path> getPathPool() {
@@ -344,9 +344,11 @@ public class HgStatusCollector {
 	 * @param rev1 <em>from</em> changeset index 
 	 * @param rev2 <em>to</em> changeset index
 	 * @return information object that describes change between the revisions
-	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidRevisionException if any supplied revision doesn't identify changeset revision. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	public Record status(int rev1, int rev2) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public Record status(int rev1, int rev2) throws HgRuntimeException {
 		Record rv = new Record();
 		try {
 			walk(rev1, rev2, rv);
@@ -359,7 +361,7 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
-	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgInvalidFileException {
+	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgRuntimeException {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		if (!df.exists()) {
 			String msg = String.format("Didn't find file '%s' in the repo. Perhaps, bad storage name conversion?", fname);
@@ -417,7 +419,7 @@ public class HgStatusCollector {
 			statusHelper = self;
 		}
 		
-		public Nodeid nodeidBeforeChange(Path fname) throws HgInvalidControlFileException {
+		public Nodeid nodeidBeforeChange(Path fname) throws HgRuntimeException {
 			if (statusHelper == null || startRev == BAD_REVISION) {
 				return null;
 			}
@@ -426,7 +428,7 @@ public class HgStatusCollector {
 			}
 			return statusHelper.raw(startRev).nodeid(fname);
 		}
-		public Nodeid nodeidAfterChange(Path fname) throws HgInvalidControlFileException {
+		public Nodeid nodeidAfterChange(Path fname) throws HgRuntimeException {
 			if (statusHelper == null || endRev == BAD_REVISION) {
 				return null;
 			}

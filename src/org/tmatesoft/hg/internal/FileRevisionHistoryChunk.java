@@ -28,6 +28,7 @@ import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Piece of file history, identified by path, limited to file revisions from range [chop..init] of changesets, 
@@ -73,7 +74,7 @@ public final class FileRevisionHistoryChunk {
 		return csetRangeEnd;
 	}
 	
-	public void init(int changelogRevisionIndex) {
+	public void init(int changelogRevisionIndex) throws HgRuntimeException {
 		csetRangeEnd = changelogRevisionIndex;
 		// XXX df.indexWalk(0, fileRevIndex, ) might be more effective
 		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(changelogRevisionIndex, df.getPath());

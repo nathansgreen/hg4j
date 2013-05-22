@@ -194,8 +194,10 @@ public final class HgDataFile extends Revlog {
 	
 	/**
 	 * @return file revision as recorded in repository manifest for dirstate parent, or <code>null</code> if no file revision can be found 
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	private Nodeid getWorkingCopyRevision() throws HgInvalidControlFileException {
+	private Nodeid getWorkingCopyRevision() throws HgRuntimeException {
 		final Pair<Nodeid, Nodeid> wcParents = getRepo().getWorkingCopyParents();
 		Nodeid p = wcParents.first().isNull() ? wcParents.second() : wcParents.first();
 		final HgChangelog clog = getRepo().getChangelog();
@@ -217,7 +219,7 @@ public final class HgDataFile extends Revlog {
 				csetRevIndex = clog.getLastRevision();
 			} else {
 				// bad luck, need to search honestly
-				csetRevIndex = getRepo().getChangelog().getRevisionIndex(p);
+				csetRevIndex = clog.getRevisionIndex(p);
 			}
 		}
 		Nodeid fileRev = getRepo().getManifest().getFileRevision(csetRevIndex, getPath());
@@ -428,7 +430,7 @@ public final class HgDataFile extends Revlog {
 	/**
 	 * mimic 'hg diff -r clogRevIndex1 -r clogRevIndex2'
 	 */
-	public void diff(int clogRevIndex1, int clogRevIndex2, HgBlameInspector insp) throws HgCallbackTargetException {
+	public void diff(int clogRevIndex1, int clogRevIndex2, HgBlameInspector insp) throws HgRuntimeException, HgCallbackTargetException {
 		int fileRevIndex1 = fileRevIndex(this, clogRevIndex1);
 		int fileRevIndex2 = fileRevIndex(this, clogRevIndex2);
 		BlameHelper bh = new BlameHelper(insp);
@@ -439,14 +441,14 @@ public final class HgDataFile extends Revlog {
 	/**
 	 * Walk file history up/down to revision at given changeset and report changes for each revision
 	 */
-	public void annotate(int changelogRevisionIndex, HgBlameInspector insp, HgIterateDirection iterateOrder) throws HgCallbackTargetException {
+	public void annotate(int changelogRevisionIndex, HgBlameInspector insp, HgIterateDirection iterateOrder) throws HgRuntimeException, HgCallbackTargetException {
 		annotate(0, changelogRevisionIndex, insp, iterateOrder);
 	}
 
 	/**
 	 * Walk file history range and report changes for each revision
 	 */
-	public void annotate(int changelogRevIndexStart, int changelogRevIndexEnd, HgBlameInspector insp, HgIterateDirection iterateOrder) throws HgCallbackTargetException {
+	public void annotate(int changelogRevIndexStart, int changelogRevIndexEnd, HgBlameInspector insp, HgIterateDirection iterateOrder) throws HgRuntimeException, HgCallbackTargetException {
 		if (wrongRevisionIndex(changelogRevIndexStart) || wrongRevisionIndex(changelogRevIndexEnd)) {
 			throw new IllegalArgumentException();
 		}
@@ -483,7 +485,7 @@ public final class HgDataFile extends Revlog {
 	 * Unlike {@link #annotate(HgDataFile, int, Inspector, HgIterateDirection)}, doesn't
 	 * walk file history, looks at the specified revision only. Handles both parents (if merge revision).
 	 */
-	public void annotateSingleRevision(int changelogRevisionIndex, HgBlameInspector insp) throws HgCallbackTargetException {
+	public void annotateSingleRevision(int changelogRevisionIndex, HgBlameInspector insp) throws HgRuntimeException, HgCallbackTargetException {
 		// TODO detect if file is text/binary (e.g. looking for chars < ' ' and not \t\r\n\f
 		int fileRevIndex = fileRevIndex(this, changelogRevisionIndex);
 		int[] fileRevParents = new int[2];
@@ -509,7 +511,7 @@ public final class HgDataFile extends Revlog {
 		return sb.toString();
 	}
 	
-	private void checkAndRecordMetadata(int localRev) throws HgInvalidControlFileException {
+	private void checkAndRecordMetadata(int localRev) throws HgRuntimeException {
 		if (metadata == null) {
 			metadata = new Metadata(getRepo());
 		}
@@ -519,7 +521,7 @@ public final class HgDataFile extends Revlog {
 	}
 	
 
-	private static int fileRevIndex(HgDataFile df, int csetRevIndex) {
+	private static int fileRevIndex(HgDataFile df, int csetRevIndex) throws HgRuntimeException {
 		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(csetRevIndex, df.getPath());
 		return df.getRevisionIndex(fileRev);
 	}
@@ -539,7 +541,7 @@ public final class HgDataFile extends Revlog {
 			setCancelSupport(CancelSupport.Factory.get(chain));
 		}
 
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgRuntimeException {
 			try {
 				if (metadata.tryRead(revisionNumber, data)) {
 					// da is in prepared state (i.e. we consumed all bytes up to metadata end).

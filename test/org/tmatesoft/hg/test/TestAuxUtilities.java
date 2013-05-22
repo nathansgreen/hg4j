@@ -41,6 +41,7 @@ import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
@@ -285,7 +286,7 @@ public class TestAuxUtilities {
 		fileNode.indexWalk(0, TIP, new HgDataFile.RevisionInspector() {
 			int i = 0;
 
-			public void next(int localRevision, Nodeid revision, int linkedRevision) {
+			public void next(int localRevision, Nodeid revision, int linkedRevision) throws HgRuntimeException {
 				assertEquals(i++, localRevision);
 				assertEquals(fileNode.getChangesetRevisionIndex(localRevision), linkedRevision);
 				assertEquals(fileNode.getRevision(localRevision), revision);

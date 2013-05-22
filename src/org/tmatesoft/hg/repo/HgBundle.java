@@ -143,7 +143,7 @@ Excerpt from bundle (nodeid, p1, p2, cs):
 
 To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
  */
-			public boolean element(GroupElement ge) {
+			public boolean element(GroupElement ge) throws HgRuntimeException {
 				emptyChangelog = false;
 				HgChangelog changelog = hgRepo.getChangelog();
 				try {
@@ -194,24 +194,24 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 	// callback to minimize amount of Strings and Nodeids instantiated
 	@Callback
 	public interface Inspector {
-		void changelogStart();
+		void changelogStart() throws HgRuntimeException;
 
-		void changelogEnd();
+		void changelogEnd() throws HgRuntimeException;
 
-		void manifestStart();
+		void manifestStart() throws HgRuntimeException;
 
-		void manifestEnd();
+		void manifestEnd() throws HgRuntimeException;
 
-		void fileStart(String name);
+		void fileStart(String name) throws HgRuntimeException;
 
-		void fileEnd(String name);
+		void fileEnd(String name) throws HgRuntimeException;
 
 		/**
 		 * XXX desperately need exceptions here
 		 * @param element data element, instance might be reused, don't keep a reference to it or its raw data
 		 * @return <code>true</code> to continue
 		 */
-		boolean element(GroupElement element);
+		boolean element(GroupElement element) throws HgRuntimeException;
 	}
 
 	/**
@@ -355,7 +355,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		flowControl = null;
 	}
 
-	private void internalInspectChangelog(DataAccess da, Inspector inspector) throws IOException {
+	private void internalInspectChangelog(DataAccess da, Inspector inspector) throws IOException, HgRuntimeException {
 		if (da.isEmpty()) {
 			return;
 		}
@@ -370,7 +370,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		inspector.changelogEnd();
 	}
 
-	private void internalInspectManifest(DataAccess da, Inspector inspector) throws IOException {
+	private void internalInspectManifest(DataAccess da, Inspector inspector) throws IOException, HgRuntimeException {
 		if (da.isEmpty()) {
 			return;
 		}
@@ -385,7 +385,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		inspector.manifestEnd();
 	}
 
-	private void internalInspectFiles(DataAccess da, Inspector inspector) throws IOException {
+	private void internalInspectFiles(DataAccess da, Inspector inspector) throws IOException, HgRuntimeException {
 		while (!da.isEmpty()) {
 			int fnameLen = da.readInt();
 			if (fnameLen <= 4) {
@@ -406,7 +406,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
-	private static void readGroup(DataAccess da, Inspector inspector) throws IOException {
+	private static void readGroup(DataAccess da, Inspector inspector) throws IOException, HgRuntimeException {
 		int len = da.readInt();
 		boolean good2go = true;
 		Nodeid prevNodeid = Nodeid.NULL;

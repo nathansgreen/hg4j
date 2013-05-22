@@ -20,6 +20,7 @@ import java.util.zip.Deflater;
 
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
@@ -44,7 +45,7 @@ public class RevlogCompressor {
 	}
 	
 	// out stream is not closed!
-	public int writeCompressedData(DataSerializer out) throws HgIOException {
+	public int writeCompressedData(DataSerializer out) throws HgIOException, HgRuntimeException {
 		zip.reset();
 		DeflaterDataSerializer dds = new DeflaterDataSerializer(out, zip, sourceData.serializeLength());
 		sourceData.serialize(dds);
@@ -52,7 +53,7 @@ public class RevlogCompressor {
 		return zip.getTotalOut();
 	}
 
-	public int getCompressedLength() {
+	public int getCompressedLength() throws HgRuntimeException {
 		if (compressedLen != -1) {
 			return compressedLen;
 		}

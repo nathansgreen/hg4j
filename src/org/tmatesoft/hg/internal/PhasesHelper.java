@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,6 +37,7 @@ import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Support to deal with Mercurial phases feature (as of Mercurial version 2.1)
@@ -69,7 +70,7 @@ public final class PhasesHelper {
 		return repo.getRepo();
 	}
 
-	public boolean isCapableOfPhases() throws HgInvalidControlFileException {
+	public boolean isCapableOfPhases() throws HgRuntimeException {
 		if (null == repoSupporsPhases) {
 			repoSupporsPhases = readRoots();
 		}
@@ -77,13 +78,26 @@ public final class PhasesHelper {
 	}
 
 
-	public HgPhase getPhase(HgChangeset cset) throws HgInvalidControlFileException {
+	/**
+	 * @param cset revision to query
+	 * @return phase of the changeset, never <code>null</code>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+	 */
+	public HgPhase getPhase(HgChangeset cset) throws HgRuntimeException {
 		final Nodeid csetRev = cset.getNodeid();
 		final int csetRevIndex = cset.getRevisionIndex();
 		return getPhase(csetRevIndex, csetRev);
 	}
 
-	public HgPhase getPhase(final int csetRevIndex, Nodeid csetRev) throws HgInvalidControlFileException {
+	/**
+	 * @param csetRevIndex revision index to query
+	 * @param csetRev revision nodeid, optional 
+	 * @return phase of the changeset, never <code>null</code>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+	 */
+	public HgPhase getPhase(final int csetRevIndex, Nodeid csetRev) throws HgRuntimeException {
 		if (!isCapableOfPhases()) {
 			return HgPhase.Undefined;
 		}
@@ -119,8 +133,8 @@ public final class PhasesHelper {
 
 	}
 
-	private Boolean readRoots() throws HgInvalidControlFileException {
-		File phaseroots = repo.getFileFromStoreDir("phaseroots");
+	private Boolean readRoots() throws HgRuntimeException {
+		File phaseroots = repo.getFileFromStoreDir("phaseroots"); // TODO into HgRepositoryFiles
 		BufferedReader br = null;
 		try {
 			if (!phaseroots.exists()) {
@@ -177,7 +191,7 @@ public final class PhasesHelper {
 	}
 
 
-	private RevisionDescendants[] getPhaseDescendants(HgPhase phase) throws HgInvalidControlFileException {
+	private RevisionDescendants[] getPhaseDescendants(HgPhase phase) throws HgRuntimeException {
 		int ordinal = phase.ordinal();
 		if (phaseDescendants[ordinal] == null) {
 			phaseDescendants[ordinal] = buildPhaseDescendants(phase);
@@ -185,7 +199,7 @@ public final class PhasesHelper {
 		return phaseDescendants[ordinal];
 	}
 
-	private RevisionDescendants[] buildPhaseDescendants(HgPhase phase) throws HgInvalidControlFileException {
+	private RevisionDescendants[] buildPhaseDescendants(HgPhase phase) throws HgRuntimeException {
 		int[] roots = toIndexes(getPhaseRoots(phase));
 		RevisionDescendants[] rv = new RevisionDescendants[roots.length];
 		for (int i = 0; i < roots.length; i++) {
@@ -195,7 +209,7 @@ public final class PhasesHelper {
 		return rv;
 	}
 	
-	private int[] toIndexes(List<Nodeid> roots) throws HgInvalidControlFileException {
+	private int[] toIndexes(List<Nodeid> roots) throws HgRuntimeException {
 		int[] rv = new int[roots.size()];
 		for (int i = 0; i < rv.length; i++) {
 			rv[i] = getRepo().getChangelog().getRevisionIndex(roots.get(i));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -185,9 +185,7 @@ public class HgMergeState {
 	 * @return <code>true</code> when recorded merge state doesn't seem to correspond to present working copy
 	 */
 	public boolean isStale() {
-		if (wcp1 == null) {
-			refresh();
-		}
+		assert wcp1 != null;
 		return !stateParent.isNull() /*there's merge state*/ && !wcp1.equals(stateParent) /*and it doesn't match*/; 
 	}
 
@@ -198,9 +196,7 @@ public class HgMergeState {
 	 * @return first parent of the working copy, never <code>null</code>
 	 */
 	public Nodeid getFirstParent() {
-		if (wcp1 == null) {
-			refresh();
-		}
+		assert wcp1 != null;
 		return wcp1;
 	}
 	
@@ -208,9 +204,7 @@ public class HgMergeState {
 	 * @return second parent of the working copy, never <code>null</code>
 	 */
 	public Nodeid getSecondParent() {
-		if (wcp2 == null) {
-			refresh();
-		}
+		assert wcp2 != null;
 		return wcp2;
 	}
 	
@@ -218,9 +212,7 @@ public class HgMergeState {
 	 * @return revision of the merge state or {@link Nodeid#NULL} if there's no merge state
 	 */
 	public Nodeid getStateParent() {
-		if (stateParent == null) {
-			refresh();
-		}
+		assert stateParent != null;
 		return stateParent;
 	}
 

@@ -33,6 +33,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgDirstate;
 import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
 import org.tmatesoft.hg.repo.HgDirstate.Record;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.util.Path;
@@ -164,7 +165,7 @@ public class DirstateBuilder {
 		}
 	}
 	
-	public void fillFrom(DirstateReader dirstate) {
+	public void fillFrom(DirstateReader dirstate) throws HgInvalidControlFileException {
 		// TODO preserve order, if reasonable and possible 
 		dirstate.readInto(new HgDirstate.Inspector() {
 			

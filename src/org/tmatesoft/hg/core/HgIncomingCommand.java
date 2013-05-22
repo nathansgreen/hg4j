@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,12 +31,11 @@ import org.tmatesoft.hg.internal.RepositoryComparator.BranchChain;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
-import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -138,10 +137,10 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 		if (handler == null) {
 			throw new IllegalArgumentException("Delegate can't be null");
 		}
-		final List<Nodeid> common = getCommon();
-		HgBundle changegroup = remoteRepo.getChanges(common);
 		final ProgressSupport ps = getProgressSupport(handler);
 		try {
+			final List<Nodeid> common = getCommon();
+			HgBundle changegroup = remoteRepo.getChanges(common);
 			final ChangesetTransformer transformer = new ChangesetTransformer(localRepo, handler, getParentHelper(), ps, getCancelSupport(handler, true));
 			transformer.limitBranches(branches);
 			changegroup.changes(localRepo, new HgChangelog.Inspector() {
@@ -154,7 +153,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 					localIndex = localRepo.getChangelog().getRevisionCount();
 				}
 				
-				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
+				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) throws HgRuntimeException {
 					if (parentHelper.knownNode(nodeid)) {
 						if (!common.contains(nodeid)) {
 							throw new HgInvalidStateException("Bundle shall not report known nodes other than roots we've supplied");
@@ -172,7 +171,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 		}
 	}
 
-	private RepositoryComparator getComparator() throws HgInvalidControlFileException, CancelledException {
+	private RepositoryComparator getComparator() throws CancelledException, HgRuntimeException {
 		if (remoteRepo == null) {
 			throw new IllegalArgumentException("Shall specify remote repository to compare against", null);
 		}
@@ -183,7 +182,7 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 		return comparator;
 	}
 	
-	private HgParentChildMap<HgChangelog> getParentHelper() throws HgInvalidControlFileException {
+	private HgParentChildMap<HgChangelog> getParentHelper() throws HgRuntimeException {
 		if (parentHelper == null) {
 			parentHelper = new HgParentChildMap<HgChangelog>(localRepo.getChangelog());
 			parentHelper.init();
@@ -191,14 +190,14 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 		return parentHelper;
 	}
 	
-	private List<BranchChain> getMissingBranches() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
+	private List<BranchChain> getMissingBranches() throws HgRemoteConnectionException, CancelledException, HgRuntimeException {
 		if (missingBranches == null) {
 			missingBranches = getComparator().calculateMissingBranches();
 		}
 		return missingBranches;
 	}
 
-	private List<Nodeid> getCommon() throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
+	private List<Nodeid> getCommon() throws HgRemoteConnectionException, CancelledException, HgRuntimeException {
 //		return getComparator(context).getCommon();
 		final LinkedHashSet<Nodeid> common = new LinkedHashSet<Nodeid>();
 		// XXX common can be obtained from repoCompare, but at the moment it would almost duplicate work of calculateMissingBranches

@@ -30,6 +30,7 @@ import org.tmatesoft.hg.internal.WorkingCopyContent;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgStatusCollector.Record;
@@ -74,12 +75,17 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 	 * Tell if changes in the working directory constitute merge commit. May be invoked prior to (and independently from) {@link #execute()}
 	 * 
 	 * @return <code>true</code> if working directory changes are result of a merge
-	 * @throws HgException subclass thereof to indicate specific issue with the repository
+	 * @throws HgLibraryFailureException to indicate unexpected issue with the repository
+	 * @throws HgException subclass thereof to indicate other specific issue with repository state
 	 */
 	public boolean isMergeCommit() throws HgException {
-		int[] parents = new int[2];
-		detectParentFromDirstate(parents);
-		return parents[0] != NO_REVISION && parents[1] != NO_REVISION; 
+		try {
+			int[] parents = new int[2];
+			detectParentFromDirstate(parents);
+			return parents[0] != NO_REVISION && parents[1] != NO_REVISION;
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
+		}
 	}
 
 	/**
@@ -152,7 +158,7 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 		return newRevision;
 	}
 
-	private String detectBranch() {
+	private String detectBranch() throws HgInvalidControlFileException {
 		return repo.getWorkingCopyBranchName();
 	}
 	
@@ -164,7 +170,7 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 		return new HgInternals(repo).getNextCommitUsername();
 	}
 
-	private void detectParentFromDirstate(int[] parents) {
+	private void detectParentFromDirstate(int[] parents) throws HgRuntimeException {
 		Pair<Nodeid, Nodeid> pn = repo.getWorkingCopyParents();
 		HgChangelog clog = repo.getChangelog();
 		parents[0] = pn.first().isNull() ? NO_REVISION : clog.getRevisionIndex(pn.first());

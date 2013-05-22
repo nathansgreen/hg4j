@@ -19,7 +19,6 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,6 +28,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.StringTokenizer;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -337,10 +337,9 @@ public final class Internals implements SessionContext.Source {
 	
 	/**
 	 * User-specific configuration, from system-wide and user home locations, without any repository-specific data.
-	 * 
 	 * @see http://www.selenic.com/mercurial/hgrc.5.html
 	 */
-	public static ConfigFile readConfiguration(SessionContext sessionCtx) throws IOException {
+	public static ConfigFile readConfiguration(SessionContext sessionCtx) throws HgIOException {
 		ConfigFile configFile = new ConfigFile(sessionCtx);
 		File hgInstallRoot = findHgInstallRoot(sessionCtx); // may be null
 		//
@@ -386,7 +385,7 @@ public final class Internals implements SessionContext.Source {
 	 * Repository-specific configuration
 	 * @see http://www.selenic.com/mercurial/hgrc.5.html
 	 */
-	public ConfigFile readConfiguration() throws IOException {
+	public ConfigFile readConfiguration() throws HgIOException {
 		ConfigFile configFile = readConfiguration(repo.getSessionContext());
 		// last one, overrides anything else
 		// <repo>/.hg/hgrc

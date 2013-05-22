@@ -26,6 +26,7 @@ import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.LogFacility.Severity;
@@ -62,8 +63,9 @@ public class WorkingDirFileWriter implements ByteChannel {
 	/**
 	 * Writes content of specified file revision into local filesystem, or create a symlink according to flags. 
 	 * Executable bit is set if specified and filesystem supports it. 
+	 * @throws HgRuntimeException 
 	 */
-	public void processFile(HgDataFile df, int fileRevIndex, HgManifest.Flags flags) throws IOException {
+	public void processFile(HgDataFile df, int fileRevIndex, HgManifest.Flags flags) throws IOException, HgRuntimeException {
 		try {
 			prepare(df.getPath());
 			if (flags != HgManifest.Flags.Link) {

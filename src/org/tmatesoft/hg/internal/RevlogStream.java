@@ -36,6 +36,7 @@ import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Adaptable;
 
 
@@ -150,12 +151,12 @@ public class RevlogStream {
 		return inline ? indexFile.getPath() : getDataFile().getPath();
 	}
 
-	public boolean isInlineData() {
+	public boolean isInlineData() throws HgInvalidControlFileException {
 		initOutline();
 		return inline;
 	}
 	
-	public int revisionCount() {
+	public int revisionCount() throws HgInvalidControlFileException {
 		initOutline();
 		return baseRevisions.length;
 	}
@@ -271,7 +272,7 @@ public class RevlogStream {
 	 * @return value suitable for the corresponding field in the new revision's header, not physical offset in the file 
 	 * (which is different in case of inline revlogs)
 	 */
-	public long newEntryOffset() {
+	public long newEntryOffset() throws HgInvalidControlFileException {
 		if (revisionCount() == 0) {
 			return 0;
 		}
@@ -291,9 +292,12 @@ public class RevlogStream {
 		}
 	}
 
-	// should be possible to use TIP, ALL, or -1, -2, -n notation of Hg
-	// ? boolean needsNodeid
-	public void iterate(int start, int end, boolean needData, Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	/**
+	 * should be possible to use TIP, ALL, or -1, -2, -n notation of Hg
+	 * ? boolean needsNodeid
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 */
+	public void iterate(int start, int end, boolean needData, Inspector inspector) throws HgRuntimeException {
 		initOutline();
 		final int indexSize = revisionCount();
 		if (indexSize == 0) {
@@ -326,8 +330,9 @@ public class RevlogStream {
 	 * @param sortedRevisions revisions to walk, in ascending order.
 	 * @param needData whether inspector needs access to header only
 	 * @param inspector callback to process entries
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public void iterate(int[] sortedRevisions, boolean needData, Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException /*REVISIT - too general exception*/ {
+	public void iterate(int[] sortedRevisions, boolean needData, Inspector inspector) throws HgRuntimeException {
 		final int indexSize = revisionCount();
 		if (indexSize == 0 || sortedRevisions.length == 0) {
 			return;
@@ -442,7 +447,7 @@ public class RevlogStream {
 		return inline ? indexRecordOffset[revisionIndex] : revisionIndex * REVLOGV1_RECORD_SIZE;
 	}
 	
-	private int checkRevisionIndex(int revisionIndex) throws HgInvalidRevisionException {
+	private int checkRevisionIndex(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		final int last = revisionCount() - 1;
 		if (revisionIndex == TIP) {
 			revisionIndex = last;
@@ -722,7 +727,7 @@ public class RevlogStream {
 		}
 
 		// may be invoked few times per instance life
-		public boolean range(int start, int end) throws IOException {
+		public boolean range(int start, int end) throws IOException, HgRuntimeException {
 			int i;
 			// it (i.e. replace with i >= start)
 			if (needData && (i = getBaseRevision(start)) < start) {
@@ -850,7 +855,7 @@ public class RevlogStream {
 		 * @param data access to revision content of actualLen size, or <code>null</code> if no data has been requested with 
 		 *        {@link RevlogStream#iterate(int[], boolean, Inspector)}
 		 */
-		void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data);
+		void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[/*20*/] nodeid, DataAccess data) throws HgRuntimeException;
 	}
 
 	public interface Observer {

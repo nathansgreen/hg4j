@@ -23,6 +23,7 @@ import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Common code to keep changelog revision and to perform boundary check.
@@ -43,19 +44,25 @@ public class CsetParamKeeper {
 			set(repo.getChangelog().getRevisionIndex(changeset));
 		} catch (HgInvalidRevisionException ex) {
 			throw new HgBadArgumentException("Can't find revision", ex).setRevision(changeset);
+		} catch (HgRuntimeException ex) {
+			throw new HgBadArgumentException(String.format("Can't initialize with revision %s", changeset.shortNotation()), ex);
 		}
 		return this;
 	}
 	
 	public CsetParamKeeper set(int changelogRevIndex) throws HgBadArgumentException {
-		int lastCsetIndex = repo.getChangelog().getLastRevision();
-		if (changelogRevIndex == HgRepository.TIP) {
-			changelogRevIndex = lastCsetIndex;
+		try {
+			int lastCsetIndex = repo.getChangelog().getLastRevision();
+			if (changelogRevIndex == HgRepository.TIP) {
+				changelogRevIndex = lastCsetIndex;
+			}
+			if (changelogRevIndex < 0 || changelogRevIndex > lastCsetIndex) {
+				throw new HgBadArgumentException(String.format("Bad revision index %d, value from [0..%d] expected", changelogRevIndex, lastCsetIndex), null).setRevisionIndex(changelogRevIndex);
+			}
+			doSet(changelogRevIndex);
+		} catch (HgRuntimeException ex) {
+			throw new HgBadArgumentException(String.format("Can't initialize with revision index %d", changelogRevIndex), ex);
 		}
-		if (changelogRevIndex < 0 || changelogRevIndex > lastCsetIndex) {
-			throw new HgBadArgumentException(String.format("Bad revision index %d, value from [0..%d] expected", changelogRevIndex, lastCsetIndex), null).setRevisionIndex(changelogRevIndex);
-		}
-		doSet(changelogRevIndex);
 		return this;
 	}
 	
@@ -74,7 +81,7 @@ public class CsetParamKeeper {
 	 * @param defaultRevisionIndex value to return when no revision was set, may be {@link HgRepository#TIP} which gets translated to real index if used
 	 * @return changelog revision index if set, or defaultRevisionIndex value otherwise
 	 */
-	public int get(int defaultRevisionIndex) {
+	public int get(int defaultRevisionIndex) throws HgRuntimeException {
 		// XXX perhaps, shall translate other predefined constants (like WORKING COPY) here, too (e.g. for HgRevertCommand)
 		if (changelogRevisionIndex != BAD_REVISION || changelogRevisionIndex != TIP) {
 			return changelogRevisionIndex;

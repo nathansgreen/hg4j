@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@ import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -43,7 +44,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 	private final HgRepository repo;
 	private final int tip;
 
-	public ChangesetDumpHandler(HgRepository hgRepo) {
+	public ChangesetDumpHandler(HgRepository hgRepo) throws HgRuntimeException {
 		repo = hgRepo;
 		tip = hgRepo.getChangelog().getLastRevision();
 	}
@@ -63,7 +64,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 		return this;
 	}
 
-	public void cset(HgChangeset changeset) {
+	public void cset(HgChangeset changeset) throws HgRuntimeException {
 		try {
 			final String s = print(changeset);
 			if (reverseOrder) {
@@ -89,7 +90,7 @@ public class ChangesetDumpHandler implements HgChangesetHandler {
 		l.clear();
 	}
 
-	private String print(HgChangeset cset) throws HgException {
+	private String print(HgChangeset cset) throws HgException, HgRuntimeException {
 		StringBuilder sb = new StringBuilder();
 		Formatter f = new Formatter(sb);
 		final Nodeid csetNodeid = cset.getNodeid();

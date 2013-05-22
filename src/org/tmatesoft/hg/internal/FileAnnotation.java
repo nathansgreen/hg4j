@@ -23,6 +23,7 @@ import org.tmatesoft.hg.repo.HgBlameInspector;
 import org.tmatesoft.hg.repo.HgBlameInspector.RevisionDescriptor;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Produce output like 'hg annotate' does
@@ -48,7 +49,7 @@ public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Reci
 	/**
 	 * Annotate file revision, line by line.
 	 */
-	public static void annotate(HgDataFile df, int changelogRevisionIndex, LineInspector insp) throws HgCallbackTargetException {
+	public static void annotate(HgDataFile df, int changelogRevisionIndex, LineInspector insp) throws HgCallbackTargetException, HgRuntimeException {
 		if (!df.exists()) {
 			return;
 		}

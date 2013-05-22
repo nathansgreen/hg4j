@@ -31,8 +31,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.util.LogFacility;
 
 /**
@@ -50,7 +50,7 @@ public class ConfigFile {
 		sessionContext = ctx;
 	}
 
-	public void addLocation(File path) throws HgInvalidFileException {
+	public void addLocation(File path) throws HgIOException {
 		read(path);
 	}
 	
@@ -125,7 +125,7 @@ public class ConfigFile {
 		}
 	}
 	
-	private void read(File f) throws HgInvalidFileException {
+	private void read(File f) throws HgIOException {
 		if (f == null || !f.canRead()) {
 			return;
 		}
@@ -227,7 +227,7 @@ public class ConfigFile {
 			return true;
 		}
 		
-		public void go(File f, ConfigFile cfg) throws HgInvalidFileException {
+		public void go(File f, ConfigFile cfg) throws HgIOException {
 			contextFile = f;
 			LineReader lr = new LineReader(f, cfg.sessionContext.getLog());
 			lr.ignoreLineComments("#");
@@ -250,7 +250,7 @@ public class ConfigFile {
 					LogFacility lf = cfg.sessionContext.getLog();
 					lf.dump(ConfigFile.class, LogFacility.Severity.Debug, "Can't read file to  include: %s", f);
 				}
-			} catch (HgInvalidFileException ex) {
+			} catch (HgIOException ex) {
 				LogFacility lf = cfg.sessionContext.getLog();
 				lf.dump(ConfigFile.class, LogFacility.Severity.Warn, "Can't include %s (%s)", f, includeValue);
 			}

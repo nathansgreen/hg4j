@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@ import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgLogCommand;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.ProgressSupport;
 
@@ -124,7 +125,7 @@ public class Log {
 	private static final class Dump extends ChangesetDumpHandler implements HgChangesetHandler.WithCopyHistory {
 		private final RenameDumpHandler renameHandlerDelegate;
 
-		public Dump(HgRepository hgRepo) {
+		public Dump(HgRepository hgRepo) throws HgRuntimeException {
 			super(hgRepo);
 			renameHandlerDelegate = new RenameDumpHandler();
 		}

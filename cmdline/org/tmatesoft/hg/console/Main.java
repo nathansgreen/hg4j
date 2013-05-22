@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,6 +57,7 @@ import org.tmatesoft.hg.repo.HgDirstate.EntryKind;
 import org.tmatesoft.hg.repo.HgDirstate.Record;
 import org.tmatesoft.hg.repo.HgIgnore;
 import org.tmatesoft.hg.repo.HgInternals;
+import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgMergeState;
@@ -219,7 +220,7 @@ public class Main {
 		cmd.file("a2.txt", true, false);
 		final int[] count = new int[] { 0 };
 		class MyHandler implements HgChangesetTreeHandler, Adaptable {
-			public void treeElement(HgChangesetTreeHandler.TreeElement entry) {
+			public void treeElement(HgChangesetTreeHandler.TreeElement entry) throws HgRuntimeException {
 				StringBuilder sb = new StringBuilder();
 				HashSet<Nodeid> test = new HashSet<Nodeid>(entry.childRevisions());
 				for (HgChangeset cc : entry.children()) {
@@ -519,7 +520,7 @@ public class Main {
 		System.out.println(bac.toArray().length);
 	}
 	
-	private void dumpIgnored() {
+	private void dumpIgnored() throws HgInvalidControlFileException {
 		String[] toCheck = new String[] {"design.txt", "src/com/tmate/hgkit/ll/Changelog.java", "src/Extras.java", "bin/com/tmate/hgkit/ll/Changelog.class"};
 		HgIgnore ignore = hgRepo.getIgnore();
 		for (int i = 0; i < toCheck.length; i++) {
@@ -609,7 +610,7 @@ public class Main {
 			public void dir(Path p) {
 				System.out.println(p);
 			}
-			public void file(HgFileRevision fileRevision) {
+			public void file(HgFileRevision fileRevision) throws HgRuntimeException {
 				System.out.print(fileRevision.getRevision());;
 				System.out.print("   ");
 				System.out.printf("%s %s", fileRevision.getParents().first().shortNotation(), fileRevision.getParents().second().shortNotation());
@@ -672,7 +673,7 @@ public class Main {
 	}
 
 
-	private void testStatusInternals() throws HgException {
+	private void testStatusInternals() throws HgException, HgRuntimeException {
 		HgDataFile n = hgRepo.getFileNode(Path.create("design.txt"));
 		for (String s : new String[] {"011dfd44417c72bd9e54cf89b82828f661b700ed", "e5529faa06d53e06a816e56d218115b42782f1ba", "c18e7111f1fc89a80a00f6a39d51288289a382fc"}) {
 			// expected: 359, 2123, 3079

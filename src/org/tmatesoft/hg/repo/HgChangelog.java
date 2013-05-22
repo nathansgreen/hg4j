@@ -53,18 +53,40 @@ public final class HgChangelog extends Revlog {
 		super(hgRepo, content, true);
 	}
 
-	public void all(final HgChangelog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	/**
+	 * Iterate over whole changelog
+	 * @param inspector callback to process entries
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+	 */
+	public void all(final HgChangelog.Inspector inspector) throws HgRuntimeException {
 		range(0, getLastRevision(), inspector);
 	}
 
-	public void range(int start, int end, final HgChangelog.Inspector inspector) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	/**
+	 * Iterate over changelog part
+	 * @param start first changelog entry to process
+	 * @param end last changelog entry to process
+	 * @param inspector callback to process entries
+	 * @throws HgInvalidRevisionException if any supplied revision doesn't identify revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+	 */
+	public void range(int start, int end, final HgChangelog.Inspector inspector) throws HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
 		content.iterate(start, end, true, new RawCsetParser(inspector));
 	}
 
-	public List<RawChangeset> range(int start, int end) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	/**
+	 * @see #range(int, int, Inspector)
+	 * @return changeset entry objects, never <code>null</code>
+	 * @throws HgInvalidRevisionException if any supplied revision doesn't identify revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+	 */
+	public List<RawChangeset> range(int start, int end) throws HgRuntimeException {
 		final RawCsetCollector c = new RawCsetCollector(end - start + 1);
 		range(start, end, c);
 		return c.result;
@@ -75,8 +97,11 @@ public final class HgChangelog extends Revlog {
 	 * changesets strictly in the order they are in the changelog.
 	 * @param inspector callback to get changesets
 	 * @param revisions revisions to read, unrestricted ordering.
+	 * @throws HgInvalidRevisionException if any supplied revision doesn't identify revision from this revlog <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	public void range(final HgChangelog.Inspector inspector, final int... revisions) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	public void range(final HgChangelog.Inspector inspector, final int... revisions) throws HgRuntimeException {
 		Arrays.sort(revisions);
 		rangeInternal(inspector, revisions);
 	}
@@ -84,7 +109,7 @@ public final class HgChangelog extends Revlog {
 	/**
 	 * Friends-only version of {@link #range(Inspector, int...)}, when callers know array is sorted
 	 */
-	/*package-local*/ void rangeInternal(HgChangelog.Inspector inspector, int[] sortedRevisions) throws HgInvalidRevisionException, HgInvalidControlFileException {
+	/*package-local*/ void rangeInternal(HgChangelog.Inspector inspector, int[] sortedRevisions) throws HgRuntimeException {
 		if (sortedRevisions == null || sortedRevisions.length == 0) {
 			return;
 		}
@@ -95,10 +120,12 @@ public final class HgChangelog extends Revlog {
 	}
 
 	/**
-	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog  
-	 * @throws HgInvalidControlFileException if access to revlog index/data entry failed
+	 * Get changeset entry object
+	 * @throws HgInvalidRevisionException if supplied nodeid doesn't identify any revision from this revlog. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
-	public RawChangeset changeset(Nodeid nid)  throws HgInvalidControlFileException, HgInvalidRevisionException {
+	public RawChangeset changeset(Nodeid nid)  throws HgRuntimeException {
 		int x = getRevisionIndex(nid);
 		return range(x, x).get(0);
 	}
@@ -113,7 +140,7 @@ public final class HgChangelog extends Revlog {
 		 * @param nodeid revision being inspected
 		 * @param cset changeset raw data
 		 */
-		void next(int revisionIndex, Nodeid nodeid, RawChangeset cset);
+		void next(int revisionIndex, Nodeid nodeid, RawChangeset cset) throws HgRuntimeException;
 	}
 
 	/**
@@ -396,7 +423,7 @@ public final class HgChangelog extends Revlog {
 			}
 		}
 
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) throws HgRuntimeException {
 			try {
 				byte[] data = da.byteArray();
 				cset.init(data, 0, data.length, usersPool);

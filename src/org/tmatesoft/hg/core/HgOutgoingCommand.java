@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +23,10 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.RepositoryComparator;
 import org.tmatesoft.hg.repo.HgChangelog;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
-import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -141,7 +140,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 		}
 	}
 
-	private RepositoryComparator getComparator(ProgressSupport ps, CancelSupport cs) throws HgRemoteConnectionException, HgInvalidControlFileException, CancelledException {
+	private RepositoryComparator getComparator(ProgressSupport ps, CancelSupport cs) throws HgRemoteConnectionException, CancelledException, HgRuntimeException {
 		if (remoteRepo == null) {
 			throw new IllegalArgumentException("Shall specify remote repository to compare against");
 		}
@@ -152,7 +151,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 		return comparator;
 	}
 	
-	private HgParentChildMap<HgChangelog> getParentHelper() throws HgInvalidControlFileException {
+	private HgParentChildMap<HgChangelog> getParentHelper() throws HgRuntimeException {
 		if (parentHelper == null) {
 			parentHelper = new HgParentChildMap<HgChangelog>(localRepo.getChangelog());
 			parentHelper.init();

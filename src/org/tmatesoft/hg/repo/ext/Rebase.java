@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,6 @@ import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
-import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 
 /**
@@ -93,8 +92,6 @@ public class Rebase {
 		} catch (NoSuchElementException ex) {
 			throw new HgIOException("Bad format of rebase state file", f);
 		} catch (HgBadNodeidFormatException ex) {
-			throw new HgIOException("Bad format of rebase state file", ex, f);
-		} catch (HgInvalidFileException ex) {
 			throw new HgIOException("Bad format of rebase state file", ex, f);
 		}
 		return this;

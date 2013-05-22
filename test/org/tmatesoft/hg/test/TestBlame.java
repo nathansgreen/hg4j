@@ -277,7 +277,7 @@ public class TestBlame {
 			//
 			String[] apiResult = splitLines(bos.toString());
 			String[] expected = splitLines(gp.result());
-			Assert.assertArrayEquals(expected, apiResult);
+			Assert.assertArrayEquals("diff -r " + cs + " - r 8", expected, apiResult);
 			gp.reset();
 		}
 	}

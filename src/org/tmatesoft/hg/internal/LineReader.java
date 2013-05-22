@@ -26,7 +26,7 @@ import java.io.Reader;
 import java.nio.charset.Charset;
 import java.util.Collection;
 
-import org.tmatesoft.hg.repo.HgInvalidFileException;
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.util.LogFacility;
 
 /**
@@ -95,7 +95,7 @@ public final class LineReader {
 			return this;
 		}
 
-		public <T> void read(LineConsumer<T> consumer, T paramObj) throws HgInvalidFileException {
+		public <T> void read(LineConsumer<T> consumer, T paramObj) throws HgIOException {
 			BufferedReader statusFileReader = null;
 			try {
 //				consumer.begin(file, paramObj);
@@ -120,7 +120,7 @@ public final class LineReader {
 					}
 				}
 			} catch (IOException ex) {
-				throw new HgInvalidFileException(ex.getMessage(), ex, file);
+				throw new HgIOException(ex.getMessage(), ex, file);
 			} finally {
 				new FileUtils(log).closeQuietly(statusFileReader);
 //				try {

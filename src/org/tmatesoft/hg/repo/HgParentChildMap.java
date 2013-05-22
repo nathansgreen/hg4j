@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -88,7 +88,12 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		}
 	}
 	
-	public void init() throws HgInvalidControlFileException {
+	/**
+	 * Prepare the map 
+	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+	 */
+	public void init() throws HgRuntimeException {
 		final int revisionCount = revlog.getRevisionCount();
 		firstParent = new Nodeid[revisionCount];
 		// TODO [post 1.0] Branches/merges are less frequent, and most of secondParent would be -1/null, hence 

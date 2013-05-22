@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 
-import org.tmatesoft.hg.repo.HgInvalidFileException;
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Adaptable;
@@ -314,7 +314,7 @@ public class NewlineFilter implements Filter, Preview, Adaptable {
 			ConfigFile hgeol = new ConfigFile(hgRepo.getSessionContext());
 			try {
 				hgeol.addLocation(cfgFile);
-			} catch (HgInvalidFileException ex) {
+			} catch (HgIOException ex) {
 				hgRepo.getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 			}
 			nativeRepoFormat = hgeol.getSection("repository").get("native");

@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
@@ -195,7 +196,7 @@ public final class HgRepository implements SessionContext.Source {
 	 * 
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public HgTags getTags() throws HgInvalidControlFileException {
+	public HgTags getTags() throws HgRuntimeException {
 		if (tags == null) {
 			tags = new HgTags(impl);
 			tags.read();
@@ -212,7 +213,7 @@ public final class HgRepository implements SessionContext.Source {
 	 * @return branch manager instance, never <code>null</code>
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public HgBranches getBranches() throws HgInvalidControlFileException {
+	public HgBranches getBranches() throws HgRuntimeException {
 		final ProgressSupport ps = ProgressSupport.Factory.get(null);
 		if (branches == null) {
 			branches = new HgBranches(impl);
@@ -226,10 +227,12 @@ public final class HgRepository implements SessionContext.Source {
 	/**
 	 * Access state of the recent merge
 	 * @return merge state facility, never <code>null</code> 
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public HgMergeState getMergeState() {
+	public HgMergeState getMergeState() throws HgRuntimeException {
 		if (mergeState == null) {
 			mergeState = new HgMergeState(impl);
+			mergeState.refresh();
 		}
 		return mergeState;
 	}
@@ -305,7 +308,7 @@ public final class HgRepository implements SessionContext.Source {
 			try {
 				ConfigFile configFile = impl.readConfiguration();
 				repoConfig = new HgRepoConfig(configFile);
-			} catch (IOException ex) {
+			} catch (HgIOException ex) {
 				String m = "Errors while reading user configuration file";
 				getSessionContext().getLog().dump(getClass(), Warn, ex, m);
 				return new HgRepoConfig(new ConfigFile(getSessionContext())); // empty config, do not cache, allow to try once again
@@ -424,7 +427,7 @@ public final class HgRepository implements SessionContext.Source {
 	 * @return facility to manage bookmarks, never <code>null</code>
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
-	public HgBookmarks getBookmarks() throws HgInvalidControlFileException {
+	public HgBookmarks getBookmarks() throws HgRuntimeException {
 		if (bookmarks == null) {
 			bookmarks = new HgBookmarks(impl);
 			bookmarks.read();

@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.core;
 
 import org.tmatesoft.hg.internal.Callback;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -33,8 +34,9 @@ public interface HgManifestHandler {
 	 * 
 	 * @param manifestRevision unique identifier of the manifest revision
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
+	 * @throws HgRuntimeException propagates library issues. <em>Runtime exception</em>
 	 */
-	void begin(Nodeid manifestRevision) throws HgCallbackTargetException;
+	void begin(Nodeid manifestRevision) throws HgCallbackTargetException, HgRuntimeException;
 
 	/**
 	 * If walker is configured to spit out directories, indicates files from specified directories are about to be reported.
@@ -42,16 +44,18 @@ public interface HgManifestHandler {
 	 * 
 	 * @param path directory known in the manifest
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
+	 * @throws HgRuntimeException propagates library issues. <em>Runtime exception</em>
 	 */
-	void dir(Path path) throws HgCallbackTargetException; 
+	void dir(Path path) throws HgCallbackTargetException, HgRuntimeException; 
 
 	/**
 	 * Reports a file revision entry in the manifest
 	 * 
 	 * @param fileRevision description of the file revision
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
+	 * @throws HgRuntimeException propagates library issues. <em>Runtime exception</em>
 	 */
-	void file(HgFileRevision fileRevision) throws HgCallbackTargetException;
+	void file(HgFileRevision fileRevision) throws HgCallbackTargetException, HgRuntimeException;
 
 	/**
 	 * Indicates all files from the manifest revision have been reported.
@@ -59,6 +63,7 @@ public interface HgManifestHandler {
 	 * 
 	 * @param manifestRevision unique identifier of the manifest revision 
 	 * @throws HgCallbackTargetException wrapper for any exception user code may produce
+	 * @throws HgRuntimeException propagates library issues. <em>Runtime exception</em>
 	 */
-	void end(Nodeid manifestRevision) throws HgCallbackTargetException;
+	void end(Nodeid manifestRevision) throws HgCallbackTargetException, HgRuntimeException;
 }

@@ -40,6 +40,7 @@ import java.util.regex.Pattern;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ChangelogMonitor;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -68,7 +69,7 @@ public class HgBranches {
 		if (!branchheadsCache.canRead()) {
 			return lastInCache;
 		}
-		BufferedReader br = null;
+		BufferedReader br = null; // TODO replace with LineReader
 		final Pattern spacePattern = Pattern.compile(" ");
 		try {
 			final LinkedHashMap<String, List<Nodeid>> branchHeads = new LinkedHashMap<String, List<Nodeid>>();
@@ -111,26 +112,17 @@ public class HgBranches {
 		} catch (NumberFormatException ex) {
 			repo.getSessionContext().getLog().dump(getClass(), Warn, ex, null);
 			// FALL THROUGH
-		} catch (HgInvalidControlFileException ex) {
-			// shall not happen, thus log as error
-			repo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
-			// FALL THROUGH
-		} catch (HgInvalidRevisionException ex) {
+		} catch (HgRuntimeException ex) {
+			// if happens, log error and pretend there's no cache
 			repo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
 			// FALL THROUGH
 		} finally {
-			if (br != null) {
-				try {
-					br.close();
-				} catch (IOException ex) {
-					repo.getSessionContext().getLog().dump(getClass(), Warn, ex, null); // ignore
-				}
-			}
+			new FileUtils(repo.getSessionContext().getLog()).closeQuietly(br);
 		}
 		return -1; // deliberately not lastInCache, to avoid anything but -1 when 1st line was read and there's error is in lines 2..end
 	}
 
-	void collect(final ProgressSupport ps) throws HgInvalidControlFileException {
+	void collect(final ProgressSupport ps) throws HgRuntimeException {
 		branches.clear();
 		final HgRepository repo = internalRepo.getRepo();
 		ps.start(1 + repo.getChangelog().getRevisionCount() * 2);
@@ -286,7 +278,7 @@ public class HgBranches {
 		return internalRepo.getFileFromRepoDir("cache/branchheads");
 	}
 	
-	/*package-local*/ void reloadIfChanged(ProgressSupport ps) throws HgInvalidControlFileException {
+	/*package-local*/ void reloadIfChanged(ProgressSupport ps) throws HgRuntimeException {
 		if (repoChangeTracker.isChanged()) {
 			collect(ps);
 		}
@@ -313,7 +305,7 @@ public class HgBranches {
 			this(branchName, Nodeid.NULL, branchHeads);
 		}
 		
-		void validate(HgChangelog clog, HgRevisionMap<HgChangelog> rmap) throws HgInvalidControlFileException {
+		void validate(HgChangelog clog, HgRevisionMap<HgChangelog> rmap) throws HgRuntimeException {
 			int[] localCset = new int[heads.size()];
 			int i = 0;
 			for (Nodeid h : heads) {

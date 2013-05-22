@@ -28,6 +28,7 @@ import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
 import org.tmatesoft.hg.repo.HgBlameInspector.BlockData;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
@@ -107,27 +108,31 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		final CancelSupport cancellation = getCancelSupport(inspector, true);
 		cancellation.checkCancelled();
 		progress.start(2);
-		HgDataFile df = repo.getFileNode(file);
-		if (!df.exists()) {
-			return;
-		}
-		final int changesetStart = followRename ? 0 : df.getChangesetRevisionIndex(0);
-		Collector c = new Collector(cancellation);
-		FileAnnotation fa = new FileAnnotation(c);
-		df.annotate(changesetStart, annotateRevision.get(), fa, HgIterateDirection.NewToOld);
-		progress.worked(1);
-		c.throwIfCancelled();
-		cancellation.checkCancelled();
-		ProgressSupport.Sub subProgress = new ProgressSupport.Sub(progress, 1);
-		subProgress.start(c.lineRevisions.length);
-		LineImpl li = new LineImpl();
-		for (int i = 0; i < c.lineRevisions.length; i++) {
-			li.init(i+1, c.lineRevisions[i], c.line(i));
-			inspector.next(li);
-			subProgress.worked(1);
+		try {
+			HgDataFile df = repo.getFileNode(file);
+			if (!df.exists()) {
+				return;
+			}
+			final int changesetStart = followRename ? 0 : df.getChangesetRevisionIndex(0);
+			Collector c = new Collector(cancellation);
+			FileAnnotation fa = new FileAnnotation(c);
+			df.annotate(changesetStart, annotateRevision.get(), fa, HgIterateDirection.NewToOld);
+			progress.worked(1);
+			c.throwIfCancelled();
 			cancellation.checkCancelled();
+			ProgressSupport.Sub subProgress = new ProgressSupport.Sub(progress, 1);
+			subProgress.start(c.lineRevisions.length);
+			LineImpl li = new LineImpl();
+			for (int i = 0; i < c.lineRevisions.length; i++) {
+				li.init(i+1, c.lineRevisions[i], c.line(i));
+				inspector.next(li);
+				subProgress.worked(1);
+				cancellation.checkCancelled();
+			}
+			subProgress.done();
+		} catch (HgRuntimeException ex) {
+			throw new HgLibraryFailureException(ex);
 		}
-		subProgress.done();
 		progress.done();
 	}
 	

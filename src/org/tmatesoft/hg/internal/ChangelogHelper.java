@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +19,8 @@ package org.tmatesoft.hg.internal;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInternals;
-import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -56,7 +56,7 @@ public class ChangelogHelper {
 	 * @param file
 	 * @return changeset where specified file is mentioned among affected files, or <code>null</code> if none found up to leftBoundary
 	 */
-	public RawChangeset findLatestChangeWith(Path file) throws HgInvalidControlFileException {
+	public RawChangeset findLatestChangeWith(Path file) throws HgRuntimeException {
 		HgDataFile df = repo.getFileNode(file);
 		if (!df.exists()) {
 			return null;
