@@ -17,13 +17,9 @@
 package org.tmatesoft.hg.internal;
 
 
-import org.tmatesoft.hg.core.HgCallbackTargetException;
-import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.HgBlameInspector;
 import org.tmatesoft.hg.core.HgBlameInspector.RevisionDescriptor;
-import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
-import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Produce output like 'hg annotate' does
@@ -44,17 +40,6 @@ public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Reci
 
 	public interface LineDescriptor {
 		int totalLines();
-	}
-
-	/**
-	 * Annotate file revision, line by line.
-	 */
-	public static void annotate(HgDataFile df, int changelogRevisionIndex, LineInspector insp) throws HgCallbackTargetException, HgRuntimeException {
-		if (!df.exists()) {
-			return;
-		}
-		FileAnnotation fa = new FileAnnotation(insp);
-		df.annotate(0, changelogRevisionIndex, fa, HgIterateDirection.NewToOld);
 	}
 
 	// keeps <startSeq1, startSeq2, len> of equal blocks, origin to target, from some previous step

@@ -42,15 +42,15 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgAnnotateCommand;
 import org.tmatesoft.hg.core.HgAnnotateCommand.LineInfo;
+import org.tmatesoft.hg.core.HgBlameInspector;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
-import org.tmatesoft.hg.core.HgIterateDirection;
+import org.tmatesoft.hg.core.HgDiffCommand;
 import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.FileAnnotation;
 import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
 import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
 import org.tmatesoft.hg.internal.IntVector;
-import org.tmatesoft.hg.repo.HgBlameInspector;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
@@ -75,7 +75,9 @@ public class TestBlame {
 		final int checkChangeset = repo.getChangelog().getRevisionIndex(Nodeid.fromAscii("946b131962521f9199e1fedbdc2487d3aaef5e46")); // 539
 		HgDataFile df = repo.getFileNode(fname);
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		df.annotateSingleRevision(checkChangeset, new DiffOutInspector(new PrintStream(bos)));
+		HgDiffCommand diffCmd = new HgDiffCommand(repo);
+		diffCmd.file(df).changeset(checkChangeset);
+		diffCmd.executeAnnotateSingleRevision(new DiffOutInspector(new PrintStream(bos)));
 		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
 		ExecHelper eh = new ExecHelper(gp, null);
 		eh.run("hg", "diff", "-c", String.valueOf(checkChangeset), "-U", "0", fname);
@@ -92,6 +94,8 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode(fname);
 		AnnotateRunner ar = new AnnotateRunner(df.getPath(), null);
 
+		final HgDiffCommand diffCmd = new HgDiffCommand(repo);
+		diffCmd.file(df).order(NewToOld);
 		final HgChangelog clog = repo.getChangelog();
 		final int[] toTest = new int[] { 
 			clog.getRevisionIndex(Nodeid.fromAscii("946b131962521f9199e1fedbdc2487d3aaef5e46")), // 539
@@ -100,7 +104,8 @@ public class TestBlame {
 		for (int cs : toTest) {
 			ar.run(cs, false);
 			FileAnnotateInspector fa = new FileAnnotateInspector();
-			FileAnnotation.annotate(df, cs, fa);
+			diffCmd.range(0, cs);
+			diffCmd.executeAnnotate(new FileAnnotation(fa));
 			doAnnotateLineCheck(cs, ar.getLines(), Arrays.asList(fa.lineRevisions), Arrays.asList(fa.lines));
 		}
 	}
@@ -111,10 +116,12 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode("file1");
 		AnnotateRunner ar = new AnnotateRunner(df.getPath(), repo.getWorkingDir());
 
+		final HgDiffCommand diffCmd = new HgDiffCommand(repo).file(df).order(NewToOld);
 		for (int cs : new int[] { 4, 6 /*, 8 see below*/, TIP}) {
 			ar.run(cs, false);
 			FileAnnotateInspector fa = new FileAnnotateInspector();
-			FileAnnotation.annotate(df, cs, fa);
+			diffCmd.range(0, cs);
+			diffCmd.executeAnnotate(new FileAnnotation(fa));
 			doAnnotateLineCheck(cs, ar.getLines(), Arrays.asList(fa.lineRevisions), Arrays.asList(fa.lines));
 		}
 		/*`hg annotate -r 8` and HgBlameFacility give different result
@@ -138,7 +145,9 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode("file1");
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		DiffOutInspector dump = new DiffOutInspector(new PrintStream(bos));
-		df.annotate(0, TIP, dump, HgIterateDirection.OldToNew);
+		HgDiffCommand diffCmd = new HgDiffCommand(repo);
+		diffCmd.file(df).range(0, TIP).order(OldToNew);
+		diffCmd.executeAnnotate(dump);
 		LinkedList<String> apiResult = new LinkedList<String>(Arrays.asList(splitLines(bos.toString())));
 		
 		/*
@@ -206,19 +215,22 @@ public class TestBlame {
 		// earlier than rev2 shall be reported as new from change3
 		int[] change_2_8_new2old = new int[] {4, 6, 3, 4, -1, 3}; 
 		int[] change_2_8_old2new = new int[] {-1, 3, 3, 4, 4, 6 };
-		df.annotate(2, 8, insp, NewToOld);
+		final HgDiffCommand cmd = new HgDiffCommand(repo);
+		cmd.file(df);
+		cmd.range(2, 8).order(NewToOld);
+		cmd.executeAnnotate(insp);
 		Assert.assertArrayEquals(change_2_8_new2old, insp.getReportedRevisionPairs());
 		insp.reset();
-		df.annotate(2, 8, insp, OldToNew);
+		cmd.order(OldToNew).executeAnnotate(insp);
 		Assert.assertArrayEquals(change_2_8_old2new, insp.getReportedRevisionPairs());
 		// same as 2 to 8, with addition of rev9 changes rev7  (rev6 to rev7 didn't change content, only name)
 		int[] change_3_9_new2old = new int[] {7, 9, 4, 6, 3, 4, -1, 3 }; 
 		int[] change_3_9_old2new = new int[] {-1, 3, 3, 4, 4, 6, 7, 9 };
 		insp.reset();
-		df.annotate(3, 9, insp, NewToOld);
+		cmd.range(3, 9).order(NewToOld).executeAnnotate(insp);
 		Assert.assertArrayEquals(change_3_9_new2old, insp.getReportedRevisionPairs());
 		insp.reset();
-		df.annotate(3, 9, insp, OldToNew);
+		cmd.order(OldToNew).executeAnnotate(insp);
 		Assert.assertArrayEquals(change_3_9_old2new, insp.getReportedRevisionPairs());
 	}
 
@@ -269,14 +281,15 @@ public class TestBlame {
 		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
 		ExecHelper eh = new ExecHelper(gp, repo.getWorkingDir());
 		int[] toTest = { 3, 4, 5 }; // p1 ancestry line, p2 ancestry line, not in ancestry line
+		final HgDiffCommand diffCmd = new HgDiffCommand(repo).file(df);
 		for (int cs : toTest) {
 			ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			df.diff(cs, 8, new DiffOutInspector(new PrintStream(bos)));
+			diffCmd.range(cs, 8).executeDiff(new DiffOutInspector(new PrintStream(bos)));
 			eh.run("hg", "diff", "-r", String.valueOf(cs), "-r", "8", "-U", "0", df.getPath().toString());
 			//
 			String[] apiResult = splitLines(bos.toString());
 			String[] expected = splitLines(gp.result());
-			Assert.assertArrayEquals("diff -r " + cs + " - r 8", expected, apiResult);
+			Assert.assertArrayEquals("diff -r " + cs + "-r 8", expected, apiResult);
 			gp.reset();
 		}
 	}
@@ -293,7 +306,8 @@ public class TestBlame {
 		eh.run("hg", "diff", "-c", "0", "-U", "0", df.getPath().toString());
 		//
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		df.annotateSingleRevision(0, new DiffOutInspector(new PrintStream(bos)));
+		HgDiffCommand diffCmd = new HgDiffCommand(repo).file(df);
+		diffCmd.changeset(0).executeAnnotateSingleRevision(new DiffOutInspector(new PrintStream(bos)));
 		//
 		String[] apiResult = splitLines(bos.toString());
 		String[] expected = splitLines(gp.result());
@@ -335,7 +349,10 @@ public class TestBlame {
 		HgDataFile df = repo.getFileNode("file.txt");
 		DiffOutInspector dump = new DiffOutInspector(System.out);
 		dump.needRevisions(true);
-		df.annotate(0, 8, dump, HgIterateDirection.NewToOld);
+		HgDiffCommand diffCmd = new HgDiffCommand(repo);
+		diffCmd.file(df);
+		diffCmd.range(0, 8).order(NewToOld);
+		diffCmd.executeAnnotate(dump);
 //		af.annotateSingleRevision(df, 113, dump);
 //		System.out.println();
 //		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
@@ -351,7 +368,8 @@ public class TestBlame {
 		errorCollector.verify();
 		*/
 		FileAnnotateInspector fa = new FileAnnotateInspector();
-		FileAnnotation.annotate(df, 8, fa);
+		diffCmd.range(0, 8).order(NewToOld);
+		diffCmd.executeAnnotate(new FileAnnotation(fa));
 		for (int i = 0; i < fa.lineRevisions.length; i++) {
 			System.out.printf("%d: %s", fa.lineRevisions[i], fa.line(i) == null ? "null\n" : fa.line(i));
 		}

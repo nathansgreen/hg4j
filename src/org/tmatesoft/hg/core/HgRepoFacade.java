@@ -153,4 +153,8 @@ public class HgRepoFacade implements SessionContext.Source {
 	public HgCommitCommand createCommitCommand() {
 		return new HgCommitCommand(repo);
 	}
+	
+	public HgDiffCommand createDiffCommand() {
+		return new HgDiffCommand(repo);
+	}
 }
