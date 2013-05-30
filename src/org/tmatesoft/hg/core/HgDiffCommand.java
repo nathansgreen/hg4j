@@ -21,23 +21,31 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.internal.BlameHelper;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileHistory;
 import org.tmatesoft.hg.internal.FileRevisionHistoryChunk;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
- * 'hg diff' counterpart, with similar, diff-based, functionality
+ * 'hg diff' counterpart, with similar, although not identical, functionality.
+ * Despite both 'hg diff' and this command are diff-based, implementation
+ * peculiarities may lead to slightly different diff results. Either is valid
+ * as there's no strict diff specification. 
+ * 
+ * <p>
+ * <strong>Note</strong>, at the moment this command annotates single file only. Diff over
+ * complete repository (all the file changed in a given changeset) might
+ * be added later.
  * 
  * @since 1.1
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-@Experimental(reason="#execute* methods might get renamed")
 public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 
 	private final HgRepository repo;
@@ -86,7 +94,7 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 	}
 	
 	/**
-	 * Selects revision for {@link #executeAnnotateSingleRevision(HgBlameInspector)}, the one 
+	 * Selects revision for {@link #executeParentsAnnotate(HgBlameInspector)}, the one 
 	 * to diff against its parents. 
 	 * 
 	 * Besides, it is handy when range of interest spans up to the very beginning of the file history 
@@ -107,7 +115,7 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 	 * annotating {@link #range(int, int) range} of changesets with
 	 * {@link #executeAnnotate(HgBlameInspector)}.
 	 * <p>
-	 * This method doesn't affect {@link #executeAnnotateSingleRevision(HgBlameInspector)} and
+	 * This method doesn't affect {@link #executeParentsAnnotate(HgBlameInspector)} and
 	 * {@link #executeDiff(HgBlameInspector)}
 	 * 
 	 * @param order desired iteration order 
@@ -117,8 +125,6 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 		iterateDirection = order;
 		return this;
 	}
-
-	// FIXME progress and cancellation
 	
 	/**
 	 * Diff two revisions selected with {@link #range(int, int)} against each other.
@@ -130,14 +136,23 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 	 */
 	public void executeDiff(HgBlameInspector insp) throws HgCallbackTargetException, CancelledException, HgException {
 		checkFile();
+		final ProgressSupport progress = getProgressSupport(insp);
+		progress.start(2);
 		try {
+			final CancelSupport cancel = getCancelSupport(insp, true);
 			int fileRevIndex1 = fileRevIndex(df, clogRevIndexStart.get());
 			int fileRevIndex2 = fileRevIndex(df, clogRevIndexEnd.get());
 			BlameHelper bh = new BlameHelper(insp);
 			bh.prepare(df, clogRevIndexStart.get(), clogRevIndexEnd.get());
+			progress.worked(1);
+			cancel.checkCancelled();
 			bh.diff(fileRevIndex1, clogRevIndexStart.get(), fileRevIndex2, clogRevIndexEnd.get());
+			progress.worked(1);
+			cancel.checkCancelled();
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
+		} finally {
+			progress.done();
 		}
 	}
 
@@ -150,13 +165,24 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 	 */
 	public void executeAnnotate(HgBlameInspector insp) throws HgCallbackTargetException, CancelledException, HgException {
 		checkFile();
+		ProgressSupport progress = null;
 		try {
 			if (!df.exists()) {
 				return;
 			}
+			final CancelSupport cancel = getCancelSupport(insp, true);
 			BlameHelper bh = new BlameHelper(insp);
 			FileHistory fileHistory = bh.prepare(df, clogRevIndexStart.get(), clogRevIndexEnd.get());
-	
+			//
+			cancel.checkCancelled();
+			int totalWork = 0;
+			for (FileRevisionHistoryChunk fhc : fileHistory.iterate(iterateDirection)) {
+				totalWork += fhc.revisionCount();
+			}
+			progress = getProgressSupport(insp);
+			progress.start(totalWork + 1);
+			progress.worked(1); // BlameHelper.prepare
+			//
 			int[] fileClogParentRevs = new int[2];
 			int[] fileParentRevs = new int[2];
 			for (FileRevisionHistoryChunk fhc : fileHistory.iterate(iterateDirection)) {
@@ -168,10 +194,16 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 					fhc.fillFileParents(fri, fileParentRevs);
 					fhc.fillCsetParents(fri, fileClogParentRevs);
 					bh.annotateChange(fri, clogRevIndex, fileParentRevs, fileClogParentRevs);
+					progress.worked(1);
+					cancel.checkCancelled();
 				}
 			}
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
+		} finally {
+			if (progress != null) {
+				progress.done();
+			}
 		}
 	}
 
@@ -184,9 +216,12 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 	 * @throws CancelledException if execution of the command was cancelled
 	 * @throws HgException subclass thereof to indicate specific issue with the command arguments or repository state
 	 */
-	public void executeAnnotateSingleRevision(HgBlameInspector insp) throws HgCallbackTargetException, CancelledException, HgException {
+	public void executeParentsAnnotate(HgBlameInspector insp) throws HgCallbackTargetException, CancelledException, HgException {
 		checkFile();
+		final ProgressSupport progress = getProgressSupport(insp);
+		progress.start(2);
 		try {
+			final CancelSupport cancel = getCancelSupport(insp, true);
 			int changelogRevisionIndex = clogRevIndexEnd.get();
 			// TODO detect if file is text/binary (e.g. looking for chars < ' ' and not \t\r\n\f
 			int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
@@ -201,9 +236,15 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 			BlameHelper bh = new BlameHelper(insp);
 			int clogIndexStart = fileClogParentRevs[0] == NO_REVISION ? (fileClogParentRevs[1] == NO_REVISION ? 0 : fileClogParentRevs[1]) : fileClogParentRevs[0];
 			bh.prepare(df, clogIndexStart, changelogRevisionIndex);
+			progress.worked(1);
+			cancel.checkCancelled();
 			bh.annotateChange(fileRevIndex, changelogRevisionIndex, fileRevParents, fileClogParentRevs);
+			progress.worked(1);
+			cancel.checkCancelled();
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
+		} finally {
+			progress.done();
 		}
 	}
 

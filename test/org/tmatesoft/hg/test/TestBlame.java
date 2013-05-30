@@ -77,7 +77,7 @@ public class TestBlame {
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		HgDiffCommand diffCmd = new HgDiffCommand(repo);
 		diffCmd.file(df).changeset(checkChangeset);
-		diffCmd.executeAnnotateSingleRevision(new DiffOutInspector(new PrintStream(bos)));
+		diffCmd.executeParentsAnnotate(new DiffOutInspector(new PrintStream(bos)));
 		LineGrepOutputParser gp = new LineGrepOutputParser("^@@.+");
 		ExecHelper eh = new ExecHelper(gp, null);
 		eh.run("hg", "diff", "-c", String.valueOf(checkChangeset), "-U", "0", fname);
@@ -307,7 +307,7 @@ public class TestBlame {
 		//
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		HgDiffCommand diffCmd = new HgDiffCommand(repo).file(df);
-		diffCmd.changeset(0).executeAnnotateSingleRevision(new DiffOutInspector(new PrintStream(bos)));
+		diffCmd.changeset(0).executeParentsAnnotate(new DiffOutInspector(new PrintStream(bos)));
 		//
 		String[] apiResult = splitLines(bos.toString());
 		String[] expected = splitLines(gp.result());

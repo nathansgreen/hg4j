@@ -466,7 +466,7 @@ public final class HgDataFile extends Revlog {
 	@Deprecated
 	public void annotateSingleRevision(int changelogRevisionIndex, HgBlameInspector insp) throws HgRuntimeException, HgCallbackTargetException {
 		try {
-			new HgDiffCommand(getRepo()).file(this).changeset(changelogRevisionIndex).executeAnnotateSingleRevision(insp);
+			new HgDiffCommand(getRepo()).file(this).changeset(changelogRevisionIndex).executeParentsAnnotate(insp);
 		} catch (HgLibraryFailureException ex) {
 			throw ex.getCause();
 		} catch (HgException ex) {
