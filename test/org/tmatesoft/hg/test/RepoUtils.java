@@ -66,6 +66,10 @@ public class RepoUtils {
 	}
 
 	static File cloneRepoToTempLocation(HgRepository repo, String name, boolean noupdate) throws IOException, InterruptedException {
+		return cloneRepoToTempLocation(repo.getWorkingDir(), name, noupdate, false);
+	}
+
+	static File cloneRepoToTempLocation(File repoLoc, String name, boolean noupdate, boolean usePull) throws IOException, InterruptedException {
 		File testRepoLoc = createEmptyDir(name);
 		ExecHelper eh = new ExecHelper(new OutputParser.Stub(), testRepoLoc.getParentFile());
 		ArrayList<String> cmd = new ArrayList<String>();
@@ -74,7 +78,10 @@ public class RepoUtils {
 		if (noupdate) {
 			cmd.add("--noupdate");
 		}
-		cmd.add(repo.getWorkingDir().toString());
+		if (usePull) {
+			cmd.add("--pull");
+		}
+		cmd.add(repoLoc.toString());
 		cmd.add(testRepoLoc.getName());
 		eh.run(cmd.toArray(new String[cmd.size()]));
 		assertEquals("[sanity]", 0, eh.getExitValue());

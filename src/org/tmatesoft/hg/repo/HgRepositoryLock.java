@@ -120,7 +120,7 @@ public class HgRepositoryLock {
 		do {
 			synchronized(this) {
 				try {
-					if (!lockFile.exists()) {
+					if (lockFile.createNewFile()) {
 						write(lockFile, bytes);
 						use++;
 						return;

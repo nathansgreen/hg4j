@@ -662,7 +662,12 @@ public final class HgManifest extends Revlog {
 		}
 
 		// XXX can be replaced with Revlog.RevisionInspector, but I don't want Nodeid instances
-		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) {
+		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgInvalidRevisionException {
+			if (linkRevision >= changelogRevisionCount) {
+				String storeLock = HgManifest.this.getRepo().getStoreLock().readLockInfo();
+				String message = String.format("Manifest revision %d references changeset %d, which is beyond known scope [0..%d). Lock: %s", revisionNumber, linkRevision, changelogRevisionCount, storeLock);
+				throw new HgInvalidRevisionException(message, null, linkRevision);
+			}
 			if (changelog2manifest != null) {
 				// next assertion is not an error, rather assumption check, which is too development-related to be explicit exception - 
 				// I just wonder if there are manifests that have two entries pointing to single changeset. It seems unrealistic, though -
