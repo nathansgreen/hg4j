@@ -277,6 +277,8 @@ public class TestCommit {
 		errorCollector.assertTrue(r.isOk());
 		Nodeid c2 = cmd.getCommittedRevision();
 		//
+		errorCollector.assertEquals("SECOND", hgRepo.getCommitLastMessage());
+		//
 		int lastRev = hgRepo.getChangelog().getLastRevision();
 		List<HgChangeset> csets = new HgLogCommand(hgRepo).range(lastRev-1, lastRev).execute();
 		errorCollector.assertEquals(csets.get(0).getNodeid(), c1);

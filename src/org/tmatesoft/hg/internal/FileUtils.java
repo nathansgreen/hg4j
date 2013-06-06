@@ -77,8 +77,8 @@ public final class FileUtils {
 			fis = null;
 		} catch (IOException ex) {
 			// not in finally because I don't want to loose exception from fos.close()
-			closeQuietly(fis);
-			closeQuietly(fos);
+			closeQuietly(fis, from);
+			closeQuietly(fos, to);
 			String m = String.format("Failed to copy %s to %s", from.getName(), to.getName());
 			throw new HgIOException(m, ex, from);
 		}
@@ -87,14 +87,24 @@ public final class FileUtils {
 		 * Windows uncached run: 1.6 seconds
 		 */
 	}
-	
+
 	public void closeQuietly(Closeable stream) {
+		closeQuietly(stream, null);
+	}
+
+	public void closeQuietly(Closeable stream, File f) {
 		if (stream != null) {
 			try {
 				stream.close();
 			} catch (IOException ex) {
 				// ignore
-				log.dump(getClass(), Severity.Warn, ex, "Exception while closing stream quietly");
+				final String msg;
+				if (f == null) {
+					msg = "Exception while closing stream quietly";
+				} else {
+					msg = String.format("Failed to close %s", f);
+				}
+				log.dump(getClass(), Severity.Warn, ex, msg);
 			}
 		}
 	}

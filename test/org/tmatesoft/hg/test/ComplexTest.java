@@ -41,7 +41,7 @@ public class ComplexTest {
 	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
 
 	/**
-	 * Regular work sequence with checkout, add, remove, and commit
+	 * Regular work sequence with checkout, add, remove, revert and commit
 	 */
 	@Test
 	public void testLocalScenario1() throws Exception {
@@ -70,8 +70,8 @@ public class ComplexTest {
 		new HgAddRemoveCommand(hgRepo).add(fc).remove(fb).execute();
 		new HgCommitCommand(hgRepo).message("SECOND").execute();
 		//
-		// TODO hgRepo.getCommitLastMessage() shall be updated from HgCommitCommand
 		assertEquals(2, hgRepo.getChangelog().getRevisionCount());
+		errorCollector.assertEquals("SECOND", hgRepo.getCommitLastMessage());
 		// checkout previous version
 		new HgCheckoutCommand(hgRepo).changeset(0).clean(true).execute();
 		assertTrue(fileA.isFile());

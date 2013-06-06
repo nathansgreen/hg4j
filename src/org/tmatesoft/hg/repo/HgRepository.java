@@ -32,6 +32,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DirstateReader;
+import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.Filter;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.PropertyMarshal;
@@ -359,7 +360,7 @@ public final class HgRepository implements SessionContext.Source {
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public String getCommitLastMessage() throws HgInvalidControlFileException {
-		File lastMessage = impl.getFileFromRepoDir(LastMessage.getPath());
+		File lastMessage = impl.getRepositoryFile(LastMessage);
 		if (!lastMessage.canRead()) {
 			return null;
 		}
@@ -372,13 +373,7 @@ public final class HgRepository implements SessionContext.Source {
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException("Can't retrieve message of last commit attempt", ex, lastMessage);
 		} finally {
-			if (fr != null) {
-				try {
-					fr.close();
-				} catch (IOException ex) {
-					getSessionContext().getLog().dump(getClass(), Warn, "Failed to close %s after read", lastMessage);
-				}
-			}
+			new FileUtils(getSessionContext().getLog()).closeQuietly(fr, lastMessage);
 		}
 	}
 

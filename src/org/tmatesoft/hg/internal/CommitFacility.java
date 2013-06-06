@@ -18,12 +18,14 @@ package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgRepository.DEFAULT_BRANCH_NAME;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.*;
 import static org.tmatesoft.hg.repo.HgRepositoryFiles.Branch;
 import static org.tmatesoft.hg.repo.HgRepositoryFiles.UndoBranch;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -136,6 +138,8 @@ public final class CommitFacility {
 			newManifestRevision.remove(p);
 		}
 		//
+		saveCommitMessage(message);
+		//
 		// Register new/changed
 		LinkedHashMap<Path, RevlogStream> newlyAddedFiles = new LinkedHashMap<Path, RevlogStream>();
 		ArrayList<Path> touchInDirstate = new ArrayList<Path>();
@@ -234,6 +238,24 @@ public final class CommitFacility {
 		// e.g. cached branch, tags and so on, not to rely on file change detection methods?
 		// The same notification might come useful once Pull is implemented
 		return changesetRev;
+	}
+	
+	private void saveCommitMessage(String message) throws HgIOException {
+		File lastMessage = repo.getRepositoryFile(LastMessage);
+		// do not attempt to write if we are going to fail anyway
+		if ((lastMessage.isFile() && !lastMessage.canWrite()) || !lastMessage.getParentFile().canWrite()) {
+			return;
+		}
+		FileWriter w = null;
+		try {
+			w = new FileWriter(lastMessage);
+			w.write(message == null ? new String() : message);
+			w.flush();
+		} catch (IOException ex) {
+			throw new HgIOException("Failed to save last commit message", ex, lastMessage);
+		} finally {
+			new FileUtils(repo.getLog()).closeQuietly(w, lastMessage);
+		}
 	}
 /*
 	private Pair<Integer, Integer> getManifestParents() {
