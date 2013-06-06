@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,8 @@ package org.tmatesoft.hg.util;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+
+import org.tmatesoft.hg.internal.Internals;
 
 /**
  * Identify repository files (not String nor io.File). Convenient for pattern matching. Memory-friendly.
@@ -148,6 +150,12 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 		int slashLoc = p1Tail.indexOf('/');
 		return slashLoc == -1 || slashLoc == p1Tail.length() - 1;
 	}
+	
+	private static final boolean runningOnWindows;
+	
+	static {
+		runningOnWindows = Internals.runningOnWindows();
+	}
 
 	public static Path create(CharSequence path) {
 		if (path == null) {
@@ -158,7 +166,7 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 			return o;
 		}
 		String p = path.toString();
-		if (p.indexOf('\\') != -1) {
+		if (runningOnWindows && p.indexOf('\\') != -1) {
 			throw new IllegalArgumentException(String.format("Path '%s' contains illegal char at %d", p, p.indexOf('\\')));
 		}
 		Path rv = new Path(p);
