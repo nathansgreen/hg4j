@@ -46,18 +46,11 @@ public final class COWTransaction extends Transaction {
 
 	@Override
 	public File prepare(File f) throws HgIOException {
-		if (!f.exists()) {
-			record(f, null);
-			try {
-				f.getParentFile().mkdirs();
-				f.createNewFile();
-				return f;
-			} catch (IOException ex) {
-				throw new HgIOException("Failed to create new file", ex, f);
-			}
-		}
 		if (known(f)) {
 			return f;
+		}
+		if (!f.exists()) {
+			return recordNonExistent(f);
 		}
 		final File parentDir = f.getParentFile();
 		assert parentDir.canWrite();
@@ -84,6 +77,9 @@ public final class COWTransaction extends Transaction {
 	public File prepare(File origin, File backup) throws HgIOException {
 		if (known(origin)) {
 			return origin;
+		}
+		if (!origin.exists()) {
+			return recordNonExistent(origin);
 		}
 		fileHelper.copy(origin, backup);
 		final RollbackEntry e = record(origin, backup);
@@ -139,6 +135,17 @@ public final class COWTransaction extends Transaction {
 		}
 	}
 
+	private File recordNonExistent(File f) throws HgIOException {
+		record(f, null);
+		try {
+			f.getParentFile().mkdirs();
+			f.createNewFile();
+			return f;
+		} catch (IOException ex) {
+			throw new HgIOException("Failed to create new file", ex, f);
+		}
+	}
+	
 	private RollbackEntry record(File origin, File backup) {
 		final RollbackEntry e = new RollbackEntry(origin, backup);
 		entries.add(e);
@@ -146,23 +153,28 @@ public final class COWTransaction extends Transaction {
 	}
 
 	private boolean known(File f) {
-		for (RollbackEntry e : entries) {
-			if (e.origin.equals(f)) {
-				return true;
-			}
-		}
-		return false;
+		RollbackEntry e = lookup(f);
+		return e != null;
 	}
+
 	private RollbackEntry find(File f) {
+		RollbackEntry e = lookup(f);
+		if (e != null) {
+			return e;
+		}
+		assert false;
+		return new RollbackEntry(f,f);
+	}
+	
+	private RollbackEntry lookup(File f) {
 		for (RollbackEntry e : entries) {
 			if (e.origin.equals(f)) {
 				return e;
 			}
 		}
-		assert false;
-		return new RollbackEntry(f,f);
+		return null;
 	}
-
+	
 	private static class RollbackEntry {
 		public final File origin;
 		public final File backup; // may be null to indicate file didn't exist

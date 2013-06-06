@@ -30,6 +30,8 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
 
+import junit.framework.Assert;
+
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.internal.FileUtils;
@@ -154,6 +156,18 @@ public class RepoUtils {
 			FileWriter fw = new FileWriter(f);
 			fw.write(String.valueOf(content));
 			fw.close();
+		}
+	}
+
+	static void exec(File wd, int expectedRetVal, String... args) throws Exception {
+		OutputParser.Stub s = new OutputParser.Stub();
+		try {
+			ExecHelper eh = new ExecHelper(s, wd);
+			eh.run(args);
+			Assert.assertEquals(expectedRetVal, eh.getExitValue());
+		} catch (Exception ex) {
+			System.err.println(s.result());
+			throw ex;
 		}
 	}
 }

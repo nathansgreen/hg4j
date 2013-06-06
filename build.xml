@@ -84,6 +84,7 @@
 			<test name="org.tmatesoft.hg.test.TestIntMap" />
 			<test name="org.tmatesoft.hg.test.TestAuxUtilities" />
 			<test name="org.tmatesoft.hg.test.TestConfigFileParser" />
+			<test name="org.tmatesoft.hg.test.TestInflaterDataAccess" />
 			<test name="org.tmatesoft.hg.test.TestHistory" />
 			<test name="org.tmatesoft.hg.test.TestManifest" />
 			<test name="org.tmatesoft.hg.test.TestStatus" />
@@ -108,6 +109,8 @@
 			<test name="org.tmatesoft.hg.test.TestCommit" />
 			<test name="org.tmatesoft.hg.test.TestBlame" />
 			<test name="org.tmatesoft.hg.test.TestDiffHelper" />
+			<test name="org.tmatesoft.hg.test.TestRepositoryLock" />
+			<test name="org.tmatesoft.hg.test.ComplexTest" />
 		</junit>
 	</target>
 
@@ -135,7 +138,7 @@
 
 	<target name="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="src" destdir="bin" debug="${compile-with-debug}" includeantruntime="no"/>
+		<javac srcdir="src" destdir="bin" debug="${compile-with-debug}" includeantruntime="no" source="1.5" encoding="UTF-8"/>
 		<jar destfile="${hg4j.jar}">
 			<fileset dir="bin/">
 				<include name="org/tmatesoft/hg/core/**" />
@@ -149,7 +152,7 @@
 
 	<target name="build-tests" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="test" destdir="bin" debug="${compile-with-debug}" includeantruntime="no">
+		<javac srcdir="test" destdir="bin" debug="${compile-with-debug}" includeantruntime="no" source="1.5" encoding="UTF-8">
 			<classpath>
 				<pathelement location="${hg4j.jar}"/>
 				<pathelement location="${junit.jar}"/>
@@ -165,7 +168,7 @@
 
 	<target name="build-cmdline" depends="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="cmdline" destdir="bin" debug="${compile-with-debug}" includeantruntime="no">
+		<javac srcdir="cmdline" destdir="bin" debug="${compile-with-debug}" includeantruntime="no" source="1.5" encoding="UTF-8">
 			<classpath>
 				<pathelement location="${hg4j.jar}"/>
 				<pathelement location="${junit.jar}"/>
