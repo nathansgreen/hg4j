@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ public class TestStorePath {
 	public TestStorePath() {
 		propertyOverrides.put("hg.consolelog.debug", true);
 		sessionCtx = new BasicSessionContext(propertyOverrides, null);
-		repoInit = new RepoInitializer().setRequires(STORE + FNCACHE + DOTENCODE);
+		repoInit = new RepoInitializer().setRequires(REVLOGV1 | STORE | FNCACHE | DOTENCODE);
 		storePathHelper = repoInit.buildDataFilesHelper(sessionCtx);
 	}
 	

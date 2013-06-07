@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,16 +16,16 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.tmatesoft.hg.internal.RequiresFile.*;
+
 import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
 
 import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCloneCommand;
+import org.tmatesoft.hg.core.HgInitCommand;
+import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 
 /**
@@ -56,12 +56,25 @@ public class TestClone {
 			cmd.source(hgRemote);
 			File dest = new File(tempDir, "test-clone-" + x++);
 			if (dest.exists()) {
-				rmdir(dest);
+				RepoUtils.rmdir(dest);
 			}
 			cmd.destination(dest);
 			cmd.execute();
 			verify(hgRemote, dest);
 		}
+	}
+	
+	@Test
+	public void testInitEmpty() throws Exception {
+		File repoLoc = RepoUtils.createEmptyDir("test-init");
+		new HgInitCommand().location(repoLoc).revlogV1().dotencode(false).fncache(false).execute();
+		
+		int requires = new RepoInitializer().initRequiresFromFile(new File(repoLoc, ".hg")).getRequires();
+		errorCollector.assertTrue(0 != (requires & REVLOGV1));
+		errorCollector.assertTrue(0 != (requires & STORE));
+		errorCollector.assertTrue(0 == (requires & DOTENCODE));
+		errorCollector.assertTrue(0 == (requires & FNCACHE));
+		errorCollector.assertTrue(0 == (requires & REVLOGV0));
 	}
 
 	private void verify(HgRemoteRepository hgRemote, File dest) throws Exception {
@@ -72,23 +85,5 @@ public class TestClone {
 		errorCollector.checkThat("Outgoing", eh.getExitValue(), CoreMatchers.equalTo(1));
 		eh.run("hg", "in", hgRemote.getLocation());
 		errorCollector.checkThat("Incoming", eh.getExitValue(), CoreMatchers.equalTo(1));
-	}
-
-	static void rmdir(File dest) throws IOException {
-		LinkedList<File> queue = new LinkedList<File>();
-		queue.addAll(Arrays.asList(dest.listFiles()));
-		while (!queue.isEmpty()) {
-			File next = queue.removeFirst();
-			if (next.isDirectory()) {
-				List<File> files = Arrays.asList(next.listFiles());
-				if (!files.isEmpty()) {
-					queue.addAll(files);
-					queue.add(next);
-				}
-				// fall through
-			} 
-			next.delete();
-		}
-		dest.delete();
 	}
 }

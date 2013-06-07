@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,6 +32,7 @@ import org.tmatesoft.hg.util.PathRewrite;
  * Responsible of `requires` processing both on repo read and repo write
  * XXX needs better name, perhaps
  * 
+ * @see http://mercurial.selenic.com/wiki/RequiresFile
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -66,7 +67,9 @@ public class RepoInitializer {
 		try {
 			FileOutputStream requiresStream = new FileOutputStream(requiresFile);
 			StringBuilder sb = new StringBuilder(40);
-			sb.append("revlogv1\n");
+			if ((requiresFlags & REVLOGV1) != 0) {
+				sb.append("revlogv1\n");
+			}
 			if ((requiresFlags & STORE) != 0) {
 				sb.append("store\n");
 			}
@@ -81,7 +84,9 @@ public class RepoInitializer {
 		} catch (IOException ex) {
 			throw new HgIOException("Failed to initialize empty repo", ex, requiresFile);
 		}
-		new File(repoDir, "store").mkdir(); // with that, hg verify says ok.
+		if ((requiresFlags & STORE) != 0) {
+			new File(repoDir, "store").mkdir(); // with that, hg verify says ok.
+		}
 	}
 
 	public PathRewrite buildDataFilesHelper(SessionContext ctx) {

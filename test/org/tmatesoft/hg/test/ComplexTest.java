@@ -25,8 +25,8 @@ import org.junit.Test;
 import org.tmatesoft.hg.core.HgAddRemoveCommand;
 import org.tmatesoft.hg.core.HgCheckoutCommand;
 import org.tmatesoft.hg.core.HgCommitCommand;
+import org.tmatesoft.hg.core.HgInitCommand;
 import org.tmatesoft.hg.core.HgRevertCommand;
-import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
@@ -47,9 +47,7 @@ public class ComplexTest {
 	public void testLocalScenario1() throws Exception {
 		File repoLoc = RepoUtils.createEmptyDir("composite-scenario-1");
 		// init empty
-		// TODO HgInitCommand
-		RepoUtils.exec(repoLoc, 0, "hg", "init");
-		HgRepository hgRepo = new HgLookup().detect(repoLoc);
+		HgRepository hgRepo = new HgInitCommand().location(repoLoc).revlogV1().execute();
 		assertFalse("[sanity]", hgRepo.isInvalid());
 		assertEquals("[sanity]", 0, hgRepo.getChangelog().getRevisionCount());
 		// add 2 files

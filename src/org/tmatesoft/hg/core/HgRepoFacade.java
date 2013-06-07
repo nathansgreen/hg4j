@@ -101,6 +101,14 @@ public class HgRepoFacade implements SessionContext.Source {
 	public SessionContext getSessionContext() {
 		return context;
 	}
+	
+	/**
+	 * This factory method doesn't need this facade to be initialized with a repository.
+	 * @return command instance, never <code>null</code>
+	 */
+	public HgInitCommand createInitCommand() {
+		return new HgInitCommand(new HgLookup(context));
+	}
 
 	public HgLogCommand createLogCommand() {
 		return new HgLogCommand(repo/*, getCommandContext()*/);

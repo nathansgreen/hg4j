@@ -18,7 +18,6 @@ package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.tmatesoft.hg.internal.RequiresFile.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Debug;
 
 import java.io.File;
@@ -29,15 +28,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 
 import junit.framework.Assert;
 
 import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgIOException;
+import org.tmatesoft.hg.core.HgInitCommand;
 import org.tmatesoft.hg.internal.FileUtils;
-import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.internal.StreamLogFacility;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.CancelledException;
 
 /**
  * 
@@ -46,18 +46,20 @@ import org.tmatesoft.hg.repo.HgRepository;
  */
 public class RepoUtils {
 
-	static File initEmptyTempRepo(String dirName) throws IOException, HgIOException {
+	static File initEmptyTempRepo(String dirName) throws IOException, HgException {
 		File dest = createEmptyDir(dirName);
-		RepoInitializer ri = new RepoInitializer();
-		ri.setRequires(STORE | FNCACHE | DOTENCODE);
-		ri.initEmptyRepository(new File(dest, ".hg"));
+		try {
+			new HgInitCommand().location(dest).revlogV1().execute();
+		} catch (CancelledException ex) {
+			Assert.fail(ex.toString());
+		}
 		return dest;
 	}
 
 	static File createEmptyDir(String dirName) throws IOException {
 		File dest = new File(Configuration.get().getTempDir(), dirName);
 		if (dest.exists()) {
-			TestClone.rmdir(dest);
+			rmdir(dest);
 		}
 		dest.mkdirs();
 		return dest;
@@ -169,5 +171,23 @@ public class RepoUtils {
 			System.err.println(s.result());
 			throw ex;
 		}
+	}
+
+	static void rmdir(File dest) throws IOException {
+		LinkedList<File> queue = new LinkedList<File>();
+		queue.addAll(Arrays.asList(dest.listFiles()));
+		while (!queue.isEmpty()) {
+			File next = queue.removeFirst();
+			if (next.isDirectory()) {
+				List<File> files = Arrays.asList(next.listFiles());
+				if (!files.isEmpty()) {
+					queue.addAll(files);
+					queue.add(next);
+				}
+				// fall through
+			} 
+			next.delete();
+		}
+		dest.delete();
 	}
 }

@@ -173,7 +173,7 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			ctx = sessionCtx;
 			hgDir = new File(destDir, ".hg");
 			repoInit = new RepoInitializer();
-			repoInit.setRequires(STORE | FNCACHE | DOTENCODE);
+			repoInit.setRequires(REVLOGV1 | STORE | FNCACHE | DOTENCODE);
 			storagePathHelper = repoInit.buildDataFilesHelper(sessionCtx);
 			progressSupport = progress;
 			cancelSupport = cancel;
