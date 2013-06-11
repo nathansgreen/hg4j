@@ -27,13 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 
-import org.tmatesoft.hg.core.HgBlameInspector;
-import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
-import org.tmatesoft.hg.core.HgDiffCommand;
-import org.tmatesoft.hg.core.HgException;
-import org.tmatesoft.hg.core.HgIterateDirection;
-import org.tmatesoft.hg.core.HgLibraryFailureException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FileUtils;
@@ -426,54 +420,6 @@ public final class HgDataFile extends Revlog {
 	public HgManifest.Flags getFlags(int fileRevisionIndex) throws HgRuntimeException {
 		int changesetRevIndex = getChangesetRevisionIndex(fileRevisionIndex);
 		return getRepo().getManifest().getFileFlags(changesetRevIndex, getPath());
-	}
-
-	/**
-	 * @deprecated use {@link HgDiffCommand} instead
-	 */
-	@Deprecated
-	public void diff(int clogRevIndex1, int clogRevIndex2, HgBlameInspector insp) throws HgRuntimeException, HgCallbackTargetException {
-		try {
-			new HgDiffCommand(getRepo()).file(this).range(clogRevIndex1, clogRevIndex2).executeDiff(insp);
-		} catch (HgLibraryFailureException ex) {
-			throw ex.getCause();
-		} catch (HgException ex) {
-			throw new HgInvalidStateException(ex.getMessage());
-		} catch (CancelledException ex) {
-			throw new HgInvalidStateException("Cancellatin is not expected");
-		}
-	}
-	
-	/**
-	 * @deprecated use {@link HgDiffCommand} instead
-	 */
-	@Deprecated
-	public void annotate(int clogRevIndex1, int clogRevIndex2, HgBlameInspector insp, HgIterateDirection iterateOrder) throws HgRuntimeException, HgCallbackTargetException {
-		try {
-			new HgDiffCommand(getRepo()).file(this).range(clogRevIndex1, clogRevIndex2).order(iterateOrder).executeAnnotate(insp);
-		} catch (HgLibraryFailureException ex) {
-			throw ex.getCause();
-		} catch (HgException ex) {
-			throw new HgInvalidStateException(ex.getMessage());
-		} catch (CancelledException ex) {
-			throw new HgInvalidStateException("Cancellatin is not expected");
-		}
-	}
-	
-	/**
-	 * @deprecated use {@link HgDiffCommand} instead
-	 */
-	@Deprecated
-	public void annotateSingleRevision(int changelogRevisionIndex, HgBlameInspector insp) throws HgRuntimeException, HgCallbackTargetException {
-		try {
-			new HgDiffCommand(getRepo()).file(this).changeset(changelogRevisionIndex).executeParentsAnnotate(insp);
-		} catch (HgLibraryFailureException ex) {
-			throw ex.getCause();
-		} catch (HgException ex) {
-			throw new HgInvalidStateException(ex.getMessage());
-		} catch (CancelledException ex) {
-			throw new HgInvalidStateException("Cancellatin is not expected");
-		}
 	}
 
 	@Override
