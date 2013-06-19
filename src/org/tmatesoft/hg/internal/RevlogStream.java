@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
+import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.internal.Internals.REVLOGV1_RECORD_SIZE;
 
@@ -234,6 +235,34 @@ public class RevlogStream {
 	public int baseRevision(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		revisionIndex = checkRevisionIndex(revisionIndex);
 		return getBaseRevision(revisionIndex);
+	}
+	
+	/**
+	 * Read indexes of parent revisions
+	 * @param revisionIndex index of child revision
+	 * @param parents array to hold return value, length >= 2
+	 * @return value of <code>parents</code> parameter for convenience
+	 * @throws HgInvalidControlFileException if attempt to read index file failed
+	 * @throws HgInvalidRevisionException if revisionIndex argument doesn't represent a valid record in the revlog
+	 */
+	public int[] parents(int revisionIndex, int[] parents) throws HgInvalidControlFileException, HgInvalidRevisionException {
+		assert parents.length > 1;
+		revisionIndex = checkRevisionIndex(revisionIndex);
+		DataAccess daIndex = getIndexStream(true);
+		try {
+			int recordOffset = getIndexOffsetInt(revisionIndex);
+			daIndex.seek(recordOffset + 24);
+			int p1 = daIndex.readInt();
+			int p2 = daIndex.readInt();
+			// although NO_REVISION == -1, it doesn't hurt to ensure this
+			parents[0] = p1 == -1 ? NO_REVISION : p1;
+			parents[1] = p2 == -1 ? NO_REVISION : p2;
+			return parents;
+		} catch (IOException ex) {
+			throw new HgInvalidControlFileException("Parents lookup failed", ex, indexFile).setRevisionIndex(revisionIndex);
+		} finally {
+			daIndex.done();
+		}
 	}
 	
 	// Perhaps, RevlogStream should be limited to use of plain int revisions for access,
