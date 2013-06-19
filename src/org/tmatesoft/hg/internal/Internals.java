@@ -142,7 +142,7 @@ public final class Internals implements SessionContext.Source {
 		final PropertyMarshal pm = new PropertyMarshal(ctx);
 		boolean shallCacheRevlogsInRepo = pm.getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
 		streamProvider = new RevlogStreamFactory(this, shallCacheRevlogsInRepo); 
-		shallMergePatches = pm.getBoolean(Internals.CFG_PROPERTY_PATCH_MERGE, false);
+		shallMergePatches = pm.getBoolean(Internals.CFG_PROPERTY_PATCH_MERGE, true);
 	}
 	
 	public boolean isInvalid() {
