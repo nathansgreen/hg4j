@@ -17,6 +17,8 @@
 package org.tmatesoft.hg.internal;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -74,7 +76,7 @@ public class DataSerializer {
 	 * Denotes an entity that wants to/could be serialized
 	 */
 	@Experimental(reason="Work in progress")
-	interface DataSource {
+	public interface DataSource {
 		/**
 		 * Invoked once for a single write operation, 
 		 * although the source itself may get serialized several times
@@ -107,7 +109,10 @@ public class DataSerializer {
 		}
 	}
 	
-	public static class ByteArrayDataSerializer extends DataSerializer {
+	/**
+	 * Serialize data to byte array
+	 */
+	public static class ByteArraySerializer extends DataSerializer {
 		private final ByteArrayOutputStream out = new ByteArrayOutputStream();
 
 		@Override
@@ -117,6 +122,28 @@ public class DataSerializer {
 		
 		public byte[] toByteArray() {
 			return out.toByteArray();
+		}
+	}
+
+	/**
+	 * Bridge to the world of {@link java.io.OutputStream}.
+	 * Caller instantiates the stream and is responsible to close it as appropriate, 
+	 * {@link #done() DataSerializer.done()} doesn't close the stream. 
+	 */
+	public static class OutputStreamSerializer extends DataSerializer {
+		private final OutputStream out;
+
+		public OutputStreamSerializer(OutputStream outputStream) {
+			out = outputStream;
+		}
+
+		@Override
+		public void write(byte[] data, int offset, int length) throws HgIOException {
+			try {
+				out.write(data, offset, length);
+			} catch (IOException ex) {
+				throw new HgIOException(ex.getMessage(), ex, null);
+			}
 		}
 	}
 }

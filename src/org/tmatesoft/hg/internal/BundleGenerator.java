@@ -22,17 +22,18 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-import org.tmatesoft.hg.console.Bundle;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
 import org.tmatesoft.hg.internal.Patch.PatchDataSource;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -72,14 +73,17 @@ public class BundleGenerator {
 		final IntVector manifestRevs = new IntVector(changesets.size(), 0);
 		final List<HgDataFile> files = new ArrayList<HgDataFile>();
 		clog.range(new HgChangelog.Inspector() {
+			private Set<String> seenFiles = new HashSet<String>();
 			public void next(int revisionIndex, Nodeid nodeid, RawChangeset cset) throws HgRuntimeException {
 				clogMap.put(revisionIndex, nodeid);
 				manifestRevs.add(manifest.getRevisionIndex(cset.manifest()));
 				for (String f : cset.files()) {
-					HgDataFile df = repo.getRepo().getFileNode(f);
-					if (!files.contains(df)) {
-						files.add(df);
+					if (seenFiles.contains(f)) {
+						continue;
 					}
+					seenFiles.add(f);
+					HgDataFile df = repo.getRepo().getFileNode(f);
+					files.add(df);
 				}
 			}
 		}, clogRevs);
@@ -106,7 +110,8 @@ public class BundleGenerator {
 		///////////////
 		//
 		final File bundleFile = File.createTempFile("hg4j-", "bundle");
-		final OutputStreamSerializer outRaw = new OutputStreamSerializer(new FileOutputStream(bundleFile));
+		final FileOutputStream osBundle = new FileOutputStream(bundleFile);
+		final OutputStreamSerializer outRaw = new OutputStreamSerializer(osBundle);
 		outRaw.write("HG10UN".getBytes(), 0, 6);
 		//
 		RevlogStream clogStream = repo.getImplAccess().getChangelogStream();
@@ -140,7 +145,10 @@ public class BundleGenerator {
 				outRaw.writeInt(0); // null chunk for file group
 			}
 		}
+		outRaw.writeInt(0); // null chunk to indicate no more files (although BundleFormat page doesn't mention this)
 		outRaw.done();
+		osBundle.flush();
+		osBundle.close();
 		//return new HgBundle(repo.getSessionContext(), repo.getDataAccess(), bundleFile);
 		return bundleFile;
 	}
@@ -232,32 +240,6 @@ public class BundleGenerator {
 				throw new HgInvalidControlFileException(ex.getMessage(), ex, null); 
 			} catch (HgIOException ex) {
 				throw new HgInvalidControlFileException(ex, true); // XXX any way to refactor ChunkGenerator not to get checked exception here?
-			}
-		}
-	}
-	
-	private static class OutputStreamSerializer extends DataSerializer {
-		private final OutputStream out;
-		public OutputStreamSerializer(OutputStream outputStream) {
-			out = outputStream;
-		}
-
-		@Override
-		public void write(byte[] data, int offset, int length) throws HgIOException {
-			try {
-				out.write(data, offset, length);
-			} catch (IOException ex) {
-				throw new HgIOException(ex.getMessage(), ex, null);
-			}
-		}
-
-		@Override
-		public void done() throws HgIOException {
-			try {
-				out.close();
-				super.done();
-			} catch (IOException ex) {
-				throw new HgIOException(ex.getMessage(), ex, null);
 			}
 		}
 	}

@@ -25,7 +25,7 @@ import java.nio.ByteBuffer;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSerializer;
+import org.tmatesoft.hg.internal.DataSerializer.ByteArraySerializer;
 import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSource;
 import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
@@ -142,7 +142,7 @@ public class RevlogStreamWriter {
 	}
 	
 	private byte[] toByteArray(DataSource content) throws HgIOException, HgRuntimeException {
-		ByteArrayDataSerializer ba = new ByteArrayDataSerializer();
+		ByteArraySerializer ba = new ByteArraySerializer();
 		content.serialize(ba);
 		return ba.toByteArray();
 	}

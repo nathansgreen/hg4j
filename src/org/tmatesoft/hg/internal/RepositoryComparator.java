@@ -54,6 +54,7 @@ public class RepositoryComparator {
 	private final HgParentChildMap<HgChangelog> localRepo;
 	private final HgRemoteRepository remoteRepo;
 	private List<Nodeid> common;
+	private List<Nodeid> remoteHeads;
 
 	public RepositoryComparator(HgParentChildMap<HgChangelog> pwLocal, HgRemoteRepository hgRemote) {
 		localRepo = pwLocal;
@@ -81,11 +82,21 @@ public class RepositoryComparator {
 		return common;
 	}
 	
+	public List<Nodeid> getRemoteHeads() {
+		assert remoteHeads != null;
+		return remoteHeads;
+	}
+	
 	/**
 	 * @return revisions that are children of common entries, i.e. revisions that are present on the local server and not on remote.
 	 */
 	public List<Nodeid> getLocalOnlyRevisions() {
-		return localRepo.childrenOf(getCommon());
+		final List<Nodeid> c = getCommon();
+		if (c.isEmpty()) {
+			return localRepo.all();
+		} else {
+			return localRepo.childrenOf(c);
+		}
 	}
 	
 	/**
@@ -128,7 +139,7 @@ public class RepositoryComparator {
 	}
 
 	private List<Nodeid> findCommonWithRemote() throws HgRemoteConnectionException {
-		List<Nodeid> remoteHeads = remoteRepo.heads();
+		remoteHeads = remoteRepo.heads();
 		LinkedList<Nodeid> resultCommon = new LinkedList<Nodeid>(); // these remotes are known in local
 		LinkedList<Nodeid> toQuery = new LinkedList<Nodeid>(); // these need further queries to find common
 		for (Nodeid rh : remoteHeads) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ package org.tmatesoft.hg.repo;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -26,6 +27,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StreamTokenizer;
+import java.net.ContentHandler;
+import java.net.ContentHandlerFactory;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -53,10 +56,14 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.internal.DataSerializer;
+import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
 import org.tmatesoft.hg.internal.PropertyMarshal;
 
 /**
@@ -76,6 +83,33 @@ public class HgRemoteRepository implements SessionContext.Source {
 	private HgLookup lookupHelper;
 	private final SessionContext sessionContext;
 	private Set<String> remoteCapabilities;
+	
+	static {
+		URLConnection.setContentHandlerFactory(new ContentHandlerFactory() {
+			
+			public ContentHandler createContentHandler(String mimetype) {
+				if ("application/mercurial-0.1".equals(mimetype)) {
+					return new ContentHandler() {
+						
+						@Override
+						public Object getContent(URLConnection urlc) throws IOException {
+							if (urlc.getContentLength() > 0) {
+								ByteArrayOutputStream bos = new ByteArrayOutputStream();
+								InputStream is = urlc.getInputStream();
+								int r;
+								while ((r = is.read()) != -1) {
+									bos.write(r);
+								}
+								return new String(bos.toByteArray());
+							}
+							return "<empty>";
+						}
+					};
+				}
+				return null;
+			}
+		});
+	}
 	
 	HgRemoteRepository(SessionContext ctx, URL url) throws HgBadArgumentException {
 		if (url == null || ctx == null) {
@@ -192,9 +226,10 @@ public class HgRemoteRepository implements SessionContext.Source {
 	}
 
 	public List<Nodeid> heads() throws HgRemoteConnectionException {
+		HttpURLConnection c = null;
 		try {
 			URL u = new URL(url, url.getPath() + "?cmd=heads");
-			HttpURLConnection c = setupConnection(u.openConnection());
+			c = setupConnection(u.openConnection());
 			c.connect();
 			if (debug) {
 				dumpResponseHeader(u, c);
@@ -213,6 +248,10 @@ public class HgRemoteRepository implements SessionContext.Source {
 			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("heads").setServerInfo(getLocation());
 		} catch (IOException ex) {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("heads").setServerInfo(getLocation());
+		} finally {
+			if (c != null) {
+				c.disconnect();
+			}
 		}
 	}
 	
@@ -245,10 +284,11 @@ public class HgRemoteRepository implements SessionContext.Source {
 			// strip last space 
 			sb.setLength(sb.length() - 1);
 		}
+		HttpURLConnection c = null;
 		try {
 			boolean usePOST = ranges.size() > 3;
 			URL u = new URL(url, url.getPath() + "?cmd=between" + (usePOST ? "" : '&' + sb.toString()));
-			HttpURLConnection c = setupConnection(u.openConnection());
+			c = setupConnection(u.openConnection());
 			if (usePOST) {
 				c.setRequestMethod("POST");
 				c.setRequestProperty("Content-Length", String.valueOf(sb.length()/*nodeids are ASCII, bytes == characters */));
@@ -314,23 +354,19 @@ public class HgRemoteRepository implements SessionContext.Source {
 			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("between").setServerInfo(getLocation());
 		} catch (IOException ex) {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("between").setServerInfo(getLocation());
+		} finally {
+			if (c != null) {
+				c.disconnect();
+			}
 		}
 	}
 
 	public List<RemoteBranch> branches(List<Nodeid> nodes) throws HgRemoteConnectionException {
-		StringBuilder sb = new StringBuilder(20 + nodes.size() * 41);
-		sb.append("nodes=");
-		for (Nodeid n : nodes) {
-			sb.append(n.toString());
-			sb.append('+');
-		}
-		if (sb.charAt(sb.length() - 1) == '+') {
-			// strip last space 
-			sb.setLength(sb.length() - 1);
-		}
+		StringBuilder sb = appendNodeidListArgument("nodes", nodes, null);
+		HttpURLConnection c = null;
 		try {
 			URL u = new URL(url, url.getPath() + "?cmd=branches&" + sb.toString());
-			HttpURLConnection c = setupConnection(u.openConnection());
+			c = setupConnection(u.openConnection());
 			c.connect();
 			if (debug) {
 				dumpResponseHeader(u, c);
@@ -357,6 +393,10 @@ public class HgRemoteRepository implements SessionContext.Source {
 			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("branches").setServerInfo(getLocation());
 		} catch (IOException ex) {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("branches").setServerInfo(getLocation());
+		} finally {
+			if (c != null) {
+				c.disconnect();
+			}
 		}
 	}
 
@@ -378,19 +418,11 @@ public class HgRemoteRepository implements SessionContext.Source {
 	 */
 	public HgBundle getChanges(List<Nodeid> roots) throws HgRemoteConnectionException, HgRuntimeException {
 		List<Nodeid> _roots = roots.isEmpty() ? Collections.singletonList(Nodeid.NULL) : roots;
-		StringBuilder sb = new StringBuilder(20 + _roots.size() * 41);
-		sb.append("roots=");
-		for (Nodeid n : _roots) {
-			sb.append(n.toString());
-			sb.append('+');
-		}
-		if (sb.charAt(sb.length() - 1) == '+') {
-			// strip last space 
-			sb.setLength(sb.length() - 1);
-		}
+		StringBuilder sb = appendNodeidListArgument("roots", _roots, null);
+		HttpURLConnection c = null;
 		try {
 			URL u = new URL(url, url.getPath() + "?cmd=changegroup&" + sb.toString());
-			HttpURLConnection c = setupConnection(u.openConnection());
+			c = setupConnection(u.openConnection());
 			c.connect();
 			if (debug) {
 				dumpResponseHeader(u, c);
@@ -407,6 +439,54 @@ public class HgRemoteRepository implements SessionContext.Source {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("changegroup").setServerInfo(getLocation());
 		} catch (HgRepositoryNotFoundException ex) {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("changegroup").setServerInfo(getLocation());
+		} finally {
+			if (c != null) {
+				c.disconnect();
+			}
+		}
+	}
+	
+	public void unbundle(HgBundle bundle, List<Nodeid> heads) throws HgRemoteConnectionException, HgRuntimeException {
+		if (heads == null) {
+			// TODO collect heads from bundle:
+			// bundle.inspectChangelog(new HeadCollector(for each c : if collected has c.p1 or c.p2, remove them. Add c))
+			throw Internals.notImplemented();
+		}
+		StringBuilder sb = appendNodeidListArgument("heads", heads, null);
+		
+		HttpURLConnection c = null;
+		DataSerializer.DataSource bundleData = bundle.new BundleSerializer();
+		try {
+			URL u = new URL(url, url.getPath() + "?cmd=unbundle&" + sb.toString());
+			c = setupConnection(u.openConnection());
+			c.setRequestMethod("POST");
+			c.setRequestProperty("Content-Length", String.valueOf(bundleData.serializeLength()));
+			c.setRequestProperty("Content-Type", "application/mercurial-0.1");
+			c.setDoOutput(true);
+			c.connect();
+			OutputStream os = c.getOutputStream();
+			bundleData.serialize(new OutputStreamSerializer(os));
+			os.flush();
+			os.close();
+			if (debug) {
+				dumpResponseHeader(u, c);
+				dumpResponse(c);
+			}
+			if (c.getResponseCode() != 200) {
+				String m = c.getResponseMessage() == null ? "unknown reason" : c.getResponseMessage();
+				String em = String.format("Push failed: %s (HTTP error:%d)", m, c.getResponseCode());
+				throw new HgRemoteConnectionException(em).setRemoteCommand("unbundle").setServerInfo(getLocation());
+			}
+		} catch (MalformedURLException ex) {
+			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("unbundle").setServerInfo(getLocation());
+		} catch (IOException ex) {
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("unbundle").setServerInfo(getLocation());
+		} catch (HgIOException ex) {
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("unbundle").setServerInfo(getLocation());
+		} finally {
+			if (c != null) {
+				c.disconnect();
+			}
 		}
 	}
 
@@ -423,7 +503,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 	}
 	
 	private HttpURLConnection setupConnection(URLConnection urlConnection) {
-		urlConnection.setRequestProperty("User-Agent", "hg4j/0.5.0");
+		urlConnection.setRequestProperty("User-Agent", "hg4j/1.0.0");
 		urlConnection.addRequestProperty("Accept", "application/mercurial-0.1");
 		if (authInfo != null) {
 			urlConnection.addRequestProperty("Authorization", "Basic " + authInfo);
@@ -433,6 +513,23 @@ public class HgRemoteRepository implements SessionContext.Source {
 		}
 		return (HttpURLConnection) urlConnection;
 	}
+	
+	private StringBuilder appendNodeidListArgument(String key, List<Nodeid> values, StringBuilder sb) {
+		if (sb == null) {
+			sb = new StringBuilder(20 + values.size() * 41);
+		}
+		sb.append(key);
+		sb.append('=');
+		for (Nodeid n : values) {
+			sb.append(n.toString());
+			sb.append('+');
+		}
+		if (sb.charAt(sb.length() - 1) == '+') {
+			// strip last space 
+			sb.setLength(sb.length() - 1);
+		}
+		return sb;
+	}
 
 	private void dumpResponseHeader(URL u, HttpURLConnection c) {
 		System.out.printf("Query (%d bytes):%s\n", u.getQuery().length(), u.getQuery());
@@ -440,6 +537,13 @@ public class HgRemoteRepository implements SessionContext.Source {
 		final Map<String, List<String>> headerFields = c.getHeaderFields();
 		for (String s : headerFields.keySet()) {
 			System.out.printf("%s: %s\n", s, c.getHeaderField(s));
+		}
+	}
+	
+	private void dumpResponse(HttpURLConnection c) throws IOException {
+		if (c.getContentLength() > 0) {
+			final Object content = c.getContent();
+			System.out.println(content);
 		}
 	}
 	

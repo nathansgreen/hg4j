@@ -17,9 +17,11 @@
 package org.tmatesoft.hg.repo;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
@@ -27,8 +29,10 @@ import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
+import org.tmatesoft.hg.internal.DataSerializer;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.InflaterDataAccess;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
@@ -50,11 +54,11 @@ public class HgBundle {
 
 	private final File bundleFile;
 	private final DataAccessProvider accessProvider;
-//	private final SessionContext sessionContext;
+	private final SessionContext ctx;
 	private Lifecycle.BasicCallback flowControl;
 
-	HgBundle(SessionContext ctx, DataAccessProvider dap, File bundle) {
-//		sessionContext = ctx;
+	HgBundle(SessionContext sessionContext, DataAccessProvider dap, File bundle) {
+		ctx = sessionContext;
 		accessProvider = dap;
 		bundleFile = bundle;
 	}
@@ -531,6 +535,31 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 				patchCount = -1;
 			}
 			return String.format("%s %s %s %s; patches:%d\n", node().shortNotation(), firstParent().shortNotation(), secondParent().shortNotation(), cset().shortNotation(), patchCount);
+		}
+	}
+
+	@Experimental(reason="Work in progress, not an API")
+	public class BundleSerializer implements DataSerializer.DataSource {
+
+		public void serialize(DataSerializer out) throws HgIOException, HgRuntimeException {
+			FileInputStream fis = null;
+			try {
+				fis = new FileInputStream(HgBundle.this.bundleFile);
+				byte[] buffer = new byte[8*1024];
+				int r;
+				while ((r = fis.read(buffer, 0, buffer.length)) > 0) {
+					out.write(buffer, 0, r);
+				}
+				
+			} catch (IOException ex) {
+				throw new HgIOException("Failed to serialize bundle", HgBundle.this.bundleFile);
+			} finally {
+				new FileUtils(HgBundle.this.ctx.getLog()).closeQuietly(fis, HgBundle.this.bundleFile);
+			}
+		}
+
+		public int serializeLength() throws HgRuntimeException {
+			return Internals.ltoi(HgBundle.this.bundleFile.length());
 		}
 	}
 }

@@ -20,6 +20,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -56,7 +57,6 @@ import org.tmatesoft.hg.repo.Revlog.ParentInspector;
  */
 public final class HgParentChildMap<T extends Revlog> implements ParentInspector {
 
-	
 	private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
 	private Nodeid[] sorted; // for binary search
 	private int[] sorted2natural;
@@ -180,6 +180,9 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	// @return ordered collection of all children rooted at supplied nodes. Nodes shall not be descendants of each other!
 	// Nodeids shall belong to this revlog
 	public List<Nodeid> childrenOf(List<Nodeid> roots) {
+		if (roots.isEmpty()) {
+			return Collections.emptyList();
+		}
 		HashSet<Nodeid> parents = new HashSet<Nodeid>();
 		LinkedList<Nodeid> result = new LinkedList<Nodeid>();
 		int earliestRevision = Integer.MAX_VALUE;
@@ -243,5 +246,12 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * @return all revisions this map knows about
+	 */
+	public List<Nodeid> all() {
+		return Arrays.asList(sequential);
 	}
 }
