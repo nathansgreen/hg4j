@@ -57,14 +57,15 @@ import org.tmatesoft.hg.repo.Revlog.ParentInspector;
  */
 public final class HgParentChildMap<T extends Revlog> implements ParentInspector {
 
+	// IMPORTANT: Nodeid instances shall be shared between all arrays
+
 	private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
 	private Nodeid[] sorted; // for binary search
-	private int[] sorted2natural;
+	private int[] sorted2natural; // indexes in sorted to indexes in sequential
 	private Nodeid[] firstParent;
 	private Nodeid[] secondParent;
 	private final T revlog;
 
-	// Nodeid instances shall be shared between all arrays
 
 	public HgParentChildMap(T owner) {
 		revlog = owner;
@@ -253,5 +254,34 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	 */
 	public List<Nodeid> all() {
 		return Arrays.asList(sequential);
+	}
+
+	/**
+	 * Find out whether a given node is among descendants of another.
+	 * 
+	 * @param root revision to check for being (grand-)*parent of a child
+	 * @param wannaBeChild candidate descendant revision
+	 * @return <code>true</code> if <code>wannaBeChild</code> is among children of <code>root</code>
+	 */
+	public boolean isChild(Nodeid root, Nodeid wannaBeChild) {
+		int x = Arrays.binarySearch(sorted, root);
+		assertSortedIndex(x);
+		root = sorted[x]; // canonical instance
+		int y = Arrays.binarySearch(sorted, wannaBeChild);
+		if (y < 0 || y <= x) {
+			// not found or comes earlier than root
+			return false;
+		}
+		wannaBeChild = sorted[y]; // canonicalize
+		final int start = sorted2natural[x];
+		final int end = sorted2natural[y];
+		HashSet<Nodeid> parents = new HashSet<Nodeid>();
+		parents.add(root);
+		for (int i = start + 1; i < end; i++) {
+			if (parents.contains(firstParent[i]) || parents.contains(secondParent[i])) {
+				parents.add(sequential[i]); // collect ancestors line
+			}
+		}
+		return parents.contains(firstParent[end]) || parents.contains(secondParent[end]);
 	}
 }

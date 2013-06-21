@@ -23,6 +23,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.internal.BundleGenerator;
 import org.tmatesoft.hg.internal.RepositoryComparator;
+import org.tmatesoft.hg.repo.HgBookmarks;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgInternals;
@@ -33,6 +34,7 @@ import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
@@ -81,8 +83,23 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 //			remote.listkeys("phases");
 			progress.worked(5);
 			//
-			// FIXME update bookmark information
+			// update bookmark information
+			HgBookmarks localBookmarks = repo.getBookmarks();
+			if (!localBookmarks.getAllBookmarks().isEmpty()) {
+				for (Pair<String,Nodeid> bm : remoteRepo.bookmarks()) {
+					Nodeid localRevision = localBookmarks.getRevision(bm.first());
+					if (localRevision == null || !parentHelper.knownNode(bm.second())) {
+						continue;
+					}
+					// we know both localRevision and revision of remote bookmark,
+					// need to make sure we don't push  older revision than it's at the server
+					if (parentHelper.isChild(bm.second(), localRevision)) {
+						remoteRepo.updateBookmark(bm.first(), bm.second(), localRevision);
+					}
+				}
+			}
 //			remote.listkeys("bookmarks");
+			// XXX WTF is obsolete in namespaces key??
 			progress.worked(5);
 		} catch (IOException ex) {
 			throw new HgIOException(ex.getMessage(), null); // XXX not a nice idea to throw IOException from BundleGenerator#create

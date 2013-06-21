@@ -62,14 +62,18 @@ import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.DataSerializer;
+import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
 import org.tmatesoft.hg.internal.PropertyMarshal;
+import org.tmatesoft.hg.util.Pair;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * WORK IN PROGRESS, DO NOT USE
  * 
  * @see http://mercurial.selenic.com/wiki/WireProtocol
+ * @see http://mercurial.selenic.com/wiki/HttpCommandProtocol
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -162,48 +166,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 	}
 	
 	public boolean isInvalid() throws HgRemoteConnectionException {
-		if (remoteCapabilities == null) {
-			remoteCapabilities = new HashSet<String>();
-			// say hello to server, check response
-			try {
-				URL u = new URL(url, url.getPath() + "?cmd=hello");
-				HttpURLConnection c = setupConnection(u.openConnection());
-				c.connect();
-				if (debug) {
-					dumpResponseHeader(u, c);
-				}
-				BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), "US-ASCII"));
-				String line = r.readLine();
-				c.disconnect();
-				final String capsPrefix = "capabilities:";
-				if (line == null || !line.startsWith(capsPrefix)) {
-					// for whatever reason, some servers do not respond to hello command (e.g. svnkit)
-					// but respond to 'capabilities' instead. Try it.
-					// TODO [post-1.0] tests needed
-					u = new URL(url, url.getPath() + "?cmd=capabilities");
-					c = setupConnection(u.openConnection());
-					c.connect();
-					if (debug) {
-						dumpResponseHeader(u, c);
-					}
-					r = new BufferedReader(new InputStreamReader(c.getInputStream(), "US-ASCII"));
-					line = r.readLine();
-					c.disconnect();
-					if (line == null || line.trim().length() == 0) {
-						return true;
-					}
-				} else {
-					line = line.substring(capsPrefix.length()).trim();
-				}
-				String[] caps = line.split("\\s");
-				remoteCapabilities.addAll(Arrays.asList(caps));
-				c.disconnect();
-			} catch (MalformedURLException ex) {
-				throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("hello").setServerInfo(getLocation());
-			} catch (IOException ex) {
-				throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("hello").setServerInfo(getLocation());
-			}
-		}
+		initCapabilities();
 		return remoteCapabilities.isEmpty();
 	}
 
@@ -446,13 +409,14 @@ public class HgRemoteRepository implements SessionContext.Source {
 		}
 	}
 	
-	public void unbundle(HgBundle bundle, List<Nodeid> heads) throws HgRemoteConnectionException, HgRuntimeException {
-		if (heads == null) {
+	public void unbundle(HgBundle bundle, List<Nodeid> remoteHeads) throws HgRemoteConnectionException, HgRuntimeException {
+		if (remoteHeads == null) {
 			// TODO collect heads from bundle:
 			// bundle.inspectChangelog(new HeadCollector(for each c : if collected has c.p1 or c.p2, remove them. Add c))
+			// or get from remote server???
 			throw Internals.notImplemented();
 		}
-		StringBuilder sb = appendNodeidListArgument("heads", heads, null);
+		StringBuilder sb = appendNodeidListArgument("heads", remoteHeads, null);
 		
 		HttpURLConnection c = null;
 		DataSerializer.DataSource bundleData = bundle.new BundleSerializer();
@@ -472,11 +436,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 				dumpResponseHeader(u, c);
 				dumpResponse(c);
 			}
-			if (c.getResponseCode() != 200) {
-				String m = c.getResponseMessage() == null ? "unknown reason" : c.getResponseMessage();
-				String em = String.format("Push failed: %s (HTTP error:%d)", m, c.getResponseCode());
-				throw new HgRemoteConnectionException(em).setRemoteCommand("unbundle").setServerInfo(getLocation());
-			}
+			checkResponseOk(c, "Push", "unbundle");
 		} catch (MalformedURLException ex) {
 			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("unbundle").setServerInfo(getLocation());
 		} catch (IOException ex) {
@@ -490,9 +450,113 @@ public class HgRemoteRepository implements SessionContext.Source {
 		}
 	}
 
+	public List<Pair<String,Nodeid>> bookmarks() throws HgRemoteConnectionException, HgRuntimeException {
+		final String actionName = "Get remote bookmarks";
+		final List<Pair<String, String>> values = listkeys("bookmarks", actionName);
+		ArrayList<Pair<String, Nodeid>> rv = new ArrayList<Pair<String, Nodeid>>();
+		for (Pair<String, String> l : values) {
+			if (l.second().length() != Nodeid.SIZE_ASCII) {
+				sessionContext.getLog().dump(getClass(), Severity.Warn, "%s: bad nodeid '%s', ignored", actionName, l.second());
+				continue;
+			}
+			Nodeid n = Nodeid.fromAscii(l.second());
+			String bm = new String(l.first());
+			rv.add(new Pair<String, Nodeid>(bm, n));
+		}
+		return rv;
+	}
+
+	public void updateBookmark(String name, Nodeid oldRev, Nodeid newRev) throws HgRemoteConnectionException, HgRuntimeException {
+		final String namespace = "bookmarks";
+		HttpURLConnection c = null;
+		try {
+			URL u = new URL(url, String.format("%s?cmd=pushkey&namespace=%s&key=%s&old=%s&new=%s",url.getPath(), namespace, name, oldRev.toString(), newRev.toString()));
+			c = setupConnection(u.openConnection());
+			c.connect();
+			if (debug) {
+				dumpResponseHeader(u, c);
+			}
+			checkResponseOk(c, "Update remote bookmark", "pushkey");
+		} catch (MalformedURLException ex) {
+			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("pushkey").setServerInfo(getLocation());
+		} catch (IOException ex) {
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("pushkey").setServerInfo(getLocation());
+		} finally {
+			if (c != null) {
+				c.disconnect();
+			}
+		}
+	}
+	
+	private void phases() throws HgRemoteConnectionException, HgRuntimeException {
+		final List<Pair<String, String>> values = listkeys("phases", "Get remote phases");
+		for (Pair<String, String> l : values) {
+			System.out.printf("%s : %s\n", l.first(), l.second());
+		}
+	}
+	
+	public static void main(String[] args) throws Exception {
+		final HgRemoteRepository r = new HgLookup().detectRemote("http://selenic.com/hg", null);
+		if (r.isInvalid()) {
+			return;
+		}
+		System.out.println(r.remoteCapabilities);
+		r.phases();
+		final List<Pair<String, Nodeid>> bm = r.bookmarks();
+		for (Pair<String, Nodeid> pair : bm) {
+			System.out.println(pair);
+		}
+	}
+
 	@Override
 	public String toString() {
 		return getClass().getSimpleName() + '[' + getLocation() + ']';
+	}
+	
+	
+	private void initCapabilities() throws HgRemoteConnectionException {
+		if (remoteCapabilities == null) {
+			remoteCapabilities = new HashSet<String>();
+			// say hello to server, check response
+			try {
+				URL u = new URL(url, url.getPath() + "?cmd=hello");
+				HttpURLConnection c = setupConnection(u.openConnection());
+				c.connect();
+				if (debug) {
+					dumpResponseHeader(u, c);
+				}
+				BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), "US-ASCII"));
+				String line = r.readLine();
+				c.disconnect();
+				final String capsPrefix = "capabilities:";
+				if (line == null || !line.startsWith(capsPrefix)) {
+					// for whatever reason, some servers do not respond to hello command (e.g. svnkit)
+					// but respond to 'capabilities' instead. Try it.
+					// TODO [post-1.0] tests needed
+					u = new URL(url, url.getPath() + "?cmd=capabilities");
+					c = setupConnection(u.openConnection());
+					c.connect();
+					if (debug) {
+						dumpResponseHeader(u, c);
+					}
+					r = new BufferedReader(new InputStreamReader(c.getInputStream(), "US-ASCII"));
+					line = r.readLine();
+					c.disconnect();
+					if (line == null || line.trim().length() == 0) {
+						return;
+					}
+				} else {
+					line = line.substring(capsPrefix.length()).trim();
+				}
+				String[] caps = line.split("\\s");
+				remoteCapabilities.addAll(Arrays.asList(caps));
+				c.disconnect();
+			} catch (MalformedURLException ex) {
+				throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("hello").setServerInfo(getLocation());
+			} catch (IOException ex) {
+				throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("hello").setServerInfo(getLocation());
+			}
+		}
 	}
 
 	private HgLookup getLookupHelper() {
@@ -501,7 +565,49 @@ public class HgRemoteRepository implements SessionContext.Source {
 		}
 		return lookupHelper;
 	}
+
+	private List<Pair<String,String>> listkeys(String namespace, String actionName) throws HgRemoteConnectionException, HgRuntimeException {
+		HttpURLConnection c = null;
+		try {
+			URL u = new URL(url, url.getPath() + "?cmd=listkeys&namespace=" + namespace);
+			c = setupConnection(u.openConnection());
+			c.connect();
+			if (debug) {
+				dumpResponseHeader(u, c);
+			}
+			checkResponseOk(c, actionName, "listkeys");
+			ArrayList<Pair<String, String>> rv = new ArrayList<Pair<String, String>>();
+			BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), EncodingHelper.getUTF8()));
+			String l;
+			while ((l = r.readLine()) != null) {
+				int sep = l.indexOf('\t');
+				if (sep == -1) {
+					sessionContext.getLog().dump(getClass(), Severity.Warn, "%s: bad line '%s', ignored", actionName, l);
+					continue;
+				}
+				rv.add(new Pair<String,String>(l.substring(0, sep), l.substring(sep+1)));
+			}
+			r.close();
+			return rv;
+		} catch (MalformedURLException ex) {
+			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("listkeys").setServerInfo(getLocation());
+		} catch (IOException ex) {
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("listkeys").setServerInfo(getLocation());
+		} finally {
+			if (c != null) {
+				c.disconnect();
+			}
+		}
+	}
 	
+	private void checkResponseOk(HttpURLConnection c, String opName, String remoteCmd) throws HgRemoteConnectionException, IOException {
+		if (c.getResponseCode() != 200) {
+			String m = c.getResponseMessage() == null ? "unknown reason" : c.getResponseMessage();
+			String em = String.format("%s failed: %s (HTTP error:%d)", opName, m, c.getResponseCode());
+			throw new HgRemoteConnectionException(em).setRemoteCommand(remoteCmd).setServerInfo(getLocation());
+		}
+	}
+
 	private HttpURLConnection setupConnection(URLConnection urlConnection) {
 		urlConnection.setRequestProperty("User-Agent", "hg4j/1.0.0");
 		urlConnection.addRequestProperty("Accept", "application/mercurial-0.1");
@@ -549,7 +655,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 	
 	private static File writeBundle(InputStream is, boolean decompress, String header) throws IOException {
 		InputStream zipStream = decompress ? new InflaterInputStream(is) : is;
-		File tf = File.createTempFile("hg-bundle-", null);
+		File tf = File.createTempFile("hg4j-bundle-", null);
 		FileOutputStream fos = new FileOutputStream(tf);
 		fos.write(header.getBytes());
 		int r;
