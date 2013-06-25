@@ -16,7 +16,7 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.repo.HgRepositoryFiles.LastMessage;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.*;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
@@ -389,7 +389,7 @@ public final class HgRepository implements SessionContext.Source {
 	public HgRepositoryLock getWorkingDirLock() {
 		if (wdLock == null) {
 			int timeout = getLockTimeout();
-			File lf = impl.getFileFromRepoDir("wlock");
+			File lf = impl.getRepositoryFile(WorkingCopyLock);
 			synchronized (this) {
 				if (wdLock == null) {
 					wdLock = new HgRepositoryLock(lf, timeout);
@@ -407,7 +407,7 @@ public final class HgRepository implements SessionContext.Source {
 	public HgRepositoryLock getStoreLock() {
 		if (storeLock == null) {
 			int timeout = getLockTimeout();
-			File fl = impl.getFileFromStoreDir("lock");
+			File fl = impl.getRepositoryFile(StoreLock);
 			synchronized (this) {
 				if (storeLock == null) {
 					storeLock = new HgRepositoryLock(fl, timeout);

@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.FNCache;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -78,7 +80,7 @@ public class FNCacheFile {
 		if (addedDotI.isEmpty() && addedDotD.isEmpty()) {
 			return;
 		}
-		File f = fncacheFile();
+		File f = repo.getRepositoryFile(FNCache);
 		f.getParentFile().mkdirs();
 		final Charset filenameEncoding = repo.getFilenameEncoding();
 		ArrayList<CharBuffer> added = new ArrayList<CharBuffer>();
@@ -111,9 +113,5 @@ public class FNCacheFile {
 
 	public void addData(Path p) {
 		addedDotD.add(p);
-	}
-
-	private File fncacheFile() {
-		return repo.getFileFromStoreDir("fncache");
 	}
 }

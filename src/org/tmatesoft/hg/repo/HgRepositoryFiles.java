@@ -25,35 +25,46 @@ package org.tmatesoft.hg.repo;
  */
 public enum HgRepositoryFiles {
 
-	HgIgnore(".hgignore"), HgTags(".hgtags"), HgEol(".hgeol"), 
-	Dirstate(false, "dirstate"), HgLocalTags(false, "localtags"),
-	HgSub(".hgsub"), HgSubstate(".hgsubstate"),
-	LastMessage(false, "last-message.txt"),
-	Bookmarks(false, "bookmarks"), BookmarksCurrent(false, "bookmarks.current"),
-	Branch(false, "branch"), 
-	UndoBranch(false, "undo.branch"), UndoDirstate(false, "undo.dirstate");
+	HgIgnore(Home.Root, ".hgignore"), HgTags(Home.Root, ".hgtags"), HgEol(Home.Root, ".hgeol"), 
+	Dirstate(Home.Repo, "dirstate"), HgLocalTags(Home.Repo, "localtags"),
+	HgSub(Home.Root, ".hgsub"), HgSubstate(Home.Root, ".hgsubstate"),
+	LastMessage(Home.Repo, "last-message.txt"),
+	Bookmarks(Home.Repo, "bookmarks"), BookmarksCurrent(Home.Repo, "bookmarks.current"),
+	Branch(Home.Repo, "branch"), 
+	UndoBranch(Home.Repo, "undo.branch"), UndoDirstate(Home.Repo, "undo.dirstate"),
+	Phaseroots(Home.Store, "phaseroots"), FNCache(Home.Store, "fncache"),
+	WorkingCopyLock(Home.Repo, "wlock"), StoreLock(Home.Store, "lock");
 
-	private final String fname;
-	private final boolean livesInWC; 
-	
-	private HgRepositoryFiles(String filename) {
-		this(true, filename);
+	/**
+	 * Possible file locations 
+	 */
+	public enum Home {
+		Root, Repo, Store
 	}
 
-	private HgRepositoryFiles(boolean wcNotRepoRoot, String filename) {
+	private final String fname;
+	private final Home residesIn; 
+	
+	private HgRepositoryFiles(Home home, String filename) {
 		fname = filename;
-		livesInWC = wcNotRepoRoot;
+		residesIn = home;
 	}
 
 	/**
-	 * Path to the file, relative to the parent it lives in.
+	 * Path to the file, relative to the repository root.
 	 * 
 	 * For repository files that reside in working directory, return their location relative to the working dir.
-	 * For files that reside under repository root, path returned would include '.hg/' prefix.
+	 * For files that reside under repository root, path returned includes '.hg/' prefix.
+	 * For files from {@link Home#Store} storage area, path starts with '.hg/store/', although actual use of 'store' folder
+	 * is controlled by repository requirements. Returned value shall be deemed as 'most likely' path in a general environment.
 	 * @return file location, never <code>null</code>
 	 */
 	public String getPath() {
-		return livesInWC ? getName() : ".hg/" + getName();
+		switch (residesIn) {
+			case Store : return ".hg/store/" + getName();
+			case Repo : return ".hg/" + getName();
+			default : return getName();
+		}
 	}
 
 	/**
@@ -73,13 +84,20 @@ public enum HgRepositoryFiles {
 	 * @return <code>true</code> if file lives in working tree
 	 */
 	public boolean residesUnderWorkingDir() {
-		return livesInWC;
+		return residesIn == Home.Root;
 	}
 
 	/**
 	 * @return <code>true</code> if file lives under '.hg/' 
 	 */
 	public boolean residesUnderRepositoryRoot() {
-		return !livesInWC;
+		return residesIn == Home.Repo;
+	}
+	
+	/**
+	 * Identify a root the file lives under
+	 */
+	public Home getHome() {
+		return residesIn;
 	}
 }

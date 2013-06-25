@@ -18,6 +18,7 @@ package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.repo.HgPhase.Draft;
 import static org.tmatesoft.hg.repo.HgPhase.Secret;
+import static org.tmatesoft.hg.repo.HgRepositoryFiles.Phaseroots;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
@@ -134,7 +135,7 @@ public final class PhasesHelper {
 	}
 
 	private Boolean readRoots() throws HgRuntimeException {
-		File phaseroots = repo.getFileFromStoreDir("phaseroots"); // TODO into HgRepositoryFiles
+		File phaseroots = repo.getRepositoryFile(Phaseroots);
 		BufferedReader br = null;
 		try {
 			if (!phaseroots.exists()) {

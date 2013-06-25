@@ -150,12 +150,16 @@ public final class Internals implements SessionContext.Source {
 	}
 	
 	public File getRepositoryFile(HgRepositoryFiles f) {
-		return f.residesUnderRepositoryRoot() ? getFileFromRepoDir(f.getName()) : new File(repo.getWorkingDir(), f.getName());
+		switch (f.getHome()) {
+			case Store : return getFileFromStoreDir(f.getName());
+			case Repo : return getFileFromRepoDir(f.getName());
+			default : return new File(repo.getWorkingDir(), f.getName());
+		}
 	}
 
 	/**
 	 * Access files under ".hg/".
-	 * File not necessarily exists, this method is merely a factory for Files at specific, configuration-dependent location. 
+	 * File not necessarily exists, this method is merely a factory for {@link File files} at specific, configuration-dependent location. 
 	 * 
 	 * @param name shall be normalized path
 	 */
