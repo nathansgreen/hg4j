@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.util.ArrayList;
 import java.util.BitSet;
 
 import org.tmatesoft.hg.core.Nodeid;
@@ -37,6 +38,7 @@ public class RevisionDescendants {
 	private final int rootRevIndex;
 	private final int tipRevIndex; // this is the last revision we cache to
 	private final BitSet descendants;
+	private RevisionSet revset;
 
 	// in fact, may be refactored to deal not only with changelog, but any revlog (not sure what would be the usecase, though)
 	public RevisionDescendants(HgRepository hgRepo, int revisionIndex) throws HgRuntimeException {
@@ -107,5 +109,22 @@ public class RevisionDescendants {
 		int ix = revisionIndex - rootRevIndex;
 		assert ix < descendants.size();
 		return descendants.get(ix);
+	}
+
+	public RevisionSet asRevisionSet() {
+		if (revset == null) {
+			final ArrayList<Nodeid> revisions = new ArrayList<Nodeid>(descendants.cardinality());
+			repo.getChangelog().indexWalk(rootRevIndex, tipRevIndex, new HgChangelog.RevisionInspector() {
+
+				public void next(int revisionIndex, Nodeid revision, int linkedRevisionIndex) throws HgRuntimeException {
+					if (isDescendant(revisionIndex)) {
+						revisions.add(revision);
+					}
+				}
+			});
+			assert revisions.size() == descendants.cardinality();
+			revset = new RevisionSet(revisions);
+		}
+		return revset;
 	}
 }

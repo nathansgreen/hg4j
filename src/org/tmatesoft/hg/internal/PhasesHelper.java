@@ -131,7 +131,39 @@ public final class PhasesHelper {
 			}
 		}
 		return HgPhase.Public;
+	}
 
+
+	/**
+	 * @return all revisions with secret phase
+	 */
+	public RevisionSet allSecret() {
+		return allOf(HgPhase.Secret);
+	}
+	
+	public RevisionSet allDraft() {
+		return allOf(HgPhase.Draft).subtract(allOf(HgPhase.Secret));
+	}
+
+	/**
+	 * For a given phase, collect all revisions with phase that is the same or more private (i.e. for Draft, returns Draft+Secret)
+	 * The reason is not a nice API intention (which is awful, indeed), but an ease of implementation 
+	 */
+	private RevisionSet allOf(HgPhase phase) {
+		assert phase != HgPhase.Public;
+		if (!isCapableOfPhases()) {
+			return new RevisionSet(Collections.<Nodeid>emptyList());
+		}
+		final List<Nodeid> roots = getPhaseRoots(phase);
+		if (parentHelper != null) {
+			return new RevisionSet(roots).union(new RevisionSet(parentHelper.childrenOf(roots)));
+		} else {
+			RevisionSet rv = new RevisionSet(Collections.<Nodeid>emptyList());
+			for (RevisionDescendants rd : getPhaseDescendants(phase)) {
+				rv = rv.union(rd.asRevisionSet());
+			}
+			return rv;
+		}
 	}
 
 	private Boolean readRoots() throws HgRuntimeException {

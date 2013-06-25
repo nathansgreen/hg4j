@@ -18,12 +18,16 @@ package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.*;
 
+import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.PhasesHelper;
+import org.tmatesoft.hg.internal.RevisionSet;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgLookup;
@@ -66,6 +70,41 @@ public class TestPhases {
 		initAndCheck(ph, expected);
 		final long end = System.nanoTime();
 		System.out.printf("With ParentWalker(simulates log command for whole repo): %,d μs (pw init: %,d ns)\n", (end - start1)/1000, start2 - start1);
+	}
+	
+	@Test
+	public void testAllSecretAndDraft() throws Exception {
+		HgRepository repo = Configuration.get().find("test-phases");
+		Internals implRepo = HgInternals.getImplementationRepo(repo);
+		HgPhase[] expected = readPhases(repo);
+		ArrayList<Nodeid> secret = new ArrayList<Nodeid>();
+		ArrayList<Nodeid> draft = new ArrayList<Nodeid>();
+		ArrayList<Nodeid> pub = new ArrayList<Nodeid>();
+		for (int i = 0; i < expected.length; i++) {
+			Nodeid n = repo.getChangelog().getRevision(i);
+			switch (expected[i]) {
+			case Secret : secret.add(n); break; 
+			case Draft : draft.add(n); break;
+			case Public : pub.add(n); break;
+			default : throw new IllegalStateException();
+			}
+		}
+		final RevisionSet rsSecret = new RevisionSet(secret);
+		final RevisionSet rsDraft = new RevisionSet(draft);
+		assertFalse("[sanity]", rsSecret.isEmpty());
+		assertFalse("[sanity]", rsDraft.isEmpty());
+		HgParentChildMap<HgChangelog> pw = new HgParentChildMap<HgChangelog>(repo.getChangelog());
+		pw.init();
+		PhasesHelper ph1 = new PhasesHelper(implRepo, null);
+		PhasesHelper ph2 = new PhasesHelper(implRepo, pw);
+		RevisionSet s1 = ph1.allSecret().symmetricDifference(rsSecret);
+		RevisionSet s2 = ph2.allSecret().symmetricDifference(rsSecret);
+		errorCollector.assertTrue("Secret,no ParentChildMap:" + s1.toString(), s1.isEmpty());
+		errorCollector.assertTrue("Secret, with ParentChildMap:" + s2.toString(), s2.isEmpty());
+		RevisionSet s3 = ph1.allDraft().symmetricDifference(rsDraft);
+		RevisionSet s4 = ph2.allDraft().symmetricDifference(rsDraft);
+		errorCollector.assertTrue("Draft,no ParentChildMap:" + s3.toString(), s3.isEmpty());
+		errorCollector.assertTrue("Draft, with ParentChildMap:" + s4.toString(), s4.isEmpty());
 	}
 
 	private HgPhase[] initAndCheck(PhasesHelper ph, HgPhase[] expected) throws HgRuntimeException {

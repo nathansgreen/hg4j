@@ -110,6 +110,7 @@
 			<test name="org.tmatesoft.hg.test.TestBlame" />
 			<test name="org.tmatesoft.hg.test.TestDiffHelper" />
 			<test name="org.tmatesoft.hg.test.TestRepositoryLock" />
+			<test name="org.tmatesoft.hg.test.TestRevisionSet" />
 			<test name="org.tmatesoft.hg.test.ComplexTest" />
 		</junit>
 	</target>
