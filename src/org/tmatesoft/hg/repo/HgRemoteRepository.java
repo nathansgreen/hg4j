@@ -66,8 +66,10 @@ import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
 import org.tmatesoft.hg.internal.PropertyMarshal;
+import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.LogFacility.Severity;
+import org.tmatesoft.hg.util.Outcome.Kind;
 
 /**
  * WORK IN PROGRESS, DO NOT USE
@@ -450,7 +452,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 		}
 	}
 
-	public List<Pair<String,Nodeid>> bookmarks() throws HgRemoteConnectionException, HgRuntimeException {
+	public Bookmarks getBookmarks() throws HgRemoteConnectionException, HgRuntimeException {
 		final String actionName = "Get remote bookmarks";
 		final List<Pair<String, String>> values = listkeys("bookmarks", actionName);
 		ArrayList<Pair<String, Nodeid>> rv = new ArrayList<Pair<String, Nodeid>>();
@@ -463,7 +465,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 			String bm = new String(l.first());
 			rv.add(new Pair<String, Nodeid>(bm, n));
 		}
-		return rv;
+		return new Bookmarks(rv);
 	}
 
 	public void updateBookmark(String name, Nodeid oldRev, Nodeid newRev) throws HgRemoteConnectionException, HgRuntimeException {
@@ -488,12 +490,39 @@ public class HgRemoteRepository implements SessionContext.Source {
 		}
 	}
 	
-	private void phases() throws HgRemoteConnectionException, HgRuntimeException {
-		final List<Pair<String, String>> values = listkeys("phases", "Get remote phases");
-		for (Pair<String, String> l : values) {
-			System.out.printf("%s : %s\n", l.first(), l.second());
+	public Phases getPhases() throws HgRemoteConnectionException, HgRuntimeException {
+		initCapabilities();
+		if (!remoteCapabilities.contains("pushkey")) {
+			// old server defaults to publishing
+			return new Phases(true, Collections.<Nodeid>emptyList());
 		}
+		final List<Pair<String, String>> values = listkeys("phases", "Get remote phases");
+		boolean publishing = true;
+		ArrayList<Nodeid> draftRoots = new ArrayList<Nodeid>();
+		for (Pair<String, String> l : values) {
+			if ("publishing".equalsIgnoreCase(l.first())) {
+				publishing = Boolean.parseBoolean(l.second());
+				continue;
+			}
+			Nodeid root = Nodeid.fromAscii(l.first());
+			int ph = Integer.parseInt(l.second());
+			if (ph == HgPhase.Draft.mercurialOrdinal()) {
+				draftRoots.add(root);
+			} else {
+				assert false;
+				sessionContext.getLog().dump(getClass(), Severity.Error, "Unexpected phase value %d for revision %s", ph, root);
+			}
+		}
+		return new Phases(publishing, draftRoots);
 	}
+	
+	public Outcome updatePhase(HgPhase from, HgPhase to, Nodeid n) throws HgRemoteConnectionException, HgRuntimeException {
+		if (pushkey("phases", n.toString(), String.valueOf(from.mercurialOrdinal()), String.valueOf(to.mercurialOrdinal()))) {
+			return new Outcome(Kind.Success, String.format("Phase of %s updated to %s", n.shortNotation(), to.name()));
+		}
+		return new Outcome(Kind.Failure, String.format("Phase update (%s: %s -> %s) failed", n.shortNotation(), from.name(), to.name()));
+	}
+
 	
 	public static void main(String[] args) throws Exception {
 		final HgRemoteRepository r = new HgLookup().detectRemote("http://selenic.com/hg", null);
@@ -501,8 +530,8 @@ public class HgRemoteRepository implements SessionContext.Source {
 			return;
 		}
 		System.out.println(r.remoteCapabilities);
-		r.phases();
-		final List<Pair<String, Nodeid>> bm = r.bookmarks();
+		r.getPhases();
+		final Iterable<Pair<String, Nodeid>> bm = r.getBookmarks();
 		for (Pair<String, Nodeid> pair : bm) {
 			System.out.println(pair);
 		}
@@ -593,6 +622,35 @@ public class HgRemoteRepository implements SessionContext.Source {
 			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("listkeys").setServerInfo(getLocation());
 		} catch (IOException ex) {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("listkeys").setServerInfo(getLocation());
+		} finally {
+			if (c != null) {
+				c.disconnect();
+			}
+		}
+	}
+	
+	private boolean pushkey(String namespace, String key, String oldValue, String newValue) throws HgRemoteConnectionException, HgRuntimeException {
+		HttpURLConnection c = null;
+		try {
+			final String p = String.format("%s?cmd=pushkey&namespace=%s&key=%s&old=%s&new=&s", url.getPath(), namespace, key, oldValue, newValue);
+			URL u = new URL(url, p);
+			c = setupConnection(u.openConnection());
+			c.connect();
+			if (debug) {
+				dumpResponseHeader(u, c);
+			}
+			checkResponseOk(c, key, "pushkey");
+			final InputStream is = c.getInputStream();
+			int rv = is.read();
+			if (is.read() != -1) {
+				sessionContext.getLog().dump(getClass(), Severity.Error, "Unexpected data in response to pushkey");
+			}
+			is.close();
+			return rv == '1';
+		} catch (MalformedURLException ex) {
+			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("pushkey").setServerInfo(getLocation());
+		} catch (IOException ex) {
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("pushkey").setServerInfo(getLocation());
 		} finally {
 			if (c != null) {
 				c.disconnect();
@@ -710,6 +768,47 @@ public class HgRemoteRepository implements SessionContext.Source {
 			RemoteBranch o = (RemoteBranch) obj;
 			// in fact, p1 and p2 are not supposed to be null, ever (at least for RemoteBranch created from server output)
 			return head.equals(o.head) && root.equals(o.root) && (p1 == null && o.p1 == null || p1.equals(o.p1)) && (p2 == null && o.p2 == null || p2.equals(o.p2));
+		}
+	}
+
+	public static final class Bookmarks implements Iterable<Pair<String, Nodeid>> {
+		private final List<Pair<String, Nodeid>> bm;
+
+		private Bookmarks(List<Pair<String, Nodeid>> bookmarks) {
+			bm = bookmarks;
+		}
+
+		public Iterator<Pair<String, Nodeid>> iterator() {
+			return bm.iterator();
+		}
+	}
+	
+	public static final class Phases {
+		private final boolean pub;
+		private final List<Nodeid> droots;
+		
+		private Phases(boolean publishing, List<Nodeid> draftRoots) {
+			pub = publishing;
+			droots = draftRoots;
+		}
+		
+		/**
+		 * Non-publishing servers may (shall?) respond with a list of draft roots.
+		 * This method doesn't make sense when {@link #isPublishingServer()} is <code>true</code>
+		 * 
+		 * @return list of draft roots on remote server
+		 */
+		public List<Nodeid> draftRoots() {
+			assert !pub; 
+			return droots;
+		}
+
+		/**
+		 * @return <code>true</code> if revisions on remote server shall be deemed published (either 
+		 * old server w/o explicit setting, or a new one with <code>phases.publish == true</code>)
+		 */
+		public boolean isPublishingServer() {
+			return pub;
 		}
 	}
 }

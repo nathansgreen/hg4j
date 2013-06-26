@@ -16,12 +16,17 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgParentChildMap;
 
 /**
  * Unmodifiable collection of revisions with handy set operations
@@ -29,7 +34,7 @@ import org.tmatesoft.hg.core.Nodeid;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class RevisionSet {
+public final class RevisionSet implements Iterable<Nodeid> {
 	
 	private final Set<Nodeid> elements;
 	
@@ -45,12 +50,70 @@ public final class RevisionSet {
 		}
 	}
 
-	public RevisionSet roots() {
-		throw Internals.notImplemented();
+	/**
+	 * elements of the set with no parents or parents not from the same set 
+	 */
+	public RevisionSet roots(HgParentChildMap<HgChangelog> ph) {
+		HashSet<Nodeid> copy = new HashSet<Nodeid>(elements);
+		for (Nodeid n : elements) {
+			assert ph.knownNode(n);
+			Nodeid p1 = ph.firstParent(n);
+			if (p1 != null && elements.contains(p1)) {
+				copy.remove(n);
+				continue;
+			}
+			Nodeid p2 = ph.secondParent(n);
+			if (p2 != null && elements.contains(p2)) {
+				copy.remove(n);
+				continue;
+			}
+		}
+		return copy.size() == elements.size() ? this : new RevisionSet(copy);
 	}
 	
-	public RevisionSet heads() {
-		throw Internals.notImplemented();
+	/**
+	 * elements of the set that has no children in this set 
+	 */
+	public RevisionSet heads(HgParentChildMap<HgChangelog> ph) {
+		HashSet<Nodeid> copy = new HashSet<Nodeid>(elements);
+		// can't do copy.removeAll(ph.childrenOf(asList())); as actual heads are indeed children of some other node
+		for (Nodeid n : elements) {
+			assert ph.knownNode(n);
+			Nodeid p1 = ph.firstParent(n);
+			Nodeid p2 = ph.secondParent(n);
+			if (p1 != null && elements.contains(p1)) {
+				copy.remove(p1);
+			}
+			if (p2 != null && elements.contains(p2)) {
+				copy.remove(p2);
+			}
+		}
+		return copy.size() == elements.size() ? this : new RevisionSet(copy);
+	}
+
+	/**
+	 * Immediate parents of the supplied children set found in this one.
+	 */
+	public RevisionSet parentsOf(RevisionSet children, HgParentChildMap<HgChangelog> parentHelper) {
+		if (isEmpty()) {
+			return this;
+		}
+		if (children.isEmpty()) {
+			return children;
+		}
+		RevisionSet chRoots = children.roots(parentHelper);
+		HashSet<Nodeid> parents = new HashSet<Nodeid>();
+		for (Nodeid n : chRoots.elements) {
+			Nodeid p1 = parentHelper.firstParent(n);
+			Nodeid p2 = parentHelper.secondParent(n);
+			if (p1 != null && elements.contains(p1)) {
+				parents.add(p1);
+			}
+			if (p2 != null && elements.contains(p2)) {
+				parents.add(p2);
+			}
+		}
+		return new RevisionSet(parents);
 	}
 
 	public RevisionSet intersect(RevisionSet other) {
@@ -109,6 +172,15 @@ public final class RevisionSet {
 		return elements.isEmpty();
 	}
 
+
+	public List<Nodeid> asList() {
+		return new ArrayList<Nodeid>(elements);
+	}
+	
+	public Iterator<Nodeid> iterator() {
+		return elements.iterator();
+	}
+	
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();

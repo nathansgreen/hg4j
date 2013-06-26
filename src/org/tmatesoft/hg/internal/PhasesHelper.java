@@ -19,19 +19,20 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.repo.HgPhase.Draft;
 import static org.tmatesoft.hg.repo.HgPhase.Secret;
 import static org.tmatesoft.hg.repo.HgRepositoryFiles.Phaseroots;
-import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgChangeset;
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
@@ -141,8 +142,33 @@ public final class PhasesHelper {
 		return allOf(HgPhase.Secret);
 	}
 	
+	/**
+	 * @return all revisions with draft phase
+	 */
 	public RevisionSet allDraft() {
 		return allOf(HgPhase.Draft).subtract(allOf(HgPhase.Secret));
+	}
+	
+	public void updateRoots(Collection<Nodeid> draftRoots, Collection<Nodeid> secretRoots) throws HgInvalidControlFileException {
+		draftPhaseRoots = draftRoots.isEmpty() ? Collections.<Nodeid>emptyList() : new ArrayList<Nodeid>(draftRoots);
+		secretPhaseRoots = secretRoots.isEmpty() ? Collections.<Nodeid>emptyList() : new ArrayList<Nodeid>(secretRoots);
+		String fmt = "%d %s\n";
+		File phaseroots = repo.getRepositoryFile(Phaseroots);
+		FileWriter fw = null;
+		try {
+			fw = new FileWriter(phaseroots);
+			for (Nodeid n : secretPhaseRoots) {
+				fw.write(String.format(fmt, HgPhase.Secret.mercurialOrdinal(), n.toString()));
+			}
+			for (Nodeid n : draftPhaseRoots) {
+				fw.write(String.format(fmt, HgPhase.Draft.mercurialOrdinal(), n.toString()));
+			}
+			fw.flush();
+		} catch (IOException ex) {
+			throw new HgInvalidControlFileException(ex.getMessage(), ex, phaseroots);
+		} finally {
+			new FileUtils(repo.getLog()).closeQuietly(fw);
+		}
 	}
 
 	/**
@@ -168,16 +194,15 @@ public final class PhasesHelper {
 
 	private Boolean readRoots() throws HgRuntimeException {
 		File phaseroots = repo.getRepositoryFile(Phaseroots);
-		BufferedReader br = null;
 		try {
 			if (!phaseroots.exists()) {
 				return Boolean.FALSE;
 			}
+			LineReader lr = new LineReader(phaseroots, repo.getLog());
+			final Collection<String> lines = lr.read(new LineReader.SimpleLineCollector(), new LinkedList<String>());
 			HashMap<HgPhase, List<Nodeid>> phase2roots = new HashMap<HgPhase, List<Nodeid>>();
-			br = new BufferedReader(new FileReader(phaseroots));
-			String line;
-			while ((line = br.readLine()) != null) {
-				String[] lc = line.trim().split("\\s+");
+			for (String line : lines) {
+				String[] lc = line.split("\\s+");
 				if (lc.length == 0) {
 					continue;
 				}
@@ -200,17 +225,8 @@ public final class PhasesHelper {
 			}
 			draftPhaseRoots = phase2roots.containsKey(Draft) ? phase2roots.get(Draft) : Collections.<Nodeid>emptyList();
 			secretPhaseRoots = phase2roots.containsKey(Secret) ? phase2roots.get(Secret) : Collections.<Nodeid>emptyList();
-		} catch (IOException ex) {
-			throw new HgInvalidControlFileException(ex.toString(), ex, phaseroots);
-		} finally {
-			if (br != null) {
-				try {
-					br.close();
-				} catch (IOException ex) {
-					repo.getSessionContext().getLog().dump(getClass(), Info, ex, null);
-					// ignore the exception otherwise 
-				}
-			}
+		} catch (HgIOException ex) {
+			throw new HgInvalidControlFileException(ex, true);
 		}
 		return Boolean.TRUE;
 	}

@@ -19,10 +19,14 @@ package org.tmatesoft.hg.core;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.tmatesoft.hg.internal.BundleGenerator;
+import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RepositoryComparator;
+import org.tmatesoft.hg.internal.RevisionSet;
 import org.tmatesoft.hg.repo.HgBookmarks;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
@@ -30,12 +34,14 @@ import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgParentChildMap;
+import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.ProgressSupport;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * 
@@ -63,14 +69,16 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 			//
 			// find out missing
 			// TODO refactor same code in HgOutgoingCommand #getComparator and #getParentHelper
-			final HgParentChildMap<HgChangelog> parentHelper = new HgParentChildMap<HgChangelog>(repo.getChangelog());
+			final HgChangelog clog = repo.getChangelog();
+			final HgParentChildMap<HgChangelog> parentHelper = new HgParentChildMap<HgChangelog>(clog);
 			parentHelper.init();
 			final RepositoryComparator comparator = new RepositoryComparator(parentHelper, remoteRepo);
 			comparator.compare(new ProgressSupport.Sub(progress, 50), getCancelSupport(null, true));
 			List<Nodeid> l = comparator.getLocalOnlyRevisions();
 			//
 			// prepare bundle
-			BundleGenerator bg = new BundleGenerator(HgInternals.getImplementationRepo(repo));
+			final Internals implRepo = HgInternals.getImplementationRepo(repo);
+			BundleGenerator bg = new BundleGenerator(implRepo);
 			File bundleFile = bg.create(l);
 			progress.worked(20);
 			HgBundle b = new HgLookup(repo.getSessionContext()).loadBundle(bundleFile);
@@ -79,14 +87,65 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 			remoteRepo.unbundle(b, comparator.getRemoteHeads());
 			progress.worked(20);
 			//
-			// FIXME update phase information
-//			remote.listkeys("phases");
+			// update phase information
+			PhasesHelper phaseHelper = new PhasesHelper(implRepo, parentHelper);
+			if (phaseHelper.isCapableOfPhases()) {
+				RevisionSet outgoing = new RevisionSet(l);
+				RevisionSet presentSecret = phaseHelper.allSecret();
+				RevisionSet presentDraft = phaseHelper.allDraft();
+				RevisionSet secretLeft, draftLeft;
+				HgRemoteRepository.Phases remotePhases = remoteRepo.getPhases();
+				if (remotePhases.isPublishingServer()) {
+					// although it's unlikely outgoing would affect secret changesets,
+					// it doesn't hurt to check secret roots along with draft ones
+					secretLeft = presentSecret.subtract(outgoing);
+					draftLeft = presentDraft.subtract(outgoing);
+				} else {
+					// shall merge local and remote phase states
+					ArrayList<Nodeid> knownRemoteDraftRoots = new ArrayList<Nodeid>();
+					for (Nodeid rdr : remotePhases.draftRoots()) {
+						if (clog.isKnown(rdr)) {
+							knownRemoteDraftRoots.add(rdr);
+						}
+					}
+					// childrenOf(knownRemoteDraftRoots) is everything remote may treat as Draft
+					RevisionSet remoteDrafts = new RevisionSet(parentHelper.childrenOf(knownRemoteDraftRoots));
+					List<Nodeid> localChildrenNotSent = parentHelper.childrenOf(outgoing.heads(parentHelper).asList());
+					// remote shall know only what we've sent, subtract revisions we didn't actually sent
+					remoteDrafts = remoteDrafts.subtract(new RevisionSet(localChildrenNotSent));
+					// if there's a remote draft root that points to revision we know is public
+					RevisionSet remoteDraftsLocallyPublic = remoteDrafts.subtract(presentSecret).subtract(presentDraft);
+					if (!remoteDraftsLocallyPublic.isEmpty()) {
+						// foreach remoteDraftsLocallyPublic.heads() do push Draft->Public
+						for (Nodeid n : remoteDraftsLocallyPublic.heads(parentHelper)) {
+							try {
+								remoteRepo.updatePhase(HgPhase.Draft, HgPhase.Public, n);
+							} catch (HgRemoteConnectionException ex) {
+								implRepo.getLog().dump(getClass(), Severity.Error, ex, String.format("Failed to update phase of %s", n.shortNotation()));
+							}
+						}
+						remoteDrafts = remoteDrafts.subtract(remoteDraftsLocallyPublic);
+					}
+					// revisions that cease to be secret (gonna become Public), e.g. someone else pushed them
+					RevisionSet secretGone = presentSecret.intersect(remoteDrafts);
+					// trace parents of these published secret revisions
+					RevisionSet secretMadePublic = presentSecret.parentsOf(secretGone, parentHelper);
+					secretLeft = presentSecret.subtract(secretGone).subtract(secretMadePublic);
+					// same for drafts
+					RevisionSet draftGone = presentDraft.intersect(remoteDrafts);
+					RevisionSet draftMadePublic = presentDraft.parentsOf(draftGone, parentHelper);
+					draftLeft = presentDraft.subtract(draftGone).subtract(draftMadePublic);
+				}
+				final RevisionSet newDraftRoots = draftLeft.roots(parentHelper);
+				final RevisionSet newSecretRoots = secretLeft.roots(parentHelper);
+				phaseHelper.updateRoots(newDraftRoots.asList(), newSecretRoots.asList());
+			}
 			progress.worked(5);
 			//
 			// update bookmark information
 			HgBookmarks localBookmarks = repo.getBookmarks();
 			if (!localBookmarks.getAllBookmarks().isEmpty()) {
-				for (Pair<String,Nodeid> bm : remoteRepo.bookmarks()) {
+				for (Pair<String,Nodeid> bm : remoteRepo.getBookmarks()) {
 					Nodeid localRevision = localBookmarks.getRevision(bm.first());
 					if (localRevision == null || !parentHelper.knownNode(bm.second())) {
 						continue;
@@ -98,7 +157,6 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 					}
 				}
 			}
-//			remote.listkeys("bookmarks");
 			// XXX WTF is obsolete in namespaces key??
 			progress.worked(5);
 		} catch (IOException ex) {
@@ -120,7 +178,7 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 	 */
 	public static void main(String[] args) throws Exception {
 		final HgLookup hgLookup = new HgLookup();
-		HgRepository r = hgLookup.detect("/home/artem/hg/junit-test-repos/log-1/");
+		HgRepository r = hgLookup.detect("/home/artem/hg/test-phases/");
 		HgRemoteRepository rr = hgLookup.detect(new URL("http://localhost:8000/"));
 		new HgPushCommand(r).destination(rr).execute();
 	}

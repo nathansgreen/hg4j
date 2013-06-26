@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,5 +57,15 @@ public enum HgPhase {
 			return Secret;
 		}
 		throw new IllegalArgumentException(String.format("Bad phase name: %d", value));
+	}
+	
+	/**
+	 * @return integer value Mercurial uses to identify the phase
+	 */
+	public int mercurialOrdinal() {
+		if (this == Undefined) {
+			throw new IllegalStateException("Undefined phase is an artifical value, which doesn't possess a valid native mercurial ordinal");
+		}
+		return ordinal(); // what a coincidence
 	}
 }
