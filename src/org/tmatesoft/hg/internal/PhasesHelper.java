@@ -78,7 +78,10 @@ public final class PhasesHelper {
 		}
 		return repoSupporsPhases.booleanValue();
 	}
-
+	
+	public boolean withSecretRoots() {
+		return !secretPhaseRoots.isEmpty();
+	}
 
 	/**
 	 * @param cset revision to query

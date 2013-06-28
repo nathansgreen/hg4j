@@ -39,6 +39,7 @@ import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.ProgressSupport;
 import org.tmatesoft.hg.util.LogFacility.Severity;
@@ -72,14 +73,22 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 			final HgChangelog clog = repo.getChangelog();
 			final HgParentChildMap<HgChangelog> parentHelper = new HgParentChildMap<HgChangelog>(clog);
 			parentHelper.init();
+			final Internals implRepo = HgInternals.getImplementationRepo(repo);
+			final PhasesHelper phaseHelper = new PhasesHelper(implRepo, parentHelper);
 			final RepositoryComparator comparator = new RepositoryComparator(parentHelper, remoteRepo);
 			comparator.compare(new ProgressSupport.Sub(progress, 50), getCancelSupport(null, true));
 			List<Nodeid> l = comparator.getLocalOnlyRevisions();
+			final RevisionSet outgoing;
+			if (phaseHelper.isCapableOfPhases() && phaseHelper.withSecretRoots()) {
+				RevisionSet secret = phaseHelper.allSecret();
+				outgoing = new RevisionSet(l).subtract(secret);
+			} else {
+				outgoing = new RevisionSet(l);
+			}
 			//
 			// prepare bundle
-			final Internals implRepo = HgInternals.getImplementationRepo(repo);
 			BundleGenerator bg = new BundleGenerator(implRepo);
-			File bundleFile = bg.create(l);
+			File bundleFile = bg.create(outgoing.asList());
 			progress.worked(20);
 			HgBundle b = new HgLookup(repo.getSessionContext()).loadBundle(bundleFile);
 			//
@@ -88,13 +97,12 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 			progress.worked(20);
 			//
 			// update phase information
-			PhasesHelper phaseHelper = new PhasesHelper(implRepo, parentHelper);
 			if (phaseHelper.isCapableOfPhases()) {
-				RevisionSet outgoing = new RevisionSet(l);
 				RevisionSet presentSecret = phaseHelper.allSecret();
 				RevisionSet presentDraft = phaseHelper.allDraft();
 				RevisionSet secretLeft, draftLeft;
 				HgRemoteRepository.Phases remotePhases = remoteRepo.getPhases();
+				RevisionSet remoteDrafts = knownRemoteDrafts(remotePhases, parentHelper, outgoing);
 				if (remotePhases.isPublishingServer()) {
 					// although it's unlikely outgoing would affect secret changesets,
 					// it doesn't hurt to check secret roots along with draft ones
@@ -102,43 +110,55 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 					draftLeft = presentDraft.subtract(outgoing);
 				} else {
 					// shall merge local and remote phase states
-					ArrayList<Nodeid> knownRemoteDraftRoots = new ArrayList<Nodeid>();
-					for (Nodeid rdr : remotePhases.draftRoots()) {
-						if (clog.isKnown(rdr)) {
-							knownRemoteDraftRoots.add(rdr);
-						}
-					}
-					// childrenOf(knownRemoteDraftRoots) is everything remote may treat as Draft
-					RevisionSet remoteDrafts = new RevisionSet(parentHelper.childrenOf(knownRemoteDraftRoots));
-					List<Nodeid> localChildrenNotSent = parentHelper.childrenOf(outgoing.heads(parentHelper).asList());
-					// remote shall know only what we've sent, subtract revisions we didn't actually sent
-					remoteDrafts = remoteDrafts.subtract(new RevisionSet(localChildrenNotSent));
-					// if there's a remote draft root that points to revision we know is public
-					RevisionSet remoteDraftsLocallyPublic = remoteDrafts.subtract(presentSecret).subtract(presentDraft);
-					if (!remoteDraftsLocallyPublic.isEmpty()) {
-						// foreach remoteDraftsLocallyPublic.heads() do push Draft->Public
-						for (Nodeid n : remoteDraftsLocallyPublic.heads(parentHelper)) {
-							try {
-								remoteRepo.updatePhase(HgPhase.Draft, HgPhase.Public, n);
-							} catch (HgRemoteConnectionException ex) {
-								implRepo.getLog().dump(getClass(), Severity.Error, ex, String.format("Failed to update phase of %s", n.shortNotation()));
-							}
-						}
-						remoteDrafts = remoteDrafts.subtract(remoteDraftsLocallyPublic);
-					}
 					// revisions that cease to be secret (gonna become Public), e.g. someone else pushed them
 					RevisionSet secretGone = presentSecret.intersect(remoteDrafts);
-					// trace parents of these published secret revisions
-					RevisionSet secretMadePublic = presentSecret.parentsOf(secretGone, parentHelper);
-					secretLeft = presentSecret.subtract(secretGone).subtract(secretMadePublic);
-					// same for drafts
-					RevisionSet draftGone = presentDraft.intersect(remoteDrafts);
-					RevisionSet draftMadePublic = presentDraft.parentsOf(draftGone, parentHelper);
-					draftLeft = presentDraft.subtract(draftGone).subtract(draftMadePublic);
+					// parents of those remote drafts are public, mark them as public locally, too
+					RevisionSet remotePublic = presentSecret.ancestors(secretGone, parentHelper);
+					secretLeft = presentSecret.subtract(secretGone).subtract(remotePublic);
+					/*
+					 * Revisions grow from left to right (parents to the left, children to the right)
+					 * 
+					 * I: Set of local is subset of remote
+					 * 
+					 *               local draft 
+					 * --o---r---o---l---o--
+					 *       remote draft
+					 * 
+					 * Remote draft roots shall be updated
+					 *
+					 *
+					 * II: Set of local is superset of remote
+					 * 
+					 *       local draft 
+					 * --o---l---o---r---o--
+					 *               remote draft 
+					 *               
+					 * Local draft roots shall be updated
+					 */
+					RevisionSet sharedDraft = presentDraft.intersect(remoteDrafts); // (I: ~presentDraft; II: ~remoteDraft
+					RevisionSet localDraftRemotePublic = presentDraft.ancestors(sharedDraft, parentHelper); // I: 0; II: those treated public on remote
+					// forget those deemed public by remote (drafts shared by both remote and local are ok to stay)
+					draftLeft = presentDraft.subtract(localDraftRemotePublic);
 				}
 				final RevisionSet newDraftRoots = draftLeft.roots(parentHelper);
 				final RevisionSet newSecretRoots = secretLeft.roots(parentHelper);
 				phaseHelper.updateRoots(newDraftRoots.asList(), newSecretRoots.asList());
+				//
+				// if there's a remote draft root that points to revision we know is public
+				RevisionSet remoteDraftsLocalPublic = remoteDrafts.subtract(draftLeft).subtract(secretLeft);
+				if (!remoteDraftsLocalPublic.isEmpty()) {
+					// foreach remoteDraftsLocallyPublic.heads() do push Draft->Public
+					for (Nodeid n : remoteDraftsLocalPublic.heads(parentHelper)) {
+						try {
+							Outcome upo = remoteRepo.updatePhase(HgPhase.Draft, HgPhase.Public, n);
+							if (!upo.isOk()) {
+								implRepo.getLog().dump(getClass(), Severity.Info, "Failed to update remote phase, reason: %s", upo.getMessage());
+							}
+						} catch (HgRemoteConnectionException ex) {
+							implRepo.getLog().dump(getClass(), Severity.Error, ex, String.format("Failed to update phase of %s", n.shortNotation()));
+						}
+					}
+				}
 			}
 			progress.worked(5);
 			//
@@ -170,6 +190,25 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 		} finally {
 			progress.done();
 		}
+	}
+	
+	private RevisionSet knownRemoteDrafts(HgRemoteRepository.Phases remotePhases, HgParentChildMap<HgChangelog> parentHelper, RevisionSet outgoing) {
+		ArrayList<Nodeid> knownRemoteDraftRoots = new ArrayList<Nodeid>();
+		for (Nodeid rdr : remotePhases.draftRoots()) {
+			if (parentHelper.knownNode(rdr)) {
+				knownRemoteDraftRoots.add(rdr);
+			}
+		}
+		// knownRemoteDraftRoots + childrenOf(knownRemoteDraftRoots) is everything remote may treat as Draft
+		RevisionSet remoteDrafts = new RevisionSet(knownRemoteDraftRoots);
+		remoteDrafts = remoteDrafts.union(remoteDrafts.children(parentHelper));
+		// 1) outgoing.children gives all local revisions accessible from outgoing.
+		// 2) outgoing.roots.children is equivalent with smaller intermediate set, the way we build
+		// childrenOf doesn't really benefits from that.
+		RevisionSet localChildrenNotSent = outgoing.children(parentHelper).subtract(outgoing);
+		// remote shall know only what we've sent, subtract revisions we didn't actually sent
+		remoteDrafts = remoteDrafts.subtract(localChildrenNotSent);
+		return remoteDrafts;
 	}
 	
 	/*

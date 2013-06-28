@@ -180,7 +180,7 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	
 	// @return ordered collection of all children rooted at supplied nodes. Nodes shall not be descendants of each other!
 	// Nodeids shall belong to this revlog
-	public List<Nodeid> childrenOf(List<Nodeid> roots) {
+	public List<Nodeid> childrenOf(Collection<Nodeid> roots) {
 		if (roots.isEmpty()) {
 			return Collections.emptyList();
 		}

@@ -92,9 +92,9 @@ public final class RevisionSet implements Iterable<Nodeid> {
 	}
 
 	/**
-	 * Immediate parents of the supplied children set found in this one.
+	 * Any ancestor of an element from the supplied children set found in this one.
 	 */
-	public RevisionSet parentsOf(RevisionSet children, HgParentChildMap<HgChangelog> parentHelper) {
+	public RevisionSet ancestors(RevisionSet children, HgParentChildMap<HgChangelog> parentHelper) {
 		if (isEmpty()) {
 			return this;
 		}
@@ -102,18 +102,36 @@ public final class RevisionSet implements Iterable<Nodeid> {
 			return children;
 		}
 		RevisionSet chRoots = children.roots(parentHelper);
-		HashSet<Nodeid> parents = new HashSet<Nodeid>();
-		for (Nodeid n : chRoots.elements) {
-			Nodeid p1 = parentHelper.firstParent(n);
-			Nodeid p2 = parentHelper.secondParent(n);
-			if (p1 != null && elements.contains(p1)) {
-				parents.add(p1);
+		HashSet<Nodeid> ancestors = new HashSet<Nodeid>();
+		Set<Nodeid> childrenToCheck = chRoots.elements;
+		while (!childrenToCheck.isEmpty()) {
+			HashSet<Nodeid> nextRound = new HashSet<Nodeid>();
+			for (Nodeid n : childrenToCheck) {
+				Nodeid p1 = parentHelper.firstParent(n);
+				Nodeid p2 = parentHelper.secondParent(n);
+				if (p1 != null && elements.contains(p1)) {
+					nextRound.add(p1);
+				}
+				if (p2 != null && elements.contains(p2)) {
+					nextRound.add(p2);
+				}
 			}
-			if (p2 != null && elements.contains(p2)) {
-				parents.add(p2);
-			}
+			ancestors.addAll(nextRound);
+			childrenToCheck = nextRound;
+		} 
+		return new RevisionSet(ancestors);
+	}
+	
+	/**
+	 * Revisions that are both direct and indirect children of elements of this revision set
+	 * as known in supplied parent-child map
+	 */
+	public RevisionSet children(HgParentChildMap<HgChangelog> parentHelper) {
+		if (isEmpty()) {
+			return this;
 		}
-		return new RevisionSet(parents);
+		List<Nodeid> children = parentHelper.childrenOf(elements);
+		return new RevisionSet(new HashSet<Nodeid>(children));
 	}
 
 	public RevisionSet intersect(RevisionSet other) {

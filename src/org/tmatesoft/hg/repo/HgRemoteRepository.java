@@ -17,6 +17,8 @@
 package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
+import static org.tmatesoft.hg.util.Outcome.Kind.Failure;
+import static org.tmatesoft.hg.util.Outcome.Kind.Success;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -62,14 +64,13 @@ import org.tmatesoft.hg.core.HgRepositoryNotFoundException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.DataSerializer;
+import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
 import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Internals;
-import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
 import org.tmatesoft.hg.internal.PropertyMarshal;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Pair;
-import org.tmatesoft.hg.util.LogFacility.Severity;
-import org.tmatesoft.hg.util.Outcome.Kind;
 
 /**
  * WORK IN PROGRESS, DO NOT USE
@@ -497,7 +498,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 			return new Phases(true, Collections.<Nodeid>emptyList());
 		}
 		final List<Pair<String, String>> values = listkeys("phases", "Get remote phases");
-		boolean publishing = true;
+		boolean publishing = false;
 		ArrayList<Nodeid> draftRoots = new ArrayList<Nodeid>();
 		for (Pair<String, String> l : values) {
 			if ("publishing".equalsIgnoreCase(l.first())) {
@@ -517,10 +518,14 @@ public class HgRemoteRepository implements SessionContext.Source {
 	}
 	
 	public Outcome updatePhase(HgPhase from, HgPhase to, Nodeid n) throws HgRemoteConnectionException, HgRuntimeException {
-		if (pushkey("phases", n.toString(), String.valueOf(from.mercurialOrdinal()), String.valueOf(to.mercurialOrdinal()))) {
-			return new Outcome(Kind.Success, String.format("Phase of %s updated to %s", n.shortNotation(), to.name()));
+		initCapabilities();
+		if (!remoteCapabilities.contains("pushkey")) {
+			return new Outcome(Failure, "Server doesn't support pushkey protocol");
 		}
-		return new Outcome(Kind.Failure, String.format("Phase update (%s: %s -> %s) failed", n.shortNotation(), from.name(), to.name()));
+		if (pushkey("phases", n.toString(), String.valueOf(from.mercurialOrdinal()), String.valueOf(to.mercurialOrdinal()))) {
+			return new Outcome(Success, String.format("Phase of %s updated to %s", n.shortNotation(), to.name()));
+		}
+		return new Outcome(Failure, String.format("Phase update (%s: %s -> %s) failed", n.shortNotation(), from.name(), to.name()));
 	}
 
 	
@@ -632,9 +637,10 @@ public class HgRemoteRepository implements SessionContext.Source {
 	private boolean pushkey(String namespace, String key, String oldValue, String newValue) throws HgRemoteConnectionException, HgRuntimeException {
 		HttpURLConnection c = null;
 		try {
-			final String p = String.format("%s?cmd=pushkey&namespace=%s&key=%s&old=%s&new=&s", url.getPath(), namespace, key, oldValue, newValue);
+			final String p = String.format("%s?cmd=pushkey&namespace=%s&key=%s&old=%s&new=%s", url.getPath(), namespace, key, oldValue, newValue);
 			URL u = new URL(url, p);
 			c = setupConnection(u.openConnection());
+			c.setRequestMethod("POST");
 			c.connect();
 			if (debug) {
 				dumpResponseHeader(u, c);
@@ -642,9 +648,6 @@ public class HgRemoteRepository implements SessionContext.Source {
 			checkResponseOk(c, key, "pushkey");
 			final InputStream is = c.getInputStream();
 			int rv = is.read();
-			if (is.read() != -1) {
-				sessionContext.getLog().dump(getClass(), Severity.Error, "Unexpected data in response to pushkey");
-			}
 			is.close();
 			return rv == '1';
 		} catch (MalformedURLException ex) {
