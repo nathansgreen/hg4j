@@ -68,7 +68,6 @@ public class BundleGenerator {
 		}
 		clogRevsVector.sort(true);
 		final int[] clogRevs = clogRevsVector.toArray();
-		System.out.printf("Changelog: %s\n", Arrays.toString(clogRevs));
 		final IntMap<Nodeid> clogMap = new IntMap<Nodeid>(changesets.size());
 		final IntVector manifestRevs = new IntVector(changesets.size(), 0);
 		final List<HgDataFile> files = new ArrayList<HgDataFile>();
@@ -88,28 +87,8 @@ public class BundleGenerator {
 			}
 		}, clogRevs);
 		manifestRevs.sort(true);
-		System.out.printf("Manifest: %s\n", Arrays.toString(manifestRevs.toArray(true)));
-		///////////////
-		for (HgDataFile df : sortedByName(files)) {
-			RevlogStream s = repo.getImplAccess().getStream(df);
-			final IntVector fileRevs = new IntVector();
-			s.iterate(0, TIP, false, new RevlogStream.Inspector() {
-				
-				public void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgRuntimeException {
-					if (Arrays.binarySearch(clogRevs, linkRevision) >= 0) {
-						fileRevs.add(revisionIndex);
-					}
-				}
-			});
-			fileRevs.sort(true);
-			System.out.printf("%s: %s\n", df.getPath(), Arrays.toString(fileRevs.toArray(true)));
-		}
-		if (Boolean.FALSE.booleanValue()) {
-			return null;
-		}
-		///////////////
 		//
-		final File bundleFile = File.createTempFile("hg4j-", "bundle");
+		final File bundleFile = File.createTempFile("hg4j-", ".bundle");
 		final FileOutputStream osBundle = new FileOutputStream(bundleFile);
 		final OutputStreamSerializer outRaw = new OutputStreamSerializer(osBundle);
 		outRaw.write("HG10UN".getBytes(), 0, 6);
@@ -187,7 +166,7 @@ public class BundleGenerator {
 
 		public ChunkGenerator(DataSerializer dataSerializer, IntMap<Nodeid> clogNodeidMap) {
 			ds = dataSerializer;
-			parentMap = new IntMap<Nodeid>(clogNodeidMap.size());;
+			parentMap = new IntMap<Nodeid>(clogNodeidMap.size());
 			clogMap = clogNodeidMap;
 		}
 		
@@ -203,7 +182,27 @@ public class BundleGenerator {
 				revs2read[0] = startParent;
 				System.arraycopy(revisions, 0, revs2read, 1, revisions.length);
 			}
+			// FIXME this is a hack to fill parentsMap with 
+			// parents of elements that we are not going to meet with regular
+			// iteration, e.g. changes from a different branch (with some older parent),
+			// scenario: two revisions added to two different branches
+			// revisions[10, 11], parents(10) == 9, parents(11) == 7
+			// revs2read == [9,10,11], and parentsMap lacks entry for parent rev7.
+			fillMissingParentsMap(s, revisions);
 			s.iterate(revs2read, true, this);
+		}
+		
+		private void fillMissingParentsMap(RevlogStream s, int[] revisions) throws HgRuntimeException {
+			int[] p = new int[2];
+			for (int i = 1; i < revisions.length; i++) {
+				s.parents(revisions[i], p);
+				if (p[0] != NO_REVISION && Arrays.binarySearch(revisions, p[0]) < 0) {
+					parentMap.put(p[0], Nodeid.fromBinary(s.nodeid(p[0]), 0));
+				}
+				if (p[1] != NO_REVISION && Arrays.binarySearch(revisions, p[1]) < 0) {
+					parentMap.put(p[1], Nodeid.fromBinary(s.nodeid(p[1]), 0));
+				}
+			}
 		}
 		
 		public void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgRuntimeException {

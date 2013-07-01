@@ -802,7 +802,6 @@ public class HgRemoteRepository implements SessionContext.Source {
 		 * @return list of draft roots on remote server
 		 */
 		public List<Nodeid> draftRoots() {
-			assert !pub; 
 			return droots;
 		}
 

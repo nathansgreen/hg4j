@@ -92,7 +92,8 @@ public final class RevisionSet implements Iterable<Nodeid> {
 	}
 
 	/**
-	 * Any ancestor of an element from the supplied children set found in this one.
+	 * Any ancestor of an element from the supplied child set found in this one. 
+	 * Elements of the supplied child set are not part of return value.  
 	 */
 	public RevisionSet ancestors(RevisionSet children, HgParentChildMap<HgChangelog> parentHelper) {
 		if (isEmpty()) {
@@ -190,6 +191,9 @@ public final class RevisionSet implements Iterable<Nodeid> {
 		return elements.isEmpty();
 	}
 
+	public int size() {
+		return elements.size();
+	}
 
 	public List<Nodeid> asList() {
 		return new ArrayList<Nodeid>(elements);
