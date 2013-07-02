@@ -102,7 +102,7 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 				RevisionSet presentDraft = phaseHelper.allDraft();
 				RevisionSet secretLeft, draftLeft;
 				HgRemoteRepository.Phases remotePhases = remoteRepo.getPhases();
-				RevisionSet remoteDrafts = knownRemoteDrafts(remotePhases, parentHelper, outgoing);
+				RevisionSet remoteDrafts = knownRemoteDrafts(remotePhases, parentHelper, outgoing, presentSecret);
 				if (remotePhases.isPublishingServer()) {
 					// although it's unlikely outgoing would affect secret changesets,
 					// it doesn't hurt to check secret roots along with draft ones
@@ -136,9 +136,15 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 					 * Local draft roots shall be updated
 					 */
 					RevisionSet sharedDraft = presentDraft.intersect(remoteDrafts); // (I: ~presentDraft; II: ~remoteDraft
+					// XXX do I really need sharedDrafts here? why not ancestors(remoteDrafts)?
 					RevisionSet localDraftRemotePublic = presentDraft.ancestors(sharedDraft, parentHelper); // I: 0; II: those treated public on remote
+					// remoteDrafts are local revisions known as draft@remote
+					// remoteDraftsLocalPublic - revisions that would cease to be listed as draft on remote
+					RevisionSet remoteDraftsLocalPublic = remoteDrafts.ancestors(sharedDraft, parentHelper);
+					RevisionSet remoteDraftsLeft = remoteDrafts.subtract(remoteDraftsLocalPublic);
 					// forget those deemed public by remote (drafts shared by both remote and local are ok to stay)
-					draftLeft = presentDraft.subtract(localDraftRemotePublic);
+					RevisionSet combinedDraft = presentDraft.union(remoteDraftsLeft);
+					draftLeft = combinedDraft.subtract(localDraftRemotePublic);
 				}
 				final RevisionSet newDraftRoots = draftLeft.roots(parentHelper);
 				final RevisionSet newSecretRoots = secretLeft.roots(parentHelper);
@@ -192,7 +198,7 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 		}
 	}
 	
-	private RevisionSet knownRemoteDrafts(HgRemoteRepository.Phases remotePhases, HgParentChildMap<HgChangelog> parentHelper, RevisionSet outgoing) {
+	private RevisionSet knownRemoteDrafts(HgRemoteRepository.Phases remotePhases, HgParentChildMap<HgChangelog> parentHelper, RevisionSet outgoing, RevisionSet localSecret) {
 		ArrayList<Nodeid> knownRemoteDraftRoots = new ArrayList<Nodeid>();
 		for (Nodeid rdr : remotePhases.draftRoots()) {
 			if (parentHelper.knownNode(rdr)) {
@@ -201,7 +207,11 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 		}
 		// knownRemoteDraftRoots + childrenOf(knownRemoteDraftRoots) is everything remote may treat as Draft
 		RevisionSet remoteDrafts = new RevisionSet(knownRemoteDraftRoots);
-		remoteDrafts = remoteDrafts.union(remoteDrafts.children(parentHelper));
+		RevisionSet localChildren = remoteDrafts.children(parentHelper);
+		// we didn't send any local secret revision
+		localChildren = localChildren.subtract(localSecret);
+		// draft roots are among remote drafts
+		remoteDrafts = remoteDrafts.union(localChildren);
 		// 1) outgoing.children gives all local revisions accessible from outgoing.
 		// 2) outgoing.roots.children is equivalent with smaller intermediate set, the way we build
 		// childrenOf doesn't really benefits from that.

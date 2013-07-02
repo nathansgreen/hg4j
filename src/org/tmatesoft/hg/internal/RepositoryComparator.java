@@ -95,7 +95,21 @@ public class RepositoryComparator {
 		if (c.isEmpty()) {
 			return localRepo.all();
 		} else {
-			return localRepo.childrenOf(c);
+			RevisionSet localHeads = new RevisionSet(localRepo.heads());
+			final List<Nodeid> commonChildren = localRepo.childrenOf(c);
+			final RevisionSet rsCommonChildren = new RevisionSet(commonChildren);
+			RevisionSet headsNotFromCommon = localHeads.subtract(rsCommonChildren);
+			if (headsNotFromCommon.isEmpty()) {
+				return commonChildren;
+			}
+			RevisionSet all = new RevisionSet(localRepo.all());
+			final RevisionSet rsCommon = new RevisionSet(c);
+			RevisionSet rsAncestors = all.ancestors(headsNotFromCommon, localRepo);
+			// #ancestors gives only parents, we need terminating children as well
+			rsAncestors = rsAncestors.union(headsNotFromCommon);
+			final RevisionSet rsAncestorsCommon = all.ancestors(rsCommon, localRepo);
+			RevisionSet outgoing = rsAncestors.subtract(rsAncestorsCommon).subtract(rsCommon);
+			return outgoing.union(rsCommonChildren).asList();
 		}
 	}
 	

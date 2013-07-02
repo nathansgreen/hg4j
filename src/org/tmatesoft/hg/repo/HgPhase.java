@@ -68,4 +68,8 @@ public enum HgPhase {
 		}
 		return ordinal(); // what a coincidence
 	}
+	
+	public String mercurialString() {
+		return hgString;
+	}
 }

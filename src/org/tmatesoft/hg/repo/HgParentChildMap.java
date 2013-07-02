@@ -18,7 +18,9 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -62,9 +64,10 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
 	private Nodeid[] sorted; // for binary search
 	private int[] sorted2natural; // indexes in sorted to indexes in sequential
-	private Nodeid[] firstParent;
+	private Nodeid[] firstParent; // parents by natural order (i.e. firstParent[A] is parent of revision with index A)
 	private Nodeid[] secondParent;
 	private final T revlog;
+	private BitSet heads; // 1 indicates revision got children
 
 
 	public HgParentChildMap(T owner) {
@@ -83,9 +86,11 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		sequential[ix] = sorted[ix] = revision;
 		if (parent1Revision != -1) {
 			firstParent[ix] = sequential[parent1Revision];
+			heads.set(parent1Revision);
 		}
 		if (parent2Revision != -1) { // revlog of DataAccess.java has p2 set when p1 is -1
 			secondParent[ix] = sequential[parent2Revision];
+			heads.set(parent2Revision);
 		}
 	}
 	
@@ -97,13 +102,14 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	public void init() throws HgRuntimeException {
 		final int revisionCount = revlog.getRevisionCount();
 		firstParent = new Nodeid[revisionCount];
-		// TODO [post 1.0] Branches/merges are less frequent, and most of secondParent would be -1/null, hence 
+		// TODO [post 1.1] Branches/merges are less frequent, and most of secondParent would be -1/null, hence 
 		// IntMap might be better alternative here, but need to carefully analyze (test) whether this brings
 		// real improvement (IntMap has 2n capacity, and element lookup is log(n) instead of array's constant)
 		secondParent = new Nodeid[revisionCount];
 		//
 		sequential = new Nodeid[revisionCount];
 		sorted = new Nodeid[revisionCount];
+		heads = new BitSet(revisionCount);
 		revlog.indexWalk(0, TIP, this);
 		Arrays.sort(sorted);
 		sorted2natural = new int[revisionCount];
@@ -233,20 +239,7 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		int x = Arrays.binarySearch(sorted, nid);
 		assertSortedIndex(x);
 		int i = sorted2natural[x];
-		assert firstParent.length == secondParent.length; // just in case later I implement sparse array for secondParent
-		assert firstParent.length == sequential.length;
-		// to use == instead of equals, take the same Nodeid instance we used to fill all the arrays.
-		final Nodeid canonicalNode = sequential[i];
-		i++; // no need to check node itself. child nodes may appear in sequential only after revision in question
-		for (; i < sequential.length; i++) {
-			// TODO [post 1.0] likely, not very effective. 
-			// May want to optimize it with another (Tree|Hash)Set, created on demand on first use, 
-			// however, need to be careful with memory usage
-			if (firstParent[i] == canonicalNode || secondParent[i] == canonicalNode) {
-				return true;
-			}
-		}
-		return false;
+		return hasChildren(i);
 	}
 
 	/**
@@ -267,14 +260,19 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		int x = Arrays.binarySearch(sorted, root);
 		assertSortedIndex(x);
 		root = sorted[x]; // canonical instance
+		final int start = sorted2natural[x];
+		if (!hasChildren(start)) {
+			return false; // root got no children at all
+		}
 		int y = Arrays.binarySearch(sorted, wannaBeChild);
-		if (y < 0 || y <= x) {
-			// not found or comes earlier than root
-			return false;
+		if (y < 0) {
+			return false; // not found
 		}
 		wannaBeChild = sorted[y]; // canonicalize
-		final int start = sorted2natural[x];
 		final int end = sorted2natural[y];
+		if (end <= start) {
+			return false; // potential child was in repository earlier than root
+		}
 		HashSet<Nodeid> parents = new HashSet<Nodeid>();
 		parents.add(root);
 		for (int i = start + 1; i < end; i++) {
@@ -283,5 +281,23 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 			}
 		}
 		return parents.contains(firstParent[end]) || parents.contains(secondParent[end]);
+	}
+	
+	/**
+	 * @return elements of this map that do not have a child recorded therein.
+	 */
+	public Collection<Nodeid> heads() {
+		ArrayList<Nodeid> result = new ArrayList<Nodeid>();
+		int index = 0;
+		do {
+			index = heads.nextClearBit(index);
+			result.add(sequential[index]);
+			index++;
+		} while (index < sequential.length);
+		return result;
+	}
+
+	private boolean hasChildren(int sequentialIndex) {
+		return heads.get(sequentialIndex);
 	}
 }

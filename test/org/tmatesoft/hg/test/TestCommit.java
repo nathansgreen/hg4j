@@ -44,7 +44,9 @@ import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Transaction;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRepositoryFiles;
 import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Path;
 
@@ -244,6 +246,8 @@ public class TestCommit {
 	@Test
 	public void testCommandBasics() throws Exception {
 		File repoLoc = RepoUtils.cloneRepoToTempLocation("log-1", "test-commit-cmd", false);
+		// PhasesHelper relies on file existence to tell phase enablement
+		RepoUtils.createFile(new File(repoLoc, HgRepositoryFiles.Phaseroots.getPath()), "");
 		HgRepository hgRepo = new HgLookup().detect(repoLoc);
 		HgDataFile dfB = hgRepo.getFileNode("b");
 		assertTrue("[sanity]", dfB.exists());
@@ -286,6 +290,12 @@ public class TestCommit {
 		errorCollector.assertEquals(csets.get(0).getComment(), "FIRST");
 		errorCollector.assertEquals(csets.get(1).getComment(), "SECOND");
 		assertHgVerifyOk(repoLoc);
+		// new commits are drafts by default, check our commit respects this
+		// TODO more tests with children of changesets with draft, secret or public phases (latter - 
+		// new commit is child of public, but there are other commits with draft/secret phases - ensure they are intact)
+		assertEquals(HgPhase.Draft, HgPhase.parse(hgRepo.getConfiguration().getStringValue("phases", "new-commit", HgPhase.Draft.mercurialString())));
+		errorCollector.assertEquals(HgPhase.Draft, csets.get(0).getPhase());
+		errorCollector.assertEquals(HgPhase.Draft, csets.get(1).getPhase());
 	}
 	
 	@Test

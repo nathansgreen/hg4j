@@ -42,6 +42,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
@@ -234,6 +235,9 @@ public final class CommitFacility {
 		if (p1Commit != NO_REVISION || p2Commit != NO_REVISION) {
 			repo.getRepo().getBookmarks().updateActive(p1Cset, p2Cset, changesetRev);
 		}
+		PhasesHelper phaseHelper = new PhasesHelper(repo);
+		HgPhase newCommitPhase = HgPhase.parse(repo.getRepo().getConfiguration().getStringValue("phases", "new-commit", HgPhase.Draft.mercurialString()));
+		phaseHelper.newCommitNode(changesetRev, newCommitPhase);
 		// TODO Revisit: might be reasonable to send out a "Repo changed" notification, to clear
 		// e.g. cached branch, tags and so on, not to rely on file change detection methods?
 		// The same notification might come useful once Pull is implemented

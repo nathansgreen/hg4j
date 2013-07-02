@@ -469,26 +469,15 @@ public class HgRemoteRepository implements SessionContext.Source {
 		return new Bookmarks(rv);
 	}
 
-	public void updateBookmark(String name, Nodeid oldRev, Nodeid newRev) throws HgRemoteConnectionException, HgRuntimeException {
-		final String namespace = "bookmarks";
-		HttpURLConnection c = null;
-		try {
-			URL u = new URL(url, String.format("%s?cmd=pushkey&namespace=%s&key=%s&old=%s&new=%s",url.getPath(), namespace, name, oldRev.toString(), newRev.toString()));
-			c = setupConnection(u.openConnection());
-			c.connect();
-			if (debug) {
-				dumpResponseHeader(u, c);
-			}
-			checkResponseOk(c, "Update remote bookmark", "pushkey");
-		} catch (MalformedURLException ex) {
-			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("pushkey").setServerInfo(getLocation());
-		} catch (IOException ex) {
-			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("pushkey").setServerInfo(getLocation());
-		} finally {
-			if (c != null) {
-				c.disconnect();
-			}
+	public Outcome updateBookmark(String name, Nodeid oldRev, Nodeid newRev) throws HgRemoteConnectionException, HgRuntimeException {
+		initCapabilities();
+		if (!remoteCapabilities.contains("pushkey")) {
+			return new Outcome(Failure, "Server doesn't support pushkey protocol");
 		}
+		if (pushkey("Update remote bookmark", "bookmarks", name, oldRev.toString(), newRev.toString())) {
+			return new Outcome(Success, String.format("Bookmark %s updated to %s", name, newRev.shortNotation()));
+		}
+		return new Outcome(Failure, String.format("Bookmark update (%s: %s -> %s) failed", name, oldRev.shortNotation(), newRev.shortNotation()));
 	}
 	
 	public Phases getPhases() throws HgRemoteConnectionException, HgRuntimeException {
@@ -522,24 +511,10 @@ public class HgRemoteRepository implements SessionContext.Source {
 		if (!remoteCapabilities.contains("pushkey")) {
 			return new Outcome(Failure, "Server doesn't support pushkey protocol");
 		}
-		if (pushkey("phases", n.toString(), String.valueOf(from.mercurialOrdinal()), String.valueOf(to.mercurialOrdinal()))) {
+		if (pushkey("Update remote phases", "phases", n.toString(), String.valueOf(from.mercurialOrdinal()), String.valueOf(to.mercurialOrdinal()))) {
 			return new Outcome(Success, String.format("Phase of %s updated to %s", n.shortNotation(), to.name()));
 		}
 		return new Outcome(Failure, String.format("Phase update (%s: %s -> %s) failed", n.shortNotation(), from.name(), to.name()));
-	}
-
-	
-	public static void main(String[] args) throws Exception {
-		final HgRemoteRepository r = new HgLookup().detectRemote("http://selenic.com/hg", null);
-		if (r.isInvalid()) {
-			return;
-		}
-		System.out.println(r.remoteCapabilities);
-		r.getPhases();
-		final Iterable<Pair<String, Nodeid>> bm = r.getBookmarks();
-		for (Pair<String, Nodeid> pair : bm) {
-			System.out.println(pair);
-		}
 	}
 
 	@Override
@@ -634,7 +609,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 		}
 	}
 	
-	private boolean pushkey(String namespace, String key, String oldValue, String newValue) throws HgRemoteConnectionException, HgRuntimeException {
+	private boolean pushkey(String opName, String namespace, String key, String oldValue, String newValue) throws HgRemoteConnectionException, HgRuntimeException {
 		HttpURLConnection c = null;
 		try {
 			final String p = String.format("%s?cmd=pushkey&namespace=%s&key=%s&old=%s&new=%s", url.getPath(), namespace, key, oldValue, newValue);
@@ -645,7 +620,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 			if (debug) {
 				dumpResponseHeader(u, c);
 			}
-			checkResponseOk(c, key, "pushkey");
+			checkResponseOk(c, opName, "pushkey");
 			final InputStream is = c.getInputStream();
 			int rv = is.read();
 			is.close();

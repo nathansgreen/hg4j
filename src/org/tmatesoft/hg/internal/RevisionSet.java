@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -27,6 +29,7 @@ import java.util.Set;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgParentChildMap;
+import org.tmatesoft.hg.repo.HgRepository;
 
 /**
  * Unmodifiable collection of revisions with handy set operations
@@ -64,6 +67,31 @@ public final class RevisionSet implements Iterable<Nodeid> {
 			}
 			Nodeid p2 = ph.secondParent(n);
 			if (p2 != null && elements.contains(p2)) {
+				copy.remove(n);
+				continue;
+			}
+		}
+		return copy.size() == elements.size() ? this : new RevisionSet(copy);
+	}
+	
+	/**
+	 * Same as {@link #roots(HgParentChildMap)}, but doesn't require a parent-child map
+	 */
+	public RevisionSet roots(HgRepository repo) {
+		// TODO introduce parent access interface, use it here, provide implementations 
+		// that delegate to HgParentChildMap or HgRepository
+		HashSet<Nodeid> copy = new HashSet<Nodeid>(elements);
+		final HgChangelog clog = repo.getChangelog();
+		byte[] parent1 = new byte[Nodeid.SIZE], parent2 = new byte[Nodeid.SIZE];
+		int[] parentRevs = new int[2];
+		for (Nodeid n : elements) {
+			assert clog.isKnown(n);
+			clog.parents(clog.getRevisionIndex(n), parentRevs, parent1, parent2);
+			if (parentRevs[0] != NO_REVISION && elements.contains(new Nodeid(parent1, false))) {
+				copy.remove(n);
+				continue;
+			}
+			if (parentRevs[1] != NO_REVISION && elements.contains(new Nodeid(parent2, false))) {
 				copy.remove(n);
 				continue;
 			}
@@ -165,7 +193,7 @@ public final class RevisionSet implements Iterable<Nodeid> {
 		}
 		HashSet<Nodeid> copy = new HashSet<Nodeid>(elements);
 		copy.addAll(other.elements);
-		return new RevisionSet(copy);
+		return copy.size() == elements.size() ? this : new RevisionSet(copy);
 	}
 
 	/**

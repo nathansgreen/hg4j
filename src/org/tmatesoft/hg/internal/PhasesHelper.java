@@ -36,6 +36,7 @@ import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -171,6 +172,33 @@ public final class PhasesHelper {
 			throw new HgInvalidControlFileException(ex.getMessage(), ex, phaseroots);
 		} finally {
 			new FileUtils(repo.getLog()).closeQuietly(fw);
+		}
+	}
+
+	public void newCommitNode(Nodeid newChangeset, HgPhase newCommitPhase) throws HgRuntimeException {
+		final int riCset = repo.getRepo().getChangelog().getRevisionIndex(newChangeset);
+		HgPhase ph = getPhase(riCset, newChangeset);
+		if (ph.compareTo(newCommitPhase) >= 0) {
+			// present phase is more secret than the desired one
+			return;
+		}
+		// newCommitPhase can't be public here, condition above would be satisfied
+		assert newCommitPhase != HgPhase.Public;
+		// ph is e.g public when newCommitPhase is draft
+		// or is draft when desired phase is secret
+		final RevisionSet rs = allOf(newCommitPhase).union(new RevisionSet(Collections.singleton(newChangeset)));
+		final RevisionSet newRoots;
+		if (parentHelper != null) {
+			newRoots = rs.roots(parentHelper);
+		} else {
+			newRoots = rs.roots(repo.getRepo());
+		}
+		if (newCommitPhase == HgPhase.Draft) {
+			updateRoots(newRoots.asList(), secretPhaseRoots);
+		} else if (newCommitPhase == HgPhase.Secret) {
+			updateRoots(draftPhaseRoots, newRoots.asList());
+		} else {
+			throw new HgInvalidStateException(String.format("Unexpected phase %s for new commits", newCommitPhase));
 		}
 	}
 
