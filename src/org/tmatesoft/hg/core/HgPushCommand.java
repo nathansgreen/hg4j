@@ -19,6 +19,8 @@ package org.tmatesoft.hg.core;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.internal.BundleGenerator;
@@ -52,6 +54,7 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 	
 	private final HgRepository repo;
 	private HgRemoteRepository remoteRepo;
+	private RevisionSet outgoing;
 
 	public HgPushCommand(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -77,7 +80,6 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 			final RepositoryComparator comparator = new RepositoryComparator(parentHelper, remoteRepo);
 			comparator.compare(new ProgressSupport.Sub(progress, 50), getCancelSupport(null, true));
 			List<Nodeid> l = comparator.getLocalOnlyRevisions();
-			final RevisionSet outgoing;
 			if (phaseHelper.isCapableOfPhases() && phaseHelper.withSecretRoots()) {
 				RevisionSet secret = phaseHelper.allSecret();
 				outgoing = new RevisionSet(l).subtract(secret);
@@ -195,6 +197,10 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 		} finally {
 			progress.done();
 		}
+	}
+	
+	public Collection<Nodeid> getPushedRevisions() {
+		return outgoing == null ? Collections.<Nodeid>emptyList() : outgoing.asList();
 	}
 	
 	private RevisionSet knownRemoteDrafts(HgRemoteRepository.Phases remotePhases, HgParentChildMap<HgChangelog> parentHelper, RevisionSet outgoing, RevisionSet localSecret) {

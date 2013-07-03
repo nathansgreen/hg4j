@@ -37,13 +37,19 @@ import org.tmatesoft.hg.util.LogFacility.Severity;
 public final class FileUtils {
 	
 	private final LogFacility log;
+	private final Class<?> troublemaker;
 	
 	public static void copyFile(File from, File to) throws HgIOException {
-		new FileUtils(new StreamLogFacility(Debug, true, System.err)).copy(from, to);
+		new FileUtils(new StreamLogFacility(Debug, true, System.err), FileUtils.class).copy(from, to);
 	}
 
-	public FileUtils(LogFacility logFacility) {
+	public FileUtils(LogFacility logFacility, Object troubleSource) {
 		log = logFacility;
+		if (troubleSource == null) {
+			troublemaker = null;
+		} else {
+			troublemaker = troubleSource instanceof Class ? (Class<?>) troubleSource : troubleSource.getClass();
+		}
 	}
 
 	public void copy(File from, File to) throws HgIOException {
@@ -104,7 +110,7 @@ public final class FileUtils {
 				} else {
 					msg = String.format("Failed to close %s", f);
 				}
-				log.dump(getClass(), Severity.Warn, ex, msg);
+				log.dump(troublemaker == null ? getClass() : troublemaker, Severity.Warn, ex, msg);
 			}
 		}
 	}

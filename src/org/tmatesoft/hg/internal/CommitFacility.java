@@ -258,7 +258,7 @@ public final class CommitFacility {
 		} catch (IOException ex) {
 			throw new HgIOException("Failed to save last commit message", ex, lastMessage);
 		} finally {
-			new FileUtils(repo.getLog()).closeQuietly(w, lastMessage);
+			new FileUtils(repo.getLog(), this).closeQuietly(w, lastMessage);
 		}
 	}
 /*

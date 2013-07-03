@@ -172,7 +172,7 @@ public final class HgDataFile extends Revlog {
 			} finally {
 				progress.done();
 				if (fis != null) {
-					new FileUtils(getRepo().getSessionContext().getLog()).closeQuietly(fis);
+					new FileUtils(getRepo().getSessionContext().getLog(), this).closeQuietly(fis);
 				}
 			}
 		} else {

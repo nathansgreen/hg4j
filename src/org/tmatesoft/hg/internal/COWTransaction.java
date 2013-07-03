@@ -41,7 +41,7 @@ public final class COWTransaction extends Transaction {
 	private final List<RollbackEntry> entries = new LinkedList<RollbackEntry>();
 	
 	public COWTransaction(SessionContext.Source ctxSource) {
-		fileHelper = new FileUtils(ctxSource.getSessionContext().getLog());
+		fileHelper = new FileUtils(ctxSource.getSessionContext().getLog(), this);
 	}
 
 	@Override

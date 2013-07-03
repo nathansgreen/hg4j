@@ -373,7 +373,7 @@ public final class HgRepository implements SessionContext.Source {
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException("Can't retrieve message of last commit attempt", ex, lastMessage);
 		} finally {
-			new FileUtils(getSessionContext().getLog()).closeQuietly(fr, lastMessage);
+			new FileUtils(getSessionContext().getLog(), this).closeQuietly(fr, lastMessage);
 		}
 	}
 

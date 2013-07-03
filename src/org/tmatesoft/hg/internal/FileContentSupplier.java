@@ -62,7 +62,7 @@ public class FileContentSupplier implements DataSource {
 		} catch (IOException ex) {
 			throw new HgIOException("Failed to get content of the file", ex, file);
 		} finally {
-			new FileUtils(ctx.getLog()).closeQuietly(fis);
+			new FileUtils(ctx.getLog(), this).closeQuietly(fis);
 		}
 	}
 	

@@ -94,20 +94,24 @@ public class RepositoryComparator {
 		if (c.isEmpty()) {
 			return localRepo.all();
 		} else {
-			RevisionSet localHeads = new RevisionSet(localRepo.heads());
+			final RevisionSet rsCommon = new RevisionSet(c);
+			final RevisionSet localHeads = new RevisionSet(localRepo.heads());
 			final List<Nodeid> commonChildren = localRepo.childrenOf(c);
 			final RevisionSet rsCommonChildren = new RevisionSet(commonChildren);
-			RevisionSet headsNotFromCommon = localHeads.subtract(rsCommonChildren);
+			// check if there's any revision in the repository that doesn't trace to common
+			// e.g. branches from one of common ancestors
+			RevisionSet headsNotFromCommon = localHeads.subtract(rsCommonChildren).subtract(rsCommon);
 			if (headsNotFromCommon.isEmpty()) {
 				return commonChildren;
 			}
 			RevisionSet all = new RevisionSet(localRepo.all());
-			final RevisionSet rsCommon = new RevisionSet(c);
+			// need outgoing := ancestors(missing) - ancestors(common):
 			RevisionSet rsAncestors = all.ancestors(headsNotFromCommon, localRepo);
 			// #ancestors gives only parents, we need terminating children as well
 			rsAncestors = rsAncestors.union(headsNotFromCommon);
 			final RevisionSet rsAncestorsCommon = all.ancestors(rsCommon, localRepo);
 			RevisionSet outgoing = rsAncestors.subtract(rsAncestorsCommon).subtract(rsCommon);
+			// outgoing keeps children that spined off prior to common revisions
 			return outgoing.union(rsCommonChildren).asList();
 		}
 	}

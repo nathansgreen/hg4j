@@ -589,7 +589,7 @@ public class HgWorkingCopyStatusCollector {
 		} catch (IOException ex) {
 			throw new HgInvalidFileException("File comparison failed", ex).setFileName(p);
 		} finally {
-			new FileUtils(repo.getSessionContext().getLog()).closeQuietly(is);
+			new FileUtils(repo.getSessionContext().getLog(), this).closeQuietly(is);
 		}
 	}
 

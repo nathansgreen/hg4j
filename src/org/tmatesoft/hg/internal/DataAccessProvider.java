@@ -244,7 +244,7 @@ public class DataAccessProvider {
 		public void done() {
 			buffer = null;
 			if (fileStream != null) {
-				new FileUtils(logFacility).closeQuietly(fileStream);
+				new FileUtils(logFacility, this).closeQuietly(fileStream);
 				fileStream = null;
 				fileChannel = null; // channel is closed together with stream
 			}
@@ -375,7 +375,7 @@ public class DataAccessProvider {
 		public void done() {
 			buffer = null;
 			if (fileStream != null) {
-				new FileUtils(logFacility).closeQuietly(fileStream);
+				new FileUtils(logFacility, this).closeQuietly(fileStream);
 				fileStream = null;
 				fileChannel = null;
 			}

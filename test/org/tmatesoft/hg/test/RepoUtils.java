@@ -115,7 +115,7 @@ public class RepoUtils {
 				throw new UnsupportedOperationException();
 			}
 		};
-		FileUtils fu = new FileUtils(new StreamLogFacility(Debug, true, System.err));
+		FileUtils fu = new FileUtils(new StreamLogFacility(Debug, true, System.err), RepoUtils.class);
 		String srcPrefix = srcDir.getAbsolutePath();
 		while (it.hasNext()) {
 			File next = it.next();

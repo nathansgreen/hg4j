@@ -554,7 +554,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			} catch (IOException ex) {
 				throw new HgIOException("Failed to serialize bundle", HgBundle.this.bundleFile);
 			} finally {
-				new FileUtils(HgBundle.this.ctx.getLog()).closeQuietly(fis, HgBundle.this.bundleFile);
+				new FileUtils(HgBundle.this.ctx.getLog(), this).closeQuietly(fis, HgBundle.this.bundleFile);
 			}
 		}
 

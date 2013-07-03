@@ -171,7 +171,7 @@ public final class PhasesHelper {
 		} catch (IOException ex) {
 			throw new HgInvalidControlFileException(ex.getMessage(), ex, phaseroots);
 		} finally {
-			new FileUtils(repo.getLog()).closeQuietly(fw);
+			new FileUtils(repo.getLog(), this).closeQuietly(fw);
 		}
 	}
 

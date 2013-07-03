@@ -130,7 +130,7 @@ public final class LineReader {
 			} catch (IOException ex) {
 				throw new HgIOException(ex.getMessage(), ex, file);
 			} finally {
-				new FileUtils(log).closeQuietly(statusFileReader);
+				new FileUtils(log, this).closeQuietly(statusFileReader);
 //				try {
 //					consumer.end(file, paramObj);
 //				} catch (IOException ex) {

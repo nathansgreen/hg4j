@@ -117,7 +117,7 @@ public class HgBranches {
 			repo.getSessionContext().getLog().dump(getClass(), Error, ex, null);
 			// FALL THROUGH
 		} finally {
-			new FileUtils(repo.getSessionContext().getLog()).closeQuietly(br);
+			new FileUtils(repo.getSessionContext().getLog(), this).closeQuietly(br);
 		}
 		return -1; // deliberately not lastInCache, to avoid anything but -1 when 1st line was read and there's error is in lines 2..end
 	}
