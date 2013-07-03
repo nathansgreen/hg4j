@@ -115,8 +115,8 @@ public class TestIncoming {
 		HashSet<Nodeid> set = new HashSet<Nodeid>(liteResult);
 		for (Nodeid nid : expected) {
 			boolean removed = set.remove(nid);
-			errorCollector.checkThat(what + " Missing " +  nid.shortNotation() + " in HgIncomingCommand.execLite result", removed, equalTo(true));
+			errorCollector.checkThat(what + " Missing " +  nid.shortNotation() + " in execLite result", removed, equalTo(true));
 		}
-		errorCollector.checkThat(what + " Superfluous cset reported by HgIncomingCommand.execLite", set.isEmpty(), equalTo(true));
+		errorCollector.checkThat(what + " Superfluous cset reported by execLite", set.isEmpty(), equalTo(true));
 	}
 }

@@ -19,6 +19,7 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -40,6 +41,10 @@ import org.tmatesoft.hg.repo.HgRepository;
 public final class RevisionSet implements Iterable<Nodeid> {
 	
 	private final Set<Nodeid> elements;
+	
+	public RevisionSet(Nodeid... revisions) {
+		this(revisions == null ? null : Arrays.asList(revisions));
+	}
 	
 	public RevisionSet(Collection<Nodeid> revisions) {
 		this(revisions == null ? new HashSet<Nodeid>() : new HashSet<Nodeid>(revisions));

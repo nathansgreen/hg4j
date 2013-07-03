@@ -21,7 +21,9 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RepositoryComparator;
+import org.tmatesoft.hg.internal.RevisionSet;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
@@ -103,8 +105,7 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 	public List<Nodeid> executeLite() throws HgRemoteConnectionException, HgException, CancelledException {
 		final ProgressSupport ps = getProgressSupport(null);
 		try {
-			ps.start(10);
-			return getComparator(new ProgressSupport.Sub(ps, 5), getCancelSupport(null, true)).getLocalOnlyRevisions();
+			return getOutgoingRevisions(ps, getCancelSupport(null, true));
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
 		} finally {
@@ -128,10 +129,16 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 		final ProgressSupport ps = getProgressSupport(handler);
 		final CancelSupport cs = getCancelSupport(handler, true);
 		try {
-			ps.start(-1);
-			ChangesetTransformer inspector = new ChangesetTransformer(localRepo, handler, getParentHelper(), ps, cs);
+			ps.start(200);
+			ChangesetTransformer inspector = new ChangesetTransformer(localRepo, handler, getParentHelper(), new ProgressSupport.Sub(ps, 100), cs);
 			inspector.limitBranches(branches);
-			getComparator(new ProgressSupport.Sub(ps, 1), cs).visitLocalOnlyRevisions(inspector);
+			List<Nodeid> out = getOutgoingRevisions(new ProgressSupport.Sub(ps, 100), cs);
+			int[] outRevIndex = new int[out.size()];
+			int i = 0;
+			for (Nodeid o : out) {
+				outRevIndex[i++] = localRepo.getChangelog().getRevisionIndex(o);
+			}
+			localRepo.getChangelog().range(inspector, outRevIndex);
 			inspector.checkFailure();
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
@@ -159,4 +166,17 @@ public class HgOutgoingCommand extends HgAbstractCommand<HgOutgoingCommand> {
 		return parentHelper;
 	}
 
+	
+	private List<Nodeid> getOutgoingRevisions(ProgressSupport ps, CancelSupport cs) throws HgRemoteConnectionException, HgException, CancelledException {
+		ps.start(10);
+		final RepositoryComparator c = getComparator(new ProgressSupport.Sub(ps, 5), cs);
+		List<Nodeid> local = c.getLocalOnlyRevisions();
+		ps.worked(3);
+		PhasesHelper phaseHelper = new PhasesHelper(Internals.getInstance(localRepo));
+		if (phaseHelper.isCapableOfPhases() && phaseHelper.withSecretRoots()) {
+			local = new RevisionSet(local).subtract(phaseHelper.allSecret()).asList();
+		}
+		ps.worked(2);
+		return local;
+	}
 }

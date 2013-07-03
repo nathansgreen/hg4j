@@ -34,6 +34,7 @@ import junit.framework.Assert;
 
 import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgInitCommand;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.StreamLogFacility;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -189,5 +190,13 @@ public class RepoUtils {
 			next.delete();
 		}
 		dest.delete();
+	}
+
+	static Nodeid[] allRevisions(HgRepository repo) {
+		Nodeid[] allRevs = new Nodeid[repo.getChangelog().getRevisionCount()];
+		for (int i = 0; i < allRevs.length; i++) {
+			allRevs[i] = repo.getChangelog().getRevision(i);
+		}
+		return allRevs;
 	}
 }

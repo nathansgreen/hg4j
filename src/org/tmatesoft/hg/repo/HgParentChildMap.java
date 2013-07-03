@@ -112,6 +112,7 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		heads = new BitSet(revisionCount);
 		revlog.indexWalk(0, TIP, this);
 		Arrays.sort(sorted);
+		// FIXME use ArrayHelper instead
 		sorted2natural = new int[revisionCount];
 		for (int i = 0; i < revisionCount; i++) {
 			Nodeid n = sequential[i];
@@ -218,11 +219,14 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	 * @return revisions that have supplied revision as their immediate parent
 	 */
 	public List<Nodeid> directChildren(Nodeid nid) {
-		LinkedList<Nodeid> result = new LinkedList<Nodeid>();
 		int x = Arrays.binarySearch(sorted, nid);
 		assertSortedIndex(x);
 		nid = sorted[x]; // canonical instance
 		int start = sorted2natural[x];
+		if (!hasChildren(start)) {
+			return Collections.emptyList();
+		}
+		LinkedList<Nodeid> result = new LinkedList<Nodeid>();
 		for (int i = start + 1; i < sequential.length; i++) {
 			if (nid == firstParent[i] || nid == secondParent[i]) {
 				result.add(sequential[i]);
@@ -291,6 +295,9 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		int index = 0;
 		do {
 			index = heads.nextClearBit(index);
+			// nextClearBit(length-1) gives length when bit is set,
+			// however, last revision can't be a parent of any other, and
+			// the last bit would be always 0, and no AIOOBE 
 			result.add(sequential[index]);
 			index++;
 		} while (index < sequential.length);

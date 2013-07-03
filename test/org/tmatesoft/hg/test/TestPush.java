@@ -20,10 +20,6 @@ import static org.junit.Assert.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Rule;
@@ -383,62 +379,9 @@ public class TestPush {
 		}
 	}
 
-
 	private void checkRepositoriesAreSame(HgRepository srcRepo, HgRepository dstRepo) {
 		errorCollector.assertEquals(srcRepo.getChangelog().getRevisionCount(), dstRepo.getChangelog().getRevisionCount());
 		errorCollector.assertEquals(srcRepo.getChangelog().getRevision(0), dstRepo.getChangelog().getRevision(0));
 		errorCollector.assertEquals(srcRepo.getChangelog().getRevision(TIP), dstRepo.getChangelog().getRevision(TIP));
-	}
-
-	static class HgServer {
-		private Process serverProcess;
-		private boolean publish = true;
-		
-		public HgServer publishing(boolean pub) {
-			publish = pub;
-			return this;
-		}
-
-		public HgServer start(File dir) throws IOException, InterruptedException {
-			if (serverProcess != null) {
-				stop();
-			}
-			List<String> cmdline = new ArrayList<String>();
-			cmdline.add("hg");
-			cmdline.add("--config");
-			cmdline.add("web.allow_push=*");
-			cmdline.add("--config");
-			cmdline.add("web.push_ssl=False");
-			cmdline.add("--config");
-			cmdline.add("server.validate=True");
-			cmdline.add("--config");
-			cmdline.add(String.format("web.port=%d", port()));
-			if (!publish) {
-				cmdline.add("--config");
-				cmdline.add("phases.publish=False");
-			}
-			cmdline.add("serve");
-			serverProcess = new ProcessBuilder(cmdline).directory(dir).start();
-			Thread.sleep(500);
-			return this;
-		}
-		
-		public URL getURL() throws MalformedURLException {
-			return new URL(String.format("http://localhost:%d/", port()));
-		}
-
-		public int port() {
-			return 9090;
-		}
-		
-		public void stop() {
-			if (serverProcess == null) {
-				return;
-			}
-			// if Process#destroy() doesn't perform well with scripts and child processes
-			// may need to write server pid to a file and send a kill <pid> here
-			serverProcess.destroy();
-			serverProcess = null;
-		}
 	}
 }

@@ -18,7 +18,6 @@ package org.tmatesoft.hg.core;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,10 +38,10 @@ import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.ProgressSupport;
-import org.tmatesoft.hg.util.LogFacility.Severity;
 
 /**
  * 
@@ -219,16 +218,5 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 		// remote shall know only what we've sent, subtract revisions we didn't actually sent
 		remoteDrafts = remoteDrafts.subtract(localChildrenNotSent);
 		return remoteDrafts;
-	}
-	
-	/*
-	 * To test, start a server:
-	 * $ hg --config web.allow_push=* --config web.push_ssl=False --config server.validate=True --debug serve
-	 */
-	public static void main(String[] args) throws Exception {
-		final HgLookup hgLookup = new HgLookup();
-		HgRepository r = hgLookup.detect("/home/artem/hg/test-phases/");
-		HgRemoteRepository rr = hgLookup.detect(new URL("http://localhost:8000/"));
-		new HgPushCommand(r).destination(rr).execute();
 	}
 }

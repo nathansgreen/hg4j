@@ -38,7 +38,6 @@ import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
 import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteBranch;
-import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -113,45 +112,6 @@ public class RepositoryComparator {
 		}
 	}
 	
-	/**
-	 * Similar to @link {@link #getLocalOnlyRevisions()}, use this one if you need access to changelog entry content, not 
-	 * only its revision number. 
-	 * @param inspector delegate to analyze changesets, shall not be <code>null</code>
-	 */
-	public void visitLocalOnlyRevisions(HgChangelog.Inspector inspector) throws HgRuntimeException {
-		if (inspector == null) {
-			throw new IllegalArgumentException();
-		}
-		// one can use localRepo.childrenOf(getCommon()) and then iterate over nodeids, but there seems to be
-		// another approach to get all changes after common:
-		// find index of earliest revision, and report all that were later
-		final HgChangelog changelog = localRepo.getRepo().getChangelog();
-		int earliestRevision = Integer.MAX_VALUE;
-		List<Nodeid> commonKnown = getCommon();
-		for (Nodeid n : commonKnown) {
-			if (!localRepo.hasChildren(n)) {
-				// there might be (old) nodes, known both locally and remotely, with no children
-				// hence, we don't need to consider their local revision number
-				continue;
-			}
-			int lr = changelog.getRevisionIndex(n);
-			if (lr < earliestRevision) {
-				earliestRevision = lr;
-			}
-		}
-		if (earliestRevision == Integer.MAX_VALUE) {
-			// either there are no common nodes (known locally and at remote)
-			// or no local children found (local is up to date). In former case, perhaps I shall bit return silently,
-			// but check for possible wrong repo comparison (hs says 'repository is unrelated' if I try to 
-			// check in/out for a repo that has no common nodes.
-			return;
-		}
-		if (earliestRevision < 0 || earliestRevision >= changelog.getLastRevision()) {
-			throw new HgInvalidStateException(String.format("Invalid index of common known revision: %d in total of %d", earliestRevision, 1+changelog.getLastRevision()));
-		}
-		changelog.range(earliestRevision+1, changelog.getLastRevision(), inspector);
-	}
-
 	private List<Nodeid> findCommonWithRemote() throws HgRemoteConnectionException {
 		remoteHeads = remoteRepo.heads();
 		LinkedList<Nodeid> resultCommon = new LinkedList<Nodeid>(); // these remotes are known in local
