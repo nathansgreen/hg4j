@@ -110,8 +110,7 @@ public final class ArrayHelper<T extends Comparable<T>> {
 	 * Slightly modified version of Arrays.sort1(int[], int, int) quicksort alg (just to deal with Object[])
 	 */
     private void sort1(int off, int len) {
-		@SuppressWarnings("unchecked")
-		Comparable<Object>[] x = (Comparable<Object>[]) sorted;
+		Comparable<Object>[] x = comparableSorted();
     	// Insertion sort on smallest arrays
     	if (len < 7) {
     	    for (int i=off; i<len+off; i++)
@@ -178,11 +177,21 @@ public final class ArrayHelper<T extends Comparable<T>> {
      * Returns the index of the median of the three indexed integers.
      */
     private int med3(int a, int b, int c) {
-		@SuppressWarnings("unchecked")
-		Comparable<Object>[] x = (Comparable<Object>[]) sorted;
+		Comparable<Object>[] x = comparableSorted();
 		return (x[a].compareTo(x[b]) < 0 ?
 			(x[b].compareTo(x[c]) < 0 ? b : x[a].compareTo(x[c]) < 0 ? c : a) :
 			(x[b].compareTo(x[c]) > 0 ? b : x[a].compareTo(x[c]) > 0 ? c : a));
+    }
+    
+    private Comparable<Object>[] comparableSorted() {
+    	// Comparable<Object>[] x = (Comparable<Object>[]) sorted
+		// eclipse compiler is ok with the line above, while javac doesn't understand it:
+		// inconvertible types found : T[] required: java.lang.Comparable<java.lang.Object>[]
+    	// so need to add another step
+    	Comparable<?>[] oo = sorted;
+		@SuppressWarnings("unchecked")
+		Comparable<Object>[] x = (Comparable<Object>[]) oo;
+		return x;
     }
 
     /**
