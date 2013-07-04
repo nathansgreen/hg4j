@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.internal;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -215,6 +216,13 @@ public class IntMap<V> {
 			map.put(next.getKey(), next.getValue());
 		}
 		return map;
+	}
+	
+	public Collection<V> values() {
+		@SuppressWarnings("unchecked")
+		V[] rv = (V[]) new Object[size];
+		System.arraycopy(values, 0, rv, 0, size);
+		return Arrays.<V>asList(rv);
 	}
 
 	// copy of Arrays.binarySearch, with upper search limit as argument

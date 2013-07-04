@@ -305,23 +305,7 @@ public final class HgChangelog extends Revlog {
 			// unixTime is local time, and timezone records difference of the local time to UTC.
 			Date _time = new Date(unixTime * 1000);
 			String _extras = space2 < _timeString.length() ? _timeString.substring(space2 + 1) : null;
-			Map<String, String> _extrasMap;
-			final String extras_branch_key = "branch";
-			if (_extras == null || _extras.trim().length() == 0) {
-				_extrasMap = Collections.singletonMap(extras_branch_key, HgRepository.DEFAULT_BRANCH_NAME);
-			} else {
-				_extrasMap = new HashMap<String, String>();
-				for (String pair : _extras.split("\00")) {
-					pair = decode(pair);
-					int eq = pair.indexOf(':');
-					_extrasMap.put(pair.substring(0, eq), pair.substring(eq + 1));
-				}
-				if (!_extrasMap.containsKey(extras_branch_key)) {
-					_extrasMap.put(extras_branch_key, HgRepository.DEFAULT_BRANCH_NAME);
-				}
-				_extrasMap = Collections.unmodifiableMap(_extrasMap);
-			}
-
+			Map<String, String> _extrasMap = parseExtras(_extras);
 			//
 			int lastStart = breakIndex3 + 1;
 			int breakIndex4 = indexOf(data, lineBreak, lastStart, bufferEndIndex);
@@ -329,6 +313,8 @@ public final class HgChangelog extends Revlog {
 			if (breakIndex4 > lastStart) {
 				// if breakIndex4 == lastStart, we already found \n\n and hence there are no files (e.g. merge revision)
 				_files = new ArrayList<String>(5);
+				// TODO pool file names
+				// TODO encoding of filenames?
 				while (breakIndex4 != -1 && breakIndex4 + 1 < bufferEndIndex) {
 					_files.add(new String(data, lastStart, breakIndex4 - lastStart));
 					lastStart = breakIndex4 + 1;
@@ -362,6 +348,34 @@ public final class HgChangelog extends Revlog {
 			this.files = _files == null ? Collections.<String> emptyList() : Collections.unmodifiableList(_files);
 			this.comment = _comment;
 			this.extras = _extrasMap;
+		}
+
+		private Map<String, String> parseExtras(String _extras) {
+			final String extras_branch_key = "branch";
+			_extras = _extras == null ? null : _extras.trim();
+			if (_extras == null || _extras.length() == 0) {
+				return Collections.singletonMap(extras_branch_key, HgRepository.DEFAULT_BRANCH_NAME);
+			}
+			Map<String, String> _extrasMap = new HashMap<String, String>();
+			int lastIndex = 0;
+			do {
+				String pair;
+				int sp = _extras.indexOf('\0', lastIndex);
+				if (sp == -1) {
+					sp = _extras.length();
+				}
+				if (sp > lastIndex) {
+					pair = _extras.substring(lastIndex, sp);
+					pair = decode(pair);
+					int eq = pair.indexOf(':');
+					_extrasMap.put(pair.substring(0, eq), pair.substring(eq + 1));
+					lastIndex = sp + 1;
+				}
+			} while (lastIndex < _extras.length());
+			if (!_extrasMap.containsKey(extras_branch_key)) {
+				_extrasMap.put(extras_branch_key, HgRepository.DEFAULT_BRANCH_NAME);
+			}
+			return Collections.unmodifiableMap(_extrasMap);
 		}
 
 		private static int indexOf(byte[] src, byte what, int startOffset, int endIndex) {

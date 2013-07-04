@@ -103,7 +103,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		Main m = new Main(args);
-		m.checkFileSneakerPerformance();
+//		m.checkFileSneakerPerformance();
 //		m.testRevert();
 //		m.testCheckout();
 //		m.tryExtensions();
@@ -119,7 +119,7 @@ public class Main {
 //		m.testEffectiveFileLog();
 //		m.testMergeState();
 //		m.testFileStatus();
-//		m.dumpBranches();
+		m.dumpBranches();
 //		m.inflaterLengthException();
 //		m.dumpIgnored();
 //		m.dumpDirstate();

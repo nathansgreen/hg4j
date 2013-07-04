@@ -27,8 +27,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -121,7 +121,7 @@ public class HgBranches {
 		}
 		return -1; // deliberately not lastInCache, to avoid anything but -1 when 1st line was read and there's error is in lines 2..end
 	}
-
+	
 	void collect(final ProgressSupport ps) throws HgRuntimeException {
 		branches.clear();
 		final HgRepository repo = internalRepo.getRepo();
@@ -133,91 +133,68 @@ public class HgBranches {
 			final HgParentChildMap<HgChangelog> pw = new HgParentChildMap<HgChangelog>(repo.getChangelog());
 			pw.init();
 			ps.worked(repo.getChangelog().getRevisionCount());
+			//
 			// first revision branch found at
 			final HashMap<String, Nodeid> branchStart = new HashMap<String, Nodeid>();
-			// last revision seen for the branch
-			final HashMap<String, Nodeid> branchLastSeen = new HashMap<String, Nodeid>();
 			// revisions from the branch that have no children at all
 			final HashMap<String, List<Nodeid>> branchHeads = new HashMap<String, List<Nodeid>>();
-			// revisions that are immediate children of a node from a given branch
-			// after iteration, there are some revisions left in this map (children of a branch last revision
-			// that doesn't belong to the branch. No use of this now, perhaps can deduce isInactive (e.g.those 
-			// branches that have non-empty candidates are inactive if all their heads are roots for those left)
-			final HashMap<String, List<Nodeid>> branchHeadCandidates = new HashMap<String, List<Nodeid>>();
 			HgChangelog.Inspector insp = new HgChangelog.Inspector() {
+				
+				private final ArrayList<Nodeid> parents = new ArrayList<Nodeid>(3);
 				
 				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) {
 					String branchName = cset.branch();
+					List<Nodeid> _branchHeads;
+					// there are chances (with --force key) branch can get more than one start
+					// revision. Neither BranchInfo nor this code support this scenario at the moment. 
 					if (!branchStart.containsKey(branchName)) {
 						branchStart.put(branchName, nodeid);
-						branchHeads.put(branchName, new LinkedList<Nodeid>());
-						branchHeadCandidates.put(branchName, new LinkedList<Nodeid>());
+						branchHeads.put(branchName, _branchHeads = new LinkedList<Nodeid>());
 					} else {
-						final List<Nodeid> headCandidates = branchHeadCandidates.get(branchName);
-						if (headCandidates.remove(nodeid)) {
-							// likely we don't need to keep parent anymore, as we found at least 1 child thereof to be at the same branch
-							// however, it's possible the child we found is a result of an earlier fork, and revision in the 
-							// branchLastSeen is 'parallel' head, which needs to be kept
-							Nodeid lastSeenInBranch = branchLastSeen.get(branchName);
-							// check if current revision is on descendant line. Seems direct parents check is enough
-							if (pw.safeFirstParent(nodeid).equals(lastSeenInBranch) || pw.safeSecondParent(nodeid).equals(lastSeenInBranch)) {
-								branchLastSeen.remove(branchName);
-							}
+						_branchHeads = branchHeads.get(branchName);
+						if (_branchHeads == null) {
+							branchHeads.put(branchName, _branchHeads = new LinkedList<Nodeid>());
 						}
 					}
-					List<Nodeid> immediateChildren = pw.directChildren(nodeid);
-					if (immediateChildren.size() > 0) {
-						// 1) children may be in another branch
-						// and unless we later came across another element from this branch,
-						// we need to record all these as potential heads
-						//
-						// 2) head1 with children in different branch, and head2 in this branch without children
-						branchLastSeen.put(branchName, nodeid);
-						branchHeadCandidates.get(branchName).addAll(immediateChildren);
-					} else {
-						// no more children known for this node, it's (one of the) head of the branch
-						branchHeads.get(branchName).add(nodeid);
-					}
+					// so far present node is the best candidate for head
+					_branchHeads.add(nodeid);
+					parents.clear();
+					// parents of this node, however, cease to be heads (if they are from this branch)
+					pw.appendParentsOf(nodeid, parents);
+					_branchHeads.removeAll(parents);
 					ps.worked(1);
 				}
-			}; 
+			};
+			// XXX alternatively may iterate with pw.all().subList(lastCached)
+			// but need an effective way to find out branch of particular changeset
 			repo.getChangelog().range(lastCached == -1 ? 0 : lastCached+1, HgRepository.TIP, insp);
-			// those last seen revisions from the branch that had no children from the same branch are heads.
-			for (String bn : branchLastSeen.keySet()) {
-				// these are inactive branches? - there were children, but not from the same branch?
-				branchHeads.get(bn).add(branchLastSeen.get(bn));
-			}
+			//
+			// build BranchInfo, based on found and cached 
 			for (String bn : branchStart.keySet()) {
 				BranchInfo bi = branches.get(bn);
 				if (bi != null) {
-					// although heads from cache shall not intersect with heads after lastCached,
-					// use of LHS doesn't hurt (and makes sense e.g. if cache is not completely correct in my tests) 
-					LinkedHashSet<Nodeid> heads = new LinkedHashSet<Nodeid>(bi.getHeads());
-					for (Nodeid oldHead : bi.getHeads()) {
-						// XXX perhaps, need pw.canReach(Nodeid from, Collection<Nodeid> to)
-						List<Nodeid> newChildren = pw.childrenOf(Collections.singletonList(oldHead));
-						if (!newChildren.isEmpty()) {
-							// likely not a head any longer,
-							// check if any new head can be reached from old one, and, if yes,
-							// do not consider that old head as head.
-							for (Nodeid newHead : branchHeads.get(bn)) {
-								if (newChildren.contains(newHead)) {
-									heads.remove(oldHead);
-									break;
-								}
+					// combine heads found so far with those cached 
+					LinkedHashSet<Nodeid> oldHeads = new LinkedHashSet<Nodeid>(bi.getHeads());
+					// expect size of both oldHeads and newHeads sets to be small, and for x for hence acceptable.
+					for (Nodeid newHead : branchHeads.get(bn)) {
+						for (Iterator<Nodeid> it = oldHeads.iterator(); it.hasNext();) {
+							if (pw.isChild(it.next(), newHead)) {
+								it.remove();
 							}
-						} // else - oldHead still head for the branch
+						}
 					}
-					heads.addAll(branchHeads.get(bn));
-					bi = new BranchInfo(bn, bi.getStart(), heads.toArray(new Nodeid[0]));
+					oldHeads.addAll(branchHeads.get(bn));
+					assert oldHeads.size() > 0;
+					bi = new BranchInfo(bn, bi.getStart(), oldHeads.toArray(new Nodeid[oldHeads.size()]));
 				} else {
 					Nodeid[] heads = branchHeads.get(bn).toArray(new Nodeid[0]);
 					bi = new BranchInfo(bn, branchStart.get(bn), heads);
 				}
 				branches.put(bn, bi);
 			}
-		}
+		} // !cacheActual
 		final HgChangelog clog = repo.getChangelog();
+		/// FIXME use HgParentChildMap if available (need to decide how to get HgRevisionMap and HgParentChildMap to a common denominator)
 		final HgRevisionMap<HgChangelog> rmap = new HgRevisionMap<HgChangelog>(clog).init();
 		for (BranchInfo bi : branches.values()) {
 			bi.validate(clog, rmap);
@@ -388,6 +365,7 @@ public class HgBranches {
 		}
 //		public Nodeid getTip() {
 //		}
+		// XXX Not public as there are chances for few possible branch starts, and I need to decide how to handle that
 		/*public*/ Nodeid getStart() {
 			// first node where branch appears
 			return start;

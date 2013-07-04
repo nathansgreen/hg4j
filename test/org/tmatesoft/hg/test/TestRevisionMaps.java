@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -84,7 +85,7 @@ public class TestRevisionMaps {
 			
 		}
 		// heads
-		errorCollector.assertEquals(Arrays.asList(allRevs[7], allRevs[9]), parentHelper.heads());
+		errorCollector.assertEquals(Arrays.asList(allRevs[7], allRevs[9]), new ArrayList<Nodeid>(parentHelper.heads()));
 		// isChild
 		errorCollector.assertTrue(parentHelper.isChild(allRevs[1], allRevs[9]));
 		errorCollector.assertTrue(parentHelper.isChild(allRevs[0], allRevs[7]));

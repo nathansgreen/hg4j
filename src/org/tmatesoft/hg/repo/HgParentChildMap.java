@@ -28,6 +28,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.repo.Revlog.ParentInspector;
 
 /**
@@ -67,7 +68,8 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	private Nodeid[] firstParent; // parents by natural order (i.e. firstParent[A] is parent of revision with index A)
 	private Nodeid[] secondParent;
 	private final T revlog;
-	private BitSet heads; // 1 indicates revision got children
+	private IntMap<Nodeid> heads;
+	private BitSet headsBitSet; // 1 indicates revision got children, != null only during init;
 
 
 	public HgParentChildMap(T owner) {
@@ -86,11 +88,11 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		sequential[ix] = sorted[ix] = revision;
 		if (parent1Revision != -1) {
 			firstParent[ix] = sequential[parent1Revision];
-			heads.set(parent1Revision);
+			headsBitSet.set(parent1Revision);
 		}
 		if (parent2Revision != -1) { // revlog of DataAccess.java has p2 set when p1 is -1
 			secondParent[ix] = sequential[parent2Revision];
-			heads.set(parent2Revision);
+			headsBitSet.set(parent2Revision);
 		}
 	}
 	
@@ -104,12 +106,13 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		firstParent = new Nodeid[revisionCount];
 		// TODO [post 1.1] Branches/merges are less frequent, and most of secondParent would be -1/null, hence 
 		// IntMap might be better alternative here, but need to carefully analyze (test) whether this brings
-		// real improvement (IntMap has 2n capacity, and element lookup is log(n) instead of array's constant)
+		// real improvement (IntMap has 2n capacity, and element lookup is log(n) instead of array's constant).
+		// FWIW: in cpython's repo, with 70k+ revisions, there are 2618 values in secondParent 
 		secondParent = new Nodeid[revisionCount];
 		//
 		sequential = new Nodeid[revisionCount];
 		sorted = new Nodeid[revisionCount];
-		heads = new BitSet(revisionCount);
+		headsBitSet = new BitSet(revisionCount);
 		revlog.indexWalk(0, TIP, this);
 		Arrays.sort(sorted);
 		// FIXME use ArrayHelper instead
@@ -120,6 +123,19 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 			assertSortedIndex(x);
 			sorted2natural[x] = i;
 		}
+		// no reason to keep BitSet, number of heads is usually small
+		IntMap<Nodeid> _heads = new IntMap<Nodeid>(headsBitSet.size() - headsBitSet.cardinality());
+		int index = 0;
+		while (index < sequential.length) {
+			index = headsBitSet.nextClearBit(index);
+			// nextClearBit(length-1) gives length when bit is set,
+			// however, last revision can't be a parent of any other, and
+			// the last bit would be always 0, and no AIOOBE 
+			_heads.put(index, sequential[index]);
+			index++;
+		} 
+		headsBitSet = null;
+		heads = _heads;
 	}
 	
 	private void assertSortedIndex(int x) {
@@ -215,6 +231,8 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		return result;
 	}
 	
+	public long AAA = 0;
+	
 	/**
 	 * @return revisions that have supplied revision as their immediate parent
 	 */
@@ -226,8 +244,9 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		if (!hasChildren(start)) {
 			return Collections.emptyList();
 		}
-		LinkedList<Nodeid> result = new LinkedList<Nodeid>();
+		ArrayList<Nodeid> result = new ArrayList<Nodeid>(5);
 		for (int i = start + 1; i < sequential.length; i++) {
+			AAA++;
 			if (nid == firstParent[i] || nid == secondParent[i]) {
 				result.add(sequential[i]);
 			}
@@ -291,20 +310,10 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	 * @return elements of this map that do not have a child recorded therein.
 	 */
 	public Collection<Nodeid> heads() {
-		ArrayList<Nodeid> result = new ArrayList<Nodeid>();
-		int index = 0;
-		do {
-			index = heads.nextClearBit(index);
-			// nextClearBit(length-1) gives length when bit is set,
-			// however, last revision can't be a parent of any other, and
-			// the last bit would be always 0, and no AIOOBE 
-			result.add(sequential[index]);
-			index++;
-		} while (index < sequential.length);
-		return result;
+		return heads.values();
 	}
 
 	private boolean hasChildren(int sequentialIndex) {
-		return heads.get(sequentialIndex);
+		return !heads.containsKey(sequentialIndex);
 	}
 }
