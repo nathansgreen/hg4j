@@ -28,6 +28,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.repo.Revlog.ParentInspector;
 
@@ -62,14 +63,15 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 
 	// IMPORTANT: Nodeid instances shall be shared between all arrays
 
+	private final T revlog;
 	private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
-	private Nodeid[] sorted; // for binary search
-	private int[] sorted2natural; // indexes in sorted to indexes in sequential
+	private Nodeid[] sorted; // for binary search, just an origin of the actual value in use, the one inside seqWrapper
 	private Nodeid[] firstParent; // parents by natural order (i.e. firstParent[A] is parent of revision with index A)
 	private Nodeid[] secondParent;
-	private final T revlog;
 	private IntMap<Nodeid> heads;
 	private BitSet headsBitSet; // 1 indicates revision got children, != null only during init;
+	private HgRevisionMap<T> revisionIndexMap;
+	private ArrayHelper<Nodeid> seqWrapper; 
 
 
 	public HgParentChildMap(T owner) {
@@ -111,18 +113,13 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		secondParent = new Nodeid[revisionCount];
 		//
 		sequential = new Nodeid[revisionCount];
-		sorted = new Nodeid[revisionCount];
+		sorted = new Nodeid[revisionCount]; 
 		headsBitSet = new BitSet(revisionCount);
 		revlog.indexWalk(0, TIP, this);
-		Arrays.sort(sorted);
-		// FIXME use ArrayHelper instead
-		sorted2natural = new int[revisionCount];
-		for (int i = 0; i < revisionCount; i++) {
-			Nodeid n = sequential[i];
-			int x = Arrays.binarySearch(sorted, n);
-			assertSortedIndex(x);
-			sorted2natural[x] = i;
-		}
+		seqWrapper = new ArrayHelper<Nodeid>(sequential);
+		// HgRevisionMap doesn't keep sorted, try alternative here.
+		// reference this.sorted (not only from ArrayHelper) helps to track ownership in hprof/mem dumps
+		seqWrapper.sort(sorted, false, true);
 		// no reason to keep BitSet, number of heads is usually small
 		IntMap<Nodeid> _heads = new IntMap<Nodeid>(headsBitSet.size() - headsBitSet.cardinality());
 		int index = 0;
@@ -151,16 +148,16 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	 * @return <code>true</code> if revision matches any revision in this revlog
 	 */
 	public boolean knownNode(Nodeid nid) {
-		return Arrays.binarySearch(sorted, nid) >= 0;
+		return seqWrapper.binarySearchSorted(nid) >= 0;
 	}
 
 	/**
 	 * null if none. only known nodes (as per #knownNode) are accepted as arguments
 	 */
 	public Nodeid firstParent(Nodeid nid) {
-		int x = Arrays.binarySearch(sorted, nid);
+		int x = seqWrapper.binarySearchSorted(nid);
 		assertSortedIndex(x);
-		int i = sorted2natural[x];
+		int i = seqWrapper.getReverseIndex(x);
 		return firstParent[i];
 	}
 
@@ -171,9 +168,9 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	}
 	
 	public Nodeid secondParent(Nodeid nid) {
-		int x = Arrays.binarySearch(sorted, nid);
+		int x = seqWrapper.binarySearchSorted(nid);
 		assertSortedIndex(x);
-		int i = sorted2natural[x];
+		int i = seqWrapper.getReverseIndex(x);
 		return secondParent[i];
 	}
 
@@ -183,9 +180,9 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	}
 
 	public boolean appendParentsOf(Nodeid nid, Collection<Nodeid> c) {
-		int x = Arrays.binarySearch(sorted, nid);
+		int x = seqWrapper.binarySearchSorted(nid);
 		assertSortedIndex(x);
-		int i = sorted2natural[x];
+		int i = seqWrapper.getReverseIndex(x);
 		Nodeid p1 = firstParent[i];
 		boolean modified = false;
 		if (p1 != null) {
@@ -214,9 +211,9 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		// first, find earliest index of roots in question, as there's  no sense 
 		// to check children among nodes prior to branch's root node
 		for (Nodeid r : roots) {
-			int x = Arrays.binarySearch(sorted, r);
+			int x = seqWrapper.binarySearchSorted(r);
 			assertSortedIndex(x);
-			int i = sorted2natural[x];
+			int i = seqWrapper.getReverseIndex(x);
 			if (i < earliestRevision) {
 				earliestRevision = i;
 			}
@@ -231,22 +228,19 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		return result;
 	}
 	
-	public long AAA = 0;
-	
 	/**
 	 * @return revisions that have supplied revision as their immediate parent
 	 */
 	public List<Nodeid> directChildren(Nodeid nid) {
-		int x = Arrays.binarySearch(sorted, nid);
+		int x = seqWrapper.binarySearchSorted(nid);
 		assertSortedIndex(x);
-		nid = sorted[x]; // canonical instance
-		int start = sorted2natural[x];
+		int start = seqWrapper.getReverseIndex(x);
+		nid = sequential[start]; // canonical instance
 		if (!hasChildren(start)) {
 			return Collections.emptyList();
 		}
 		ArrayList<Nodeid> result = new ArrayList<Nodeid>(5);
 		for (int i = start + 1; i < sequential.length; i++) {
-			AAA++;
 			if (nid == firstParent[i] || nid == secondParent[i]) {
 				result.add(sequential[i]);
 			}
@@ -259,9 +253,9 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	 * @return <code>true</code> if there's any node in this revlog that has specified node as one of its parents. 
 	 */
 	public boolean hasChildren(Nodeid nid) {
-		int x = Arrays.binarySearch(sorted, nid);
+		int x = seqWrapper.binarySearchSorted(nid);
 		assertSortedIndex(x);
-		int i = sorted2natural[x];
+		int i = seqWrapper.getReverseIndex(x);
 		return hasChildren(i);
 	}
 
@@ -280,19 +274,19 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	 * @return <code>true</code> if <code>wannaBeChild</code> is among children of <code>root</code>
 	 */
 	public boolean isChild(Nodeid root, Nodeid wannaBeChild) {
-		int x = Arrays.binarySearch(sorted, root);
+		int x = seqWrapper.binarySearchSorted(root);
 		assertSortedIndex(x);
-		root = sorted[x]; // canonical instance
-		final int start = sorted2natural[x];
+		final int start = seqWrapper.getReverseIndex(x);
+		root = sequential[start]; // canonical instance
 		if (!hasChildren(start)) {
 			return false; // root got no children at all
 		}
-		int y = Arrays.binarySearch(sorted, wannaBeChild);
+		int y = seqWrapper.binarySearchSorted(wannaBeChild);
 		if (y < 0) {
 			return false; // not found
 		}
-		wannaBeChild = sorted[y]; // canonicalize
-		final int end = sorted2natural[y];
+		final int end = seqWrapper.getReverseIndex(y);
+		wannaBeChild = sequential[end]; // canonicalize
 		if (end <= start) {
 			return false; // potential child was in repository earlier than root
 		}
@@ -311,6 +305,17 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	 */
 	public Collection<Nodeid> heads() {
 		return heads.values();
+	}
+	
+	/**
+	 * @return map of revision to indexes
+	 */
+	public HgRevisionMap<T> getRevisionMap() {
+		if (revisionIndexMap == null) {
+			revisionIndexMap = new HgRevisionMap<T>(revlog);
+			revisionIndexMap.init(seqWrapper);
+		}
+		return revisionIndexMap;
 	}
 
 	private boolean hasChildren(int sequentialIndex) {

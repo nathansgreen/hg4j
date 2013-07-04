@@ -16,40 +16,107 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.util.Arrays;
+
 /**
  * Internal alternative to Arrays.sort to build reversed index along with sorting
+ * and to perform lookup (binary search) without sorted array, using reversed index.
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class ArrayHelper {
-	private int[] reverse;
+public final class ArrayHelper<T extends Comparable<T>> {
+	private int[] reverse; // aka sorted2natural
+	private final T[] data;
+	private T[] sorted;
+	
+	public ArrayHelper(T[] _data) {
+		assert _data != null;
+		data = _data;
+	}
 
-	@SuppressWarnings("unchecked")
-	public void sort(Comparable<?>[] a) {
-//		Object[] aux = (Object[]) a.clone();
-		reverse = new int[a.length];
-		sort1((Comparable<Object>[])a, 0, a.length);
-		for (int i = 0; i < reverse.length; i++) {
-			// element that was not moved don't have an index in reverse.
-			// perhaps, can do it inside sort alg?
-			// Alternatively, may start with filling reverse[] array with initial indexes and
-			// avoid != 0 comparisons in #swap altogether?
-			if (reverse[i] == 0) {
-				reverse[i] = i+1;
+	/**
+	 * Sort data this helper wraps, possibly using supplied array (optional)
+	 * to keep sorted elements
+	 * @param sortDest array to keep sorted values at, or <code>null</code>
+	 * @param sortDestIsEmpty <code>false</code> when sortDest already contains copy of data to be sorted
+	 * @param keepSorted <code>true</code> to save sorted array for future use (e.g. in
+	 */
+	public void sort(T[] sortDest, boolean sortDestIsEmpty, boolean keepSorted) {
+		if (sortDest != null) {
+			assert sortDest.length >= data.length;
+			if (sortDestIsEmpty) {
+				System.arraycopy(data, 0, sortDest, 0, data.length);
 			}
+			sorted = sortDest;
+		} else {
+			sorted = data.clone();
 		}
+		reverse = new int[data.length];
+		for (int i = 0; i < reverse.length; i++) {
+			// initial reverse indexes, so that elements that do
+			// not move during sort got correct indexes
+			reverse[i] = i;
+		}
+		sort1(0, data.length);
+		if (!keepSorted) {
+			sorted = null;
+		}
+	}
+
+	/**
+	 * @return all reverse indexes
+	 */
+	public int[] getReverseIndexes() {
+		return reverse;
+	}
+	
+	public int getReverseIndex(int sortedIndex) {
+		return reverse[sortedIndex];
+	}
+	
+	public T get(int index) {
+		return data[index];
+	}
+	
+	public T[] getData() {
+		return data;
+	}
+
+	/**
+	 * Look up sorted index of the value, using sort information 
+	 * @return same value as {@link Arrays#binarySearch(Object[], Object)} does
+	 */
+	public int binarySearchSorted(T value) {
+		if (sorted != null) {
+			return Arrays.binarySearch(sorted, 0, data.length, value);
+		}
+		return binarySearchWithReverse(0, data.length, value);
+	}
+
+	/**
+	 * Look up index of the value in the original array.
+	 * @return index in original data, or <code>defaultValue</code> if value not found
+	 */
+	public int binarySearch(T value, int defaultValue) {
+		int x = binarySearchSorted(value);
+		if (x < 0) {
+			return defaultValue;
+		}
+		return reverse[x];
 	}
 
 	/**
 	 * Slightly modified version of Arrays.sort1(int[], int, int) quicksort alg (just to deal with Object[])
 	 */
-    private void sort1(Comparable<Object> x[], int off, int len) {
+    private void sort1(int off, int len) {
+		@SuppressWarnings("unchecked")
+		Comparable<Object>[] x = (Comparable<Object>[]) sorted;
     	// Insertion sort on smallest arrays
     	if (len < 7) {
     	    for (int i=off; i<len+off; i++)
     			for (int j=i; j>off && x[j-1].compareTo(x[j]) > 0; j--)
-    			    swap(x, j, j-1);
+    			    swap(j, j-1);
     	    return;
     	}
 
@@ -60,11 +127,11 @@ public class ArrayHelper {
     	    int n = off + len - 1;
     	    if (len > 40) {        // Big arrays, pseudomedian of 9
     			int s = len/8;
-	    		l = med3(x, l,     l+s, l+2*s);
-	    		m = med3(x, m-s,   m,   m+s);
-	    		n = med3(x, n-2*s, n-s, n);
+	    		l = med3(l,     l+s, l+2*s);
+	    		m = med3(m-s,   m,   m+s);
+	    		n = med3(n-2*s, n-s, n);
     	    }
-    	    m = med3(x, l, m, n); // Mid-size, med of 3
+    	    m = med3(l, m, n); // Mid-size, med of 3
     	}
     	Comparable<Object> v = x[m];
 
@@ -73,67 +140,84 @@ public class ArrayHelper {
     	while(true) {
     	    while (b <= c && x[b].compareTo(v) <= 0) {
     			if (x[b] == v)
-    			    swap(x, a++, b);
+    			    swap(a++, b);
     			b++;
     	    }
     	    while (c >= b && x[c].compareTo(v) >= 0) {
     			if (x[c] == v)
-    			    swap(x, c, d--);
+    			    swap(c, d--);
     			c--;
     	    }
     	    if (b > c)
     			break;
-    	    swap(x, b++, c--);
+    	    swap(b++, c--);
     	}
 
     	// Swap partition elements back to middle
     	int s, n = off + len;
-    	s = Math.min(a-off, b-a  );  vecswap(x, off, b-s, s);
-    	s = Math.min(d-c,   n-d-1);  vecswap(x, b,   n-s, s);
+    	s = Math.min(a-off, b-a  );  vecswap(off, b-s, s);
+    	s = Math.min(d-c,   n-d-1);  vecswap(b,   n-s, s);
 
     	// Recursively sort non-partition-elements
     	if ((s = b-a) > 1)
-    	    sort1(x, off, s);
+    	    sort1(off, s);
     	if ((s = d-c) > 1)
-    	    sort1(x, n-s, s);
+    	    sort1(n-s, s);
     }
 
     /**
      * Swaps x[a .. (a+n-1)] with x[b .. (b+n-1)].
      */
-    private void vecswap(Object[] x, int a, int b, int n) {
+    private void vecswap(int a, int b, int n) {
 		for (int i=0; i<n; i++, a++, b++) {
-		    swap(x, a, b);
+		    swap(a, b);
 		}
     }
 
     /**
      * Returns the index of the median of the three indexed integers.
      */
-    private static int med3(Comparable<Object>[] x, int a, int b, int c) {
-	return (x[a].compareTo(x[b]) < 0 ?
-		(x[b].compareTo(x[c]) < 0 ? b : x[a].compareTo(x[c]) < 0 ? c : a) :
-		(x[b].compareTo(x[c]) > 0 ? b : x[a].compareTo(x[c]) > 0 ? c : a));
+    private int med3(int a, int b, int c) {
+		@SuppressWarnings("unchecked")
+		Comparable<Object>[] x = (Comparable<Object>[]) sorted;
+		return (x[a].compareTo(x[b]) < 0 ?
+			(x[b].compareTo(x[c]) < 0 ? b : x[a].compareTo(x[c]) < 0 ? c : a) :
+			(x[b].compareTo(x[c]) > 0 ? b : x[a].compareTo(x[c]) > 0 ? c : a));
     }
 
-
-	/**
-	 * @return the reverse
-	 */
-	public int[] getReverse() {
-		return reverse;
-	}
-
-	/**
+    /**
 	 * Swaps x[a] with x[b].
 	 */
-	private void swap(Object[] x, int a, int b) {
+	private void swap(int a, int b) {
+		Object[] x = sorted;
 		Object t = x[a];
 		x[a] = x[b];
 		x[b] = t;
-		int z1 = reverse[a] != 0 ? reverse[a] : a+1;
-		int z2 = reverse[b] != 0 ? reverse[b] : b+1;
+		int z1 = reverse[a];
+		int z2 = reverse[b];
 		reverse[b] = z1;
 		reverse[a] = z2;
 	}
+
+	// copied from Arrays.binarySearch0, update to be instance method and to use reverse indexes
+	private int binarySearchWithReverse(int fromIndex, int toIndex, T key) {
+		int low = fromIndex;
+		int high = toIndex - 1;
+
+		while (low <= high) {
+			int mid = (low + high) >>> 1;
+			// data[reverse[x]] gives sorted value at index x
+			T midVal = data[reverse[mid]];
+			int cmp = midVal.compareTo(key);
+
+			if (cmp < 0)
+				low = mid + 1;
+			else if (cmp > 0)
+				high = mid - 1;
+			else
+				return mid; // key found
+		}
+		return -(low + 1);  // key not found.
+	}
+
 }

@@ -19,8 +19,6 @@ package org.tmatesoft.hg.repo;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
-import java.util.Arrays;
-
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.repo.Revlog.RevisionInspector;
@@ -60,15 +58,14 @@ public final class HgRevisionMap<T extends Revlog> implements RevisionInspector 
 	 * for complete changelog iteration. 
 	 */
 	
+	private final T revlog;
 	/*
 	 * XXX 3 * (x * 4) bytes. Can I do better?
 	 * It seems, yes. Don't need to keep sorted, always can emulate it with indirect access to sequential through sorted2natural.
 	 * i.e. instead sorted[mid].compareTo(toFind), do sequential[sorted2natural[mid]].compareTo(toFind) 
 	 */
-	private Nodeid[] sequential; // natural repository order, childrenOf rely on ordering
-	private Nodeid[] sorted; // for binary search
-	private int[] sorted2natural;
-	private final T revlog;
+	private Nodeid[] sequential; // natural repository order
+	private ArrayHelper<Nodeid> seqWrapper;
 
 	public HgRevisionMap(T owner) {
 		revlog = owner;
@@ -79,7 +76,7 @@ public final class HgRevisionMap<T extends Revlog> implements RevisionInspector 
 	}
 	
 	public void next(int revisionIndex, Nodeid revision, int linkedRevision) {
-		sequential[revisionIndex] = sorted[revisionIndex] = revision;
+		sequential[revisionIndex] = revision;
 	}
 
 	/**
@@ -89,28 +86,29 @@ public final class HgRevisionMap<T extends Revlog> implements RevisionInspector 
 		// XXX HgRepository.register((RepoChangeListener) this); // listen to changes in repo, re-init if needed?
 		final int revisionCount = revlog.getRevisionCount();
 		sequential = new Nodeid[revisionCount];
-		sorted = new Nodeid[revisionCount];
 		revlog.indexWalk(0, TIP, this);
 		// next is alternative to Arrays.sort(sorted), and build sorted2natural looking up each element of sequential in sorted.
 		// the way sorted2natural was build is O(n*log n).  
-		final ArrayHelper ah = new ArrayHelper();
-		ah.sort(sorted);
-		// note, values in ArrayHelper#getReversed are 1-based indexes, not 0-based 
-		sorted2natural = ah.getReverse();
+		seqWrapper = new ArrayHelper<Nodeid>(sequential);
+		seqWrapper.sort(null, true, false);
 		return this;
+	}
+
+	/* friendly initializer to use from HgParentChildMap
+	/*package*/ void init(ArrayHelper<Nodeid> _seqWrapper) {
+		assert _seqWrapper.getData().length == revlog.getRevisionCount();
+		sequential = _seqWrapper.getData();
+		seqWrapper = _seqWrapper;
 	}
 	
 	public Nodeid revision(int revisionIndex) {
 		return sequential[revisionIndex];
 	}
+
 	public int revisionIndex(Nodeid revision) {
 		if (revision == null || revision.isNull()) {
 			return BAD_REVISION;
 		}
-		int x = Arrays.binarySearch(sorted, revision);
-		if (x < 0) {
-			return BAD_REVISION;
-		}
-		return sorted2natural[x]-1;
+		return seqWrapper.binarySearch(revision, BAD_REVISION);
 	}
 }

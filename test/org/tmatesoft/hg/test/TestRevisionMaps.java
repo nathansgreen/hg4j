@@ -28,6 +28,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRevisionMap;
 
 /**
  * 
@@ -101,4 +102,29 @@ public class TestRevisionMaps {
 		errorCollector.assertEquals(Collections.emptyList(), parentHelper.directChildren(allRevs[7]));
 	}
 
+	@Test
+	public void testRevisionMap() throws HgException {
+		// XXX this test may benefit from external huge repository
+		final HgRepository repo = Configuration.get().find("test-annotate");
+		Nodeid[] allRevs = RepoUtils.allRevisions(repo);
+		final HgChangelog clog = repo.getChangelog();
+		final HgRevisionMap<HgChangelog> rmap = new HgRevisionMap<HgChangelog>(clog).init();
+		doTestRevisionMap(allRevs, rmap);
+	}
+
+	@Test
+	public void testRevisionMapFromParentChildMap() throws HgException {
+		final HgRepository repo = Configuration.get().find("test-annotate");
+		Nodeid[] allRevs = RepoUtils.allRevisions(repo);
+		HgParentChildMap<HgChangelog> parentHelper = new HgParentChildMap<HgChangelog>(repo.getChangelog());
+		parentHelper.init();
+		doTestRevisionMap(allRevs, parentHelper.getRevisionMap());
+	}
+
+	private void doTestRevisionMap(Nodeid[] allRevs, HgRevisionMap<HgChangelog> rmap) {
+		for (int i = 0; i < allRevs.length; i++) {
+			errorCollector.assertEquals(i, rmap.revisionIndex(allRevs[i]));
+			errorCollector.assertEquals(allRevs[i], rmap.revision(i));
+		}
+	}
 }

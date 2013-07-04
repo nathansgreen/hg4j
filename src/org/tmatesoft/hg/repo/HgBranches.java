@@ -46,7 +46,8 @@ import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
- *
+ * Access information about branches in the repository
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -125,14 +126,17 @@ public class HgBranches {
 	void collect(final ProgressSupport ps) throws HgRuntimeException {
 		branches.clear();
 		final HgRepository repo = internalRepo.getRepo();
-		ps.start(1 + repo.getChangelog().getRevisionCount() * 2);
+		final HgChangelog clog = repo.getChangelog();
+		final HgRevisionMap<HgChangelog> rmap;
+		ps.start(1 + clog.getRevisionCount() * 2);
 		//
 		int lastCached = readCache();
-		isCacheActual = lastCached == repo.getChangelog().getLastRevision();
+		isCacheActual = lastCached == clog.getLastRevision();
 		if (!isCacheActual) {
-			final HgParentChildMap<HgChangelog> pw = new HgParentChildMap<HgChangelog>(repo.getChangelog());
+			// XXX need a way to share HgParentChildMap<HgChangelog>
+			final HgParentChildMap<HgChangelog> pw = new HgParentChildMap<HgChangelog>(clog);
 			pw.init();
-			ps.worked(repo.getChangelog().getRevisionCount());
+			ps.worked(clog.getRevisionCount());
 			//
 			// first revision branch found at
 			final HashMap<String, Nodeid> branchStart = new HashMap<String, Nodeid>();
@@ -167,7 +171,7 @@ public class HgBranches {
 			};
 			// XXX alternatively may iterate with pw.all().subList(lastCached)
 			// but need an effective way to find out branch of particular changeset
-			repo.getChangelog().range(lastCached == -1 ? 0 : lastCached+1, HgRepository.TIP, insp);
+			clog.range(lastCached == -1 ? 0 : lastCached+1, HgRepository.TIP, insp);
 			//
 			// build BranchInfo, based on found and cached 
 			for (String bn : branchStart.keySet()) {
@@ -192,10 +196,10 @@ public class HgBranches {
 				}
 				branches.put(bn, bi);
 			}
-		} // !cacheActual
-		final HgChangelog clog = repo.getChangelog();
-		/// FIXME use HgParentChildMap if available (need to decide how to get HgRevisionMap and HgParentChildMap to a common denominator)
-		final HgRevisionMap<HgChangelog> rmap = new HgRevisionMap<HgChangelog>(clog).init();
+			rmap = pw.getRevisionMap();
+		} else { // !cacheActual
+			rmap = new HgRevisionMap<HgChangelog>(clog).init(); 
+		}
 		for (BranchInfo bi : branches.values()) {
 			bi.validate(clog, rmap);
 		}

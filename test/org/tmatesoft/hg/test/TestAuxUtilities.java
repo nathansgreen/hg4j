@@ -23,6 +23,7 @@ import static org.tmatesoft.hg.util.Path.CompareResult.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import org.junit.Assert;
 import org.junit.Rule;
@@ -62,25 +63,31 @@ public class TestAuxUtilities {
 	@Test
 	public void testArrayHelper() {
 		String[] initial = {"d", "w", "k", "b", "c", "i", "a", "r", "e", "h" };
-		ArrayHelper ah = new ArrayHelper();
+		ArrayHelper<String> ah = new ArrayHelper<String>(initial);
 		String[] result = initial.clone();
-		ah.sort(result);
-		String[] restored = restore(result, ah.getReverse());
+		ah.sort(result, false, false);
+		String[] restored = restore(result, ah.getReverseIndexes());
 		assertArrayEquals(initial, restored);
 		//
 		// few elements are on the right place from the very start and do not shift during sort.
 		// make sure for them we've got correct reversed indexes as well
 		initial = new String[] {"d", "h", "c", "b", "k", "i", "a", "r", "e", "w" };
-		ah.sort(result = initial.clone());
-		restored = restore(result, ah.getReverse());
+		ah = new ArrayHelper<String>(initial);
+		ah.sort(result = new String[initial.length], true, true);
+		restored = restore(result, ah.getReverseIndexes());
 		assertArrayEquals(initial, restored);
+		for (int i = 0; i < initial.length; i++) {
+			String s = initial[i];
+			errorCollector.assertEquals(i, ah.binarySearch(s, -1));
+			errorCollector.assertEquals(Arrays.binarySearch(result, s), ah.binarySearchSorted(s));
+		}
 	}
 
 	private static String[] restore(String[] sorted, int[] sortReverse) {
 		String[] rebuilt = new String[sorted.length];
 		for (int i = 0; i < sorted.length; i++) {
 			int indexInOriginal = sortReverse[i];
-			rebuilt[indexInOriginal-1] = sorted[i];
+			rebuilt[indexInOriginal] = sorted[i];
 		}
 		return rebuilt;
 	}
