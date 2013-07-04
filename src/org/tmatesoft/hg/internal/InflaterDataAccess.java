@@ -39,22 +39,22 @@ public class InflaterDataAccess extends FilterDataAccess {
 	private int decompressedLength;
 
 	public InflaterDataAccess(DataAccess dataAccess, long offset, int compressedLength) {
-		this(dataAccess, offset, compressedLength, -1, new Inflater(), new byte[512]);
+		this(dataAccess, offset, compressedLength, -1, new Inflater(), new byte[512], null);
 	}
 
 	public InflaterDataAccess(DataAccess dataAccess, long offset, int compressedLength, int actualLength) {
-		this(dataAccess, offset, compressedLength, actualLength, new Inflater(), new byte[512]);
+		this(dataAccess, offset, compressedLength, actualLength, new Inflater(), new byte[512], null);
 	}
 
-	public InflaterDataAccess(DataAccess dataAccess, long offset, int compressedLength, int actualLength, Inflater inflater, byte[] buf) {
+	public InflaterDataAccess(DataAccess dataAccess, long offset, int compressedLength, int actualLength, Inflater inflater, byte[] inBuf, ByteBuffer outBuf) {
 		super(dataAccess, offset, compressedLength);
-		if (inflater == null || buf == null) {
+		if (inflater == null || inBuf == null) {
 			throw new IllegalArgumentException();
 		}
 		this.inflater = inflater;
 		this.decompressedLength = actualLength;
-		inBuffer = buf;
-		outBuffer = ByteBuffer.allocate(inBuffer.length * 2);
+		inBuffer = inBuf;
+		outBuffer = outBuf == null ? ByteBuffer.allocate(inBuffer.length * 2) : outBuf;
 		outBuffer.limit(0); // there's nothing to read in the buffer 
 	}
 	

@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.SoftReference;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.Inflater;
@@ -632,6 +633,7 @@ public class RevlogStream {
 		private final Inflater inflater = new Inflater();
 		// can share buffer between instances of InflaterDataAccess as I never read any two of them in parallel
 		private final byte[] inflaterBuffer = new byte[10 * 1024]; // TODO [post-1.1] consider using DAP.DEFAULT_FILE_BUFFER
+		private final ByteBuffer inflaterOutBuffer = ByteBuffer.allocate(inflaterBuffer.length * 2);
 		private final byte[] nodeidBuf = new byte[20];
 		// revlog record fields
 		private long offset;
@@ -741,7 +743,7 @@ public class RevlogStream {
 				final byte firstByte = streamDataAccess.readByte();
 				if (firstByte == 0x78 /* 'x' */) {
 					inflater.reset();
-					userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, isPatch(i) ? -1 : actualLen, inflater, inflaterBuffer);
+					userDataAccess = new InflaterDataAccess(streamDataAccess, streamOffset, compressedLen, isPatch(i) ? -1 : actualLen, inflater, inflaterBuffer, inflaterOutBuffer);
 				} else if (firstByte == 0x75 /* 'u' */) {
 					userDataAccess = new FilterDataAccess(streamDataAccess, streamOffset+1, compressedLen-1);
 				} else {

@@ -51,7 +51,7 @@ public class TestInflaterDataAccess {
 	@Test
 	public void testSeek() throws Exception {
 		DataAccess zip = zip(testContent1);
-		InflaterDataAccess ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25]);
+		InflaterDataAccess ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25], null);
 		ida.seek(20);
 		final int bufferCapacity = 10;
 		ByteBuffer chunk1 = ByteBuffer.allocate(bufferCapacity);
@@ -66,15 +66,15 @@ public class TestInflaterDataAccess {
 	@Test
 	public void testLength() throws Exception {
 		DataAccess zip = zip(testContent1);
-		InflaterDataAccess ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25]);
+		InflaterDataAccess ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25], null);
 		errorCollector.assertEquals("Plain #length()", testContent1.length, ida.length());
 		//
-		ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25]);
+		ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25], null);
 		byte[] dummy = new byte[30];
 		ida.readBytes(dummy, 0, dummy.length);
 		errorCollector.assertEquals("#length() after readBytes()", testContent1.length, ida.length());
 		//
-		ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25]);
+		ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25], null);
 		// consume most of the stream, so that all original compressed data is already read
 		dummy = new byte[testContent1.length - 1];
 		ida.readBytes(dummy, 0, dummy.length);
@@ -86,7 +86,7 @@ public class TestInflaterDataAccess {
 	@Test
 	public void testReadBytes() throws Exception {
 		DataAccess zip = zip(testContent1);
-		InflaterDataAccess ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25]);
+		InflaterDataAccess ida = new InflaterDataAccess(zip, 0, zip.length(), -1, new Inflater(), new byte[25], null);
 		ida.skip(10);
 		byte[] chunk1 = new byte[22];
 		ida.readBytes(chunk1, 0, 20);
