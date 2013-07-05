@@ -244,4 +244,35 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		}
 		return false;
 	}
+
+	/**
+     * Find out whether a given node is among descendants of another.
+     *
+     * @param root revision to check for being (grand-)*parent of a child
+     * @param wannaBeChild candidate descendant revision
+     * @return <code>true</code> if <code>wannaBeChild</code> is among children of <code>root</code>
+     */
+    public boolean isChild(Nodeid root, Nodeid wannaBeChild) {
+            int x = Arrays.binarySearch(sorted, root);
+            assertSortedIndex(x);
+            root = sorted[x]; // canonical instance
+            final int start = sorted2natural[x];
+            int y = Arrays.binarySearch(sorted, wannaBeChild);
+            if (y < 0) {
+                    return false; // not found
+            }
+            wannaBeChild = sorted[y]; // canonicalize
+            final int end = sorted2natural[y];
+            if (end <= start) {
+                    return false; // potential child was in repository earlier than root
+            }
+            HashSet<Nodeid> parents = new HashSet<Nodeid>();
+            parents.add(root);
+            for (int i = start + 1; i < end; i++) {
+                    if (parents.contains(firstParent[i]) || parents.contains(secondParent[i])) {
+                            parents.add(sequential[i]); // collect ancestors line
+                    }
+            }
+            return parents.contains(firstParent[end]) || parents.contains(secondParent[end]);
+    }
 }
