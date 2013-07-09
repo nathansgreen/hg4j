@@ -169,4 +169,8 @@ public class HgRepoFacade implements SessionContext.Source {
 	public HgPushCommand createPushCommand() {
 		return new HgPushCommand(repo);
 	}
+	
+	public HgPullCommand createPullCommand() {
+		return new HgPullCommand(repo);
+	}
 }

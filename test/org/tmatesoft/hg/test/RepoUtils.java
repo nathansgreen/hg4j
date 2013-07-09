@@ -199,4 +199,10 @@ public class RepoUtils {
 		}
 		return allRevs;
 	}
+
+	static void assertHgVerifyOk(ErrorCollectorExt errorCollector, File repoLoc) throws InterruptedException, IOException {
+		ExecHelper verifyRun = new ExecHelper(new OutputParser.Stub(), repoLoc);
+		verifyRun.run("hg", "verify");
+		errorCollector.assertEquals("hg verify", 0, verifyRun.getExitValue());
+	}
 }

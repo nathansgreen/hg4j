@@ -157,7 +157,7 @@ public final class CommitFacility {
 				newlyAddedFiles.put(df.getPath(), contentStream);
 			}
 			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream, transaction);
-			Nodeid fileRev = fileWriter.addRevision(bds, clogRevisionIndex, fp.first(), fp.second());
+			Nodeid fileRev = fileWriter.addRevision(bds, clogRevisionIndex, fp.first(), fp.second()).second();
 			newManifestRevision.put(df.getPath(), fileRev);
 			touchInDirstate.add(df.getPath());
 		}
@@ -168,7 +168,7 @@ public final class CommitFacility {
 			manifestBuilder.add(me.getKey().toString(), me.getValue());
 		}
 		RevlogStreamWriter manifestWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getManifestStream(), transaction);
-		Nodeid manifestRev = manifestWriter.addRevision(manifestBuilder, clogRevisionIndex, manifestParents.first(), manifestParents.second());
+		Nodeid manifestRev = manifestWriter.addRevision(manifestBuilder, clogRevisionIndex, manifestParents.first(), manifestParents.second()).second();
 		//
 		// Changelog
 		final ChangelogEntryBuilder changelogBuilder = new ChangelogEntryBuilder();
@@ -177,7 +177,7 @@ public final class CommitFacility {
 		changelogBuilder.user(String.valueOf(user));
 		changelogBuilder.manifest(manifestRev).comment(message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream(), transaction);
-		Nodeid changesetRev = changelogWriter.addRevision(changelogBuilder, clogRevisionIndex, p1Commit, p2Commit);
+		Nodeid changesetRev = changelogWriter.addRevision(changelogBuilder, clogRevisionIndex, p1Commit, p2Commit).second();
 		// TODO move fncache update to an external facility, along with dirstate and bookmark update
 		if (!newlyAddedFiles.isEmpty() && repo.fncacheInUse()) {
 			FNCacheFile fncache = new FNCacheFile(repo);
