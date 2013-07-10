@@ -52,7 +52,7 @@ public class ByteArrayDataAccess extends DataAccess {
 	@Override
 	public void readBytes(byte[] buf, int off, int len) throws IOException {
 		if (len > (this.length - pos)) {
-			throw new IOException();
+			throw new IOException(String.format("Requested %d bytes at position %d of %d total", len, pos, length));
 		}
 		System.arraycopy(data, offset+pos, buf, off, len);
 		pos += len;

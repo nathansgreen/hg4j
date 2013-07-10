@@ -39,6 +39,7 @@ import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgPhase;
+import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 
@@ -68,7 +69,7 @@ public final class PhasesHelper {
 		repo = internalRepo;
 		parentHelper = pw;
 	}
-	
+
 	public HgRepository getRepo() {
 		return repo.getRepo();
 	}
@@ -79,16 +80,19 @@ public final class PhasesHelper {
 		}
 		return repoSupporsPhases.booleanValue();
 	}
-	
+
 	public boolean withSecretRoots() {
 		return !secretPhaseRoots.isEmpty();
 	}
 
 	/**
-	 * @param cset revision to query
+	 * @param cset
+	 *            revision to query
 	 * @return phase of the changeset, never <code>null</code>
-	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
-	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException
+	 *             if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException
+	 *             subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public HgPhase getPhase(HgChangeset cset) throws HgRuntimeException {
 		final Nodeid csetRev = cset.getNodeid();
@@ -97,11 +101,15 @@ public final class PhasesHelper {
 	}
 
 	/**
-	 * @param csetRevIndex revision index to query
-	 * @param csetRev revision nodeid, optional 
+	 * @param csetRevIndex
+	 *            revision index to query
+	 * @param csetRev
+	 *            revision nodeid, optional
 	 * @return phase of the changeset, never <code>null</code>
-	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
-	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
+	 * @throws HgInvalidControlFileException
+	 *             if failed to access revlog index/data entry. <em>Runtime exception</em>
+	 * @throws HgRuntimeException
+	 *             subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public HgPhase getPhase(final int csetRevIndex, Nodeid csetRev) throws HgRuntimeException {
 		if (!isCapableOfPhases()) {
@@ -111,8 +119,8 @@ public final class PhasesHelper {
 		if (parentHelper != null && (csetRev == null || csetRev.isNull())) {
 			csetRev = getRepo().getChangelog().getRevision(csetRevIndex);
 		}
-					
-		for (HgPhase phase : new HgPhase[] {HgPhase.Secret, HgPhase.Draft }) {
+
+		for (HgPhase phase : new HgPhase[] { HgPhase.Secret, HgPhase.Draft }) {
 			List<Nodeid> roots = getPhaseRoots(phase);
 			if (roots.isEmpty()) {
 				continue;
@@ -138,24 +146,24 @@ public final class PhasesHelper {
 		return HgPhase.Public;
 	}
 
-
 	/**
 	 * @return all revisions with secret phase
 	 */
 	public RevisionSet allSecret() {
 		return allOf(HgPhase.Secret);
 	}
-	
+
 	/**
 	 * @return all revisions with draft phase
 	 */
 	public RevisionSet allDraft() {
 		return allOf(HgPhase.Draft).subtract(allOf(HgPhase.Secret));
 	}
-	
+
+	// XXX throw HgIOException instead?
 	public void updateRoots(Collection<Nodeid> draftRoots, Collection<Nodeid> secretRoots) throws HgInvalidControlFileException {
-		draftPhaseRoots = draftRoots.isEmpty() ? Collections.<Nodeid>emptyList() : new ArrayList<Nodeid>(draftRoots);
-		secretPhaseRoots = secretRoots.isEmpty() ? Collections.<Nodeid>emptyList() : new ArrayList<Nodeid>(secretRoots);
+		draftPhaseRoots = draftRoots.isEmpty() ? Collections.<Nodeid> emptyList() : new ArrayList<Nodeid>(draftRoots);
+		secretPhaseRoots = secretRoots.isEmpty() ? Collections.<Nodeid> emptyList() : new ArrayList<Nodeid>(secretRoots);
 		String fmt = "%d %s\n";
 		File phaseroots = repo.getRepositoryFile(Phaseroots);
 		FileWriter fw = null;
@@ -203,19 +211,114 @@ public final class PhasesHelper {
 	}
 
 	/**
+	 * @return set of revisions that are public locally, but draft on remote.
+	 */
+	public RevisionSet synchronizeWithRemote(HgRemoteRepository.Phases remotePhases, RevisionSet sharedWithRemote) throws HgInvalidControlFileException {
+		assert parentHelper != null;
+		RevisionSet presentSecret = allSecret();
+		RevisionSet presentDraft = allDraft();
+		RevisionSet secretLeft, draftLeft;
+		RevisionSet remoteDrafts = knownRemoteDrafts(remotePhases, sharedWithRemote, presentSecret);
+		if (remotePhases.isPublishingServer()) {
+			// although it's unlikely shared revisions would affect secret changesets,
+			// it doesn't hurt to check secret roots along with draft ones
+			// 
+			// local drafts that are known to be public now
+			RevisionSet draftsBecomePublic = presentDraft.intersect(sharedWithRemote);
+			RevisionSet secretsBecomePublic = presentSecret.intersect(sharedWithRemote);
+			// any ancestor of the public revision is public, too
+			RevisionSet draftsGone = presentDraft.ancestors(draftsBecomePublic, parentHelper);
+			RevisionSet secretsGone = presentSecret.ancestors(secretsBecomePublic, parentHelper);
+			// remove public and their ancestors from drafts
+			draftLeft = presentDraft.subtract(draftsGone).subtract(draftsBecomePublic);
+			secretLeft = presentSecret.subtract(secretsGone).subtract(secretsBecomePublic);
+		} else {
+			// shall merge local and remote phase states
+			// revisions that cease to be secret (gonna become Public), e.g. someone else pushed them
+			RevisionSet secretGone = presentSecret.intersect(remoteDrafts);
+			// parents of those remote drafts are public, mark them as public locally, too
+			RevisionSet remotePublic = presentSecret.ancestors(secretGone, parentHelper);
+			secretLeft = presentSecret.subtract(secretGone).subtract(remotePublic);
+			/*
+			 * Revisions grow from left to right (parents to the left, children to the right)
+			 * 
+			 * I: Set of local is subset of remote
+			 * 
+			 * local draft
+			 * --o---r---o---l---o--
+			 * remote draft
+			 * 
+			 * Remote draft roots shall be updated
+			 * 
+			 * 
+			 * II: Set of local is superset of remote
+			 * 
+			 * local draft
+			 * --o---l---o---r---o--
+			 * remote draft
+			 * 
+			 * Local draft roots shall be updated
+			 */
+			RevisionSet sharedDraft = presentDraft.intersect(remoteDrafts); // (I: ~presentDraft; II: ~remoteDraft
+			// XXX do I really need sharedDrafts here? why not ancestors(remoteDrafts)?
+			RevisionSet localDraftRemotePublic = presentDraft.ancestors(sharedDraft, parentHelper); // I: 0; II: those treated public on remote
+			// remoteDrafts are local revisions known as draft@remote
+			// remoteDraftsLocalPublic - revisions that would cease to be listed as draft on remote
+			RevisionSet remoteDraftsLocalPublic = remoteDrafts.ancestors(sharedDraft, parentHelper);
+			RevisionSet remoteDraftsLeft = remoteDrafts.subtract(remoteDraftsLocalPublic);
+			// forget those deemed public by remote (drafts shared by both remote and local are ok to stay)
+			RevisionSet combinedDraft = presentDraft.union(remoteDraftsLeft);
+			draftLeft = combinedDraft.subtract(localDraftRemotePublic);
+		}
+		final RevisionSet newDraftRoots = draftLeft.roots(parentHelper);
+		final RevisionSet newSecretRoots = secretLeft.roots(parentHelper);
+		updateRoots(newDraftRoots.asList(), newSecretRoots.asList());
+		//
+		// if there's a remote draft root that points to revision we know is public
+		RevisionSet remoteDraftsLocalPublic = remoteDrafts.subtract(draftLeft).subtract(secretLeft);
+		return remoteDraftsLocalPublic;
+	}
+
+	// shared - set of revisions we've shared with remote
+	private RevisionSet knownRemoteDrafts(HgRemoteRepository.Phases remotePhases, RevisionSet shared, RevisionSet localSecret) {
+		ArrayList<Nodeid> knownRemoteDraftRoots = new ArrayList<Nodeid>();
+		for (Nodeid rdr : remotePhases.draftRoots()) {
+			if (parentHelper.knownNode(rdr)) {
+				knownRemoteDraftRoots.add(rdr);
+			}
+		}
+		// knownRemoteDraftRoots + childrenOf(knownRemoteDraftRoots) is everything remote may treat as Draft
+		RevisionSet remoteDrafts = new RevisionSet(knownRemoteDraftRoots);
+		RevisionSet localChildren = remoteDrafts.children(parentHelper);
+		// we didn't send any local secret revision
+		localChildren = localChildren.subtract(localSecret);
+		// draft roots are among remote drafts
+		remoteDrafts = remoteDrafts.union(localChildren);
+		// remoteDrafts is set of local revisions remote may see as Draft. However,
+		// need to remove from this set revisions we didn't share with remote:
+		// 1) shared.children gives all local revisions accessible from shared.
+		// 2) shared.roots.children is equivalent with smaller intermediate set, the way we build
+		// childrenOf doesn't really benefits from that.
+		RevisionSet localChildrenNotSent = shared.children(parentHelper).subtract(shared);
+		// remote shall know only what we've sent, subtract revisions we didn't actually sent
+		remoteDrafts = remoteDrafts.subtract(localChildrenNotSent);
+		return remoteDrafts;
+	}
+
+	/**
 	 * For a given phase, collect all revisions with phase that is the same or more private (i.e. for Draft, returns Draft+Secret)
-	 * The reason is not a nice API intention (which is awful, indeed), but an ease of implementation 
+	 * The reason is not a nice API intention (which is awful, indeed), but an ease of implementation
 	 */
 	private RevisionSet allOf(HgPhase phase) {
 		assert phase != HgPhase.Public;
 		if (!isCapableOfPhases()) {
-			return new RevisionSet(Collections.<Nodeid>emptyList());
+			return new RevisionSet(Collections.<Nodeid> emptyList());
 		}
 		final List<Nodeid> roots = getPhaseRoots(phase);
 		if (parentHelper != null) {
 			return new RevisionSet(roots).union(new RevisionSet(parentHelper.childrenOf(roots)));
 		} else {
-			RevisionSet rv = new RevisionSet(Collections.<Nodeid>emptyList());
+			RevisionSet rv = new RevisionSet(Collections.<Nodeid> emptyList());
 			for (RevisionDescendants rd : getPhaseDescendants(phase)) {
 				rv = rv.union(rd.asRevisionSet());
 			}
@@ -227,6 +330,11 @@ public final class PhasesHelper {
 		File phaseroots = repo.getRepositoryFile(Phaseroots);
 		try {
 			if (!phaseroots.exists()) {
+				if (repo.shallCreatePhaseroots()) {
+					draftPhaseRoots = Collections.<Nodeid>emptyList();
+					secretPhaseRoots = Collections.<Nodeid>emptyList();
+					return Boolean.TRUE;
+				}
 				return Boolean.FALSE;
 			}
 			LineReader lr = new LineReader(phaseroots, repo.getLog());
@@ -254,8 +362,8 @@ public final class PhasesHelper {
 				}
 				roots.add(rootRev);
 			}
-			draftPhaseRoots = phase2roots.containsKey(Draft) ? phase2roots.get(Draft) : Collections.<Nodeid>emptyList();
-			secretPhaseRoots = phase2roots.containsKey(Secret) ? phase2roots.get(Secret) : Collections.<Nodeid>emptyList();
+			draftPhaseRoots = phase2roots.containsKey(Draft) ? phase2roots.get(Draft) : Collections.<Nodeid> emptyList();
+			secretPhaseRoots = phase2roots.containsKey(Secret) ? phase2roots.get(Secret) : Collections.<Nodeid> emptyList();
 		} catch (HgIOException ex) {
 			throw new HgInvalidControlFileException(ex, true);
 		}
@@ -264,12 +372,13 @@ public final class PhasesHelper {
 
 	private List<Nodeid> getPhaseRoots(HgPhase phase) {
 		switch (phase) {
-		case Draft : return draftPhaseRoots;
-		case Secret : return secretPhaseRoots;
+		case Draft:
+			return draftPhaseRoots;
+		case Secret:
+			return secretPhaseRoots;
 		}
 		return Collections.emptyList();
 	}
-
 
 	private RevisionDescendants[] getPhaseDescendants(HgPhase phase) throws HgRuntimeException {
 		int ordinal = phase.ordinal();
@@ -288,7 +397,7 @@ public final class PhasesHelper {
 		}
 		return rv;
 	}
-	
+
 	private int[] toIndexes(List<Nodeid> roots) throws HgRuntimeException {
 		int[] rv = new int[roots.size()];
 		for (int i = 0; i < rv.length; i++) {

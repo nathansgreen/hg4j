@@ -76,7 +76,7 @@ public class FNCacheFile {
 	}
 	*/
 	
-	public void write() throws IOException {
+	public void write() throws IOException { // FIXME transaction! and HgIOException
 		if (addedDotI.isEmpty() && addedDotD.isEmpty()) {
 			return;
 		}
@@ -113,5 +113,35 @@ public class FNCacheFile {
 
 	public void addData(Path p) {
 		addedDotD.add(p);
+	}
+
+	/**
+	 * Register new files with fncache if one is enabled for the repo, do nothing otherwise
+	 */
+	public static class Mediator {
+		private final Internals repo;
+		private FNCacheFile fncache;
+
+		public Mediator(Internals internalRepo) {
+			repo = internalRepo;
+		}
+		
+		public void registerNew(Path f, RevlogStream rs) {
+			if (fncache != null || repo.fncacheInUse()) {
+				if (fncache == null) {
+					fncache = new FNCacheFile(repo);
+				}
+				fncache.addIndex(f);
+				if (!rs.isInlineData()) {
+					fncache.addData(f);
+				}
+			}
+		}
+		
+		public void complete() throws IOException {
+			if (fncache != null) {
+				fncache.write();
+			}
+		}
 	}
 }

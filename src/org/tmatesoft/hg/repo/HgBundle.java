@@ -413,7 +413,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 	private static void readGroup(DataAccess da, Inspector inspector) throws IOException, HgRuntimeException {
 		int len = da.readInt();
 		boolean good2go = true;
-		Nodeid prevNodeid = Nodeid.NULL;
+		Nodeid prevNodeid = null;
 		while (len > 4 && !da.isEmpty() && good2go) {
 			byte[] nb = new byte[80];
 			da.readBytes(nb, 0, 80);
@@ -498,7 +498,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		 * @return revision of delta base, never <code>null</code>
 		 */
 		public Nodeid patchBase() {
-			return deltaBase;
+			return deltaBase == null ? firstParent() : deltaBase;
 		}
 		
 		public byte[] rawDataByteArray() throws IOException { // XXX IOException or HgInvalidFileException?

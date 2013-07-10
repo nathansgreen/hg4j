@@ -16,6 +16,9 @@
  */
 package org.tmatesoft.hg.core;
 
+import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.internal.AddRevInspector;
@@ -44,6 +47,7 @@ public class HgPullCommand extends HgAbstractCommand<HgPullCommand> {
 
 	private final HgRepository repo;
 	private HgRemoteRepository remote;
+	private RevisionSet added;
 
 	public HgPullCommand(HgRepository hgRepo) {
 		repo = hgRepo;
@@ -76,30 +80,32 @@ public class HgPullCommand extends HgAbstractCommand<HgPullCommand> {
 			Transaction tr = trFactory.create(repo);
 			try {
 				incoming.inspectAll(insp = new AddRevInspector(implRepo, tr));
+				insp.done();
 				tr.commit();
 			} catch (HgRuntimeException ex) {
 				tr.rollback();
 				throw ex;
+			} catch (IOException ex) {
+				tr.rollback();
+				throw new HgIOException(ex.getMessage(), ex, null); // FIXME throw HgIOException right away
 			} catch (RuntimeException ex) {
 				tr.rollback();
 				throw ex;
 			}
 			progress.worked(45);
-			RevisionSet added = insp.addedChangesets();
+			added = insp.addedChangesets();
 			
+			if (!added.isEmpty()) {
+				// FIXME refresh parentHelper with newly added revisions in effective way
+				parentHelper.init(); 
+			}
 			// get remote phases, update local phases to match that of remote
+			// do not update any remote phase (it's pull, after all)
 			final PhasesHelper phaseHelper = new PhasesHelper(implRepo, parentHelper);
 			if (phaseHelper.isCapableOfPhases()) {
 				RevisionSet rsCommon = new RevisionSet(common);
 				HgRemoteRepository.Phases remotePhases = remote.getPhases();
-				if (remotePhases.isPublishingServer()) {
-					final RevisionSet knownPublic = rsCommon.union(added);
-					RevisionSet newDraft = phaseHelper.allDraft().subtract(knownPublic);
-					RevisionSet newSecret = phaseHelper.allSecret().subtract(knownPublic);
-					phaseHelper.updateRoots(newDraft.asList(), newSecret.asList());
-				} else {
-					// FIXME refactor reuse from HgPushCommand
-				}
+				phaseHelper.synchronizeWithRemote(remotePhases, rsCommon.union(added));
 			}
 			progress.worked(5);
 		} catch (HgRuntimeException ex) {
@@ -107,5 +113,9 @@ public class HgPullCommand extends HgAbstractCommand<HgPullCommand> {
 		} finally {
 			progress.done();
 		}
+	}
+	
+	public Collection<Nodeid> getPulledRevisions() {
+		return added == null ? Collections.<Nodeid>emptyList() : added.asList();
 	}
 }

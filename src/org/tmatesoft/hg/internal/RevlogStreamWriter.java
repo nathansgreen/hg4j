@@ -17,8 +17,10 @@
 package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.internal.Internals.REVLOGV1_RECORD_SIZE;
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -48,7 +50,8 @@ public class RevlogStreamWriter {
 	private final DigestHelper dh = new DigestHelper();
 	private final RevlogCompressor revlogDataZip;
 	private final Transaction transaction;
-	private int lastEntryBase, lastEntryIndex, lastEntryActualLen;
+	// init with illegal values
+	private int lastEntryBase = BAD_REVISION, lastEntryIndex = BAD_REVISION, lastEntryActualLen = -1;
 	// record revision and its full content
 	// the name might be misleading, it does not necessarily match lastEntryIndex
 	private Pair<Integer, byte[]> lastFullContent;
@@ -64,6 +67,10 @@ public class RevlogStreamWriter {
 		revlogDataZip = new RevlogCompressor(ctxSource.getSessionContext());
 		revlogStream = stream;
 		transaction = tr;
+	}
+	
+	public RevlogStream getRevlogStream() {
+		return revlogStream;
 	}
 	
 	public Pair<Integer,Nodeid> addPatchRevision(GroupElement ge, RevisionToIndexMap clogRevs, RevisionToIndexMap revlogRevs) throws HgIOException, HgRuntimeException {
@@ -110,15 +117,18 @@ public class RevlogStreamWriter {
 					complete = p.apply(new ByteArrayDataAccess(new byte[0]), -1);
 					baseRev = 0; // it's done above, but doesn't hurt
 				} else {
-					ReadContentInspector insp = new ReadContentInspector().read(revlogStream, baseRev);
+					assert patchBaseRev != NO_REVISION;
+					ReadContentInspector insp = new ReadContentInspector().read(revlogStream, patchBaseRev);
 					complete = p.apply(new ByteArrayDataAccess(insp.content), -1);
 					baseRev = lastEntryIndex + 1;
 				}
 				ds = new ByteArrayDataSource(complete);
 				revLen = complete.length;
 			} catch (IOException ex) {
-				// unlikely to happen, as ByteArrayDataSource doesn't throw IOException
-				throw new HgIOException("Failed to reconstruct revision", ex, null);
+				// unlikely to happen, as ByteArrayDataSource throws IOException only in case of programming errors
+				// FIXME next approach to get indexFile is awful:
+				File indexFile = revlogStream.initWithIndexFile(new HgInvalidControlFileException("", ex, null)).getFile();
+				throw new HgIOException("Failed to reconstruct revision", ex, indexFile);
 			}
 		}
 		doAdd(nodeRev, p1, p2, linkRev, baseRev, revLen, ds);
@@ -236,7 +246,11 @@ public class RevlogStreamWriter {
 	
 	private int dataLength(int revisionIndex) throws HgInvalidControlFileException, HgInvalidRevisionException {
 		assert revisionIndex >= 0;
-		if (revisionIndex == lastEntryIndex) {
+		if (revisionIndex == lastEntryIndex && lastEntryActualLen >= 0) {
+			// if the last entry is the one we've just written, we know its actual len.
+			// it's possible, however, that revisionIndex == lastEntryIndex just
+			// because revision being added comes right after last locally known one
+			// and lastEntryActualLen is not set
 			return lastEntryActualLen;
 		}
 		if (lastFullContent != null && lastFullContent.first() == revisionIndex) {

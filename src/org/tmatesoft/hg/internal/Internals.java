@@ -104,12 +104,23 @@ public final class Internals implements SessionContext.Source {
 	 * Alternative approach, controlled with this option, first combines these there patches into one,
 	 * and only then applies it to base revision, eliminating 2 intermediate elements.
 	 * <p>
-	 * Present default value for this option is <b>FALSE</b>, and will be changed in future, once
-	 * tests prove support is fully functional (likely in v1.2).
+	 * Since 1.2, default value for this option is <em>TRUE</em>, (was <code>false</code> in <b>Hg4J 1.1</b>)
 	 * 
 	 * @since 1.1
 	 */
 	public static final String CFG_PROPERTY_PATCH_MERGE = "hg4j.repo.merge_revlog_patches";
+	
+	/**
+	 * Phases were introduced in Mercurial 2.1. Unless there's <code>phaseroots</code> file in the 
+	 * repository's storage area, <b>Hg4J</b> pretends phases are not enabled and doesn't update
+	 * phase information on commit/push/pull. If, however, it's desired to keep phase information,
+	 * this option may be set to <code>true</code>, and <code>phaseroots</code> file gets updated
+	 * along with repository changes.
+	 * 
+	 * <p>Default value: <code>false</code>
+	 * @since 1.2
+	 */
+	public static final String CFG_PROPERTY_CREATE_PHASEROOTS = "hg4j.repo.create_phaseroots";
 
 	public static final int REVLOGV1_RECORD_SIZE = 64;
 
@@ -126,6 +137,7 @@ public final class Internals implements SessionContext.Source {
 	private final PathRewrite repoPathHelper; // access to system files (under .hg/store if requires has 'store' flag)
 
 	private final boolean shallMergePatches;
+	private final boolean shallWritePhaseroots;
 	private final RevlogStreamFactory streamProvider;
 
 	public Internals(HgRepository hgRepo, File hgDir, ImplAccess implementationAccess) throws HgRuntimeException {
@@ -143,6 +155,7 @@ public final class Internals implements SessionContext.Source {
 		boolean shallCacheRevlogsInRepo = pm.getBoolean(CFG_PROPERTY_REVLOG_STREAM_CACHE, true);
 		streamProvider = new RevlogStreamFactory(this, shallCacheRevlogsInRepo); 
 		shallMergePatches = pm.getBoolean(Internals.CFG_PROPERTY_PATCH_MERGE, true);
+		shallWritePhaseroots = pm.getBoolean(Internals.CFG_PROPERTY_CREATE_PHASEROOTS, false);
 	}
 	
 	public boolean isInvalid() {
@@ -279,6 +292,10 @@ public final class Internals implements SessionContext.Source {
 	
 	boolean shallMergePatches() {
 		return shallMergePatches;
+	}
+	
+	boolean shallCreatePhaseroots() {
+		return shallWritePhaseroots;
 	}
 
 	RevlogChangeMonitor getRevlogTracker(File f) {

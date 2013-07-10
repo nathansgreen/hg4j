@@ -135,9 +135,9 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		heads = _heads;
 	}
 	
-	private void assertSortedIndex(int x) {
+	private static void assertSortedIndex(int x) {
 		if (x < 0) {
-			throw new HgInvalidStateException(String.format("Bad index", x));
+			throw new HgInvalidStateException(String.format("Bad index %d", x));
 		}
 	}
 	

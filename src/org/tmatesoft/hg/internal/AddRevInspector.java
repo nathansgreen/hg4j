@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.internal;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Set;
 
@@ -30,24 +31,29 @@ import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Pair;
 
 /**
+ * FIXME pretty much alike HgCloneCommand.WriteDownMate, shall converge
+ * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 public final class AddRevInspector implements HgBundle.Inspector {
 	private final Internals repo;
 	private final Transaction tr;
+	private final FNCacheFile.Mediator fncache;
 	private Set<Nodeid> added;
 	private RevlogStreamWriter revlog;
 	private RevMap clogRevs;
 	private RevMap revlogRevs;
+	private HgDataFile fileNode;
+	private boolean newFile = false;
 
 	public AddRevInspector(Internals implRepo, Transaction transaction) {
 		repo = implRepo;
 		tr = transaction;
+		fncache = new FNCacheFile.Mediator(implRepo);
 	}
 
 	public void changelogStart() throws HgRuntimeException {
-		// TODO Auto-generated method stub
 		RevlogStream rs = repo.getImplAccess().getChangelogStream();
 		revlog = new RevlogStreamWriter(repo, rs, tr);
 		revlogRevs = clogRevs = new RevMap(rs);
@@ -71,14 +77,17 @@ public final class AddRevInspector implements HgBundle.Inspector {
 	}
 
 	public void fileStart(String name) throws HgRuntimeException {
-		HgDataFile df = repo.getRepo().getFileNode(name);
-		RevlogStream rs = repo.getImplAccess().getStream(df);
+		fileNode = repo.getRepo().getFileNode(name);
+		newFile = !fileNode.exists();
+		RevlogStream rs = repo.getImplAccess().getStream(fileNode);
 		revlog = new RevlogStreamWriter(repo, rs, tr);
 		revlogRevs = new RevMap(rs);
-		// FIXME collect new files and update fncache
 	}
 
 	public void fileEnd(String name) throws HgRuntimeException {
+		if (newFile) {
+			fncache.registerNew(fileNode.getPath(), revlog.getRevlogStream());
+		}
 		revlog = null;
 		revlogRevs = null;
 	}
@@ -86,6 +95,12 @@ public final class AddRevInspector implements HgBundle.Inspector {
 	public boolean element(GroupElement ge) throws HgRuntimeException {
 		assert clogRevs != null;
 		assert revlogRevs != null;
+		if (revlog.getRevlogStream().findRevisionIndex(ge.node()) != HgRepository.BAD_REVISION) {
+			// HgRemoteRepository.getChanges(common) builds a bundle that includes these common
+			// revisions. Hence, shall not add these common (i.e. known locally) revisions
+			// once again
+			return true;
+		}
 		try {
 			Pair<Integer, Nodeid> newRev = revlog.addPatchRevision(ge, clogRevs, revlogRevs);
 			revlogRevs.update(newRev.first(), newRev.second());
@@ -97,6 +112,10 @@ public final class AddRevInspector implements HgBundle.Inspector {
 
 	public RevisionSet addedChangesets() {
 		return new RevisionSet(added);
+	}
+	
+	public void done() throws IOException {
+		fncache.complete();
 	}
 
 	private static class RevMap implements RevlogStreamWriter.RevisionToIndexMap {

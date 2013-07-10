@@ -255,6 +255,13 @@ public class TestPush {
 	}
 
 	
+	/**
+	 * XXX doesn't check the case when we push child of a draft revision which is
+	 * known as public on server ((presentLocalDrafts \ outgoing) leaves bogus draft revision, 
+	 * the parent one of the child added and pushed)
+	 * For the time being, TestPull.testPullFromPublishing covers this case (as both push and
+	 * pull share same phase update functionality)
+	 */
 	@Test
 	public void testPushToPublishingServer() throws Exception {
 		// copy, not clone as latter updates phase information
