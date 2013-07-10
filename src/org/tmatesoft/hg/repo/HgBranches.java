@@ -256,6 +256,11 @@ public class HgBranches {
 
 	private File getCacheFile() {
 		// prior to 1.8 used to be .hg/branchheads.cache
+		// since 2.5 there is filter suffix
+		File f = internalRepo.getFileFromRepoDir("cache/branchheads-base");
+		if (f.exists()) {
+			return f;
+		}
 		return internalRepo.getFileFromRepoDir("cache/branchheads");
 	}
 	
