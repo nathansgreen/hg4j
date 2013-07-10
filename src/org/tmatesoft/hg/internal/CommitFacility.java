@@ -142,7 +142,7 @@ public final class CommitFacility {
 		saveCommitMessage(message);
 		//
 		// Register new/changed
-		LinkedHashMap<Path, RevlogStream> newlyAddedFiles = new LinkedHashMap<Path, RevlogStream>();
+		FNCacheFile.Mediator fncache = new FNCacheFile.Mediator(repo, transaction);
 		ArrayList<Path> touchInDirstate = new ArrayList<Path>();
 		for (Pair<HgDataFile, DataSource> e : files.values()) {
 			HgDataFile df = e.first();
@@ -153,13 +153,15 @@ public final class CommitFacility {
 				fp = new Pair<Integer, Integer>(NO_REVISION, NO_REVISION);
 			}
 			RevlogStream contentStream = repo.getImplAccess().getStream(df);
-			if (!df.exists()) {
-				newlyAddedFiles.put(df.getPath(), contentStream);
-			}
+			final boolean isNewFile = !df.exists();
 			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream, transaction);
 			Nodeid fileRev = fileWriter.addRevision(bds, clogRevisionIndex, fp.first(), fp.second()).second();
 			newManifestRevision.put(df.getPath(), fileRev);
 			touchInDirstate.add(df.getPath());
+			if (isNewFile) {
+				// registerNew shall go after fileWriter.addRevision as it needs to know if data is inlined or not
+				fncache.registerNew(df.getPath(), contentStream);
+			}
 		}
 		//
 		// Manifest
@@ -178,22 +180,8 @@ public final class CommitFacility {
 		changelogBuilder.manifest(manifestRev).comment(message);
 		RevlogStreamWriter changelogWriter = new RevlogStreamWriter(repo, repo.getImplAccess().getChangelogStream(), transaction);
 		Nodeid changesetRev = changelogWriter.addRevision(changelogBuilder, clogRevisionIndex, p1Commit, p2Commit).second();
-		// TODO move fncache update to an external facility, along with dirstate and bookmark update
-		if (!newlyAddedFiles.isEmpty() && repo.fncacheInUse()) {
-			FNCacheFile fncache = new FNCacheFile(repo);
-			for (Path p : newlyAddedFiles.keySet()) {
-				fncache.addIndex(p);
-				if (!newlyAddedFiles.get(p).isInlineData()) {
-					fncache.addData(p);
-				}
-			}
-			try {
-				fncache.write();
-			} catch (IOException ex) {
-				// see comment above for fnchache.read()
-				repo.getLog().dump(getClass(), Error, ex, "Failed to write fncache, error ignored");
-			}
-		}
+		// TODO move dirstate and bookmark update update to an external facility 
+		fncache.complete();
 		String oldBranchValue = DirstateReader.readBranch(repo);
 		String newBranchValue = branch == null ? DEFAULT_BRANCH_NAME : branch;
 		if (!oldBranchValue.equals(newBranchValue)) {

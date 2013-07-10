@@ -28,6 +28,7 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -76,7 +77,7 @@ public class FNCacheFile {
 	}
 	*/
 	
-	public void write() throws IOException { // FIXME transaction! and HgIOException
+	public void write(Transaction tr) throws HgIOException {
 		if (addedDotI.isEmpty() && addedDotD.isEmpty()) {
 			return;
 		}
@@ -97,14 +98,26 @@ public class FNCacheFile {
 			cb.flip();
 			added.add(cb);
 		}
-		FileChannel fncacheFile = new FileOutputStream(f, true).getChannel();
-		ByteBuffer lf = ByteBuffer.wrap(new byte[] { 0x0A });
-		for (CharBuffer b : added) {
-			fncacheFile.write(filenameEncoding.encode(b));
-			fncacheFile.write(lf);
-			lf.rewind();
+		FileOutputStream fos = null;
+		f = tr.prepare(f);
+		try {
+			fos = new FileOutputStream(f, true);
+			FileChannel fncacheFile = fos.getChannel();
+			ByteBuffer lf = ByteBuffer.wrap(new byte[] { 0x0A });
+			for (CharBuffer b : added) {
+				fncacheFile.write(filenameEncoding.encode(b));
+				fncacheFile.write(lf);
+				lf.rewind();
+			}
+			fncacheFile.force(true);
+			tr.done(f);
+		} catch (IOException ex) {
+			tr.failure(f, ex);
+			throw new HgIOException("Failed to write fncache", ex, f);
+		} finally {
+			new FileUtils(repo.getLog(), this).closeQuietly(fos, f);
 		}
-		fncacheFile.close();
+		
 	}
 
 	public void addIndex(Path p) {
@@ -121,9 +134,11 @@ public class FNCacheFile {
 	public static class Mediator {
 		private final Internals repo;
 		private FNCacheFile fncache;
+		private final Transaction tr;
 
-		public Mediator(Internals internalRepo) {
+		public Mediator(Internals internalRepo, Transaction transaction) {
 			repo = internalRepo;
+			tr = transaction;
 		}
 		
 		public void registerNew(Path f, RevlogStream rs) {
@@ -138,9 +153,9 @@ public class FNCacheFile {
 			}
 		}
 		
-		public void complete() throws IOException {
+		public void complete() throws HgIOException {
 			if (fncache != null) {
-				fncache.write();
+				fncache.write(tr);
 			}
 		}
 	}

@@ -29,7 +29,7 @@ import java.io.IOException;
  */
 @SuppressWarnings("serial")
 public class HgIOException extends HgException {
-	private final File file;
+	private File file;
 
 	public HgIOException(String message, File troubleFile) {
 		this(message, null, troubleFile);
@@ -38,7 +38,7 @@ public class HgIOException extends HgException {
 	/**
 	 * @param message describes the issue, never <code>null</code>
 	 * @param cause root cause for the error, likely {@link IOException} or its subclass, but not necessarily, and may be omitted. 
-	 * @param troubleFile file we tried to deal with, never <code>null</code>
+	 * @param troubleFile file we tried to deal with, or <code>null</code> if set later
 	 */
 	public HgIOException(String message, Throwable cause, File troubleFile) {
 		super(message, cause);
@@ -50,5 +50,13 @@ public class HgIOException extends HgException {
 	 */
 	public File getFile() {
 		return file;
+	}
+
+	/**
+	 * @return <code>this</code> for convenience
+	 */
+	public HgIOException setFile(File f) {
+		file = f;
+		return this;
 	}
 }

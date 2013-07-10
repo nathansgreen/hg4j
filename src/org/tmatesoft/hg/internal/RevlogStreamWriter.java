@@ -20,7 +20,6 @@ import static org.tmatesoft.hg.internal.Internals.REVLOGV1_RECORD_SIZE;
 import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -32,6 +31,7 @@ import org.tmatesoft.hg.internal.DataSerializer.ByteArraySerializer;
 import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
+import org.tmatesoft.hg.repo.HgInvalidDataFormatException;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgRepository;
@@ -126,9 +126,8 @@ public class RevlogStreamWriter {
 				revLen = complete.length;
 			} catch (IOException ex) {
 				// unlikely to happen, as ByteArrayDataSource throws IOException only in case of programming errors
-				// FIXME next approach to get indexFile is awful:
-				File indexFile = revlogStream.initWithIndexFile(new HgInvalidControlFileException("", ex, null)).getFile();
-				throw new HgIOException("Failed to reconstruct revision", ex, indexFile);
+				// hence, throwing rt exception here makes more sense here than HgIOException (even that latter is in throws)
+				throw new HgInvalidDataFormatException("Failed to reconstruct revision", ex);
 			}
 		}
 		doAdd(nodeRev, p1, p2, linkRev, baseRev, revLen, ds);
@@ -264,7 +263,7 @@ public class RevlogStreamWriter {
 		lastEntryIndex = revCount == 0 ? NO_REVISION : revCount - 1;
 	}
 	
-	private void populateLastEntryContent() throws HgRuntimeException {
+	private void populateLastEntryContent() throws HgIOException, HgRuntimeException {
 		if (lastFullContent != null && lastFullContent.first() == lastEntryIndex) {
 			// we have last entry cached
 			return;
@@ -401,12 +400,12 @@ public class RevlogStreamWriter {
 		public byte[] content;
 		private IOException failure;
 		
-		public ReadContentInspector read(RevlogStream rs, int revIndex) throws HgInvalidControlFileException {
+		public ReadContentInspector read(RevlogStream rs, int revIndex) throws HgIOException, HgRuntimeException {
 			assert revIndex >= 0;
 			rs.iterate(revIndex, revIndex, true, this);
 			if (failure != null) {
 				String m = String.format("Failed to get content of revision %d", revIndex);
-				throw rs.initWithDataFile(new HgInvalidControlFileException(m, failure, null));
+				throw rs.initWithIndexFile(new HgIOException(m, failure, null));
 			}
 			return this;
 		}

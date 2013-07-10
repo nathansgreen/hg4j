@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.core;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -39,7 +38,9 @@ import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
+ * 'hg pull <remote>' counterpart, get remote changes to local repository
  * 
+ * @since 1.2
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
@@ -85,9 +86,9 @@ public class HgPullCommand extends HgAbstractCommand<HgPullCommand> {
 			} catch (HgRuntimeException ex) {
 				tr.rollback();
 				throw ex;
-			} catch (IOException ex) {
+			} catch (HgIOException ex) {
 				tr.rollback();
-				throw new HgIOException(ex.getMessage(), ex, null); // FIXME throw HgIOException right away
+				throw ex;
 			} catch (RuntimeException ex) {
 				tr.rollback();
 				throw ex;

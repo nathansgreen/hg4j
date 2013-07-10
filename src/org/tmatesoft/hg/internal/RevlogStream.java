@@ -136,6 +136,10 @@ public class RevlogStream {
 		return ex.setFile(indexFile);
 	}
 
+	public HgIOException initWithIndexFile(HgIOException ex) {
+		return ex.setFile(indexFile);
+	}
+
 	// initialize exception with the file where revlog data comes from
 	public HgInvalidControlFileException initWithDataFile(HgInvalidControlFileException ex) {
 		// exceptions are usually raised after read attepmt, hence inline shall be initialized

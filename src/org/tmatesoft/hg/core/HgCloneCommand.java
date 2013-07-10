@@ -38,10 +38,10 @@ import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.internal.RevlogCompressor;
 import org.tmatesoft.hg.internal.RevlogStreamWriter;
+import org.tmatesoft.hg.internal.Transaction;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
-import org.tmatesoft.hg.repo.HgInvalidFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
@@ -126,8 +126,6 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				completeChanges.inspectAll(mate);
 				mate.checkFailure();
 				mate.complete();
-			} catch (IOException ex) {
-				throw new HgInvalidFileException(getClass().getName(), ex);
 			} finally {
 				completeChanges.unlink();
 				progress.done();
@@ -189,8 +187,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 			fncacheFile = new FNCacheFile(Internals.getInstance(new HgLookup(ctx).detect(hgDir)));
 		}
 
-		public void complete() throws IOException {
-			fncacheFile.write();
+		public void complete() throws HgIOException {
+			fncacheFile.write(new Transaction.NoRollback());
 		}
 
 		public void changelogStart() throws HgInvalidControlFileException {

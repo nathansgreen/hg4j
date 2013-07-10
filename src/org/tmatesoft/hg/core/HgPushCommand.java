@@ -45,7 +45,9 @@ import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
+ * 'hg push <remote>' counterpart, send local changes to a remote server
  * 
+ * @since 1.2
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */

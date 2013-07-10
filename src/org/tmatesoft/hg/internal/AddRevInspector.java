@@ -16,7 +16,6 @@
  */
 package org.tmatesoft.hg.internal;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Set;
 
@@ -50,7 +49,7 @@ public final class AddRevInspector implements HgBundle.Inspector {
 	public AddRevInspector(Internals implRepo, Transaction transaction) {
 		repo = implRepo;
 		tr = transaction;
-		fncache = new FNCacheFile.Mediator(implRepo);
+		fncache = new FNCacheFile.Mediator(implRepo, transaction);
 	}
 
 	public void changelogStart() throws HgRuntimeException {
@@ -114,7 +113,7 @@ public final class AddRevInspector implements HgBundle.Inspector {
 		return new RevisionSet(added);
 	}
 	
-	public void done() throws IOException {
+	public void done() throws HgIOException {
 		fncache.complete();
 	}
 
