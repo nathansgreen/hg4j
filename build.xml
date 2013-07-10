@@ -84,6 +84,7 @@
 			<test name="org.tmatesoft.hg.test.TestIntMap" />
 			<test name="org.tmatesoft.hg.test.TestAuxUtilities" />
 			<test name="org.tmatesoft.hg.test.TestConfigFileParser" />
+			<test name="org.tmatesoft.hg.test.TestTransaction" />
 			<test name="org.tmatesoft.hg.test.TestInflaterDataAccess" />
 			<test name="org.tmatesoft.hg.test.TestHistory" />
 			<test name="org.tmatesoft.hg.test.TestManifest" />

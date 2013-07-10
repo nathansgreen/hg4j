@@ -24,6 +24,7 @@ import java.util.List;
 
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 
 /**
  * This transaction strategy makes a copy of original file and breaks origin hard links, if any.
@@ -103,7 +104,9 @@ public final class COWTransaction extends Transaction {
 	public void commit() throws HgIOException {
 		for (Iterator<RollbackEntry> it = entries.iterator(); it.hasNext();) {
 			RollbackEntry e = it.next();
-			assert e.success;
+			if (!e.success) {
+				throw new HgInvalidStateException(String.format("Attempt to commit transaction without successful clearance of file %s", e.origin));
+			}
 			if (e.failure != null) {
 				throw new HgIOException("Can't close transaction with a failure.", e.failure, e.origin);
 			}

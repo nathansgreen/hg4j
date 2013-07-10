@@ -45,7 +45,6 @@ import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Path;
 
 /**
- * FIXME need TestTransaction to check transaction rolback/commit as it's tricky to test transactions as part of pull/push commands
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */

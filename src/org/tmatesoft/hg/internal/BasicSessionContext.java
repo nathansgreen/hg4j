@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ import org.tmatesoft.hg.util.LogFacility.Severity;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class BasicSessionContext extends SessionContext {
+public class BasicSessionContext extends SessionContext implements SessionContext.Source {
 
 	private LogFacility logFacility;
 	private final Map<String, Object> properties;
@@ -67,5 +67,9 @@ public class BasicSessionContext extends SessionContext {
 		}
 		value = System.getProperty(name);
 		return value == null ? defaultValue : value;
+	}
+
+	public SessionContext getSessionContext() {
+		return this;
 	}
 }
