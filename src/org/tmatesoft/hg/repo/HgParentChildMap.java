@@ -50,6 +50,9 @@ import org.tmatesoft.hg.repo.Revlog.ParentInspector;
  *   List<Nodei> immediateChildren = pw.directChildren(me);
  * </pre>
  * 
+ * <p>Note, this map represents a snapshot of repository state at specific point, and is not automatically
+ * updated/refreshed along with repository changes. I.e. any revision committed after this map was initialized
+ * won't be recognized as known.
  * 
  * <p> Perhaps, later may add alternative way to access (and reuse) map instance, Revlog#getParentWalker(), 
  * that instantiates and initializes ParentWalker, and keep SoftReference to allow its reuse.

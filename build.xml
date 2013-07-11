@@ -97,6 +97,7 @@
 			<test name="org.tmatesoft.hg.test.TestBranches" />
 			<test name="org.tmatesoft.hg.test.TestByteChannel" />
 			<test name="org.tmatesoft.hg.test.TestSubrepo" />
+			<test name="org.tmatesoft.hg.test.TestBundle" />
 			<test name="org.tmatesoft.hg.test.TestClone" />
 			<test name="org.tmatesoft.hg.test.TestIncoming" />
 			<test name="org.tmatesoft.hg.test.TestOutgoing" />

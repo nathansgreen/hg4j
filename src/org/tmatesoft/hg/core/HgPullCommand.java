@@ -109,6 +109,7 @@ public class HgPullCommand extends HgAbstractCommand<HgPullCommand> {
 				phaseHelper.synchronizeWithRemote(remotePhases, rsCommon.union(added));
 			}
 			progress.worked(5);
+			incoming.unlink(); // keep the file only in case of failure
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
 		} finally {

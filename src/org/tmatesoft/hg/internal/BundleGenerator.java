@@ -35,15 +35,11 @@ import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
 import org.tmatesoft.hg.internal.Patch.PatchDataSource;
-import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
-import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgManifest;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
@@ -143,20 +139,6 @@ public class BundleGenerator {
 		return files;
 	}
 	
-	
-	public static void main(String[] args) throws Exception {
-		final HgLookup hgLookup = new HgLookup();
-		HgRepository hgRepo = hgLookup.detectFromWorkingDir();
-		BundleGenerator bg = new BundleGenerator(HgInternals.getImplementationRepo(hgRepo));
-		ArrayList<Nodeid> l = new ArrayList<Nodeid>();
-		l.add(Nodeid.fromAscii("9ef1fab9f5e3d51d70941121dc27410e28069c2d")); // 640
-		l.add(Nodeid.fromAscii("2f33f102a8fa59274a27ebbe1c2903cecac6c5d5")); // 639
-		l.add(Nodeid.fromAscii("d074971287478f69ab0a64176ce2284d8c1e91c3")); // 638
-		File bundleFile = bg.create(l);
-		HgBundle b = hgLookup.loadBundle(bundleFile);
-//		Bundle.dump(b); // FIXME dependency from dependant code
-	}
-
 	private static class ChunkGenerator implements RevlogStream.Inspector {
 		
 		private final DataSerializer ds;
@@ -222,7 +204,6 @@ public class BundleGenerator {
 				int len = pds.serializeLength() + 84;
 				ds.writeInt(len);
 				ds.write(nodeid, 0, Nodeid.SIZE);
-				// TODO assert parents match those in previous group elements
 				if (parent1Revision != NO_REVISION) {
 					ds.writeByte(parentMap.get(parent1Revision).toByteArray());
 				} else {

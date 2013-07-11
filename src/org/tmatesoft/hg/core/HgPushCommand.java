@@ -135,6 +135,7 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 			}
 			// XXX WTF is obsolete in namespaces key??
 			progress.worked(5);
+			b.unlink(); // keep the file only in case of failure
 		} catch (IOException ex) {
 			throw new HgIOException(ex.getMessage(), null); // XXX not a nice idea to throw IOException from BundleGenerator#create
 		} catch (HgRepositoryNotFoundException ex) {
