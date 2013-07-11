@@ -18,18 +18,18 @@ package org.tmatesoft.hg.console;
 
 import java.util.Collections;
 
-import org.tmatesoft.hg.core.HgPushCommand;
+import org.tmatesoft.hg.core.HgPullCommand;
 import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 
 /**
- * Basic analog to 'hg push' command line utility
+ * Basic analog to 'hg pull' command line utility
  * @since 1.2
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class Push {
+public class Pull {
 
 	public static void main(String[] args) throws Exception {
 		Options cmdLineOpts = Options.parse(args, Collections.<String>emptySet());
@@ -38,15 +38,15 @@ public class Push {
 			System.err.printf("Can't find repository in: %s\n", hgRepo.getRepository().getLocation());
 			return;
 		}
-		// XXX perhaps, HgRepoFacade shall get detectRemote() analog (to get remote server with respect of facade's repo)
 		HgRemoteRepository hgRemote = new HgLookup().detectRemote(cmdLineOpts.getSingle(""), hgRepo.getRepository());
 		if (hgRemote.isInvalid()) {
 			System.err.printf("Remote repository %s is not valid", hgRemote.getLocation());
 			return;
 		}
-		HgPushCommand cmd = hgRepo.createPushCommand();
-		cmd.destination(hgRemote);
+		HgPullCommand cmd = hgRepo.createPullCommand();
+		cmd.source(hgRemote);
 		cmd.execute();
-		System.out.printf("Added %d changesets\n", cmd.getPushedRevisions().size());
+		System.out.printf("Sent %d changesets\n", cmd.getPulledRevisions().size());
 	}
+
 }
