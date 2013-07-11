@@ -101,6 +101,7 @@ public class BundleGenerator {
 		new ChunkGenerator(outRaw, clogMap).iterate(manifestStream, manifestRevs.toArray(true));
 		outRaw.writeInt(0); // null chunk for manifest group
 		//
+		EncodingHelper fnEncoder = repo.buildFileNameEncodingHelper();
 		for (HgDataFile df : sortedByName(files)) {
 			RevlogStream s = repo.getImplAccess().getStream(df);
 			final IntVector fileRevs = new IntVector();
@@ -117,7 +118,7 @@ public class BundleGenerator {
 				// although BundleFormat page says "filename length, filename" for a file,
 				// in fact there's a sort of 'filename chunk', i.e. filename length field includes
 				// not only length of filename, but also length of the field itseld, i.e. filename.length+sizeof(int)
-				byte[] fnameBytes = df.getPath().toString().getBytes(); // FIXME check encoding in native hg (and fix accordingly in HgBundle)
+				byte[] fnameBytes = fnEncoder.toBundle(df.getPath());
 				outRaw.writeInt(fnameBytes.length + 4);
 				outRaw.writeByte(fnameBytes);
 				new ChunkGenerator(outRaw, clogMap).iterate(s, fileRevs.toArray(true));

@@ -18,6 +18,7 @@ package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -26,15 +27,19 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
 
 import org.tmatesoft.hg.core.SessionContext;
+import org.tmatesoft.hg.repo.HgInvalidStateException;
 
 /**
  * Keep all encoding-related issues in the single place
  * NOT thread-safe (encoder and decoder requires synchronized access)
+ * 
+ * @see http://mercurial.selenic.com/wiki/EncodingStrategy
+ * @see http://mercurial.selenic.com/wiki/WindowsUTF8Plan
+ * @see http://mercurial.selenic.com/wiki/CharacterEncodingOnWindows
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
 public class EncodingHelper {
-	// XXX perhaps, shall not be full of statics, but rather an instance coming from e.g. HgRepository?
 	/*
 	 * To understand what Mercurial thinks of UTF-8 and Unix byte approach to names, see
 	 * http://mercurial.808500.n3.nabble.com/Unicode-support-request-td3430704.html
@@ -43,11 +48,21 @@ public class EncodingHelper {
 	private final SessionContext sessionContext;
 	private final CharsetEncoder encoder;
 	private final CharsetDecoder decoder;
+	private final CharsetEncoder utfEncoder;
+	private final CharsetDecoder utfDecoder;
 	
-	EncodingHelper(Charset fsEncoding, SessionContext ctx) {
-		sessionContext = ctx;
+	EncodingHelper(Charset fsEncoding, SessionContext.Source ctx) {
+		sessionContext = ctx.getSessionContext();
 		decoder = fsEncoding.newDecoder();
 		encoder = fsEncoding.newEncoder();
+		Charset utf8 = getUTF8();
+		if (fsEncoding.equals(utf8)) {
+			utfDecoder = decoder;
+			utfEncoder = encoder;
+		} else {
+			utfDecoder = utf8.newDecoder();
+			utfEncoder = utf8.newEncoder();
+		}
 	}
 
 	/**
@@ -65,7 +80,7 @@ public class EncodingHelper {
 			// perhaps, can return byte[0] in this case?
 			throw new IllegalArgumentException();
 		}
-		return encodeWithSystemDefaultFallback(s);
+		return toArray(encodeWithSystemDefaultFallback(s));
 	}
 
 	/**
@@ -79,9 +94,51 @@ public class EncodingHelper {
 		if (fname == null) {
 			throw new IllegalArgumentException();
 		}
+		return toArray(encodeWithSystemDefaultFallback(fname));
+	}
+	
+	/**
+	 * prepare filename to be serialized into fncache file
+	 */
+	public ByteBuffer toFNCache(CharSequence fname) {
 		return encodeWithSystemDefaultFallback(fname);
 	}
+	
+	public byte[] toBundle(CharSequence fname) {
+		// yes, mercurial transfers filenames in local encoding
+		// so that if your local encoding doesn't match that on server, 
+		// and you use native characters, you'd likely fail
+		return toArray(encodeWithSystemDefaultFallback(fname));
+	}
+	public String fromBundle(byte[] data, int start, int length) {
+		return decodeWithSystemDefaultFallback(data, start, length);
+	}
+	
+	
+	public String userFromChangeset(byte[] data, int start, int length) {
+		return decodeUnicodeWithFallback(data, start, length);
+	}
+	
+	public String commentFromChangeset(byte[] data, int start, int length) {
+		return decodeUnicodeWithFallback(data, start, length);
+	}
+	
+	public String fileFromChangeset(byte[] data, int start, int length) {
+		return decodeWithSystemDefaultFallback(data, start, length);
+	}
 
+	public byte[] userToChangeset(CharSequence user) {
+		return toArray(encodeUnicode(user));
+	}
+	
+	public byte[] commentToChangeset(CharSequence comment) {
+		return toArray(encodeUnicode(comment));
+	}
+	
+	public byte[] fileToChangeset(CharSequence file) {
+		return toArray(encodeWithSystemDefaultFallback(file));
+	}
+	
 	private String decodeWithSystemDefaultFallback(byte[] data, int start, int length) {
 		try {
 			return decoder.decode(ByteBuffer.wrap(data, start, length)).toString();
@@ -92,18 +149,53 @@ public class EncodingHelper {
 		}
 	}
 	
-	private byte[] encodeWithSystemDefaultFallback(CharSequence s) {
+	private ByteBuffer encodeWithSystemDefaultFallback(CharSequence s) {
 		try {
 			// synchronized(encoder) {
-			ByteBuffer bb = encoder.encode(CharBuffer.wrap(s));
+			return encoder.encode(CharBuffer.wrap(s));
 			// }
-			byte[] rv = new byte[bb.remaining()];
-			bb.get(rv, 0, rv.length);
-			return rv;
 		} catch (CharacterCodingException ex) {
 			sessionContext.getLog().dump(getClass(), Error, ex, String.format("Use of charset %s failed, resort to system default", charset().name()));
 			// resort to system-default
-			return s.toString().getBytes();
+			return ByteBuffer.wrap(s.toString().getBytes());
+		}
+	}
+
+	private byte[] toArray(ByteBuffer bb) {
+		byte[] rv;
+		if (bb.hasArray() && bb.arrayOffset() == 0) {
+			rv = bb.array();
+			if (rv.length == bb.remaining()) {
+				return rv;
+			}
+			// fall through
+		}
+		rv = new byte[bb.remaining()];
+		bb.get(rv, 0, rv.length);
+		return rv;
+	}
+
+	private String decodeUnicodeWithFallback(byte[] data, int start, int length) {
+		try {
+			return utfDecoder.decode(ByteBuffer.wrap(data, start, length)).toString();
+		} catch (CharacterCodingException ex) {
+			// TODO post-1.2 respect ui.fallbackencoding actual setting
+			return new String(data, start, length, Charset.forName("ISO-8859-1"));
+		}
+	}
+	
+	private ByteBuffer encodeUnicode(CharSequence s) {
+		// 
+		try {
+			return utfEncoder.encode(CharBuffer.wrap(s));
+		} catch (CharacterCodingException ex) {
+			byte[] rv;
+			try {
+				rv = s.toString().getBytes(getUTF8().name()); // XXX Java 1.5
+			} catch (UnsupportedEncodingException e) {
+				throw new HgInvalidStateException("Unexpected error trying to get UTF-8 encoding"); 
+			}
+			return ByteBuffer.wrap(rv);
 		}
 	}
 

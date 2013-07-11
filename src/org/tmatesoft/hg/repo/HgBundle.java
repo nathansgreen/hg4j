@@ -31,12 +31,14 @@ import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataAccessProvider;
 import org.tmatesoft.hg.internal.DataSerializer;
 import org.tmatesoft.hg.internal.DigestHelper;
+import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.InflaterDataAccess;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Patch;
+import org.tmatesoft.hg.repo.HgChangelog.ChangesetParser;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelledException;
@@ -55,12 +57,14 @@ public class HgBundle {
 	private final File bundleFile;
 	private final DataAccessProvider accessProvider;
 	private final SessionContext ctx;
+	private final EncodingHelper fnDecorer;
 	private Lifecycle.BasicCallback flowControl;
 
 	HgBundle(SessionContext sessionContext, DataAccessProvider dap, File bundle) {
 		ctx = sessionContext;
 		accessProvider = dap;
 		bundleFile = bundle;
+		fnDecorer = Internals.buildFileNameEncodingHelper(new SessionContext.SourcePrim(ctx));
 	}
 
 	private DataAccess getDataStream() throws IOException {
@@ -112,10 +116,12 @@ public class HgBundle {
 			boolean emptyChangelog = true;
 			private DataAccess prevRevContent;
 			private int revisionIndex;
+			private ChangesetParser csetBuilder;
 
 			public void changelogStart() {
 				emptyChangelog = true;
 				revisionIndex = 0;
+				csetBuilder = new ChangesetParser(hgRepo, true);
 			}
 
 			public void changelogEnd() {
@@ -172,7 +178,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 						throw new HgInvalidStateException(String.format("Integrity check failed on %s, node: %s", bundleFile, ge.node().shortNotation()));
 					}
 					ByteArrayDataAccess csetDataAccess = new ByteArrayDataAccess(csetContent);
-					RawChangeset cs = RawChangeset.parse(csetDataAccess);
+					RawChangeset cs = csetBuilder.parse(csetDataAccess);
 					inspector.next(revisionIndex++, ge.node(), cs);
 					prevRevContent.done();
 					prevRevContent = csetDataAccess.reset();
@@ -397,7 +403,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			}
 			byte[] fnameBuf = new byte[fnameLen - 4];
 			da.readBytes(fnameBuf, 0, fnameBuf.length);
-			String name = new String(fnameBuf);
+			String name = fnDecorer.fromBundle(fnameBuf, 0, fnameBuf.length);
 			inspector.fileStart(name);
 			if (flowControl.isStopped()) {
 				return;

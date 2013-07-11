@@ -17,7 +17,6 @@
 package org.tmatesoft.hg.internal;
 
 import java.io.ByteArrayOutputStream;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -31,7 +30,6 @@ import java.util.TimeZone;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataSerializer.DataSource;
-import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -41,6 +39,7 @@ import org.tmatesoft.hg.util.Path;
  */
 public class ChangelogEntryBuilder implements DataSource {
 
+	private final EncodingHelper encHelper;
 	private String user;
 	private List<Path> modifiedFiles;
 	private final Map<String, String> extrasMap = new LinkedHashMap<String, String>();
@@ -48,6 +47,10 @@ public class ChangelogEntryBuilder implements DataSource {
 	private Long csetTime;
 	private Nodeid manifestRev;
 	private CharSequence comment;
+	
+	ChangelogEntryBuilder(EncodingHelper encodingHelper) {
+		encHelper = encodingHelper;
+	}
 	
 	public ChangelogEntryBuilder user(String username) {
 		user = username;
@@ -116,36 +119,32 @@ public class ChangelogEntryBuilder implements DataSource {
 	}
 
 	public byte[] build() {
-		try {
-			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			final int LF = '\n';
-			CharSequence extras = buildExtras();
-			CharSequence files = buildFiles();
-			byte[] manifestRevision = manifestRev.toString().getBytes();
-			byte[] username = user().getBytes(EncodingHelper.getUTF8().name()); // XXX Java 1.5
-			out.write(manifestRevision, 0, manifestRevision.length);
-			out.write(LF);
-			out.write(username, 0, username.length);
-			out.write(LF);
-			final long csetDate = csetTime();
-			byte[] date = String.format("%d %d", csetDate, csetTimezone(csetDate)).getBytes();
-			out.write(date, 0, date.length);
-			if (extras.length() > 0) {
-				out.write(' ');
-				byte[] b = extras.toString().getBytes();
-				out.write(b, 0, b.length);
-			}
-			out.write(LF);
-			byte[] b = files.toString().getBytes();
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		final int LF = '\n';
+		CharSequence extras = buildExtras();
+		CharSequence files = buildFiles();
+		byte[] manifestRevision = manifestRev.toString().getBytes();
+		byte[] username = encHelper.userToChangeset(user());
+		out.write(manifestRevision, 0, manifestRevision.length);
+		out.write(LF);
+		out.write(username, 0, username.length);
+		out.write(LF);
+		final long csetDate = csetTime();
+		byte[] date = String.format("%d %d", csetDate, csetTimezone(csetDate)).getBytes();
+		out.write(date, 0, date.length);
+		if (extras.length() > 0) {
+			out.write(' ');
+			byte[] b = extras.toString().getBytes();
 			out.write(b, 0, b.length);
-			out.write(LF);
-			out.write(LF);
-			byte[] cmt = comment.toString().getBytes(EncodingHelper.getUTF8().name()); // XXX Java 1.5
-			out.write(cmt, 0, cmt.length);
-			return out.toByteArray();
-		} catch (UnsupportedEncodingException ex) {
-			throw new HgInvalidStateException(ex.getMessage()); // Can't happen, UTF8 is always there
 		}
+		out.write(LF);
+		byte[] b = encHelper.fileToChangeset(files);
+		out.write(b, 0, b.length);
+		out.write(LF);
+		out.write(LF);
+		byte[] cmt = encHelper.commentToChangeset(comment);
+		out.write(cmt, 0, cmt.length);
+		return out.toByteArray();
 	}
 
 	private CharSequence buildExtras() {

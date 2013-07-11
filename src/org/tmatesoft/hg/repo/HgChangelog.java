@@ -17,7 +17,6 @@
 package org.tmatesoft.hg.repo;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -31,8 +30,11 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.EncodingHelper;
+import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.LifecycleBridge;
 import org.tmatesoft.hg.internal.Pool;
@@ -76,7 +78,7 @@ public final class HgChangelog extends Revlog {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		content.iterate(start, end, true, new RawCsetParser(inspector));
+		content.iterate(start, end, true, new RawCsetParser(getRepo(), inspector));
 	}
 
 	/**
@@ -116,7 +118,7 @@ public final class HgChangelog extends Revlog {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
-		content.iterate(sortedRevisions, true, new RawCsetParser(inspector));
+		content.iterate(sortedRevisions, true, new RawCsetParser(getRepo(), inspector));
 	}
 
 	/**
@@ -146,33 +148,17 @@ public final class HgChangelog extends Revlog {
 	/**
 	 * Entry in the Changelog
 	 */
-	public static class RawChangeset implements Cloneable /* for those that would like to keep a copy */{
-		// TODO immutable
+	public static final class RawChangeset implements Cloneable /* for those that would like to keep a copy */{
+		// would be nice to get it immutable, but then we can't reuse instances
 		private/* final */Nodeid manifest;
 		private String user;
 		private String comment;
-		private List<String> files; // unmodifiable collection (otherwise #files() and implicit #clone() shall be revised)
+		private String[] files; // shall not be modified (#clone() does shallow copy)
 		private Date time;
 		private int timezone;
 		// http://mercurial.selenic.com/wiki/PruningDeadBranches - Closing changesets can be identified by close=1 in the changeset's extra field.
 		private Map<String, String> extras;
 
-		/**
-		 * @see mercurial/changelog.py:read()
-		 * 
-		 *      <pre>
-		 *         format used:
-		 *         nodeid\n        : manifest node in ascii
-		 *         user\n          : user, no \n or \r allowed
-		 *         time tz extra\n : date (time is int or float, timezone is int)
-		 *                         : extra is metadatas, encoded and separated by '\0'
-		 *                         : older versions ignore it
-		 *         files\n\n       : files modified by the cset, no \n or \r allowed
-		 *         (.*)            : comment (free text, ideally utf-8)
-		 * 
-		 *         changelog v0 doesn't use extra
-		 * </pre>
-		 */
 		private RawChangeset() {
 		}
 
@@ -189,7 +175,7 @@ public final class HgChangelog extends Revlog {
 		}
 
 		public List<String> files() {
-			return files;
+			return Arrays.asList(files);
 		}
 
 		public Date date() {
@@ -234,7 +220,7 @@ public final class HgChangelog extends Revlog {
 			sb.append("Comment: ").append(comment).append(", ");
 			sb.append("Manifest: ").append(manifest).append(", ");
 			sb.append("Date: ").append(time).append(", ");
-			sb.append("Files: ").append(files.size());
+			sb.append("Files: ").append(files.length);
 			for (String s : files) {
 				sb.append(", ").append(s);
 			}
@@ -253,16 +239,57 @@ public final class HgChangelog extends Revlog {
 				throw new InternalError(ex.toString());
 			}
 		}
-
-		/*package*/ static RawChangeset parse(DataAccess da) throws IOException, HgInvalidDataFormatException {
-			byte[] data = da.byteArray();
-			RawChangeset rv = new RawChangeset();
-			rv.init(data, 0, data.length, null);
-			return rv;
+	}
+	
+	/**
+	 * @see mercurial/changelog.py:read()
+	 * 
+	 *      <pre>
+	 *         format used:
+	 *         nodeid\n        : manifest node in ascii
+	 *         user\n          : user, no \n or \r allowed
+	 *         time tz extra\n : date (time is int or float, timezone is int)
+	 *                         : extra is metadatas, encoded and separated by '\0'
+	 *                         : older versions ignore it
+	 *         files\n\n       : files modified by the cset, no \n or \r allowed
+	 *         (.*)            : comment (free text, ideally utf-8)
+	 * 
+	 *         changelog v0 doesn't use extra
+	 * </pre>
+	 */
+	/*package-local*/static final class ChangesetParser {
+		private final EncodingHelper encHelper;
+		// it's likely user names get repeated again and again throughout repository. 
+		private final Pool<String> usersPool;
+		private final Pool<String> filesPool;
+		private final boolean reuseChangesetInstance;
+		private RawChangeset target;
+		
+		public ChangesetParser(SessionContext.Source sessionContex, boolean shallReuseCsetInstance) {
+			encHelper = Internals.buildFileNameEncodingHelper(sessionContex);
+			usersPool = new Pool<String>();
+			filesPool = new Pool<String>();
+			reuseChangesetInstance = shallReuseCsetInstance;
+			if (shallReuseCsetInstance) {
+				target = new RawChangeset();
+			}
+		}
+		
+		public void dispose() {
+			usersPool.clear();
+			filesPool.clear();
 		}
 
-		// @param usersPool - it's likely user names get repeated again and again throughout repository. can be null
-		/* package-local */void init(byte[] data, int offset, int length, Pool<String> usersPool) throws HgInvalidDataFormatException {
+		public RawChangeset parse(DataAccess da) throws IOException, HgInvalidDataFormatException {
+			byte[] data = da.byteArray();
+			if (!reuseChangesetInstance) {
+				target = new RawChangeset();
+			}
+			init(data, 0, data.length);
+			return target;
+		}
+
+		private void init(byte[] data, int offset, int length) throws HgInvalidDataFormatException {
 			final int bufferEndIndex = offset + length;
 			final byte lineBreak = (byte) '\n';
 			int breakIndex1 = indexOf(data, lineBreak, offset, bufferEndIndex);
@@ -275,17 +302,8 @@ public final class HgChangelog extends Revlog {
 				throw new HgInvalidDataFormatException("Bad Changeset data");
 			}
 			String _user;
-			try {
-				// TODO use encoding helper? Although where encoding is fixed (like here), seems to be just too much
-				_user = new String(data, breakIndex1 + 1, breakIndex2 - breakIndex1 - 1, "UTF-8");
-				if (usersPool != null) {
-					_user = usersPool.unify(_user);
-				}
-			} catch (UnsupportedEncodingException ex) {
-				_user = "";
-				// Could hardly happen
-				throw new HgInvalidDataFormatException("Bad Changeset data", ex);
-			}
+			_user = encHelper.userFromChangeset(data, breakIndex1 + 1, breakIndex2 - breakIndex1 - 1);
+			_user = usersPool.unify(_user);
 
 			int breakIndex3 = indexOf(data, lineBreak, breakIndex2 + 1, bufferEndIndex);
 			if (breakIndex3 == -1) {
@@ -313,10 +331,9 @@ public final class HgChangelog extends Revlog {
 			if (breakIndex4 > lastStart) {
 				// if breakIndex4 == lastStart, we already found \n\n and hence there are no files (e.g. merge revision)
 				_files = new ArrayList<String>(5);
-				// TODO pool file names
-				// TODO encoding of filenames?
 				while (breakIndex4 != -1 && breakIndex4 + 1 < bufferEndIndex) {
-					_files.add(new String(data, lastStart, breakIndex4 - lastStart));
+					String fname = encHelper.fileFromChangeset(data, lastStart, breakIndex4 - lastStart);
+					_files.add(filesPool.unify(fname));
 					lastStart = breakIndex4 + 1;
 					if (data[breakIndex4 + 1] == lineBreak) {
 						// found \n\n
@@ -331,23 +348,15 @@ public final class HgChangelog extends Revlog {
 			} else {
 				breakIndex4--;
 			}
-			String _comment;
-			try {
-				_comment = new String(data, breakIndex4 + 2, bufferEndIndex - breakIndex4 - 2, "UTF-8");
-				// TODO post-1.0 respect ui.fallbackencoding and try to decode if set; use EncodingHelper
-			} catch (UnsupportedEncodingException ex) {
-				_comment = "";
-				// Could hardly happen
-				throw new HgInvalidDataFormatException("Bad Changeset data", ex);
-			}
+			String _comment = encHelper.commentFromChangeset(data, breakIndex4 + 2, bufferEndIndex - breakIndex4 - 2);
 			// change this instance at once, don't leave it partially changes in case of error
-			this.manifest = _nodeid;
-			this.user = _user;
-			this.time = _time;
-			this.timezone = _timezone;
-			this.files = _files == null ? Collections.<String> emptyList() : Collections.unmodifiableList(_files);
-			this.comment = _comment;
-			this.extras = _extrasMap;
+			target.manifest = _nodeid;
+			target.user = _user;
+			target.time = _time;
+			target.timezone = _timezone;
+			target.files = _files == null ? new String[0] : _files.toArray(new String[_files.size()]);
+			target.comment = _comment;
+			target.extras = _extrasMap;
 		}
 
 		private Map<String, String> parseExtras(String _extras) {
@@ -408,21 +417,20 @@ public final class HgChangelog extends Revlog {
 		}
 	}
 
-	private static class RawCsetParser implements RevlogStream.Inspector, Adaptable {
+	private static final class RawCsetParser implements RevlogStream.Inspector, Adaptable, Lifecycle {
 		
 		private final Inspector inspector;
-		private final Pool<String> usersPool;
-		private final RawChangeset cset = new RawChangeset();
+		private final ChangesetParser csetBuilder;
 		// non-null when inspector uses high-level lifecycle entities (progress and/or cancel supports)
 		private final LifecycleBridge lifecycleStub;
 		// non-null when inspector relies on low-level lifecycle and is responsible
 		// to proceed any possible high-level entities himself.
 		private final Lifecycle inspectorLifecycle;
 
-		public RawCsetParser(HgChangelog.Inspector delegate) {
+		public RawCsetParser(SessionContext.Source sessionContext, HgChangelog.Inspector delegate) {
 			assert delegate != null;
 			inspector = delegate;
-			usersPool = new Pool<String>();
+			csetBuilder = new ChangesetParser(sessionContext, true);
 			inspectorLifecycle = Adaptable.Factory.getAdapter(delegate, Lifecycle.class, null);
 			if (inspectorLifecycle == null) {
 				ProgressSupport ph = Adaptable.Factory.getAdapter(delegate, ProgressSupport.class, null);
@@ -439,8 +447,7 @@ public final class HgChangelog extends Revlog {
 
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess da) throws HgRuntimeException {
 			try {
-				byte[] data = da.byteArray();
-				cset.init(data, 0, data.length, usersPool);
+				RawChangeset cset = csetBuilder.parse(da);
 				// XXX there's no guarantee for Changeset.Callback that distinct instance comes each time, consider instance reuse
 				inspector.next(revisionNumber, Nodeid.fromBinary(nodeid, 0), cset);
 				if (lifecycleStub != null) {
@@ -456,16 +463,27 @@ public final class HgChangelog extends Revlog {
 		
 		public <T> T getAdapter(Class<T> adapterClass) {
 			if (adapterClass == Lifecycle.class) {
-				if (inspectorLifecycle != null) {
-					return adapterClass.cast(inspectorLifecycle);
-				}
-				// reveal interest in lifecycle only when either progress or cancel support is there
-				// and inspector itself doesn't respond to lifecycle request
-				// lifecycleStub may still be null here (no progress and cancel), it's ok to cast(null) 
-				return adapterClass.cast(lifecycleStub);
-				
+				return adapterClass.cast(this);
 			}
+			// XXX what if caller takes Progress/Cancel (which we update through lifecycleStub, too)
 			return Adaptable.Factory.getAdapter(inspector, adapterClass, null);
+		}
+
+		public void start(int count, Callback callback, Object token) {
+			if (inspectorLifecycle != null) {
+				inspectorLifecycle.start(count, callback, token);
+			} else if (lifecycleStub != null) {
+				lifecycleStub.start(count, callback, token);
+			}
+		}
+
+		public void finish(Object token) {
+			if (inspectorLifecycle != null) {
+				inspectorLifecycle.finish(token);
+			} else if (lifecycleStub != null) {
+				lifecycleStub.finish(token);
+			}
+			csetBuilder.dispose();
 		}
 
 	}

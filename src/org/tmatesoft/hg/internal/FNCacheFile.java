@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -83,7 +82,7 @@ public class FNCacheFile {
 		}
 		File f = repo.getRepositoryFile(FNCache);
 		f.getParentFile().mkdirs();
-		final Charset filenameEncoding = repo.getFilenameEncoding();
+		final EncodingHelper fnEncoder = repo.buildFileNameEncodingHelper();
 		ArrayList<CharBuffer> added = new ArrayList<CharBuffer>();
 		for (Path p : addedDotI) {
 			added.add(CharBuffer.wrap(pathHelper.rewrite(p)));
@@ -105,7 +104,7 @@ public class FNCacheFile {
 			FileChannel fncacheFile = fos.getChannel();
 			ByteBuffer lf = ByteBuffer.wrap(new byte[] { 0x0A });
 			for (CharBuffer b : added) {
-				fncacheFile.write(filenameEncoding.encode(b));
+				fncacheFile.write(fnEncoder.toFNCache(b));
 				fncacheFile.write(lf);
 				lf.rewind();
 			}

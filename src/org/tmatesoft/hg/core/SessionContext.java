@@ -72,4 +72,16 @@ public abstract class SessionContext {
 	public interface Source {
 		SessionContext getSessionContext();
 	}
+	
+	public static final class SourcePrim implements Source {
+		private final SessionContext ctx;
+
+		public SourcePrim(SessionContext sessionContext) {
+			assert sessionContext != null;
+			ctx = sessionContext;
+		}
+		public SessionContext getSessionContext() {
+			return ctx;
+		}
+	}
 }

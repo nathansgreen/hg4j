@@ -164,8 +164,10 @@ public final class CommitFacility {
 			}
 		}
 		//
+		final EncodingHelper encHelper = repo.buildFileNameEncodingHelper();
+		//
 		// Manifest
-		final ManifestEntryBuilder manifestBuilder = new ManifestEntryBuilder(repo.buildFileNameEncodingHelper());
+		final ManifestEntryBuilder manifestBuilder = new ManifestEntryBuilder(encHelper);
 		for (Map.Entry<Path, Nodeid> me : newManifestRevision.entrySet()) {
 			manifestBuilder.add(me.getKey().toString(), me.getValue());
 		}
@@ -173,7 +175,7 @@ public final class CommitFacility {
 		Nodeid manifestRev = manifestWriter.addRevision(manifestBuilder, clogRevisionIndex, manifestParents.first(), manifestParents.second()).second();
 		//
 		// Changelog
-		final ChangelogEntryBuilder changelogBuilder = new ChangelogEntryBuilder();
+		final ChangelogEntryBuilder changelogBuilder = new ChangelogEntryBuilder(encHelper);
 		changelogBuilder.setModified(files.keySet());
 		changelogBuilder.branch(branch == null ? DEFAULT_BRANCH_NAME : branch);
 		changelogBuilder.user(String.valueOf(user));

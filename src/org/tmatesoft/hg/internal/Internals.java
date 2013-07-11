@@ -247,19 +247,18 @@ public final class Internals implements SessionContext.Source {
 	public boolean isCaseSensitiveFileSystem() {
 		return isCaseSensitiveFileSystem;
 	}
-	
-	public EncodingHelper buildFileNameEncodingHelper() {
-		return new EncodingHelper(getFilenameEncoding(), repo.getSessionContext());
-	}
-	
+
 	public boolean fncacheInUse() {
 		return (getRequiresFlags() & RequiresFile.FNCACHE) != 0;
 	}
-	
-	/*package-local*/ Charset getFilenameEncoding() {
-		return getFileEncoding(getSessionContext());
+
+	public EncodingHelper buildFileNameEncodingHelper() {
+		return new EncodingHelper(getFileEncoding(getSessionContext()), repo);
 	}
 	
+	public static EncodingHelper buildFileNameEncodingHelper(SessionContext.Source ctx) {
+		return new EncodingHelper(getFileEncoding(ctx.getSessionContext()), ctx);
+	}
 	/*package-local*/ static Charset getFileEncoding(SessionContext ctx) {
 		Object altEncoding = ctx.getConfigurationProperty(CFG_PROPERTY_FS_FILENAME_ENCODING, null);
 		Charset cs;
