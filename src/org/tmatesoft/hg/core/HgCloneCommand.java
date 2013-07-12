@@ -31,16 +31,19 @@ import java.util.TreeMap;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.DataSerializer;
+import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSource;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.FNCacheFile;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
+import org.tmatesoft.hg.internal.Patch;
 import org.tmatesoft.hg.internal.RepoInitializer;
 import org.tmatesoft.hg.internal.RevlogCompressor;
 import org.tmatesoft.hg.internal.RevlogStreamWriter;
 import org.tmatesoft.hg.internal.Transaction;
 import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgLookup;
@@ -316,7 +319,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 					}
 				}
 				//
-				byte[] content = ge.apply(prevRevContent.byteArray());
+				Patch patch = HgInternals.patchFromData(ge);
+				byte[] content = patch.apply(prevRevContent, -1);
 				Nodeid p1 = ge.firstParent();
 				Nodeid p2 = ge.secondParent();
 				byte[] calculated = dh.sha1(p1, p2, content).asBinary();
@@ -340,23 +344,23 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				//
 				revlogHeader.parents(knownRevision(p1), knownRevision(p2));
 				//
-				byte[] patchContent = ge.rawDataByteArray();
+				int patchSerializedLength = patch.serializedLength();
 				// no reason to keep patch if it's close (here, >75%) in size to the complete contents,
 				// save patching effort in this case
-				writeComplete = writeComplete || preferCompleteOverPatch(patchContent.length, content.length);
+				writeComplete = writeComplete || preferCompleteOverPatch(patchSerializedLength, content.length);
 
 				if (writeComplete) {
 					revlogHeader.baseRevision(revisionSequence.size());
 				}
 				assert revlogHeader.baseRevision() >= 0;
 
-				final byte[] sourceData = writeComplete ? content : patchContent;
-				revlogDataZip.reset(new DataSerializer.ByteArrayDataSource(sourceData));
+				DataSerializer.DataSource dataSource = writeComplete ? new ByteArrayDataSource(content) : patch.new PatchDataSource();
+				revlogDataZip.reset(dataSource);
 				final int compressedLen;
-				final boolean useUncompressedData = preferCompressedOverComplete(revlogDataZip.getCompressedLength(), sourceData.length);
+				final boolean useUncompressedData = preferCompressedOverComplete(revlogDataZip.getCompressedLength(), dataSource.serializeLength());
 				if (useUncompressedData) {
 					// compression wasn't too effective,
-					compressedLen = sourceData.length + 1 /*1 byte for 'u' - uncompressed prefix byte*/;
+					compressedLen = dataSource.serializeLength() + 1 /*1 byte for 'u' - uncompressed prefix byte*/;
 				} else {
 					compressedLen= revlogDataZip.getCompressedLength();
 				}
@@ -377,8 +381,8 @@ public class HgCloneCommand extends HgAbstractCommand<HgCloneCommand> {
 				revlogHeader.serialize(sds);
 
 				if (useUncompressedData) {
-					indexFile.write((byte) 'u');
-					indexFile.write(sourceData);
+					sds.writeByte((byte) 'u');
+					dataSource.serialize(sds);
 				} else {
 					int actualCompressedLenWritten = revlogDataZip.writeCompressedData(sds);
 					if (actualCompressedLenWritten != compressedLen) {

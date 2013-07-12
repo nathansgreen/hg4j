@@ -28,8 +28,10 @@ import java.net.UnknownHostException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.Patch;
 import org.tmatesoft.hg.internal.RelativePathRewrite;
 import org.tmatesoft.hg.internal.WinToNixPathRewrite;
+import org.tmatesoft.hg.repo.HgBundle.GroupElement;
 import org.tmatesoft.hg.repo.HgSubrepoLocation.Kind;
 import org.tmatesoft.hg.util.FileIterator;
 import org.tmatesoft.hg.util.FileWalker;
@@ -114,8 +116,19 @@ public class HgInternals {
 		br.close();
 		return hgIgnore;
 	}
+	
+	// XXX just to access package local method. Perhaps, GroupElement shall be redesigned
+	// to allow classes from .internal to access its details?
+	// or Patch may become public?
+	public static Patch patchFromData(GroupElement ge) throws IOException {
+		return ge.patch();
+	}
 
-	// in fact, need a setter for this anyway, shall move to internal.Internals perhaps?
+	public static File getBundleFile(HgBundle bundle) {
+		return bundle.bundleFile;
+	}
+
+	// TODO in fact, need a setter for this anyway, shall move to internal.Internals perhaps?
 	public String getNextCommitUsername() {
 		String hgUser = System.getenv("HGUSER");
 		if (hgUser != null && hgUser.trim().length() > 0) {

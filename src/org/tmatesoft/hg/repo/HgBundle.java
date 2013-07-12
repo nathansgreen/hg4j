@@ -17,8 +17,8 @@
 package org.tmatesoft.hg.repo;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ConcurrentModificationException;
 
 import org.tmatesoft.hg.core.HgIOException;
@@ -27,18 +27,17 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.ByteArrayChannel;
 import org.tmatesoft.hg.internal.ByteArrayDataAccess;
 import org.tmatesoft.hg.internal.Callback;
+import org.tmatesoft.hg.internal.ChangesetParser;
 import org.tmatesoft.hg.internal.DataAccess;
+import org.tmatesoft.hg.internal.DataAccessInputStream;
 import org.tmatesoft.hg.internal.DataAccessProvider;
-import org.tmatesoft.hg.internal.DataSerializer;
 import org.tmatesoft.hg.internal.DigestHelper;
 import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Experimental;
-import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.InflaterDataAccess;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.Lifecycle;
 import org.tmatesoft.hg.internal.Patch;
-import org.tmatesoft.hg.repo.HgChangelog.ChangesetParser;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelledException;
@@ -54,9 +53,9 @@ import org.tmatesoft.hg.util.CancelledException;
 @Experimental(reason="API is not stable")
 public class HgBundle {
 
-	private final File bundleFile;
+	final File bundleFile;
 	private final DataAccessProvider accessProvider;
-	private final SessionContext ctx;
+	final SessionContext ctx;
 	private final EncodingHelper fnDecorer;
 	private Lifecycle.BasicCallback flowControl;
 
@@ -110,7 +109,7 @@ public class HgBundle {
 	 * @param hgRepo repository that shall possess base revision for this bundle
 	 * @param inspector callback to get each changeset found 
 	 */
-	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgRuntimeException {
+	public void changes(final HgRepository hgRepo, final HgChangelog.Inspector inspector) throws HgIOException, HgRuntimeException {
 		Inspector bundleInsp = new Inspector() {
 			DigestHelper dh = new DigestHelper();
 			boolean emptyChangelog = true;
@@ -121,7 +120,7 @@ public class HgBundle {
 			public void changelogStart() {
 				emptyChangelog = true;
 				revisionIndex = 0;
-				csetBuilder = new ChangesetParser(hgRepo, true);
+				csetBuilder = new ChangesetParser(hgRepo, new HgChangelog.RawCsetFactory(true));
 			}
 
 			public void changelogEnd() {
@@ -153,7 +152,7 @@ Excerpt from bundle (nodeid, p1, p2, cs):
 
 To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
  */
-			public boolean element(GroupElement ge) throws HgRuntimeException {
+			public boolean element(GroupElement ge) throws IOException, HgRuntimeException {
 				emptyChangelog = false;
 				HgChangelog changelog = hgRepo.getChangelog();
 				try {
@@ -172,20 +171,17 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 						}
 					}
 					//
-					byte[] csetContent = ge.apply(prevRevContent);
+					byte[] csetContent = ge.patch().apply(prevRevContent, -1);
 					dh = dh.sha1(ge.firstParent(), ge.secondParent(), csetContent); // XXX ge may give me access to byte[] content of nodeid directly, perhaps, I don't need DH to be friend of Nodeid?
 					if (!ge.node().equalsTo(dh.asBinary())) {
 						throw new HgInvalidStateException(String.format("Integrity check failed on %s, node: %s", bundleFile, ge.node().shortNotation()));
 					}
-					ByteArrayDataAccess csetDataAccess = new ByteArrayDataAccess(csetContent);
-					RawChangeset cs = csetBuilder.parse(csetDataAccess);
+					RawChangeset cs = csetBuilder.parse(csetContent);
 					inspector.next(revisionIndex++, ge.node(), cs);
 					prevRevContent.done();
-					prevRevContent = csetDataAccess.reset();
+					prevRevContent = new ByteArrayDataAccess(csetContent);
 				} catch (CancelledException ex) {
 					return false;
-				} catch (IOException ex) {
-					throw new HgInvalidFileException("Invalid bundle file", ex, bundleFile); // TODO post-1.0 revisit exception handling
 				} catch (HgInvalidDataFormatException ex) {
 					throw new HgInvalidControlFileException("Invalid bundle file", ex, bundleFile);
 				}
@@ -217,11 +213,12 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		void fileEnd(String name) throws HgRuntimeException;
 
 		/**
-		 * XXX desperately need exceptions here
 		 * @param element data element, instance might be reused, don't keep a reference to it or its raw data
 		 * @return <code>true</code> to continue
+		 * @throws IOException propagated exception from {@link GroupElement#data()}
+		 * @throws HgRuntimeException propagated exception (subclass thereof) to indicate issues with the library. <em>Runtime exception</em>
 		 */
-		boolean element(GroupElement element) throws HgRuntimeException;
+		boolean element(GroupElement element) throws IOException, HgRuntimeException;
 	}
 
 	/**
@@ -229,7 +226,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 * @throws IllegalArgumentException if inspector argument is null
 	 */
-	public void inspectChangelog(Inspector inspector) throws HgRuntimeException {
+	public void inspectChangelog(Inspector inspector) throws HgIOException, HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -239,7 +236,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			da = getDataStream();
 			internalInspectChangelog(da, inspector);
 		} catch (IOException ex) {
-			throw new HgInvalidFileException("Bundle.inspectChangelog failed", ex, bundleFile);
+			throw new HgIOException("Failed to inspect changelog in the bundle", ex, bundleFile);
 		} finally {
 			if (da != null) {
 				da.done();
@@ -253,7 +250,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 * @throws IllegalArgumentException if inspector argument is null
 	 */
-	public void inspectManifest(Inspector inspector) throws HgRuntimeException {
+	public void inspectManifest(Inspector inspector) throws HgIOException, HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -267,7 +264,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			skipGroup(da); // changelog
 			internalInspectManifest(da, inspector);
 		} catch (IOException ex) {
-			throw new HgInvalidFileException("Bundle.inspectManifest failed", ex, bundleFile);
+			throw new HgIOException("Failed to inspect manifest in the bundle", ex, bundleFile);
 		} finally {
 			if (da != null) {
 				da.done();
@@ -281,7 +278,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 * @throws IllegalArgumentException if inspector argument is null
 	 */
-	public void inspectFiles(Inspector inspector) throws HgRuntimeException {
+	public void inspectFiles(Inspector inspector) throws HgIOException, HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -299,7 +296,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			skipGroup(da); // manifest
 			internalInspectFiles(da, inspector);
 		} catch (IOException ex) {
-			throw new HgInvalidFileException("Bundle.inspectFiles failed", ex, bundleFile);
+			throw new HgIOException("Failed to inspect files in the bundle", ex, bundleFile);
 		} finally {
 			if (da != null) {
 				da.done();
@@ -313,7 +310,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 * @throws IllegalArgumentException if inspector argument is null
 	 */
-	public void inspectAll(Inspector inspector) throws HgRuntimeException {
+	public void inspectAll(Inspector inspector) throws HgIOException, HgRuntimeException {
 		if (inspector == null) {
 			throw new IllegalArgumentException();
 		}
@@ -331,7 +328,7 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			}
 			internalInspectFiles(da, inspector);
 		} catch (IOException ex) {
-			throw new HgInvalidFileException("Bundle.inspectAll failed", ex, bundleFile);
+			throw new HgIOException("Failed to inspect bundle", ex, bundleFile);
 		} finally {
 			if (da != null) {
 				da.done();
@@ -453,13 +450,15 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 		}
 	}
 
-	@Experimental(reason="Cumbersome API, rawData and apply with byte[] perhaps need replacement with ByteChannel/ByteBuffer, and better Exceptions. Perhaps, shall split into interface and impl")
-	public static class GroupElement {
+	/**
+	 * Describes single element (a.k.a. chunk) of the group, either changelog, manifest or a file. 
+	 */
+	public static final class GroupElement {
 		private final byte[] header; // byte[80] takes 120 bytes, 4 Nodeids - 192
 		private final DataAccess dataAccess;
-		private Patch patches;
 		private final Nodeid deltaBase;
-
+		private Patch patches;
+		
 		GroupElement(byte[] fourNodeids, Nodeid deltaBaseRev, DataAccess rawDataAccess) {
 			assert fourNodeids != null && fourNodeids.length == 80;
 			header = fourNodeids;
@@ -507,16 +506,15 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			return deltaBase == null ? firstParent() : deltaBase;
 		}
 		
-		public byte[] rawDataByteArray() throws IOException { // XXX IOException or HgInvalidFileException?
-			return rawData().byteArray();
-		}
-		
-		public byte[] apply(byte[] baseContent) throws IOException {
-			return apply(new ByteArrayDataAccess(baseContent));
-		}
-
-		/*package-local*/ DataAccess rawData() {
-			return dataAccess;
+		/**
+		 * Read data of the group element. 
+		 * Note, {@link InputStream streams} obtained from several calls to this method
+		 * can't be read simultaneously.
+		 *  
+		 * @return stream to access content of this group element, never <code>null</code>
+		 */
+		public InputStream data() {
+			return new DataAccessInputStream(dataAccess);
 		}
 		
 		/*package-local*/ Patch patch() throws IOException {
@@ -528,10 +526,6 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 			return patches;
 		}
 
-		/*package-local*/ byte[] apply(DataAccess baseContent) throws IOException {
-			return patch().apply(baseContent, -1);
-		}
-		
 		public String toString() {
 			int patchCount;
 			try {
@@ -541,31 +535,6 @@ To recreate 30bd..e5, one have to take content of 9429..e0, not its p1 f1db..5e
 				patchCount = -1;
 			}
 			return String.format("%s %s %s %s; patches:%d\n", node().shortNotation(), firstParent().shortNotation(), secondParent().shortNotation(), cset().shortNotation(), patchCount);
-		}
-	}
-
-	@Experimental(reason="Work in progress, not an API")
-	public class BundleSerializer implements DataSerializer.DataSource {
-
-		public void serialize(DataSerializer out) throws HgIOException, HgRuntimeException {
-			FileInputStream fis = null;
-			try {
-				fis = new FileInputStream(HgBundle.this.bundleFile);
-				byte[] buffer = new byte[8*1024];
-				int r;
-				while ((r = fis.read(buffer, 0, buffer.length)) > 0) {
-					out.write(buffer, 0, r);
-				}
-				
-			} catch (IOException ex) {
-				throw new HgIOException("Failed to serialize bundle", HgBundle.this.bundleFile);
-			} finally {
-				new FileUtils(HgBundle.this.ctx.getLog(), this).closeQuietly(fis, HgBundle.this.bundleFile);
-			}
-		}
-
-		public int serializeLength() throws HgRuntimeException {
-			return Internals.ltoi(HgBundle.this.bundleFile.length());
 		}
 	}
 }

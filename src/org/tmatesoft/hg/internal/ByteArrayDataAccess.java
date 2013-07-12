@@ -95,7 +95,7 @@ public class ByteArrayDataAccess extends DataAccess {
 		pos = offset;
 	}
 	@Override
-	public void skip(int bytes) throws IOException {
+	public void skip(int bytes) {
 		seek(pos + bytes);
 	}
 	@Override

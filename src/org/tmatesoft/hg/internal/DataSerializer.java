@@ -24,7 +24,7 @@ import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
- * Serialization friend of {@link DataAccess}
+ * Serialization friend of {@link DataAccess}, similar to OutputStream with few handy methods
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.

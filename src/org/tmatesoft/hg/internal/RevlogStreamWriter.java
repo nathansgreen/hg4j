@@ -30,6 +30,7 @@ import org.tmatesoft.hg.internal.DataSerializer.ByteArrayDataSource;
 import org.tmatesoft.hg.internal.DataSerializer.ByteArraySerializer;
 import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgBundle.GroupElement;
+import org.tmatesoft.hg.repo.HgInternals;
 import org.tmatesoft.hg.repo.HgInvalidControlFileException;
 import org.tmatesoft.hg.repo.HgInvalidDataFormatException;
 import org.tmatesoft.hg.repo.HgInvalidRevisionException;
@@ -89,12 +90,9 @@ public class RevlogStreamWriter {
 		int p1 = p1Rev.isNull() ? NO_REVISION : revlogRevs.revisionIndex(p1Rev);
 		final Nodeid p2Rev = ge.secondParent();
 		int p2 = p2Rev.isNull() ? NO_REVISION : revlogRevs.revisionIndex(p2Rev);
-		Patch p = new Patch();
-		final byte[] patchBytes;
+		Patch p = null;
 		try {
-			// XXX there's ge.rawData(), to avoid extra array wrap
-			patchBytes = ge.rawDataByteArray();
-			p.read(new ByteArrayDataAccess(patchBytes));
+			p = HgInternals.patchFromData(ge);
 		} catch (IOException ex) {
 			throw new HgIOException("Failed to read patch information", ex, null);
 		}
@@ -109,7 +107,7 @@ public class RevlogStreamWriter {
 			// we may write patch from GroupElement as is
 			int patchBaseLen = dataLength(patchBaseRev);
 			revLen = patchBaseLen + p.patchSizeDelta();
-			ds = new ByteArrayDataSource(patchBytes);
+			ds = p.new PatchDataSource();
 		} else {
 			// read baseRev, unless it's the pull to empty repository
 			try {
@@ -180,7 +178,7 @@ public class RevlogStreamWriter {
 		DataSerializer indexFile, dataFile;
 		indexFile = dataFile = null;
 		try {
-			//
+			// FIXME perhaps, not a good idea to open stream for each revision added (e.g, when we pull a lot of them)
 			indexFile = revlogStream.getIndexStreamWriter(transaction);
 			final boolean isInlineData = revlogStream.isInlineData();
 			HeaderWriter revlogHeader = new HeaderWriter(isInlineData);

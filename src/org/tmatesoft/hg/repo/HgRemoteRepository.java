@@ -65,6 +65,7 @@ import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.DataSerializer;
 import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
+import org.tmatesoft.hg.internal.BundleSerializer;
 import org.tmatesoft.hg.internal.EncodingHelper;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.PropertyMarshal;
@@ -422,7 +423,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 		StringBuilder sb = appendNodeidListArgument("heads", remoteHeads, null);
 		
 		HttpURLConnection c = null;
-		DataSerializer.DataSource bundleData = bundle.new BundleSerializer();
+		DataSerializer.DataSource bundleData = BundleSerializer.newInstance(sessionContext, bundle);
 		try {
 			URL u = new URL(url, url.getPath() + "?cmd=unbundle&" + sb.toString());
 			c = setupConnection(u.openConnection());
