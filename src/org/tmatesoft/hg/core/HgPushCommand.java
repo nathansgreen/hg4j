@@ -87,15 +87,17 @@ public class HgPushCommand extends HgAbstractCommand<HgPushCommand> {
 			} else {
 				outgoing = new RevisionSet(l);
 			}
-			//
-			// prepare bundle
-			BundleGenerator bg = new BundleGenerator(implRepo);
-			File bundleFile = bg.create(outgoing.asList());
-			progress.worked(20);
-			HgBundle b = new HgLookup(repo.getSessionContext()).loadBundle(bundleFile);
-			//
-			// send changes
-			remoteRepo.unbundle(b, comparator.getRemoteHeads());
+			if (!outgoing.isEmpty()) {
+				//
+				// prepare bundle
+				BundleGenerator bg = new BundleGenerator(implRepo);
+				File bundleFile = bg.create(outgoing.asList());
+				progress.worked(20);
+				HgBundle b = new HgLookup(repo.getSessionContext()).loadBundle(bundleFile);
+				//
+				// send changes
+				remoteRepo.unbundle(b, comparator.getRemoteHeads());
+			} // update phase information nevertheless
 			progress.worked(20);
 			//
 			// update phase information

@@ -55,6 +55,9 @@ public class BundleGenerator {
 		repo = hgRepo;
 	}
 	
+	/**
+	 * @return never <code>null</code>. empty file if no changesets were written
+	 */
 	public File create(List<Nodeid> changesets) throws HgIOException, IOException {
 		final HgChangelog clog = repo.getRepo().getChangelog();
 		final HgManifest manifest = repo.getRepo().getManifest();
@@ -85,6 +88,10 @@ public class BundleGenerator {
 		manifestRevs.sort(true);
 		//
 		final File bundleFile = File.createTempFile("hg4j-", ".bundle");
+		if (clogRevs.length == 0) {
+			// nothing to write
+			return bundleFile;
+		}
 		final FileOutputStream osBundle = new FileOutputStream(bundleFile);
 		final OutputStreamSerializer outRaw = new OutputStreamSerializer(osBundle);
 		outRaw.write("HG10UN".getBytes(), 0, 6);
