@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.repo;
 
-import static org.tmatesoft.hg.repo.HgRepository.TIP;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -102,12 +100,27 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 	}
 	
 	/**
-	 * Prepare the map 
+	 * Prepare (initialize or update) the map. Once {@link HgParentChildMap} was initialized, it keeps snapshot
+	 * of repository state. New revisions committed to the repository are not visible. To update the map, call 
+	 * {@link #init()} once again, it tries to refresh in effective way, and to bring in only relevant changes.
+	 *  
 	 * @throws HgInvalidControlFileException if failed to access revlog index/data entry. <em>Runtime exception</em>
 	 * @throws HgRuntimeException subclass thereof to indicate other issues with the library. <em>Runtime exception</em>
 	 */
 	public void init() throws HgRuntimeException {
 		final int revisionCount = revlog.getRevisionCount();
+		Nodeid[] oldSequential = null, oldFirstParent = null, oldSecondParent = null, oldSorted = null;
+		if (sequential != null && sequential.length > 0 && sequential.length < revisionCount) {
+			int lastRecordedRevIndex = sequential.length-1;
+			if (sequential[lastRecordedRevIndex].equals(revlog.getRevision(lastRecordedRevIndex))) {
+				oldSequential = sequential;
+				oldFirstParent = firstParent;
+				oldSecondParent = secondParent;
+				oldSorted = sorted;
+				// not sure if there's a benefit in keeping sorted. assume quite some of them
+				// might end up on the same place and thus minimize rearrangements
+			}
+		}
 		firstParent = new Nodeid[revisionCount];
 		// TODO [post 1.1] Branches/merges are less frequent, and most of secondParent would be -1/null, hence 
 		// IntMap might be better alternative here, but need to carefully analyze (test) whether this brings
@@ -116,15 +129,29 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		secondParent = new Nodeid[revisionCount];
 		//
 		sequential = new Nodeid[revisionCount];
-		sorted = new Nodeid[revisionCount]; 
+		sorted = new Nodeid[revisionCount];
 		headsBitSet = new BitSet(revisionCount);
-		revlog.indexWalk(0, TIP, this);
+		if (oldSequential != null) {
+			assert oldFirstParent.length == oldSequential.length;
+			assert oldSecondParent.length == oldSequential.length;
+			assert oldSorted.length == oldSequential.length;
+			System.arraycopy(oldSequential, 0, sequential, 0, oldSequential.length);
+			System.arraycopy(oldFirstParent, 0, firstParent, 0, oldFirstParent.length);
+			System.arraycopy(oldSecondParent, 0, secondParent, 0, oldSecondParent.length);
+			System.arraycopy(oldSorted, 0, sorted, 0, oldSorted.length);
+			// restore old heads so that new one are calculated correctly
+			headsBitSet.set(0, oldSequential.length);
+			for (int headIndex : heads.keys()) {
+				headsBitSet.clear(headIndex);
+			}
+		}
+		revlog.indexWalk(oldSequential == null ? 0 : oldSequential.length, revisionCount-1, this);
 		seqWrapper = new ArrayHelper<Nodeid>(sequential);
 		// HgRevisionMap doesn't keep sorted, try alternative here.
 		// reference this.sorted (not only from ArrayHelper) helps to track ownership in hprof/mem dumps
 		seqWrapper.sort(sorted, false, true);
 		// no reason to keep BitSet, number of heads is usually small
-		IntMap<Nodeid> _heads = new IntMap<Nodeid>(headsBitSet.size() - headsBitSet.cardinality());
+		IntMap<Nodeid> _heads = new IntMap<Nodeid>(revisionCount - headsBitSet.cardinality());
 		int index = 0;
 		while (index < sequential.length) {
 			index = headsBitSet.nextClearBit(index);

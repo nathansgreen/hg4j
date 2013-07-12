@@ -218,6 +218,12 @@ public class IntMap<V> {
 		return map;
 	}
 	
+	public int[] keys() {
+		int[] rv = new int[size];
+		System.arraycopy(keys, 0, rv, 0, size);
+		return rv;
+	}
+	
 	public Collection<V> values() {
 		@SuppressWarnings("unchecked")
 		V[] rv = (V[]) new Object[size];

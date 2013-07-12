@@ -97,8 +97,7 @@ public class HgPullCommand extends HgAbstractCommand<HgPullCommand> {
 			added = insp.addedChangesets();
 			
 			if (!added.isEmpty()) {
-				// FIXME refresh parentHelper with newly added revisions in effective way
-				parentHelper.init(); 
+				parentHelper.init(); // refresh the map, we use it for phases below 
 			}
 			// get remote phases, update local phases to match that of remote
 			// do not update any remote phase (it's pull, after all)
