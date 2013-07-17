@@ -24,50 +24,44 @@ import java.util.Formatter;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class RangeSeq {
-	// XXX smth like IntSliceVector to access triples (or slices of any size, in fact)
-	// with easy indexing, e.g. #get(sliceIndex, indexWithinSlice)
-	// and vect.get(7,2) instead of vect.get(7*SIZEOF_SLICE+2)
-	private final IntVector ranges = new IntVector(3*10, 3*5);
-	private int count;
+public final class RangePairSeq {
+	private final IntSliceSeq ranges = new IntSliceSeq(3);
 	
 	public void add(int start1, int start2, int length) {
+		int count = ranges.size();
 		if (count > 0) {
-			int lastIndex = 3 * (count-1);
-			int lastS1 = ranges.get(lastIndex);
-			int lastS2 = ranges.get(lastIndex + 1);
-			int lastLen = ranges.get(lastIndex + 2);
+			int lastS1 = ranges.get(--count, 0);
+			int lastS2 = ranges.get(count, 1);
+			int lastLen = ranges.get(count, 2);
 			if (start1 == lastS1 + lastLen && start2 == lastS2 + lastLen) {
 				// new range continues the previous one - just increase the length
-				ranges.set(lastIndex + 2, lastLen + length);
+				ranges.set(count, lastS1, lastS2, lastLen + length);
 				return;
 			}
 		}
 		ranges.add(start1, start2, length);
-		count++;
 	}
 	
 	public void clear() {
 		ranges.clear();
-		count = 0;
 	}
 
 	public int size() {
-		return count;
+		return ranges.size();
 	}
 
 	/**
 	 * find out line index in the target that matches specified origin line
 	 */
 	public int mapLineIndex(int ln) {
-		for (int i = 0; i < ranges.size(); i += 3) {
-			int s1 = ranges.get(i);
+		for (IntTuple t : ranges) {
+			int s1 = t.at(0);
 			if (s1 > ln) {
 				return -1;
 			}
-			int l = ranges.get(i+2);
+			int l = t.at(2);
 			if (s1 + l > ln) {
-				int s2 = ranges.get(i + 1);
+				int s2 = t.at(1);
 				return s2 + (ln - s1);
 			}
 		}
@@ -78,26 +72,26 @@ public final class RangeSeq {
 	 * find out line index in origin that matches specified target line
 	 */
 	public int reverseMapLine(int targetLine) {
-		for (int i = 0; i < ranges.size(); i +=3) {
-			int ts = ranges.get(i + 1);
+		for (IntTuple t : ranges) {
+			int ts = t.at(1);
 			if (ts > targetLine) {
 				return -1;
 			}
-			int l = ranges.get(i + 2);
+			int l = t.at(2);
 			if (ts + l > targetLine) {
-				int os = ranges.get(i);
+				int os = t.at(0);
 				return os + (targetLine - ts);
 			}
 		}
 		return -1;
 	}
 	
-	public RangeSeq intersect(RangeSeq target) {
-		RangeSeq v = new RangeSeq();
-		for (int i = 0; i < ranges.size(); i += 3) {
-			int originLine = ranges.get(i);
-			int targetLine = ranges.get(i + 1);
-			int length = ranges.get(i + 2);
+	public RangePairSeq intersect(RangePairSeq target) {
+		RangePairSeq v = new RangePairSeq();
+		for (IntTuple t : ranges) {
+			int originLine = t.at(0);
+			int targetLine = t.at(1);
+			int length = t.at(2);
 			int startTargetLine = -1, startOriginLine = -1, c = 0;
 			for (int j = 0; j < length; j++) {
 				int lnInFinal = target.mapLineIndex(targetLine + j);
@@ -143,12 +137,12 @@ public final class RangeSeq {
 	}
 
 	private boolean includes(int ln, int o) {
-		for (int i = 2; i < ranges.size(); o += 3, i+=3) {
-			int rangeStart = ranges.get(o);
+		for (IntTuple t : ranges) {
+			int rangeStart = t.at(o);
 			if (rangeStart > ln) {
 				return false;
 			}
-			int rangeLen = ranges.get(i);
+			int rangeLen = t.at(2);
 			if (rangeStart + rangeLen > ln) {
 				return true;
 			}
@@ -159,10 +153,10 @@ public final class RangeSeq {
 	public CharSequence dump() {
 		StringBuilder sb = new StringBuilder();
 		Formatter f = new Formatter(sb);
-		for (int i = 0; i < ranges.size(); i += 3) {
-			int s1 = ranges.get(i);
-			int s2 = ranges.get(i + 1);
-			int len = ranges.get(i + 2);
+		for (IntTuple t : ranges) {
+			int s1 = t.at(0);
+			int s2 = t.at(1);
+			int len = t.at(2);
 			f.format("[%d..%d) == [%d..%d);  ", s1, s1 + len, s2, s2 + len);
 		}
 		return sb;
@@ -170,6 +164,6 @@ public final class RangeSeq {
 	
 	@Override
 	public String toString() {
-		return String.format("RangeSeq[%d]:%s", count, dump());
+		return String.format("RangeSeq[%d]:%s", size(), dump());
 	}
 }

@@ -32,9 +32,11 @@ import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.ArrayHelper;
 import org.tmatesoft.hg.internal.ByteVector;
+import org.tmatesoft.hg.internal.IntSliceSeq;
+import org.tmatesoft.hg.internal.IntTuple;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.PathScope;
-import org.tmatesoft.hg.internal.RangeSeq;
+import org.tmatesoft.hg.internal.RangePairSeq;
 import org.tmatesoft.hg.internal.RevisionDescendants;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgChangelog.RawChangeset;
@@ -511,8 +513,8 @@ public class TestAuxUtilities {
 	}
 	
 	@Test
-	public void testRangeSequence() {
-		RangeSeq rs = new RangeSeq();
+	public void testRangePairSequence() {
+		RangePairSeq rs = new RangePairSeq();
 		rs.add(-1, 5, 3);
 		rs.add(-1, 10, 2);
 		rs.add(-1, 15, 3);
@@ -554,6 +556,38 @@ public class TestAuxUtilities {
 			x--;
 		}
 		errorCollector.assertTrue(v.equalsTo(new byte[] { 10,9,8,7,6,5,4 }));
+	}
+	
+	@Test
+	public void testIntSliceSeq() {
+		IntSliceSeq s1 = new IntSliceSeq(3, 10, 10);
+		s1.add(1,2,3);
+		try {
+			s1.add(1,2);
+			errorCollector.fail("shall accept precise number of arguments");
+		} catch (IllegalArgumentException ex) {
+		}
+		try {
+			s1.add(1,2,3,4);
+			errorCollector.fail("shall accept precise number of arguments");
+		} catch (IllegalArgumentException ex) {
+		}
+		s1.add(21,22,23);
+		errorCollector.assertEquals(2, s1.size());
+		s1.add(7, 8, 9);
+		s1.set(1, 4, 5, 6);
+		IntTuple l = s1.last();
+		errorCollector.assertEquals(7, l.at(0));
+		errorCollector.assertEquals(8, l.at(1));
+		errorCollector.assertEquals(9, l.at(2));
+		int v = 1, slice = 0;
+		for (IntTuple t : s1) {
+			for (int i = 0; i < t.size(); i++) {
+				errorCollector.assertEquals(String.format("Slice %d, element %d", slice, i), v++, t.at(i));
+			}
+			slice++;
+		}
+		errorCollector.assertEquals(10, v);
 	}
 	
 	public static void main(String[] args) throws Throwable {

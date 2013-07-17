@@ -19,6 +19,7 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
 
@@ -219,7 +220,7 @@ public class BlameHelper {
 		private final int csetTarget;
 		private EqualBlocksCollector p2MergeCommon;
 		private int csetMergeParent;
-		private IntVector mergeRanges;
+		private IntSliceSeq mergeRanges;
 		private final AnnotateRev annotatedRevision;
 		private HgCallbackTargetException error;
 
@@ -235,7 +236,7 @@ public class BlameHelper {
 		public void setMergeParent2(EqualBlocksCollector p2Merge, int parentCset2) {
 			p2MergeCommon = p2Merge;
 			csetMergeParent = parentCset2;
-			mergeRanges = new IntVector(3*10, 3*10);
+			mergeRanges = new IntSliceSeq(3, 10, 10);
 		}
 		
 		@Override
@@ -298,11 +299,12 @@ public class BlameHelper {
 					 */
 					int s1TotalLines = s1To - s1From, s1ConsumedLines = 0, s1Start = s1From;
 					
-					for (int i = 0; i < mergeRanges.size(); i += 3) {
-						final int rangeOrigin = mergeRanges.get(i);
-						final int rangeStart = mergeRanges.get(i+1);
-						final int rangeLen = mergeRanges.get(i+2);
-						final boolean lastRange = i+3 >= mergeRanges.size();
+					for (Iterator<IntTuple> it = mergeRanges.iterator(); it.hasNext();) {
+						IntTuple mergeRange = it.next();
+						final int rangeOrigin = mergeRange.at(0);
+						final int rangeStart = mergeRange.at(1);
+						final int rangeLen = mergeRange.at(2);
+						final boolean lastRange = it.hasNext();
 						final int s1LinesLeft = s1TotalLines - s1ConsumedLines;
 						// how many lines we may report as changed (don't use more than in range unless it's the very last range)
 						final int s1LinesToBorrow = lastRange ? s1LinesLeft : Math.min(s1LinesLeft, rangeLen);
@@ -349,10 +351,10 @@ public class BlameHelper {
 					mergeRanges.clear();
 					p2MergeCommon.combineAndMarkRangesWithTarget(s2From, s2To - s2From, csetOrigin, csetMergeParent, mergeRanges);
 					int insPoint = s1InsertPoint; // track changes to insertion point
-					for (int i = 0; i < mergeRanges.size(); i += 3) {
-						int rangeOrigin = mergeRanges.get(i);
-						int rangeStart = mergeRanges.get(i+1);
-						int rangeLen = mergeRanges.get(i+2);
+					for (IntTuple mergeRange : mergeRanges) {
+						int rangeOrigin = mergeRange.at(0);
+						int rangeStart = mergeRange.at(1);
+						int rangeLen = mergeRange.at(2);
 						ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, insPoint);
 						block.setOriginAndTarget(rangeOrigin, csetTarget);
 						insp.added(block);
@@ -619,7 +621,7 @@ public class BlameHelper {
 	
 
 	private static class EqualBlocksCollector implements DiffHelper.MatchInspector<LineSequence> {
-		private final RangeSeq matches = new RangeSeq();
+		private final RangePairSeq matches = new RangePairSeq();
 
 		public void begin(LineSequence s1, LineSequence s2) {
 		}
@@ -658,16 +660,15 @@ public class BlameHelper {
 		 * whether the range is from initial range (markerSource) or is a result of the intersection with target
 		 * (markerTarget)
 		 */
-		public void combineAndMarkRangesWithTarget(int start, int length, int markerSource, int markerTarget, IntVector result) {
+		public void combineAndMarkRangesWithTarget(int start, int length, int markerSource, int markerTarget, IntSliceSeq result) {
+			assert result.sliceSize() == 3;
 			int sourceStart = start, targetStart = start, sourceEnd = start + length;
 			for (int l = sourceStart; l < sourceEnd; l++) {
 				if (matches.includesTargetLine(l)) {
 					// l is from target
 					if (sourceStart < l) {
 						// few lines from source range were not in the target, report them
-						result.add(markerSource);
-						result.add(sourceStart);
-						result.add(l - sourceStart);
+						result.add(markerSource, sourceStart, l - sourceStart);
 					}
 					// indicate the earliest line from source range to use
 					sourceStart = l + 1;
@@ -675,9 +676,7 @@ public class BlameHelper {
 					// l is not in target
 					if (targetStart < l) {
 						// report lines from target range
-						result.add(markerTarget);
-						result.add(targetStart);
-						result.add(l - targetStart);
+						result.add(markerTarget, targetStart, l - targetStart);
 					}
 					// next line *may* be from target
 					targetStart = l + 1;
@@ -688,14 +687,10 @@ public class BlameHelper {
 			if (sourceStart < sourceEnd) {
 				assert targetStart == sourceEnd;
 				// something left from the source range
-				result.add(markerSource);
-				result.add(sourceStart);
-				result.add(sourceEnd - sourceStart);
+				result.add(markerSource, sourceStart, sourceEnd - sourceStart);
 			} else if (targetStart < sourceEnd) {
 				assert sourceStart == sourceEnd;
-				result.add(markerTarget);
-				result.add(targetStart);
-				result.add(sourceEnd - targetStart);
+				result.add(markerTarget, targetStart, sourceEnd - targetStart);
 			}
 		}
 	}
@@ -770,10 +765,10 @@ public class BlameHelper {
 			System.out.printf("[%d..%d) ", r.get(i), r.get(i) + r.get(i+1));
 		}
 		System.out.println();
-		r.clear();
-		bc.combineAndMarkRangesWithTarget(0, 16, 508, 514, r);
-		for (int i = 0; i < r.size(); i+=3) {
-			System.out.printf("%d:[%d..%d)  ", r.get(i), r.get(i+1), r.get(i+1) + r.get(i+2));
+		IntSliceSeq mr = new IntSliceSeq(3);
+		bc.combineAndMarkRangesWithTarget(0, 16, 508, 514, mr);
+		for (IntTuple t : mr) {
+			System.out.printf("%d:[%d..%d)  ", t.at(0), t.at(1), t.at(1) + t.at(2));
 		}
 	}
 }

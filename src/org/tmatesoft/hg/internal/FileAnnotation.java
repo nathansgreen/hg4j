@@ -43,18 +43,18 @@ public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Reci
 	}
 
 	// keeps <startSeq1, startSeq2, len> of equal blocks, origin to target, from some previous step
-	private RangeSeq activeEquals;
+	private RangePairSeq activeEquals;
 	// equal blocks of the current iteration, to be recalculated before next step
 	// to track line number (current target to ultimate target) mapping 
-	private RangeSeq intermediateEquals = new RangeSeq();
+	private RangePairSeq intermediateEquals = new RangePairSeq();
 
 	private boolean[] knownLines;
 	private final LineInspector delegate;
 	private RevisionDescriptor revisionDescriptor;
 	private BlockData lineContent;
 
-	private IntMap<RangeSeq> mergedRanges = new IntMap<RangeSeq>(10);
-	private IntMap<RangeSeq> equalRanges = new IntMap<RangeSeq>(10);
+	private IntMap<RangePairSeq> mergedRanges = new IntMap<RangePairSeq>(10);
+	private IntMap<RangePairSeq> equalRanges = new IntMap<RangePairSeq>(10);
 	private boolean activeEqualsComesFromMerge = false;
 
 	public FileAnnotation(LineInspector lineInspector) {
@@ -66,7 +66,7 @@ public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Reci
 		if (knownLines == null) {
 			lineContent = rd.target();
 			knownLines = new boolean[lineContent.elementCount()];
-			activeEquals = new RangeSeq();
+			activeEquals = new RangePairSeq();
 			activeEquals.add(0, 0, knownLines.length);
 			equalRanges.put(rd.targetChangesetIndex(), activeEquals);
 		} else {
@@ -85,7 +85,7 @@ public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Reci
 
 	public void done(RevisionDescriptor rd) {
 		// update line numbers of the intermediate target to point to ultimate target's line numbers
-		RangeSeq v = intermediateEquals.intersect(activeEquals);
+		RangePairSeq v = intermediateEquals.intersect(activeEquals);
 		if (activeEqualsComesFromMerge) {
 			mergedRanges.put(rd.originChangesetIndex(), v);
 		} else {
@@ -94,7 +94,7 @@ public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Reci
 		if (rd.isMerge() && !mergedRanges.containsKey(rd.mergeChangesetIndex())) {
 			// seen merge, but no lines were merged from p2.
 			// Add empty range to avoid uncertainty when a parent of p2 pops in
-			mergedRanges.put(rd.mergeChangesetIndex(), new RangeSeq());
+			mergedRanges.put(rd.mergeChangesetIndex(), new RangePairSeq());
 		}
 		intermediateEquals.clear();
 		activeEquals = null;
@@ -107,11 +107,11 @@ public class FileAnnotation implements HgBlameInspector, RevisionDescriptor.Reci
 	}
 
 	public void added(AddBlock block) {
-		RangeSeq rs = null;
+		RangePairSeq rs = null;
 		if (revisionDescriptor.isMerge() && block.originChangesetIndex() == revisionDescriptor.mergeChangesetIndex()) {
 			rs = mergedRanges.get(revisionDescriptor.mergeChangesetIndex());
 			if (rs == null) {
-				mergedRanges.put(revisionDescriptor.mergeChangesetIndex(), rs = new RangeSeq());
+				mergedRanges.put(revisionDescriptor.mergeChangesetIndex(), rs = new RangePairSeq());
 			}
 		}
 		if (activeEquals.size() == 0) {
