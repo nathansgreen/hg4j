@@ -67,7 +67,7 @@ public class ForwardAnnotateInspector implements HgBlameInspector, HgBlameInspec
 			for (int i = 0, x = t.at(0); i < x; i++) {
 				final int lineInRev = t.at(2) + i;
 				final byte[] lc = revLines.get(lineInRev);
-				li.init(line++, t.at(1), lc);
+				li.init(line++, lineInRev+1, t.at(1), lc);
 				insp.next(li);
 				progress.worked(1);
 				cancel.checkCancelled();
@@ -112,7 +112,7 @@ public class ForwardAnnotateInspector implements HgBlameInspector, HgBlameInspec
 	public void deleted(DeleteBlock block) throws HgCallbackTargetException {
 	}
 	
-	private void copyBlock(int originChangesetIndex, int originStart, int length) {
+	private void copyBlock(int originChangesetIndex, int blockStart, int length) {
 		IntSliceSeq origin = all.get(originChangesetIndex);
 		assert origin != null; // shall visit parents before came to this child
 		int originPos = 0;
@@ -120,17 +120,20 @@ public class ForwardAnnotateInspector implements HgBlameInspector, HgBlameInspec
 		for (IntTuple t : origin) {
 			int originBlockLen = t.at(0);
 			int originBlockEnd = originPos + originBlockLen;
-			if (originBlockEnd > originStart) {
-				int originBlockOverlap = Math.min(originBlockLen, originBlockEnd - originStart);
+			if (originBlockEnd > blockStart) {
+				// part of origin block from blockStart up to originBlockEnd, but not more
+				// than size of the block (when blockStart is out of block start, i.e. < originPos)
+				int originBlockOverlap = Math.min(originBlockLen, originBlockEnd - blockStart);
 				assert originBlockOverlap > 0;
-				originBlockOverlap = Math.min(originBlockOverlap, targetBlockLen);
+				// eat as much as there's left in the block being copied
+				int originBlockConsumed = Math.min(originBlockOverlap, targetBlockLen);
 				int originBlockLine = t.at(2);
-				if (originPos < originStart) {
+				if (originPos < blockStart) {
 					originBlockLine += originBlockLen-originBlockOverlap;
 				}
 				// copy fragment of original block;
-				current.add(originBlockOverlap, t.at(1), originBlockLine);
-				targetBlockLen -= originBlockOverlap;
+				current.add(originBlockConsumed, t.at(1), originBlockLine);
+				targetBlockLen -= originBlockConsumed;
 				if (targetBlockLen == 0) {
 					break;
 				}
@@ -144,19 +147,17 @@ public class ForwardAnnotateInspector implements HgBlameInspector, HgBlameInspec
 		HgRepository repo = new HgLookup().detect("/home/artem/hg/junit-test-repos/test-annotate/");
 		HgDiffCommand cmd = new HgDiffCommand(repo);
 		cmd.file(repo.getFileNode("file1")).order(HgIterateDirection.OldToNew);
-		cmd.range(0, 8);
+		final int cset = 8;
+		cmd.range(0, cset);
 		final ForwardAnnotateInspector c2 = new ForwardAnnotateInspector();
 		cmd.executeAnnotate(c2);
-		for (IntTuple t : c2.all.get(8)) {
-			System.out.printf("Block %d lines from revision %d (starts with line %d in the origin)\n", t.at(0), t.at(1), t.at(2));
-		}
-		for (IntTuple t : c2.all.get(8)) {
+		for (IntTuple t : c2.all.get(cset)) {
 			System.out.printf("Block %d lines from revision %d (starts with line %d in the origin)\n", t.at(0), t.at(1), 1+t.at(2));
 		}
-		c2.report(8, new Inspector() {
+		c2.report(cset, new Inspector() {
 			
 			public void next(LineInfo lineInfo) throws HgCallbackTargetException {
-				System.out.printf("%3d:%3d: %s", lineInfo.getChangesetIndex(), lineInfo.getLineNumber(), new String(lineInfo.getContent()));
+				System.out.printf("%3d:%3d: %s", lineInfo.getChangesetIndex(), lineInfo.getOriginLineNumber(), new String(lineInfo.getContent()));
 			}
 		}, ProgressSupport.Factory.get(null), CancelSupport.Factory.get(null));
 	}

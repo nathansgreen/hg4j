@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.ListIterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -108,7 +107,7 @@ public class TestBlame {
 			final ReverseAnnotateInspector insp = new ReverseAnnotateInspector();
 			diffCmd.executeAnnotate(insp);
 			AnnotateInspector fa = new AnnotateInspector().fill(cs, insp);
-			doAnnotateLineCheck(cs, ar.getLines(), fa.changesets, fa.lines);
+			doAnnotateLineCheck(cs, ar, fa);
 		}
 	}
 	
@@ -125,7 +124,7 @@ public class TestBlame {
 			final ReverseAnnotateInspector insp = new ReverseAnnotateInspector();
 			diffCmd.executeAnnotate(insp);
 			AnnotateInspector fa = new AnnotateInspector().fill(cs, insp);
-			doAnnotateLineCheck(cs, ar.getLines(), fa.changesets, fa.lines);
+			doAnnotateLineCheck(cs, ar, fa);
 		}
 		/*`hg annotate -r 8` and HgBlameFacility give different result
 		 * for "r0, line 5" line, which was deleted in rev2 and restored back in
@@ -253,28 +252,30 @@ public class TestBlame {
 		cmd.execute(ai);
 		AnnotateRunner ar = new AnnotateRunner(fname, repo.getWorkingDir());
 		ar.run(changeset, true);
-		doAnnotateLineCheck(changeset, ar.getLines(), ai.changesets, ai.lines);
+		doAnnotateLineCheck(changeset, ar, ai);
 		
 		// no follow
 		cmd.file(fname, false);
 		ai = new AnnotateInspector();
 		cmd.execute(ai);
 		ar.run(changeset, false);
-		doAnnotateLineCheck(changeset, ar.getLines(), ai.changesets, ai.lines);
+		doAnnotateLineCheck(changeset, ar, ai);
 	}
 	
-	// FIXME add originLineNumber to HgAnnotateCommand#LineInfo, pass it from FileAnnotate, test
-
-	private void doAnnotateLineCheck(int cs, String[] hgAnnotateLines, List<Integer> cmdChangesets, List<String> cmdLines) {
+	private void doAnnotateLineCheck(int cs, AnnotateRunner ar, AnnotateInspector hg4jResult) {
+		String[] hgAnnotateLines = ar.getLines();
 		assertTrue("[sanity]", hgAnnotateLines.length > 0);
-		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, cmdLines.size());
+		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, hg4jResult.getLineCount());
 
-		for (int i = 0; i < cmdChangesets.size(); i++) {
-			int hgAnnotateRevIndex = Integer.parseInt(hgAnnotateLines[i].substring(0, hgAnnotateLines[i].indexOf(':')).trim());
-			errorCollector.assertEquals(String.format("Revision mismatch for line %d (annotating rev: %d)", i+1, cs), hgAnnotateRevIndex, cmdChangesets.get(i));
-			String hgAnnotateLine = hgAnnotateLines[i].substring(hgAnnotateLines[i].indexOf(':') + 1);
-			String apiLine = cmdLines.get(i).trim();
-			errorCollector.assertEquals(hgAnnotateLine.trim(), apiLine);
+		for (int i = 0; i < hgAnnotateLines.length; i++) {
+			String[] hgLine = hgAnnotateLines[i].split(":");
+			assertTrue(hgAnnotateLines[i], hgLine.length >= 3);
+			int hgAnnotateRevIndex = Integer.parseInt(hgLine[0].trim());
+			int hgFirstAppLine = Integer.parseInt(hgLine[1].trim());
+			String hgLineText = hgAnnotateLines[i].substring(hgLine[0].length() + hgLine[1].length() + 2).trim(); 
+			errorCollector.assertEquals(String.format("Revision mismatch for line %d (annotating rev: %d)", i+1, cs), hgAnnotateRevIndex, hg4jResult.getChangeset(i));
+			errorCollector.assertEquals(hgLineText, hg4jResult.getLine(i).trim());
+			errorCollector.assertEquals(hgFirstAppLine, hg4jResult.getOriginLine(i));
 		}
 	}
 	
@@ -525,10 +526,15 @@ public class TestBlame {
 		}
 	}
 	
+	/**
+	 * Note, this class expects lines coming in natural sequence (not the order they are detected - possible with {@link ReverseAnnotateInspector})
+	 * Once async lines are done, shall change implementation here 
+	 */
 	static class AnnotateInspector implements HgAnnotateCommand.Inspector {
 		private int lineNumber = 1;
-		public final ArrayList<String> lines = new ArrayList<String>();
-		public final ArrayList<Integer> changesets = new ArrayList<Integer>();
+		private final ArrayList<String> lines = new ArrayList<String>();
+		private final IntVector changesets = new IntVector();
+		private final IntVector firstAppLines = new IntVector();
 
 		AnnotateInspector fill(int rev, ReverseAnnotateInspector ai) throws HgCallbackTargetException, CancelledException {
 			ai.report(rev, this, ProgressSupport.Factory.get(null), CancelSupport.Factory.get(null));
@@ -544,6 +550,20 @@ public class TestBlame {
 			lineNumber++;
 			lines.add(new String(lineInfo.getContent()));
 			changesets.add(lineInfo.getChangesetIndex());
+			firstAppLines.add(lineInfo.getOriginLineNumber());
+		}
+		
+		int getLineCount() {
+			return changesets.size();
+		}
+		int getChangeset(int line) {
+			return changesets.get(line);
+		}
+		String getLine(int line) {
+			return lines.get(line);
+		}
+		int getOriginLine(int line) {
+			return firstAppLines.get(line);
 		}
 	}
 	
@@ -563,6 +583,7 @@ public class TestBlame {
 			ArrayList<String> args = new ArrayList<String>();
 			args.add("hg");
 			args.add("annotate");
+			args.add("--line-number");
 			args.add("-r");
 			args.add(cset == TIP ? "tip" : String.valueOf(cset));
 			if (!follow) {

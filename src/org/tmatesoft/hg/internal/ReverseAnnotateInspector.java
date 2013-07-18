@@ -59,6 +59,7 @@ public class ReverseAnnotateInspector implements HgBlameInspector, RevisionDescr
 	private boolean activeEqualsComesFromMerge = false;
 
 	private int[] lineRevisions;
+	private int[] lineNumbers;
 
 	/**
 	 * @return desired order of iteration for diff
@@ -72,7 +73,7 @@ public class ReverseAnnotateInspector implements HgBlameInspector, RevisionDescr
 		progress.start(lineRevisions.length);
 		for (int i = 0; i < lineRevisions.length; i++) {
 			byte[] c = lineContent.elementAt(i).asArray();
-			li.init(i+1, lineRevisions[i], c);
+			li.init(i+1, lineNumbers[i] + 1, lineRevisions[i], c);
 			insp.next(li);
 			progress.worked(1);
 			cancel.checkCancelled();
@@ -85,8 +86,9 @@ public class ReverseAnnotateInspector implements HgBlameInspector, RevisionDescr
 		if (knownLines == null) {
 			lineContent = rd.target();
 			knownLines = new boolean[lineContent.elementCount()];
-			lineRevisions = new int [lineContent.elementCount()];
+			lineRevisions = new int [knownLines.length];
 			Arrays.fill(lineRevisions, NO_REVISION);
+			lineNumbers = new int[knownLines.length];
 			activeEquals = new RangePairSeq();
 			activeEquals.add(0, 0, knownLines.length);
 			equalRanges.put(rd.targetChangesetIndex(), activeEquals);
@@ -144,7 +146,7 @@ public class ReverseAnnotateInspector implements HgBlameInspector, RevisionDescr
 				if (rs != null) {
 					rs.add(block.insertedAt() + i, lnInFinal, 1);
 				} else {
-					line(lnInFinal, block.targetChangesetIndex());
+					line(lnInFinal, ln, block.targetChangesetIndex());
 				}
 				knownLines[lnInFinal] = true;
 			}
@@ -158,7 +160,8 @@ public class ReverseAnnotateInspector implements HgBlameInspector, RevisionDescr
 	public void deleted(DeleteBlock block) {
 	}
 
-	private void line(int lineNumber, int changesetRevIndex) {
+	private void line(int lineNumber, int firstAppearance, int changesetRevIndex) {
 		lineRevisions[lineNumber] = changesetRevIndex;
+		lineNumbers[lineNumber] = firstAppearance;
 	}
 }

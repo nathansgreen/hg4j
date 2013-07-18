@@ -24,17 +24,24 @@ import org.tmatesoft.hg.core.HgAnnotateCommand.LineInfo;
  */
 final class LineImpl implements LineInfo {
 	private int ln;
+	private int origLine;
 	private int rev;
 	private byte[] content;
 
-	void init(int line, int csetRev, byte[] cnt) {
+	void init(int line, int firstAppearance, int csetRev, byte[] cnt) {
 		ln = line;
+		origLine = firstAppearance;
 		rev = csetRev;
 		content = cnt;
 	}
 
 	public int getLineNumber() {
 		return ln;
+	}
+
+
+	public int getOriginLineNumber() {
+		return origLine;
 	}
 
 	public int getChangesetIndex() {

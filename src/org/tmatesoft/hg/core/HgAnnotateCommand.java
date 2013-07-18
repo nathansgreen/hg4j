@@ -143,8 +143,23 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 	 * Clients shall not implement this interface
 	 */
 	public interface LineInfo {
+		/**
+		 * @return 1-based index of the line in the annotated revision
+		 */
 		int getLineNumber();
+
+		/**
+		 * @return 1-based line number at the first appearance, at changeset {@link #getChangesetIndex()} 
+		 */
+		int getOriginLineNumber();
+		/**
+		 * @return changeset revision this line was introduced at
+		 */
 		int getChangesetIndex();
+
+		/**
+		 * @return line content
+		 */
 		byte[] getContent();
 	}
 }

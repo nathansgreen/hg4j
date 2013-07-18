@@ -60,7 +60,7 @@ public class Annotate {
 
 		public void next(LineInfo lineInfo) {
 			if (lineNumbers) {
-				System.out.printf("%3d:%3d: %s", lineInfo.getChangesetIndex(), lineInfo.getLineNumber(), new String(lineInfo.getContent()));
+				System.out.printf("%3d:%3d: %s", lineInfo.getChangesetIndex(), lineInfo.getOriginLineNumber(), new String(lineInfo.getContent()));
 			} else {
 				System.out.printf("%3d: %s", lineInfo.getChangesetIndex(), new String(lineInfo.getContent()));
 			}

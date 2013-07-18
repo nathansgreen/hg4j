@@ -53,4 +53,17 @@ public final class IntTuple implements Cloneable {
 			throw new Error(ex);
 		}
 	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append('(');
+		for (int i = 0; i < size; i++) {
+			sb.append(at(i));
+			sb.append(", ");
+		}
+		sb.setLength(sb.length() - 2);
+		sb.append(')');
+		return sb.toString();
+	}
 }
