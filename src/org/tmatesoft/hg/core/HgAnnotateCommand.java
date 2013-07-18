@@ -16,16 +16,9 @@
  */
 package org.tmatesoft.hg.core;
 
-import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
-
-import java.util.Arrays;
-
-import org.tmatesoft.hg.core.HgBlameInspector.BlockData;
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
-import org.tmatesoft.hg.internal.FileAnnotation;
-import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
-import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
+import org.tmatesoft.hg.internal.ForwardAnnotateInspector;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -88,6 +81,7 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 	}
 	
 	// TODO [post-1.1] set encoding and provide String line content from LineInfo
+	// TODO FWIW: diff algorithms: http://bramcohen.livejournal.com/73318.html
 
 	/**
 	 * Annotate selected file
@@ -107,32 +101,26 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		final ProgressSupport progress = getProgressSupport(inspector);
 		final CancelSupport cancellation = getCancelSupport(inspector, true);
 		cancellation.checkCancelled();
-		progress.start(2);
+		progress.start(200);
 		try {
 			HgDataFile df = repo.getFileNode(file);
 			if (!df.exists()) {
 				return;
 			}
 			final int changesetStart = followRename ? 0 : df.getChangesetRevisionIndex(0);
-			Collector c = new Collector(cancellation);
-			FileAnnotation fa = new FileAnnotation(c);
-			HgDiffCommand cmd = new HgDiffCommand(repo);
-			cmd.file(df).order(HgIterateDirection.NewToOld);
-			cmd.range(changesetStart, annotateRevision.get());
-			cmd.executeAnnotate(fa);
-			progress.worked(1);
-			c.throwIfCancelled();
+			final int annotateRevIndex = annotateRevision.get();
+			HgDiffCommand cmd = new HgDiffCommand(repo).file(df);
+			cmd.range(changesetStart, annotateRevIndex);
+			cmd.set(cancellation);
+			cmd.set(new ProgressSupport.Sub(progress, 100));
+			//
+//			ReverseAnnotateInspector ai = new ReverseAnnotateInspector();
+			ForwardAnnotateInspector ai = new ForwardAnnotateInspector();
+			cmd.order(ai.iterateDirection());
+			//
+			cmd.executeAnnotate(ai);
 			cancellation.checkCancelled();
-			ProgressSupport.Sub subProgress = new ProgressSupport.Sub(progress, 1);
-			subProgress.start(c.lineRevisions.length);
-			LineImpl li = new LineImpl();
-			for (int i = 0; i < c.lineRevisions.length; i++) {
-				li.init(i+1, c.lineRevisions[i], c.line(i));
-				inspector.next(li);
-				subProgress.worked(1);
-				cancellation.checkCancelled();
-			}
-			subProgress.done();
+			ai.report(annotateRevIndex, inspector, new ProgressSupport.Sub(progress, 100), cancellation);
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
 		}
@@ -158,71 +146,5 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		int getLineNumber();
 		int getChangesetIndex();
 		byte[] getContent();
-	}
-
-	// TODO [post-1.1] there's no need in FileAnnotation.LineInspector, merge it here
-	// ok for 1.1 as this LineInspector is internal class
-	private static class Collector implements LineInspector {
-		private int[] lineRevisions;
-		private byte[][] lines;
-		private final CancelSupport cancelSupport;
-		private CancelledException cancelEx;
-		
-		Collector(CancelSupport cancellation) {
-			cancelSupport = cancellation;
-		}
-		
-		public void line(int lineNumber, int changesetRevIndex, BlockData lineContent, LineDescriptor ld) {
-			if (cancelEx != null) {
-				return;
-			}
-			if (lineRevisions == null) {
-				lineRevisions = new int [ld.totalLines()];
-				Arrays.fill(lineRevisions, NO_REVISION);
-				lines = new byte[ld.totalLines()][];
-			}
-			lineRevisions[lineNumber] = changesetRevIndex;
-			lines[lineNumber] = lineContent.asArray();
-			try {
-				cancelSupport.checkCancelled();
-			} catch (CancelledException ex) {
-				cancelEx = ex;
-			}
-		}
-		
-		public byte[] line(int i) {
-			return lines[i];
-		}
-		
-		public void throwIfCancelled() throws CancelledException {
-			if (cancelEx != null) {
-				throw cancelEx;
-			}
-		}
-	}
-	
-	
-	private static class LineImpl implements LineInfo {
-		private int ln;
-		private int rev;
-		private byte[] content;
-
-		void init(int line, int csetRev, byte[] cnt) {
-			ln = line;
-			rev = csetRev;
-			content = cnt;
-		}
-
-		public int getLineNumber() {
-			return ln;
-		}
-
-		public int getChangesetIndex() {
-			return rev;
-		}
-
-		public byte[] getContent() {
-			return content;
-		}
 	}
 }

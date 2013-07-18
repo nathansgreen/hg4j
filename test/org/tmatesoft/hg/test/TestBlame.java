@@ -20,7 +20,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.core.HgIterateDirection.NewToOld;
 import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
-import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import java.io.ByteArrayOutputStream;
@@ -47,15 +46,17 @@ import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgDiffCommand;
 import org.tmatesoft.hg.core.HgRepoFacade;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.FileAnnotation;
-import org.tmatesoft.hg.internal.FileAnnotation.LineDescriptor;
-import org.tmatesoft.hg.internal.FileAnnotation.LineInspector;
+import org.tmatesoft.hg.internal.ForwardAnnotateInspector;
 import org.tmatesoft.hg.internal.IntVector;
+import org.tmatesoft.hg.internal.ReverseAnnotateInspector;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.CancelSupport;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Path;
+import org.tmatesoft.hg.util.ProgressSupport;
 
 /**
  * 
@@ -103,10 +104,11 @@ public class TestBlame {
 			/*, TIP */};
 		for (int cs : toTest) {
 			ar.run(cs, false);
-			FileAnnotateInspector fa = new FileAnnotateInspector();
 			diffCmd.range(0, cs);
-			diffCmd.executeAnnotate(new FileAnnotation(fa));
-			doAnnotateLineCheck(cs, ar.getLines(), Arrays.asList(fa.lineRevisions), Arrays.asList(fa.lines));
+			final ReverseAnnotateInspector insp = new ReverseAnnotateInspector();
+			diffCmd.executeAnnotate(insp);
+			AnnotateInspector fa = new AnnotateInspector().fill(cs, insp);
+			doAnnotateLineCheck(cs, ar.getLines(), fa.changesets, fa.lines);
 		}
 	}
 	
@@ -119,10 +121,11 @@ public class TestBlame {
 		final HgDiffCommand diffCmd = new HgDiffCommand(repo).file(df).order(NewToOld);
 		for (int cs : new int[] { 4, 6 /*, 8 see below*/, TIP}) {
 			ar.run(cs, false);
-			FileAnnotateInspector fa = new FileAnnotateInspector();
 			diffCmd.range(0, cs);
-			diffCmd.executeAnnotate(new FileAnnotation(fa));
-			doAnnotateLineCheck(cs, ar.getLines(), Arrays.asList(fa.lineRevisions), Arrays.asList(fa.lines));
+			final ReverseAnnotateInspector insp = new ReverseAnnotateInspector();
+			diffCmd.executeAnnotate(insp);
+			AnnotateInspector fa = new AnnotateInspector().fill(cs, insp);
+			doAnnotateLineCheck(cs, ar.getLines(), fa.changesets, fa.lines);
 		}
 		/*`hg annotate -r 8` and HgBlameFacility give different result
 		 * for "r0, line 5" line, which was deleted in rev2 and restored back in
@@ -131,7 +134,7 @@ public class TestBlame {
 		 * However `hg annotate -r 4` shows rev4 for the line, too. The aforementioned rev0 for 
 		 * the merge rev8 results from the iteration order and is implementation specific 
 		 * (i.e. one can't tell which one is right). Mercurial walks from parents to children,
-		 * and traces equal lines, wile HgBlameFacility walks from child to parents and records 
+		 * and traces equal lines, while HgBlameFacility walks from child to parents and records 
 		 * changes (additions). Seems it processes branch with rev3 and rev6 first 
 		 * (printout in context.py, annotate and annotate.pair reveals that), and the line 0_5
 		 * comes as unchanged through this branch, and later processing rev2 and rev4 doesn't 
@@ -259,6 +262,8 @@ public class TestBlame {
 		ar.run(changeset, false);
 		doAnnotateLineCheck(changeset, ar.getLines(), ai.changesets, ai.lines);
 	}
+	
+	// FIXME add originLineNumber to HgAnnotateCommand#LineInfo, pass it from FileAnnotate, test
 
 	private void doAnnotateLineCheck(int cs, String[] hgAnnotateLines, List<Integer> cmdChangesets, List<String> cmdLines) {
 		assertTrue("[sanity]", hgAnnotateLines.length > 0);
@@ -367,11 +372,13 @@ public class TestBlame {
 		}
 		errorCollector.verify();
 		*/
-		FileAnnotateInspector fa = new FileAnnotateInspector();
-		diffCmd.range(0, 8).order(NewToOld);
-		diffCmd.executeAnnotate(new FileAnnotation(fa));
-		for (int i = 0; i < fa.lineRevisions.length; i++) {
-			System.out.printf("%d: %s", fa.lineRevisions[i], fa.line(i) == null ? "null\n" : fa.line(i));
+		ForwardAnnotateInspector insp = new ForwardAnnotateInspector();
+		diffCmd.range(0, 8).order(insp.iterateDirection());
+		diffCmd.executeAnnotate(insp);
+		AnnotateInspector fa = new AnnotateInspector().fill(8, insp);
+		for (int i = 0; i < fa.changesets.size(); i++) {
+			final String line = fa.lines.get(i);
+			System.out.printf("%d: %s", fa.changesets.get(i), line == null ? "null\n" : line);
 		}
 	}
 
@@ -476,28 +483,6 @@ public class TestBlame {
 		}
 	}
 
-	private static class FileAnnotateInspector implements LineInspector {
-		private Integer[] lineRevisions;
-		private String[] lines;
-		
-		FileAnnotateInspector() {
-		}
-		
-		public void line(int lineNumber, int changesetRevIndex, HgBlameInspector.BlockData lineContent, LineDescriptor ld) {
-			if (lineRevisions == null) {
-				lineRevisions = new Integer[ld.totalLines()];
-				Arrays.fill(lineRevisions, NO_REVISION);
-				lines = new String[ld.totalLines()];
-			}
-			lineRevisions[lineNumber] = changesetRevIndex;
-			lines[lineNumber] = new String(lineContent.asArray());
-		}
-		
-		public String line(int i) {
-			return lines[i];
-		}
-	}
-
 	@SuppressWarnings("unused")
 	private static class LineDumpInspector implements HgBlameInspector {
 		
@@ -544,7 +529,16 @@ public class TestBlame {
 		private int lineNumber = 1;
 		public final ArrayList<String> lines = new ArrayList<String>();
 		public final ArrayList<Integer> changesets = new ArrayList<Integer>();
-		
+
+		AnnotateInspector fill(int rev, ReverseAnnotateInspector ai) throws HgCallbackTargetException, CancelledException {
+			ai.report(rev, this, ProgressSupport.Factory.get(null), CancelSupport.Factory.get(null));
+			return this;
+		}
+		AnnotateInspector fill(int rev, ForwardAnnotateInspector ai) throws HgCallbackTargetException, CancelledException {
+			ai.report(rev, this, ProgressSupport.Factory.get(null), CancelSupport.Factory.get(null));
+			return this;
+		}
+
 		public void next(LineInfo lineInfo) throws HgCallbackTargetException {
 			Assert.assertEquals(lineInfo.getLineNumber(), lineNumber);
 			lineNumber++;
