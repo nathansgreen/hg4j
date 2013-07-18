@@ -83,7 +83,7 @@ public class CsetParamKeeper {
 	 */
 	public int get(int defaultRevisionIndex) throws HgRuntimeException {
 		// XXX perhaps, shall translate other predefined constants (like WORKING COPY) here, too (e.g. for HgRevertCommand)
-		if (changelogRevisionIndex != BAD_REVISION || changelogRevisionIndex != TIP) {
+		if (changelogRevisionIndex != BAD_REVISION && changelogRevisionIndex != TIP) {
 			return changelogRevisionIndex;
 		}
 		if (changelogRevisionIndex == TIP || defaultRevisionIndex == TIP) {

@@ -139,14 +139,16 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 		final ProgressSupport progress = getProgressSupport(insp);
 		progress.start(2);
 		try {
+			final int startRevIndex = clogRevIndexStart.get(0);
+			final int endRevIndex = clogRevIndexEnd.get(TIP);
 			final CancelSupport cancel = getCancelSupport(insp, true);
-			int fileRevIndex1 = fileRevIndex(df, clogRevIndexStart.get());
-			int fileRevIndex2 = fileRevIndex(df, clogRevIndexEnd.get());
+			int fileRevIndex1 = fileRevIndex(df, startRevIndex);
+			int fileRevIndex2 = fileRevIndex(df, endRevIndex);
 			BlameHelper bh = new BlameHelper(insp);
-			bh.prepare(df, clogRevIndexStart.get(), clogRevIndexEnd.get());
+			bh.prepare(df, startRevIndex, endRevIndex);
 			progress.worked(1);
 			cancel.checkCancelled();
-			bh.diff(fileRevIndex1, clogRevIndexStart.get(), fileRevIndex2, clogRevIndexEnd.get());
+			bh.diff(fileRevIndex1, startRevIndex, fileRevIndex2, endRevIndex);
 			progress.worked(1);
 			cancel.checkCancelled();
 		} catch (HgRuntimeException ex) {
@@ -172,7 +174,9 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 			}
 			final CancelSupport cancel = getCancelSupport(insp, true);
 			BlameHelper bh = new BlameHelper(insp);
-			FileHistory fileHistory = bh.prepare(df, clogRevIndexStart.get(), clogRevIndexEnd.get());
+			final int startRevIndex = clogRevIndexStart.get(0);
+			final int endRevIndex = clogRevIndexEnd.get(TIP);
+			FileHistory fileHistory = bh.prepare(df, startRevIndex, endRevIndex);
 			//
 			cancel.checkCancelled();
 			int totalWork = 0;
@@ -189,8 +193,8 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 				for (int fri : fhc.fileRevisions(iterateDirection)) {
 					int clogRevIndex = fhc.changeset(fri);
 					// the way we built fileHistory ensures we won't walk past [changelogRevIndexStart..changelogRevIndexEnd]
-					assert clogRevIndex >= clogRevIndexStart.get();
-					assert clogRevIndex <= clogRevIndexEnd.get();
+					assert clogRevIndex >= startRevIndex;
+					assert clogRevIndex <= endRevIndex;
 					fhc.fillFileParents(fri, fileParentRevs);
 					fhc.fillCsetParents(fri, fileClogParentRevs);
 					bh.annotateChange(fri, clogRevIndex, fileParentRevs, fileClogParentRevs);
