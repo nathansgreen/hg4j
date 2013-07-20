@@ -100,6 +100,16 @@ public class TestRevisionMaps {
 		errorCollector.assertEquals(Arrays.asList(allRevs[2], allRevs[3]), parentHelper.directChildren(allRevs[1]));
 		errorCollector.assertEquals(Arrays.asList(allRevs[8]), parentHelper.directChildren(allRevs[6]));
 		errorCollector.assertEquals(Collections.emptyList(), parentHelper.directChildren(allRevs[7]));
+		// ancestors on the same line
+		errorCollector.assertEquals(allRevs[4], parentHelper.ancestor(allRevs[4], allRevs[4]));
+		errorCollector.assertEquals(allRevs[8], parentHelper.ancestor(allRevs[8], allRevs[9]));
+		errorCollector.assertEquals(allRevs[1], parentHelper.ancestor(allRevs[9], allRevs[1]));
+		errorCollector.assertEquals(allRevs[5], parentHelper.ancestor(allRevs[5], allRevs[7]));
+		// ancestor
+		errorCollector.assertEquals(allRevs[1], parentHelper.ancestor(allRevs[2], allRevs[3]));
+		errorCollector.assertEquals(allRevs[1], parentHelper.ancestor(allRevs[4], allRevs[6]));
+		errorCollector.assertEquals(allRevs[2], parentHelper.ancestor(allRevs[9], allRevs[7]));
+		errorCollector.assertEquals(allRevs[2], parentHelper.ancestor(allRevs[4], allRevs[7]));
 	}
 
 	@Test

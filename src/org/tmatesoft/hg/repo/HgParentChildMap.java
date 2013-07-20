@@ -347,8 +347,72 @@ public final class HgParentChildMap<T extends Revlog> implements ParentInspector
 		}
 		return revisionIndexMap;
 	}
+	
+	/**
+	 * @return common ancestor of two revisions
+	 */
+	public Nodeid ancestor(Nodeid r1, Nodeid r2) {
+		if (r1.equals(r2)) {
+			return r1;
+		}
+		BitSet a1 = buildAncestors(r1);
+		BitSet a2 = buildAncestors(r2);
+		// BitSet.and() trims to shorter bitset, it's ok as we are not 
+		// interested in bits that are part of one bitset only
+		a1.and(a2);
+		final int cardinality = a1.cardinality();
+		if (cardinality == 1) {
+			return sequential[a1.nextSetBit(0)];
+		}
+		assert cardinality > 0; // every revision is child of at least rev0
+		final int length = sequential.length;
+		int index = length / 2;
+		int lastBitSet = -1;
+		do {
+			int nextSetBit = a1.nextSetBit(index);
+			int nextIndex;
+			if (nextSetBit == -1) {
+				assert lastBitSet == -1 || lastBitSet <= index;
+				nextIndex = index - (index - (lastBitSet == -1 ? 0 : lastBitSet)) / 2;
+			} else {
+				lastBitSet = nextSetBit;
+				nextIndex = lastBitSet + (length - lastBitSet) / 2;
+			}
+			if (nextIndex == index) {
+				break;
+			}
+			index = nextIndex;
+		} while (true);
+		if (lastBitSet == -1) {
+			assert false; // likely error in the algorithm above (e.g. can't reach index==0)
+			return sequential[0];
+		}
+		return sequential[lastBitSet];
+	}
 
 	private boolean hasChildren(int sequentialIndex) {
 		return !heads.containsKey(sequentialIndex);
+	}
+	
+	private BitSet buildAncestors(Nodeid nid) {
+		int x = seqWrapper.binarySearchSorted(nid);
+		assertSortedIndex(x);
+		int i = seqWrapper.getReverseIndex(x);
+		BitSet rv = new BitSet(sequential.length);
+		HashSet<Nodeid> ancestors = new HashSet<Nodeid>();
+		ancestors.add(nid);
+		do {
+			if (ancestors.contains(sequential[i])) {
+				rv.set(i);
+				if(firstParent[i] != null) {
+					ancestors.add(firstParent[i]);
+				}
+				if (secondParent[i] != null) {
+					ancestors.add(secondParent[i]);
+				}
+			}
+			i--;
+		} while (i >= 0);
+		return rv;
 	}
 }

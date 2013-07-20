@@ -101,6 +101,22 @@ public final class IntSliceSeq implements Iterable<IntTuple> {
 			}
 		};
 	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < size(); i++) {
+			sb.append('(');
+			for (int j = 0; j < slice; j++) {
+				sb.append(slices.get(i*slice + j));
+				sb.append(',');
+			}
+			sb.setLength(sb.length() - 1);
+			sb.append(')');
+			sb.append(' ');
+		}
+		return sb.toString();
+	}
 
 	private void checkArgRange(int rangeSize, int index) {
 		if (index >= 0 && index < rangeSize) {
