@@ -29,6 +29,8 @@ import java.nio.ByteBuffer;
  * @author TMate Software Ltd.
  */
 public class DataAccess {
+	private byte[] longBuffer;
+
 	public boolean isEmpty() throws IOException {
 		return true;
 	}
@@ -78,7 +80,10 @@ public class DataAccess {
 		// no-op in this empty implementation
 	}
 	public int readInt() throws IOException {
-		byte[] b = new byte[4];
+		if (longBuffer == null) {
+			longBuffer = new byte[8];
+		}
+		byte[] b = longBuffer;
 		readBytes(b, 0, 4);
 		return b[0] << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
 	}
@@ -87,7 +92,10 @@ public class DataAccess {
 	 * Read 8 bytes as long value, big-endian.
 	 */
 	public long readLong() throws IOException {
-		byte[] b = new byte[8];
+		if (longBuffer == null) {
+			longBuffer = new byte[8];
+		}
+		byte[] b = longBuffer;
 		readBytes(b, 0, 8);
 		int i1 = b[0] << 24 | (b[1] & 0xFF) << 16 | (b[2] & 0xFF) << 8 | (b[3] & 0xFF);
 		int i2 = b[4] << 24 | (b[5] & 0xFF) << 16 | (b[6] & 0xFF) << 8 | (b[7] & 0xFF);
