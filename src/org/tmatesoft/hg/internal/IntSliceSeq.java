@@ -24,7 +24,7 @@ import java.util.NoSuchElementException;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public final class IntSliceSeq implements Iterable<IntTuple> {
+public final class IntSliceSeq implements Iterable<IntTuple>, Cloneable {
 	private final IntVector slices;
 	private final int slice;
 
@@ -39,13 +39,13 @@ public final class IntSliceSeq implements Iterable<IntTuple> {
 	}
 	
 	public IntSliceSeq add(int... values) {
-		checkValues(values);
+		checkValuesAny(values);
 		slices.add(values);
 		return this;
 	}
 	
 	public IntSliceSeq set(int sliceIndex, int... values) {
-		checkValues(values);
+		checkValuesExact(values);
 		for (int i = 0, j = sliceIndex*slice; i < slice; i++,j++) {
 			slices.set(j, values[i]);
 		}
@@ -61,6 +61,13 @@ public final class IntSliceSeq implements Iterable<IntTuple> {
 		checkArgRange(size(), sliceIndex);
 		checkArgRange(slice, valueIndex);
 		return slices.get(sliceIndex*slice + valueIndex);
+	}
+	
+	public void addAll(IntSliceSeq other) {
+		if (other.slice != this.slice) {
+			throw new IllegalArgumentException(String.format("Tuple size doesn't match: %d and %d", slice, other.slice));
+		}
+		slices.addAll(other.slices);
 	}
 	
 	public int size() {
@@ -117,6 +124,15 @@ public final class IntSliceSeq implements Iterable<IntTuple> {
 		}
 		return sb.toString();
 	}
+	
+	@Override
+	public IntSliceSeq clone() {
+		try {
+			return (IntSliceSeq) super.clone();
+		} catch (CloneNotSupportedException ex) {
+			throw new Error(ex);
+		}
+	}
 
 	private void checkArgRange(int rangeSize, int index) {
 		if (index >= 0 && index < rangeSize) {
@@ -124,8 +140,13 @@ public final class IntSliceSeq implements Iterable<IntTuple> {
 		}
 		throw new IllegalArgumentException(String.valueOf(index));
 	}
-	private void checkValues(int[] values) {
+	private void checkValuesExact(int[] values) {
 		if (values == null || values.length != slice) {
+			throw new IllegalArgumentException(String.valueOf(values == null ? values : values.length));
+		}
+	}
+	private void checkValuesAny(int[] values) {
+		if (values == null || values.length % slice != 0) {
 			throw new IllegalArgumentException(String.valueOf(values == null ? values : values.length));
 		}
 	}

@@ -83,6 +83,50 @@ public class DiffHelper<T extends DiffHelper.ChunkSequence<?>> {
 		insp.end();
 	}
 	
+	/** 
+	 * look up every line in s2 that match lines in s1
+	 * idea: pure additions in s2 are diff-ed against s1 again and again, to see if there are any matches
+	 */
+	void findAllMatchAlternatives(final MatchInspector<T> insp) {
+		assert seq1.chunkCount() > 0;
+		final IntSliceSeq insertions = new IntSliceSeq(2);
+		final boolean matchedAny[] = new boolean[] {false};
+		DeltaInspector<T> myInsp = new DeltaInspector<T>() {
+			@Override
+			protected void unchanged(int s1From, int s2From, int length) {
+				matchedAny[0] = true;
+				insp.match(s1From, s2From, length);
+			}
+			@Override
+			protected void added(int s1InsertPoint, int s2From, int s2To) {
+				insertions.add(s2From, s2To);
+			}
+		};
+		matchInspector = myInsp;
+		myInsp.begin(seq1, seq2);
+		IntSliceSeq s2RangesToCheck = new IntSliceSeq(2, 1, 0);
+		s2RangesToCheck.add(0, seq2.chunkCount());
+		do {
+			IntSliceSeq nextCheck = new IntSliceSeq(2);
+			for (IntTuple t : s2RangesToCheck) {
+				int s2Start = t.at(0);
+				int s2End = t.at(1);
+				myInsp.changeStartS1 = 0;
+				myInsp.changeStartS2 = s2Start;
+				insp.begin(seq1, seq2);
+				matchedAny[0] = false;
+				findMatchingBlocks(0, seq1.chunkCount(), s2Start, s2End);
+				insp.end();
+				myInsp.end();
+				if (matchedAny[0]) {
+					nextCheck.addAll(insertions);
+				}
+				insertions.clear();
+			}
+			s2RangesToCheck = nextCheck;
+		} while (s2RangesToCheck.size() > 0);
+	}
+	
 	/**
 	 * implementation based on Python's difflib.py and SequenceMatcher 
 	 */

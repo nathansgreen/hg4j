@@ -19,17 +19,27 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.ListIterator;
 
 import org.tmatesoft.hg.core.HgCallbackTargetException;
+import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
 import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
+import org.tmatesoft.hg.internal.diff.DiffRangeMap;
+import org.tmatesoft.hg.internal.diff.DiffRangeMap.RangePair;
 import org.tmatesoft.hg.core.HgBlameInspector;
 import org.tmatesoft.hg.core.HgBlameInspector.*;
+import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
+import org.tmatesoft.hg.repo.HgParentChildMap;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRevisionMap;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.CancelledException;
@@ -45,6 +55,7 @@ public class BlameHelper {
 	
 	private final HgBlameInspector insp;
 	private FileLinesCache linesCache;
+	private HgParentChildMap<HgChangelog> clogMap;
 
 	public BlameHelper(HgBlameInspector inspector) {
 		insp = inspector;
@@ -100,14 +111,12 @@ public class BlameHelper {
 			int p2ClogIndex = fileParentClogRevs[1];
 			LineSequence p1Lines = linesCache.lines(p1ClogIndex, fileParentRevs[0]);
 			LineSequence p2Lines = linesCache.lines(p2ClogIndex, fileParentRevs[1]);
-			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
-			pg.init(p2Lines, fileRevLines);
-			EqualBlocksCollector p2MergeCommon = new EqualBlocksCollector();
-			pg.findMatchingBlocks(p2MergeCommon);
+			MergeResolutionStrategy mergeResolver = createMergeStrategy(fileRevLines, p1Lines, p2Lines, csetRevIndex, fileParentClogRevs);
 			//
-			pg.init(p1Lines);
+			DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
+			pg.init(p1Lines, fileRevLines);
 			BlameBlockInspector bbi = new BlameBlockInspector(targetFile, fileRevIndex, insp, p1ClogIndex, csetRevIndex);
-			bbi.setMergeParent2(new MergeStrategy1(p2MergeCommon.matches), p2ClogIndex);
+			bbi.setMergeParent2(mergeResolver, p2ClogIndex);
 			pg.findMatchingBlocks(bbi);
 			bbi.checkErrors();
 		} else if (fileParentClogRevs[0] == fileParentClogRevs[1]) {
@@ -132,6 +141,66 @@ public class BlameHelper {
 		}
 	}
 	
+	private static final boolean useNewStrategy = Boolean.TRUE.booleanValue();
+	
+	private MergeResolutionStrategy createMergeStrategy(LineSequence fileRevLines, LineSequence p1Lines, LineSequence p2Lines, int csetRevIndex, int[] fileParentClogRevs) {
+		DiffHelper<LineSequence> pg = new DiffHelper<LineSequence>();
+		if (useNewStrategy) {
+			final ArrayList<RangePairSeq> allMatches = new ArrayList<RangePairSeq>();
+			pg.init(p2Lines, fileRevLines);
+			pg.findAllMatchAlternatives(new DiffHelper.MatchInspector<LineSequence>() {
+				private RangePairSeq matches;
+
+				public void begin(LineSequence s1, LineSequence s2) {
+					matches = new RangePairSeq();
+				}
+
+				public void match(int startSeq1, int startSeq2, int matchLength) {
+					matches.add(startSeq1, startSeq2, matchLength);
+				}
+
+				public void end() {
+					if (matches.size() > 0) {
+						allMatches.add(matches);
+					}
+				}
+				
+			});
+			//
+			LineSequence baseLines = getBaseRevisionLines(csetRevIndex, fileParentClogRevs);
+			pg.init(p1Lines, baseLines);
+			DiffRangeMap p1ToBase = new DiffRangeMap().fill(pg);
+			pg.init(baseLines, p2Lines);
+			DiffRangeMap baseToP2 = new DiffRangeMap().fill(pg);
+			return new MergeStrategy2(allMatches, p1ToBase, baseToP2);
+		} else {
+			pg.init(p2Lines, fileRevLines);
+			EqualBlocksCollector p2MergeCommon = new EqualBlocksCollector();
+			pg.findMatchingBlocks(p2MergeCommon);
+			return new MergeStrategy1(p2MergeCommon.matches);
+		}
+	}
+
+	private LineSequence getBaseRevisionLines(int clogRevIndex, int[] fileParentClogRevs) {
+		assert fileParentClogRevs[0] >= 0;
+		assert fileParentClogRevs[1] >= 0;
+		HgDataFile targetFile = linesCache.getFile(clogRevIndex);
+		final HgRepository repo = targetFile.getRepo();
+		if (clogMap == null) {
+			// FIXME replace HgParentChildMap with revlog.indexWalk(AncestorIterator))
+			clogMap = new HgParentChildMap<HgChangelog>(repo.getChangelog());
+			clogMap.init();
+		}
+		final HgRevisionMap<HgChangelog> m = clogMap.getRevisionMap();
+		Nodeid ancestor = clogMap.ancestor(m.revision(fileParentClogRevs[0]), m.revision(fileParentClogRevs[1]));
+		final int ancestorRevIndex = m.revisionIndex(ancestor);
+		Nodeid fr = repo.getManifest().getFileRevision(ancestorRevIndex, targetFile.getPath());
+		if (fr == null) {
+			return LineSequence.newlines(new byte[0]);
+		}
+		return linesCache.lines(ancestorRevIndex, targetFile.getRevisionIndex(fr));
+	}
+
 	private static class FileLinesCache {
 		private final LinkedList<Pair<Integer, LineSequence>> lruCache;
 		private final int limit;
@@ -281,7 +350,7 @@ public class BlameHelper {
 			}
 			try {
 				if (p2MergeCommon != null) {
-					IntSliceSeq mergeRanges = p2MergeCommon.combineAndMarkRangesWithSource(s2From, s2To - s2From, csetOrigin, csetMergeParent);
+					IntSliceSeq mergeRanges = p2MergeCommon.combineAndMarkRangesWithSource(s1From, s1To, s2From, s2To, csetOrigin, csetMergeParent);
 					
 					/*
 					 * Usecases, how it USED TO BE initially:
@@ -345,7 +414,7 @@ public class BlameHelper {
 			}
 			try {
 				if (p2MergeCommon != null) {
-					IntSliceSeq mergeRanges = p2MergeCommon.combineAndMarkRangesWithSource(s2From, s2To - s2From, csetOrigin, csetMergeParent);
+					IntSliceSeq mergeRanges = p2MergeCommon.combineAndMarkRangesWithSource(s1InsertPoint, s2From, s2To, csetOrigin, csetMergeParent);
 					int insPoint = s1InsertPoint; // track changes to insertion point
 					for (IntTuple mergeRange : mergeRanges) {
 						int rangeOrigin = mergeRange.at(0);
@@ -617,18 +686,7 @@ public class BlameHelper {
 			return contentBlock.seq.data(from, from + length);
 		}
 	}
-	
-	
-	interface MergeResolutionStrategy {
-		/**
-		 * breaks region [start..start+length) into ranges according to deduced (or simply guessed)
-		 * matching of these lines to lines in source1 and source2
-		 * @return list of tuples (source, start, length), where source is one of the identifiers supplied
-		 */
-		public IntSliceSeq combineAndMarkRangesWithSource(int start, int length, int source1, int source2);
-		public int getLineInP2(int mergeLine);
-	}
-	
+
 	private static class EqualBlocksCollector implements DiffHelper.MatchInspector<LineSequence> {
 		private final RangePairSeq matches = new RangePairSeq();
 
@@ -660,7 +718,20 @@ public class BlameHelper {
 		}
 		
 	}
-	
+
+	interface MergeResolutionStrategy {
+		/**
+		 * breaks region [start2..end2) into ranges according to deduced (or simply guessed)
+		 * matching of [start1..end1) lines to lines in source1 and source2
+		 * @return list of tuples (source, start, length), where source is one of the identifiers supplied
+		 */
+		public IntSliceSeq combineAndMarkRangesWithSource(int start1, int end1, int start2, int end2, int source1, int source2);
+		public IntSliceSeq combineAndMarkRangesWithSource(int insPoint, int start, int end, int source1, int source2);
+		public int getLineInP2(int mergeLine);
+	}
+
+	// report lines as merged from p2 solely based on whether target line belongs
+	// to a region that is equal to p2 region
 	private static class MergeStrategy1 implements MergeResolutionStrategy {
 		// equal ranges in p2 and merged revision
 		private final RangePairSeq matches; 
@@ -677,7 +748,7 @@ public class BlameHelper {
 		 * whether the range is from initial range (markerSource) or is a result of the intersection with target
 		 * (markerTarget)
 		 */
-		public IntSliceSeq combineAndMarkRangesWithSource(int start, int length, int markerSource, int markerTarget) {
+		private IntSliceSeq doCombine(int start, int length, int markerSource, int markerTarget) {
 			mergeRanges.clear();
 			assert mergeRanges.sliceSize() == 3;
 			int sourceStart = start, targetStart = start, sourceEnd = start + length;
@@ -716,7 +787,89 @@ public class BlameHelper {
 		public int getLineInP2(int mergeLine) {
 			return matches.reverseMapLine(mergeLine);
 		}
+
+		public IntSliceSeq combineAndMarkRangesWithSource(int start1, int end1, int start2, int end2, int source1, int source2) {
+			return doCombine(start2, end2 - start2, source1, source2);
+		}
+
+		public IntSliceSeq combineAndMarkRangesWithSource(int insPoint, int start, int end, int source1, int source2) {
+			return doCombine(start, end - start, source1, source2);
+		}
 	}
+	
+	private static class MergeStrategy2 implements MergeResolutionStrategy {
+		// equal ranges in p2 and merged revision
+		private final List<RangePairSeq> matches; 
+		private final IntSliceSeq mergeRanges;
+		private final DiffRangeMap p1ToBase;
+		private final DiffRangeMap baseToP2;
+
+		public MergeStrategy2(List<RangePairSeq> p2EqualToM, DiffRangeMap p1ToBaseRanges, DiffRangeMap baseToP2Ranges) {
+			matches = p2EqualToM;
+			p1ToBase = p1ToBaseRanges;
+			baseToP2= baseToP2Ranges;
+			mergeRanges = new IntSliceSeq(3, 10, 10);
+		}
+
+
+		public IntSliceSeq combineAndMarkRangesWithSource(int insPoint, int start, int end, int source1, int source2) {
+			return combineAndMarkRangesWithSource(insPoint, insPoint, start, end, source1, source2);
+		}
+
+		public IntSliceSeq combineAndMarkRangesWithSource(int start1, int end1, int start2, int end2, int source1, int source2) {
+			mergeRanges.clear();
+			IntSliceSeq mergedLines = new IntSliceSeq(2, end2-start2, 0);
+			for (int i = start2; i < end2; i++) {
+				mergedLines.add(source1, 0);
+			}
+			// [s1Start..s1End) // range in p1 seen as changed in m
+			for (RangePair p1_b : p1ToBase.findInSource(start1, end1)) {
+				// there might be few ranges in (p1-base) that overlap with (p1-m) changes
+				for (RangePair b_p2 : baseToP2.findInSource(p1_b.start2(), p1_b.end2())) {
+					// regions in p2 that correspond to affected regions in base
+					for (int p2Line = b_p2.start2(); p2Line < b_p2.end2(); p2Line++) {
+						for (RangePairSeq eq : matches) {
+							if (eq.includesOriginLine(p2Line)) {
+								// this line in p2 is equal to some line in merge
+								int mergeLine = eq.mapLineIndex(p2Line);
+								if (mergeLine >= start2 && mergeLine < end2) {
+									mergedLines.set(mergeLine - start2, source2, p2Line);
+								}
+							}
+						}
+					}
+				}
+			}
+			int lineCount = 0, start = start2;
+			int lastSeenSource = source1;
+			for (IntTuple t : mergedLines) {
+				if (t.at(0) == lastSeenSource) {
+					lineCount++;
+				} else {
+					if (lineCount > 0) {
+						mergeRanges.add(lastSeenSource, start, lineCount);
+						start += lineCount;
+					}
+					lineCount = 1;
+					lastSeenSource = t.at(0);
+				}
+			}
+			if (lineCount > 0) {
+				mergeRanges.add(lastSeenSource, start, lineCount);
+			}
+			return mergeRanges;
+		}
+
+		public int getLineInP2(int mergeLine) {
+			for (RangePairSeq eq : matches) {
+				if (eq.includesTargetLine(mergeLine)) {
+					return eq.reverseMapLine(mergeLine);
+				}
+			}
+			return -1;
+		}
+	}
+
 
 	private static class AnnotateRev implements RevisionDescriptor {
 		public ContentBlock origin, target;
@@ -789,7 +942,24 @@ public class BlameHelper {
 		}
 		System.out.println();
 		MergeStrategy1 ms = new MergeStrategy1(bc.matches);
-		IntSliceSeq mr = ms.combineAndMarkRangesWithSource(0, 16, 508, 514);
+		IntSliceSeq mr = ms.doCombine(0, 16, 508, 514);
+		for (IntTuple t : mr) {
+			System.out.printf("%d:[%d..%d)  ", t.at(0), t.at(1), t.at(1) + t.at(2));
+		}
+		System.out.println();
+		System.out.println();
+		DiffRangeMap m1 = new DiffRangeMap(); // p1 -> base
+		m1.match(0, 0, 1); // =1..1 -> 1..1
+		m1.match(7, 3, 0);  // *2..7 -> 2..3
+		DiffRangeMap m2 = new DiffRangeMap(); // base -> p2
+		m2.match(0, 0, 1); // =1..1 -> 1..1
+		m2.match(3, 3, 0); // *2..3 -> 2..3
+		RangePairSeq eq1 = new RangePairSeq();
+		eq1.add(0, 0, 3);
+		RangePairSeq eq2 = new RangePairSeq();
+		eq2.add(0, 4, 3);
+		MergeStrategy2 ms2 = new MergeStrategy2(Arrays.asList(eq1, eq2), m1, m2);
+		mr = ms2.combineAndMarkRangesWithSource(5, 7, 5, 7, 33, 44);
 		for (IntTuple t : mr) {
 			System.out.printf("%d:[%d..%d)  ", t.at(0), t.at(1), t.at(1) + t.at(2));
 		}

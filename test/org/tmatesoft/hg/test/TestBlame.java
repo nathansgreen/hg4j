@@ -262,24 +262,6 @@ public class TestBlame {
 		doAnnotateLineCheck(changeset, ar, ai);
 	}
 	
-	private void doAnnotateLineCheck(int cs, AnnotateRunner ar, AnnotateInspector hg4jResult) {
-		String[] hgAnnotateLines = ar.getLines();
-		assertTrue("[sanity]", hgAnnotateLines.length > 0);
-		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, hg4jResult.getLineCount());
-
-		for (int i = 0; i < hgAnnotateLines.length; i++) {
-			String[] hgLine = hgAnnotateLines[i].split(":");
-			assertTrue(hgAnnotateLines[i], hgLine.length >= 3);
-			int hgAnnotateRevIndex = Integer.parseInt(hgLine[0].trim());
-			int hgFirstAppLine = Integer.parseInt(hgLine[1].trim());
-			String hgLineText = hgAnnotateLines[i].substring(hgLine[0].length() + hgLine[1].length() + 2).trim(); 
-			errorCollector.assertEquals(String.format("Revision mismatch for line %d (annotating rev: %d)", i+1, cs), hgAnnotateRevIndex, hg4jResult.getChangeset(i));
-			errorCollector.assertEquals(hgLineText, hg4jResult.getLine(i).trim());
-			errorCollector.assertEquals(hgFirstAppLine, hg4jResult.getOriginLine(i));
-		}
-	}
-	
-	
 	@Test
 	public void testDiffTwoRevisions() throws Exception {
 		HgRepository repo = Configuration.get().find("test-annotate");
@@ -319,6 +301,32 @@ public class TestBlame {
 		String[] expected = splitLines(gp.result());
 		Assert.assertArrayEquals(expected, apiResult);
 	}
+	
+	@Test
+	public void testAnnotateMergeMapViaBase() throws Exception {
+		HgRepository repo = Configuration.get().find("test-annotate3");
+		HgDataFile df1 = repo.getFileNode("file1");
+		HgDataFile df4 = repo.getFileNode("file4");
+		HgDataFile df5 = repo.getFileNode("file5");
+		assertTrue("[sanity]", df1.exists() && df4.exists());
+		// hg annotate handles merge in its own way, here we check 
+		// how map(diff(p1->base->p2)) merge strategy works
+		final String file1AnnotateResult = "3:1:1\n3:2:2x\n3:3:3y\n2:4:z\n0:1:1\n1:2:2x\n4:3:3y\n";
+		final String file4AnnotateResult = "3:1:1\n1:2:2x\n4:3:3y\n2:4:z\n0:1:1\n3:6:2x\n3:7:3y\n";
+		final String file5AnnotateResult = "0:1:1\n1:2:2x\n4:3:3y\n2:4:z\n5:5:1\n5:6:2x\n5:7:3y\n";
+		HgAnnotateCommand cmd = new HgAnnotateCommand(repo);
+		cmd.changeset(5);
+		AnnotateInspector insp = new AnnotateInspector();
+		// file1
+		cmd.file(df1, false).execute(insp);
+		doAnnotateLineCheck(5, splitLines(file1AnnotateResult), insp);
+		// file4
+		cmd.file(df4, false).execute(insp = new AnnotateInspector());
+		doAnnotateLineCheck(5, splitLines(file4AnnotateResult), insp);
+		// file5
+		cmd.file(df5, false).execute(insp = new AnnotateInspector());
+		doAnnotateLineCheck(5, splitLines(file5AnnotateResult), insp);
+}
 
 	// TODO HgWorkingCopyStatusCollector (and HgStatusCollector), with their ancestors (rev 59/69) have examples
 	// of *incorrect* assignment of common lines (like "}") - our impl doesn't process common lines in any special way
@@ -349,6 +357,25 @@ public class TestBlame {
 		return rv;
 	}
 	
+	private void doAnnotateLineCheck(int cs, AnnotateRunner ar, AnnotateInspector hg4jResult) {
+		String[] hgAnnotateLines = ar.getLines();
+		assertTrue("[sanity]", hgAnnotateLines.length > 0);
+		assertEquals("Number of lines reported by native annotate and our impl", hgAnnotateLines.length, hg4jResult.getLineCount());
+		doAnnotateLineCheck(cs, hgAnnotateLines, hg4jResult);
+	}
+
+	private void doAnnotateLineCheck(int cs, String[] expectedAnnotateLines, AnnotateInspector hg4jResult) { 
+		for (int i = 0; i < expectedAnnotateLines.length; i++) {
+			String[] hgLine = expectedAnnotateLines[i].split(":");
+			assertTrue(expectedAnnotateLines[i], hgLine.length >= 3);
+			int hgAnnotateRevIndex = Integer.parseInt(hgLine[0].trim());
+			int hgFirstAppLine = Integer.parseInt(hgLine[1].trim());
+			String hgLineText = expectedAnnotateLines[i].substring(hgLine[0].length() + hgLine[1].length() + 2).trim(); 
+			errorCollector.assertEquals(String.format("Revision mismatch for line %d (annotating rev: %d)", i+1, cs), hgAnnotateRevIndex, hg4jResult.getChangeset(i));
+			errorCollector.assertEquals("Line text", hgLineText, hg4jResult.getLine(i).trim());
+			errorCollector.assertEquals("Line in origin", hgFirstAppLine, hg4jResult.getOriginLine(i));
+		}
+	}
 	
 	private void ccc() throws Throwable {
 		HgRepository repo = new HgLookup().detect("/home/artem/hg/hgtest-annotate-merge/");

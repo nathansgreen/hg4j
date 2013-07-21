@@ -17,14 +17,9 @@
 package org.tmatesoft.hg.internal;
 
 import org.tmatesoft.hg.core.HgAnnotateCommand.Inspector;
-import org.tmatesoft.hg.core.HgAnnotateCommand.LineInfo;
 import org.tmatesoft.hg.core.HgBlameInspector;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
-import org.tmatesoft.hg.core.HgDiffCommand;
-import org.tmatesoft.hg.core.HgException;
 import org.tmatesoft.hg.core.HgIterateDirection;
-import org.tmatesoft.hg.repo.HgLookup;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;
@@ -140,25 +135,5 @@ public class ForwardAnnotateInspector implements HgBlameInspector, HgBlameInspec
 			}
 			originPos += originBlockLen;
 		}
-	}
-
-
-	public static void main(String[] args) throws HgCallbackTargetException, CancelledException, HgException {
-		HgRepository repo = new HgLookup().detect("/home/artem/hg/junit-test-repos/test-annotate/");
-		HgDiffCommand cmd = new HgDiffCommand(repo);
-		cmd.file(repo.getFileNode("file1")).order(HgIterateDirection.OldToNew);
-		final int cset = 8;
-		cmd.range(0, cset);
-		final ForwardAnnotateInspector c2 = new ForwardAnnotateInspector();
-		cmd.executeAnnotate(c2);
-		for (IntTuple t : c2.all.get(cset)) {
-			System.out.printf("Block %d lines from revision %d (starts with line %d in the origin)\n", t.at(0), t.at(1), 1+t.at(2));
-		}
-		c2.report(cset, new Inspector() {
-			
-			public void next(LineInfo lineInfo) throws HgCallbackTargetException {
-				System.out.printf("%3d:%3d: %s", lineInfo.getChangesetIndex(), lineInfo.getOriginLineNumber(), new String(lineInfo.getContent()));
-			}
-		}, ProgressSupport.Factory.get(null), CancelSupport.Factory.get(null));
 	}
 }

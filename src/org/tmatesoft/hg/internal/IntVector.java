@@ -24,7 +24,7 @@ import java.util.Arrays;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class IntVector {
+public class IntVector implements Cloneable {
 	
 	private int[] data;
 	private final int increment;
@@ -57,7 +57,17 @@ public class IntVector {
 			data[count++] = v;
 		}
 	}
-	
+
+	public void addAll(IntVector other) {
+		final int otherLen = other.count;
+		if (count + otherLen > data.length) {
+			grow(count + otherLen);
+		}
+		for (int i = 0; i < otherLen; i++) {
+			data[count++] = other.data[i];
+		}
+	}
+
 	public int get(int i) {
 		if (i < 0 || i >= count) {
 			throw new IndexOutOfBoundsException(String.format("Index: %d, size: %d", i, count));
@@ -125,6 +135,15 @@ public class IntVector {
 	@Override
 	public String toString() {
 		return String.format("%s[%d]", IntVector.class.getSimpleName(), size());
+	}
+	
+	@Override
+	public IntVector clone() {
+		try {
+			return (IntVector) super.clone();
+		} catch (CloneNotSupportedException ex) {
+			throw new Error(ex);
+		}
 	}
 
 	/**

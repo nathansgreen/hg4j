@@ -80,6 +80,17 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 		return this;
 	}
 	
+	
+	/**
+	 * Select file to annotate,
+	 * @param fileNode repository file to annotate 
+	 * @param followCopyRename true to follow copies/renames.
+	 * @return <code>this</code> for convenience
+	 */
+	public HgAnnotateCommand file(HgDataFile fileNode, boolean followCopyRename) {
+		return file(fileNode.getPath(), followCopyRename);
+	}
+
 	// TODO [post-1.1] set encoding and provide String line content from LineInfo
 	// TODO FWIW: diff algorithms: http://bramcohen.livejournal.com/73318.html
 
