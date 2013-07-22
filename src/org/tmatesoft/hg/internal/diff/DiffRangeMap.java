@@ -19,6 +19,7 @@ package org.tmatesoft.hg.internal.diff;
 import java.util.ArrayList;
 
 import org.tmatesoft.hg.internal.DiffHelper;
+import org.tmatesoft.hg.internal.DiffHelper.MatchInspector;
 import org.tmatesoft.hg.internal.IntSliceSeq;
 import org.tmatesoft.hg.internal.IntTuple;
 import org.tmatesoft.hg.internal.DiffHelper.ChunkSequence;
@@ -44,8 +45,11 @@ public class DiffRangeMap extends DiffHelper.DeltaInspector<ChunkSequence<?>> {
 	 *   dh.findMatchingBlocks(p1ToBase); // compiles ok!
 	 * </pre>
 	 */
+	@SuppressWarnings("unchecked")
 	public DiffRangeMap fill(DiffHelper<?> dh) {
-		dh.findMatchingBlocks(this);
+		@SuppressWarnings("rawtypes")
+		final MatchInspector i = (MatchInspector) this;
+		dh.findMatchingBlocks(i);
 		return this;
 	}
 	

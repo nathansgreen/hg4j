@@ -180,7 +180,11 @@ public class EncodingHelper {
 			return utfDecoder.decode(ByteBuffer.wrap(data, start, length)).toString();
 		} catch (CharacterCodingException ex) {
 			// TODO post-1.2 respect ui.fallbackencoding actual setting
-			return new String(data, start, length, Charset.forName("ISO-8859-1"));
+			try {
+				return new String(data, start, length, "ISO-8859-1"); // XXX java5
+			} catch (UnsupportedEncodingException e) {
+				throw new HgInvalidStateException(ex.getMessage());
+			}
 		}
 	}
 	

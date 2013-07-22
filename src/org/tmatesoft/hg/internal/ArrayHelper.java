@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,7 +89,9 @@ public final class ArrayHelper<T extends Comparable<T>> {
 	 */
 	public int binarySearchSorted(T value) {
 		if (sorted != null) {
-			return Arrays.binarySearch(sorted, 0, data.length, value);
+			int x = Arrays.binarySearch(sorted, value);
+			// fulfill the Arrays#binarySearch contract in case sorted array is greater than data 
+			return x >= data.length ? -(data.length - 1) : x;
 		}
 		return binarySearchWithReverse(0, data.length, value);
 	}
