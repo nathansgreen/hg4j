@@ -94,6 +94,20 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 	}
 	
 	/**
+	 * Select range of file history, limited by changesets.
+	 * @see #range(int, int)
+	 * @param cset1 changelog revision, left range boundary
+	 * @param cset2 changelog revision, right range boundary
+	 * @return <code>this</code> for convenience
+	 * @throws HgBadArgumentException if revisions are not valid changeset identifiers
+	 */
+	public HgDiffCommand range(Nodeid cset1, Nodeid cset2) throws HgBadArgumentException {
+		clogRevIndexStart.set(cset1);
+		clogRevIndexEnd.set(cset2);
+		return this;
+	}
+	
+	/**
 	 * Selects revision for {@link #executeParentsAnnotate(HgBlameInspector)}, the one 
 	 * to diff against its parents. 
 	 * 
@@ -109,6 +123,20 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 		clogRevIndexEnd.set(changelogRevIndex);
 		return this;
 	}
+	
+	/**
+	 * Select specific changeset or a range [0..changeset], like {@link #changeset(int)}
+	 * 
+	 * @param nid changeset
+	 * @return <code>this</code> for convenience
+	 * @throws HgBadArgumentException if failed to find supplied changeset revision 
+	 */
+	public HgDiffCommand changeset(Nodeid nid) throws HgBadArgumentException {
+		clogRevIndexStart.set(0);
+		clogRevIndexEnd.set(nid);
+		return this;
+	}
+
 
 	/**
 	 * Revision differences are reported in selected order when 

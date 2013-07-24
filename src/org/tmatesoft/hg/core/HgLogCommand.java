@@ -180,6 +180,34 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 	}
 	
 	/**
+	 * Limit history to specified range.
+	 * 
+	 * @see #range(int, int)
+	 * @param cset1 range start revision
+	 * @param cset2 range end revision
+	 * @return <code>this</code> instance for convenience
+	 * @throws HgBadArgumentException if revisions are not valid changeset identifiers
+	 */
+	public HgLogCommand range(Nodeid cset1, Nodeid cset2) throws HgBadArgumentException {
+		CsetParamKeeper pk = new CsetParamKeeper(repo);
+		int r1 = pk.set(cset1).get();
+		int r2 = pk.set(cset2).get();
+		return range(r1, r2);
+	}
+	
+	/**
+	 * Select specific changeset by index
+	 * @see #changeset(Nodeid)
+	 * @param revisionIndex index of changelog revision
+	 * @return <code>this</code> for convenience
+	 * @throws HgBadArgumentException if failed to find supplied changeset revision
+	 */
+	public HgLogCommand changeset(int revisionIndex) throws HgBadArgumentException {
+		int ri = new CsetParamKeeper(repo).set(revisionIndex).get();
+		return range(ri, ri);
+	}
+	
+	/**
 	 * Select specific changeset
 	 * 
 	 * @param nid changeset revision

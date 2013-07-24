@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ import java.util.ConcurrentModificationException;
 
 import org.tmatesoft.hg.internal.AdapterPlug;
 import org.tmatesoft.hg.internal.ChangelogHelper;
+import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -115,9 +116,21 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 			changesetRevisionIndex = TIP;
 		}
 		startRevision = changesetRevisionIndex;
+		// TODO [2.0 API break] shall throw HgBadArgumentException, like other commands do
 		return this;
 	}
-	
+
+	/**
+	 * Select base revision for difference
+	 * @param changeset changelog revision, left range boundary if used in conjunction with {@link #revision(int)}  
+	 * @return <code>this</code> for convenience
+	 * @throws HgBadArgumentException if revision is not a valid changeset identifier
+	 */
+	public HgStatusCommand base(Nodeid changeset) throws HgBadArgumentException {
+		int ri = new CsetParamKeeper(repo).set(changeset).get();
+		return base(ri);
+	}
+
 	/**
 	 * Revision without base == --change
 	 * Pass {@link HgRepository#WORKING_COPY} or {@link HgRepository#BAD_REVISION} to reset
@@ -133,20 +146,45 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 			throw new IllegalArgumentException(String.valueOf(changesetRevisionIndex));
 		}
 		endRevision = changesetRevisionIndex;
+		// TODO [2.0 API break] shall throw HgBadArgumentException, like other commands do
 		return this;
 	}
-	
+
+	/**
+	 * Select changeset to show difference
+	 * @see #revision(int) 
+	 * @param changeset changelog revision, right range boundary if <code>base</code> revision is set  
+	 * @return <code>this</code> for convenience
+	 * @throws HgBadArgumentException if revision is not a valid changeset identifier
+	 */
+	public HgStatusCommand revision(Nodeid changeset) throws HgBadArgumentException {
+		int ri = new CsetParamKeeper(repo).set(changeset).get();
+		return revision(ri);
+	}
+
 	/**
 	 * Shorthand for {@link #base(int) cmd.base(BAD_REVISION)}{@link #change(int) .revision(revision)}
-	 *  
-	 * @param changesetRevisionIndex compare given revision against its parent
+	 * 
+	 * @param changesetIndex compare given revision against its parent
 	 * @return <code>this</code> for convenience
 	 */
-	public HgStatusCommand change(int changesetRevisionIndex) {
+	public HgStatusCommand change(int changesetIndex) {
 		base(BAD_REVISION);
-		return revision(changesetRevisionIndex);
+		return revision(changesetIndex);
 	}
-	
+
+	/**
+	 * Report changes in specified changeset 
+	 * @see #change(int)
+	 * @param changeset changelog revision to get status of  
+	 * @return <code>this</code> for convenience
+	 * @throws HgBadArgumentException if revision is not a valid changeset identifier
+	 */
+	public HgStatusCommand change(Nodeid changeset) throws HgBadArgumentException {
+		base(BAD_REVISION);
+		return revision(changeset);
+	}
+
 	/**
 	 * Limit status operation to certain sub-tree.
 	 * 

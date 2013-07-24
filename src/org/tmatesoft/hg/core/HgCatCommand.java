@@ -23,6 +23,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -74,7 +75,7 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 	 * although possible, makes little sense (command would fail if executed).  
  	 * @return <code>this</code> for convenience
 	 */
-	public HgCatCommand revision(int fileRevisionIndex) {
+	public HgCatCommand revision(int fileRevisionIndex) { // TODO [2.0 API break] shall throw HgBadArgumentException, like other commands do
 		if (wrongRevisionIndex(fileRevisionIndex)) {
 			throw new IllegalArgumentException(String.valueOf(fileRevisionIndex));
 		}
@@ -127,6 +128,18 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 		cset = nodeid;
 		// TODO [2.0 API break] shall use CsetParamKeeper instead, but Exception thrown would break the API
 		return this;
+	}
+
+	/**
+	 * Select file by changeset
+	 * @see #changeset(Nodeid) 
+	 * @param revisionIndex index of changelog revision
+	 * @return <code>this</code> for convenience
+	 * @throws HgBadArgumentException if failed to find supplied changeset revision
+	 */
+	public HgCatCommand changeset(int revisionIndex) throws HgBadArgumentException {
+		int ri = new CsetParamKeeper(repo).set(revisionIndex).get();
+		return changeset(repo.getChangelog().getRevision(ri));
 	}
 
 	/**
