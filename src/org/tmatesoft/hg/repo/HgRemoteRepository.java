@@ -242,9 +242,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 		StringBuilder sb = new StringBuilder(20 + ranges.size() * 82);
 		sb.append("pairs=");
 		for (Range r : ranges) {
-			sb.append(r.end.toString());
-			sb.append('-');
-			sb.append(r.start.toString());
+			r.append(sb);
 			sb.append('+');
 		}
 		if (sb.charAt(sb.length() - 1) == '+') {
@@ -587,6 +585,7 @@ public class HgRemoteRepository implements SessionContext.Source {
 			}
 			checkResponseOk(c, actionName, "listkeys");
 			ArrayList<Pair<String, String>> rv = new ArrayList<Pair<String, String>>();
+			// output of listkeys is encoded with UTF-8
 			BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), EncodingHelper.getUTF8()));
 			String l;
 			while ((l = r.readLine()) != null) {
@@ -723,6 +722,16 @@ public class HgRemoteRepository implements SessionContext.Source {
 		public Range(Nodeid from, Nodeid to) {
 			start = from;
 			end = to;
+		}
+		
+		/**
+		 * Append this range as pair of values 'end-start' to the supplied buffer and return the buffer.
+		 */
+		public StringBuilder append(StringBuilder sb) {
+			sb.append(end.toString());
+			sb.append('-');
+			sb.append(start.toString());
+			return sb;
 		}
 	}
 

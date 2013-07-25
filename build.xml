@@ -26,6 +26,7 @@
 	</description>
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
+	<property name="ssh.jar" value="lib/ganymed-ssh2-build251beta1.jar" />
 	<property name="ver.qualifier" value="" />
 	<property name="version.lib" value="1.2" />
 	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
@@ -144,7 +145,11 @@
 
 	<target name="build-lib">
 		<mkdir dir="bin" />
-		<javac srcdir="src" destdir="bin" debug="${compile-with-debug}" includeantruntime="no" source="1.5" encoding="UTF-8"/>
+		<javac srcdir="src" destdir="bin" debug="${compile-with-debug}" includeantruntime="no" source="1.5" encoding="UTF-8">
+			<classpath>
+				<pathelement location="${ssh.jar}"/>
+			</classpath>
+		</javac>
 		<jar destfile="${hg4j.jar}">
 			<fileset dir="bin/">
 				<include name="org/tmatesoft/hg/core/**" />
