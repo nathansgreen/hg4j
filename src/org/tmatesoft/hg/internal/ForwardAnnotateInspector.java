@@ -29,7 +29,7 @@ import org.tmatesoft.hg.util.ProgressSupport;
  * 
  * At the moment, doesn't handle start from any revision but 0
  * 
- * (+) May report annotate for any revision in the visited range.
+ * (+) May report annotate for any revision (with actual file change) in the visited range.
  * 
  * @see ReverseAnnotateInspector
  * @author Artem Tikhomirov
@@ -51,6 +51,9 @@ public class ForwardAnnotateInspector implements HgBlameInspector, HgBlameInspec
 
 	public void report(int revision, Inspector insp, ProgressSupport progress, CancelSupport cancel) throws HgCallbackTargetException, CancelledException {
 		int totalLines = 0;
+		if (!all.containsKey(revision)) {
+			throw new IllegalArgumentException(String.format("Revision %d has not been visited", revision));
+		}
 		for (IntTuple t : all.get(revision)) {
 			totalLines += t.at(0);
 		}

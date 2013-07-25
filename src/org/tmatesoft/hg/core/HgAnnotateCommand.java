@@ -16,6 +16,8 @@
  */
 package org.tmatesoft.hg.core;
 
+import static org.tmatesoft.hg.repo.HgRepository.TIP;
+
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.ForwardAnnotateInspector;
@@ -44,7 +46,7 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 	public HgAnnotateCommand(HgRepository hgRepo) {
 		repo = hgRepo;
 		annotateRevision = new CsetParamKeeper(repo);
-		annotateRevision.doSet(HgRepository.TIP);
+		annotateRevision.doSet(TIP);
 	}
 
 	public HgAnnotateCommand changeset(Nodeid nodeid) throws HgBadArgumentException {
@@ -119,7 +121,7 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 				return;
 			}
 			final int changesetStart = followRename ? 0 : df.getChangesetRevisionIndex(0);
-			final int annotateRevIndex = annotateRevision.get();
+			final int annotateRevIndex = annotateRevision.get(TIP);
 			HgDiffCommand cmd = new HgDiffCommand(repo).file(df);
 			cmd.range(changesetStart, annotateRevIndex);
 			cmd.set(cancellation);
@@ -131,7 +133,14 @@ public class HgAnnotateCommand extends HgAbstractCommand<HgAnnotateCommand> {
 			//
 			cmd.executeAnnotate(ai);
 			cancellation.checkCancelled();
-			ai.report(annotateRevIndex, inspector, new ProgressSupport.Sub(progress, 100), cancellation);
+			final int lastCsetWithFileChange;
+			Nodeid fileRev = repo.getManifest().getFileRevision(annotateRevIndex, df.getPath());
+			if (fileRev != null) {
+				lastCsetWithFileChange = df.getChangesetRevisionIndex(df.getRevisionIndex(fileRev));
+			} else {
+				lastCsetWithFileChange = annotateRevIndex;
+			}
+			ai.report(lastCsetWithFileChange, inspector, new ProgressSupport.Sub(progress, 100), cancellation);
 		} catch (HgRuntimeException ex) {
 			throw new HgLibraryFailureException(ex);
 		}
