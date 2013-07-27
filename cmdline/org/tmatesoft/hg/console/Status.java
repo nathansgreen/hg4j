@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011 TMate Software Ltd
+ * Copyright (c) 2010-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +44,7 @@ import org.tmatesoft.hg.util.Path;
 public class Status {
 
 	public static void main(String[] args) throws Exception {
-		final Set<String> flagOpts = asSet("-A", "-all", "-m", "--modified", "-a", "--added", "-r", "--removed", 
+		final Set<String> flagOpts = asSet("-A", "--all", "-m", "--modified", "-a", "--added", "-r", "--removed", 
 				"--d", "--deleted", "-u", "--unknown", "-c", "--clean", "-i", "--ignored",
 				"-n", "--no-status", "-C", "--copies");
 		Options cmdLineOpts = Options.parse(args, flagOpts);

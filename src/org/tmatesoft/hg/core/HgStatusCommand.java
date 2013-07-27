@@ -61,13 +61,13 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 	public HgStatusCommand defaults() {
 		final Mediator m = mediator;
 		m.needModified = m.needAdded = m.needRemoved = m.needUnknown = m.needMissing = true;
-		m.needCopies = m.needClean = m.needIgnored = false;
+		m.needClean = m.needIgnored = false;
 		return this;
 	}
 	public HgStatusCommand all() {
 		final Mediator m = mediator;
 		m.needModified = m.needAdded = m.needRemoved = m.needUnknown = m.needMissing = true;
-		m.needCopies = m.needClean = m.needIgnored = true;
+		m.needClean = m.needIgnored = true;
 		return this;
 	}
 	
@@ -252,7 +252,6 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 		boolean needMissing;
 		boolean needClean;
 		boolean needIgnored;
-		boolean needCopies;
 		HgStatusHandler handler;
 		private ChangelogHelper logHelper;
 		private HgCallbackTargetException failure;
@@ -311,10 +310,8 @@ public class HgStatusCommand extends HgAbstractCommand<HgStatusCommand> {
 			}
 		}
 		public void copied(Path fnameOrigin, Path fnameAdded) {
-			if (needCopies) {
-				// TODO post-1.0 in fact, merged files may report 'copied from' as well, correct status kind thus may differ from Added
-				dispatch(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
-			}
+			// TODO post-1.0 in fact, merged files may report 'copied from' as well, correct status kind thus may differ from Added
+			dispatch(new HgStatus(Added, fnameAdded, fnameOrigin, logHelper));
 		}
 		public void missing(Path fname) {
 			if (needMissing) {
