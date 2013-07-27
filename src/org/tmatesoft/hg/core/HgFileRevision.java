@@ -168,14 +168,12 @@ public final class HgFileRevision {
 	}
 
 	private void checkCopy() throws HgRuntimeException {
-		HgDataFile fn = repo.getFileNode(path);
-		if (fn.isCopy()) {
-			if (fn.getRevision(0).equals(revision)) {
-				// this HgFileRevision represents first revision of the copy
-				isCopy = Boolean.TRUE;
-				origin = fn.getCopySourceName();
-				return;
-			}
+		HgDataFile df = repo.getFileNode(path);
+		int revIdx = df.getRevisionIndex(revision);
+		if (df.isCopy(revIdx)) {
+			isCopy = Boolean.TRUE;
+			origin = df.getCopySource(revIdx).getPath();
+			return;
 		}
 		isCopy = Boolean.FALSE;
 	}

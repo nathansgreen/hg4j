@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
+import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.ManifestRevision;
@@ -316,7 +317,7 @@ public class HgStatusCollector {
 			} else {
 				try {
 					Path copyTarget = r2fname;
-					Path copyOrigin = detectCopies ? getOriginIfCopy(repo, copyTarget, r1Files, rev1) : null;
+					Path copyOrigin = detectCopies ? getOriginIfCopy(repo, copyTarget, r2.nodeid(copyTarget), r1Files, rev1) : null;
 					if (copyOrigin != null) {
 						inspector.copied(getPathPool().mangle(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
 					} else {
@@ -361,29 +362,50 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
-	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Collection<Path> originals, int originalChangelogRevision) throws HgRuntimeException {
+	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Nodeid fnameRev, Collection<Path> originals, int originalChangesetIndex) throws HgRuntimeException {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		if (!df.exists()) {
 			String msg = String.format("Didn't find file '%s' in the repo. Perhaps, bad storage name conversion?", fname);
-			throw new HgInvalidFileException(msg, null).setFileName(fname).setRevisionIndex(originalChangelogRevision);
+			throw new HgInvalidFileException(msg, null).setFileName(fname).setRevisionIndex(originalChangesetIndex);
 		}
-		while (df.isCopy()) {
-			Path original = df.getCopySourceName();
-			if (originals.contains(original)) {
-				df = hgRepo.getFileNode(original);
-				int changelogRevision = df.getChangesetRevisionIndex(0);
-				if (changelogRevision <= originalChangelogRevision) {
+		assert fnameRev != null;
+		assert !Nodeid.NULL.equals(fnameRev); 
+		int fileRevIndex = fnameRev == null ? 0 : df.getRevisionIndex(fnameRev);
+		Path lastOriginFound = null;
+		while(fileRevIndex >=0) {
+			if (!df.isCopy(fileRevIndex)) {
+				fileRevIndex--;
+				continue;
+			}
+			int csetRevIndex = df.getChangesetRevisionIndex(fileRevIndex);
+			if (csetRevIndex <= originalChangesetIndex) {
+				// we've walked past originalChangelogRevIndex and no chances we'll find origin
+				// if we get here, it means fname's origin is not from the base revision 
+				return null;
+			}
+			HgFileRevision origin = df.getCopySource(fileRevIndex);
+			// prepare for the next step, df(copyFromFileRev) would point to copy origin and its revision
+			df = hgRepo.getFileNode(origin.getPath());
+			int copyFromFileRevIndex = df.getRevisionIndex(origin.getRevision());
+			if (originals.contains(origin.getPath())) {
+				int copyFromCsetIndex = df.getChangesetRevisionIndex(copyFromFileRevIndex);
+				if (copyFromCsetIndex <= originalChangesetIndex) {
 					// copy/rename source was known prior to rev1 
 					// (both r1Files.contains is true and original was created earlier than rev1)
 					// without r1Files.contains changelogRevision <= rev1 won't suffice as the file
 					// might get removed somewhere in between (changelogRevision < R < rev1)
-					return original;
+					return origin.getPath();
 				}
-				break; // copy/rename done later
-			} 
-			df = hgRepo.getFileNode(original); // try more steps away
+				// copy/rename happened in [copyFromCsetIndex..target], let's see if
+				// origin wasn't renamed once more in [originalChangesetIndex..copyFromCsetIndex]
+				lastOriginFound = origin.getPath();
+				// FALL-THROUGH
+			}
+			// try more steps away
+			// copyFromFileRev or one of its predecessors might be copies as well
+			fileRevIndex = copyFromFileRevIndex; // df is already origin file
 		}
-		return null;
+		return lastOriginFound;
 	}
 
 	// XXX for r1..r2 status, only modified, added, removed (and perhaps, clean) make sense

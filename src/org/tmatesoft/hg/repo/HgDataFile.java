@@ -28,6 +28,7 @@ import java.nio.channels.FileChannel;
 import java.util.Arrays;
 
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
+import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.DataAccess;
 import org.tmatesoft.hg.internal.FileUtils;
@@ -371,22 +372,19 @@ public final class HgDataFile extends Revlog {
 	}
 
 	/**
-	 * Tells whether this file originates from another repository file
-	 * @return <code>true</code> if this file is a copy of another from the repository
+	 * Tells whether first revision of this file originates from another repository file.
+	 * This method is shorthand for {@link #isCopy(int) isCopy(0)} and it's advised to use {@link #isCopy(int)} instead.
+	 *  
+	 * @return <code>true</code> if first revision of this file is a copy of some other from the repository
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
 	public boolean isCopy() throws HgRuntimeException {
-		if (metadata == null || !metadata.checked(0)) {
-			checkAndRecordMetadata(0);
-		}
-		if (!metadata.known(0)) {
-			return false;
-		}
-		return metadata.find(0, "copy") != null;
+		return isCopy(0);
 	}
 
 	/**
-	 * Get name of the file this one was copied from.
+	 * Get name of the file first revision of this one was copied from. 
+	 * Note, it's better to use {@link #getCopySource(int)} instead.
 	 * 
 	 * @return name of the file origin
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
@@ -400,7 +398,7 @@ public final class HgDataFile extends Revlog {
 	}
 	
 	/**
-	 * 
+	 * Use {@link #getCopySource(int)} instead
 	 * @return revision this file was copied from
 	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
 	 */
@@ -409,6 +407,53 @@ public final class HgDataFile extends Revlog {
 			return Nodeid.fromAscii(metadata.find(0, "copyrev")); // XXX reuse/cache Nodeid
 		}
 		throw new UnsupportedOperationException();
+	}
+	
+	/**
+	 * Tell if specified file revision was created by copying or renaming another file
+	 * 
+	 * @param fileRevisionIndex index of file revision to check
+	 * @return <code>true</code> if this revision originates (as a result of copy/rename) from another file
+	 * @throws HgRuntimeException subclass thereof to indicate issues with the library. <em>Runtime exception</em>
+	 * @since 1.2
+	 */
+	public boolean isCopy(int fileRevisionIndex) throws HgRuntimeException {
+		if (fileRevisionIndex == TIP) {
+			fileRevisionIndex = getLastRevision();
+		}
+		if (wrongRevisionIndex(fileRevisionIndex) || fileRevisionIndex == BAD_REVISION || fileRevisionIndex == WORKING_COPY || fileRevisionIndex == NO_REVISION) {
+			throw new HgInvalidRevisionException(fileRevisionIndex);
+		}
+		
+		if (metadata == null || !metadata.checked(fileRevisionIndex)) {
+			checkAndRecordMetadata(fileRevisionIndex);
+		}
+		if (!metadata.known(fileRevisionIndex)) {
+			return false;
+		}
+		return metadata.find(fileRevisionIndex, "copy") != null;
+	}
+	
+	/**
+	 * Find out which file and which revision of that file given revision originates from
+	 * 
+	 * @param fileRevisionIndex file revision index of interest, it's assumed {@link #isCopy(int)} for the same revision is <code>true</code> 
+	 * @return origin revision descriptor
+	 * @throws HgRuntimeException
+	 * @throws UnsupportedOperationException if specified revision is not a {@link #isCopy(int) copy} revision 
+	 * @since 1.2
+	 */
+	public HgFileRevision getCopySource(int fileRevisionIndex) throws HgRuntimeException {
+		if (fileRevisionIndex == TIP) {
+			fileRevisionIndex = getLastRevision();
+		}
+		if (!isCopy(fileRevisionIndex)) {
+			throw new UnsupportedOperationException();
+		}
+		Path.Source ps = getRepo().getSessionContext().getPathFactory();
+		Path origin = ps.path(metadata.find(fileRevisionIndex, "copy"));
+		Nodeid originRev = Nodeid.fromAscii(metadata.find(fileRevisionIndex, "copyrev")); // XXX reuse/cache Nodeid
+		return new HgFileRevision(getRepo(), originRev, null, origin);
 	}
 
 	/**
