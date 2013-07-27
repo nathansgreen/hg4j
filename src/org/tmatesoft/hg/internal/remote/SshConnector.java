@@ -21,24 +21,20 @@ import java.io.Closeable;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FilterInputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.internal.Internals;
-import org.tmatesoft.hg.repo.HgBundle;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.LogFacility.Severity;
@@ -54,7 +50,7 @@ import ch.ethz.ssh2.StreamGobbler;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class SshConnector {
+public class SshConnector implements Connector {
 	private SessionContext sessionCtx;
 	private URL url;
 	private Connection conn;
@@ -64,9 +60,12 @@ public class SshConnector {
 	private StreamGobbler remoteErr, remoteOut;
 	private OutputStream remoteIn;
 	
-	public void connect(URL url, SessionContext sessionContext, Object globalConfig) throws HgRemoteConnectionException {
+	public void init(URL url, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
 		sessionCtx = sessionContext;
 		this.url = url;
+	}
+	
+	public void connect() throws HgRemoteConnectionException, HgRuntimeException {
 		try {
 			conn = new Connection(url.getHost(), url.getPort() == -1 ? 22 : url.getPort());
 			conn.connect();
@@ -78,7 +77,7 @@ public class SshConnector {
 			ConnectionInfo ci = conn.getConnectionInfo();
 			System.out.printf("%s %s %s %d %s %s %s\n", ci.clientToServerCryptoAlgorithm, ci.clientToServerMACAlgorithm, ci.keyExchangeAlgorithm, ci.keyExchangeCounter, ci.serverHostKeyAlgorithm, ci.serverToClientCryptoAlgorithm, ci.serverToClientMACAlgorithm);
 		} catch (IOException ex) {
-			throw new HgRemoteConnectionException("Failed to authenticate", ex).setServerInfo(getLocation());
+			throw new HgRemoteConnectionException("Failed to authenticate", ex).setServerInfo(getServerLocation());
 		}
 	}
 	
@@ -119,8 +118,41 @@ public class SshConnector {
 		forceSessionClose();
 	}
 
-	public String getLocation() {
-		return "";
+	public String getServerLocation() {
+		return ""; // FIXME
+	}
+	
+	public String getCapabilities() throws HgRemoteConnectionException {
+		try {
+			consume(remoteOut);
+			consume(remoteErr);
+			remoteIn.write(CMD_HELLO.getBytes());
+			remoteIn.write('\n');
+			remoteIn.write(CMD_CAPABILITIES.getBytes()); // see http connector for details
+			remoteIn.write('\n');
+			remoteIn.write(CMD_HEADS.getBytes());
+			remoteIn.write('\n');
+			checkError();
+			int responseLen = readResponseLength();
+			checkError();
+			FilterStream s = new FilterStream(remoteOut, responseLen);
+			BufferedReader r = new BufferedReader(new InputStreamReader(s));
+			String line;
+			while ((line = r.readLine()) != null) {
+				if (line.startsWith(CMD_CAPABILITIES) && line.length() > (CMD_CAPABILITIES.length()+1)) {
+					line = line.substring(CMD_CAPABILITIES.length());
+					if (line.charAt(0) == ':') {
+						return line.substring(CMD_CAPABILITIES.length() + 1);
+					}
+				}
+			}
+			r.close();
+			consume(remoteOut);
+			checkError();
+			return new String();
+		} catch (IOException ex) {
+			throw new HgRemoteConnectionException("Failed to initiate dialog with server", ex).setRemoteCommand(CMD_HELLO).setServerInfo(getServerLocation());
+		}
 	}
 
 	public InputStream heads() throws HgRemoteConnectionException {
@@ -148,10 +180,28 @@ public class SshConnector {
 		return executeCommand("changegroup", Collections.singletonList(new Parameter("roots", l)));
 	}
 
-	public void unbundle(HgBundle bundle, List<Nodeid> remoteHeads) throws HgRemoteConnectionException, HgRuntimeException {
+	public OutputStream unbundle(long outputLen, List<Nodeid> remoteHeads) throws HgRemoteConnectionException, HgRuntimeException {
 		String l = join(remoteHeads, ' ');
-		Collections.singletonList(new Parameter("heads", l));
-		throw Internals.notImplemented();
+		try {
+			consume(remoteOut);
+			consume(remoteErr);
+			remoteIn.write(CMD_UNBUNDLE.getBytes());
+			remoteIn.write('\n');
+			writeParameters(Collections.singletonList(new Parameter("heads", l)));
+			checkError();
+			return new FilterOutputStream(remoteIn) {
+				@Override
+				public void close() throws IOException {
+					out.flush();
+					@SuppressWarnings("unused")
+					int responseLen = readResponseLength();
+					checkError();
+					// XXX perhaps, need to return responseLen to caller? 
+				}
+			};
+		} catch (IOException ex) {
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand(CMD_UNBUNDLE).setServerInfo(getServerLocation());
+		}
 	}
 
 	public InputStream pushkey(String opName, String namespace, String key, String oldValue, String newValue) throws HgRemoteConnectionException, HgRuntimeException {
@@ -167,70 +217,30 @@ public class SshConnector {
 		return executeCommand("listkeys", Collections.singletonList(new Parameter("namespace", namespace)));
 	}
 	
-	
-	public Set<String> initCapabilities() throws HgRemoteConnectionException {
-		try {
-			final String CMD_CAPABILITIES = "capabilities";
-			final String CMD_HEADS = "heads";
-			final String CMD_HELLO = "hello";
-			consume(remoteOut);
-			consume(remoteErr);
-			remoteIn.write(CMD_HELLO.getBytes());
-			remoteIn.write('\n');
-			remoteIn.write(CMD_CAPABILITIES.getBytes()); // see http connector for
-			remoteIn.write('\n');
-			remoteIn.write(CMD_HEADS.getBytes());
-			remoteIn.write('\n');
-			checkError();
-			int responseLen = readResponseLength();
-			checkError();
-			FilterStream s = new FilterStream(remoteOut, responseLen);
-			BufferedReader r = new BufferedReader(new InputStreamReader(s));
-			String line;
-			while ((line = r.readLine()) != null) {
-				if (line.startsWith(CMD_CAPABILITIES) && line.length() > (CMD_CAPABILITIES.length()+1)) {
-					line = line.substring(CMD_CAPABILITIES.length());
-					if (line.charAt(0) == ':') {
-						String[] caps = line.substring(CMD_CAPABILITIES.length() + 1).split("\\s");
-						return new HashSet<String>(Arrays.asList(caps));
-					}
-				}
-			}
-			r.close();
-			consume(remoteOut);
-			checkError();
-			return Collections.emptySet();
-		} catch (IOException ex) {
-			throw new HgRemoteConnectionException("Failed to initiate dialog with server", ex).setRemoteCommand("hello").setServerInfo(getLocation());
-		} catch (HgRemoteConnectionException ex) {
-			ex.setRemoteCommand("hello").setServerInfo(getLocation());
-			throw ex;
-		}
-	}
-	
 	private InputStream executeCommand(String cmd, List<Parameter> parameters) throws HgRemoteConnectionException {
 		try {
 			consume(remoteOut);
 			consume(remoteErr);
 			remoteIn.write(cmd.getBytes());
 			remoteIn.write('\n');
-			for (Parameter p : parameters) {
-				remoteIn.write(p.name().getBytes());
-				remoteIn.write(' ');
-				remoteIn.write(String.valueOf(p.size()).getBytes());
-				remoteIn.write('\n');
-				remoteIn.write(p.data());
-				remoteIn.write('\n');
-			}
+			writeParameters(parameters);
 			checkError();
 			int responseLen = readResponseLength();
 			checkError();
 			return new FilterStream(remoteOut, responseLen);
 		} catch (IOException ex) {
-			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand(cmd).setServerInfo(getLocation());
-		} catch (HgRemoteConnectionException ex) {
-			ex.setRemoteCommand(cmd).setServerInfo(getLocation());
-			throw ex;
+			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand(cmd).setServerInfo(getServerLocation());
+		}
+	}
+	
+	private void writeParameters(List<Parameter> parameters) throws IOException {
+		for (Parameter p : parameters) {
+			remoteIn.write(p.name().getBytes());
+			remoteIn.write(' ');
+			remoteIn.write(String.valueOf(p.size()).getBytes());
+			remoteIn.write('\n');
+			remoteIn.write(p.data());
+			remoteIn.write('\n');
 		}
 	}
 
@@ -240,14 +250,14 @@ public class SshConnector {
 		}
 	}
 
-	private void checkError() throws IOException, HgRemoteConnectionException {
+	private void checkError() throws IOException {
 		if (remoteErr.available() > 0) {
 			StringBuilder sb = new StringBuilder();
 			int c;
 			while ((c = remoteErr.read()) != -1) {
 				sb.append((char)c);
 			}
-			throw new HgRemoteConnectionException(sb.toString());
+			throw new IOException(sb.toString());
 		}
 	}
 	
