@@ -298,7 +298,9 @@ public class HgStatusCollector {
 
 		final CancelSupport cs = CancelSupport.Factory.get(inspector);
 
-		TreeSet<Path> r1Files = new TreeSet<Path>(r1.files());
+		
+		Collection<Path> allBaseFiles = r1.files();
+		TreeSet<Path> r1Files = new TreeSet<Path>(allBaseFiles);
 		for (Path r2fname : r2.files()) {
 			if (!scope.accept(r2fname)) {
 				continue;
@@ -317,7 +319,7 @@ public class HgStatusCollector {
 			} else {
 				try {
 					Path copyTarget = r2fname;
-					Path copyOrigin = detectCopies ? getOriginIfCopy(repo, copyTarget, r2.nodeid(copyTarget), r1Files, rev1) : null;
+					Path copyOrigin = detectCopies ? getOriginIfCopy(repo, copyTarget, r2.nodeid(copyTarget), allBaseFiles, rev1) : null;
 					if (copyOrigin != null) {
 						inspector.copied(getPathPool().mangle(copyOrigin) /*pipe through pool, just in case*/, copyTarget);
 					} else {
@@ -362,6 +364,9 @@ public class HgStatusCollector {
 		return rv;
 	}
 	
+	// originals shall include all names known in base revision, not those not yet consumed
+	// see TestStatus#testDetectRenamesInNonFirstRev and log-renames test repository
+	// where a and d in r5 are compared to a and b in r1, while d is in fact descendant of original a, and a is original b (through c)
 	/*package-local*/static Path getOriginIfCopy(HgRepository hgRepo, Path fname, Nodeid fnameRev, Collection<Path> originals, int originalChangesetIndex) throws HgRuntimeException {
 		HgDataFile df = hgRepo.getFileNode(fname);
 		if (!df.exists()) {
@@ -380,8 +385,9 @@ public class HgStatusCollector {
 			int csetRevIndex = df.getChangesetRevisionIndex(fileRevIndex);
 			if (csetRevIndex <= originalChangesetIndex) {
 				// we've walked past originalChangelogRevIndex and no chances we'll find origin
-				// if we get here, it means fname's origin is not from the base revision 
-				return null;
+				// if we get here, it means either fname's origin is not from the base revision
+				// or the last found rename is still valid
+				return lastOriginFound;
 			}
 			HgFileRevision origin = df.getCopySource(fileRevIndex);
 			// prepare for the next step, df(copyFromFileRev) would point to copy origin and its revision
@@ -400,6 +406,9 @@ public class HgStatusCollector {
 				// origin wasn't renamed once more in [originalChangesetIndex..copyFromCsetIndex]
 				lastOriginFound = origin.getPath();
 				// FALL-THROUGH
+			} else {
+				// clear last known origin if the file was renamed once again to something we don't have in base
+				lastOriginFound = null;
 			}
 			// try more steps away
 			// copyFromFileRev or one of its predecessors might be copies as well

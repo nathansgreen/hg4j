@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,7 @@
 package org.tmatesoft.hg.test;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.tmatesoft.hg.core.HgStatus.Kind.*;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 import static org.tmatesoft.hg.repo.HgRepository.WORKING_COPY;
@@ -657,6 +656,47 @@ public class TestStatus {
 		assertEquals(1, ignored.size());
 		assertEquals(Path.create("skip/a"), ignored.get(0));
 		assertTrue(sc.get(Path.create("s1/b")).isEmpty());
+	}
+	
+	@Test
+	public void testDetectRenamesInNonFirstRev() throws Exception {
+		repo = Configuration.get().find("log-renames");
+		eh.cwd(repo.getWorkingDir());
+		final HgStatusCommand cmd = new HgStatusCommand(repo).defaults();
+		StatusCollector sc;
+		for (int r : new int[] {2,3,4}) {
+			statusParser.reset();
+			eh.run("hg", "status", "-C", "--change", String.valueOf(r));
+			cmd.change(r).execute(sc = new StatusCollector());
+			sr.report("hg status -C --change " + r, sc);
+		}
+		// a and d from r5 are missing in r3
+		statusParser.reset();
+		eh.run("hg", "status", "-C", "--rev", "3", "--rev", "5");
+		cmd.base(3).revision(5).execute(sc = new StatusCollector());
+		sr.report("hg status -C 3..5 ", sc);
+		//
+		// a is c which is initially b
+		// d is b which is initially a
+		Path fa = Path.create("a"); 
+		Path fb = Path.create("b");
+		Path fc = Path.create("c");
+		Path fd = Path.create("d");
+		// neither initial a nor b have isCopy(() == true
+		assertFalse("[sanity]", repo.getFileNode(fa).isCopy());
+		// check HgStatusCollector
+		// originals (base revision) doesn't contain first copy origin (there's no b in r2)
+		cmd.base(2).revision(5).execute(sc = new StatusCollector());
+		errorCollector.assertEquals(fa, sc.new2oldName.get(fd));
+		errorCollector.assertEquals(Collections.singletonList(Removed), sc.get(fc));
+		// ensure same result with HgWorkingCopyStatusCollector
+		cmd.base(2).revision(WORKING_COPY).execute(sc = new StatusCollector());
+		errorCollector.assertEquals(fa, sc.new2oldName.get(fd));
+		errorCollector.assertEquals(Collections.singletonList(Removed), sc.get(fc));
+		// originals (base revision) does contain first copy origin (b is in r1)
+		cmd.base(1).revision(5).execute(sc = new StatusCollector());
+		errorCollector.assertEquals(fa, sc.new2oldName.get(fd));
+		errorCollector.assertEquals(Collections.singletonList(Removed), sc.get(fb));
 	}
 
 	/*

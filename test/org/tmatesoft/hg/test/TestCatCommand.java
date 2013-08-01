@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 TMate Software Ltd
+ * Copyright (c) 2012-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@ package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.*;
 
+import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCatCommand;
 import org.tmatesoft.hg.core.HgChangesetFileSneaker;
@@ -34,7 +35,10 @@ import org.tmatesoft.hg.util.Path;
  */
 public class TestCatCommand {
 	
-	private final HgRepository repo;
+	@Rule
+	public ErrorCollectorExt errorCollector = new ErrorCollectorExt();
+
+	private HgRepository repo;
 	
 	public TestCatCommand() throws Exception {
 		repo = new HgLookup().detectFromWorkingDir();
@@ -64,4 +68,35 @@ public class TestCatCommand {
 		assertEquals(result1, result2);
 	}
 
+	// ensure code to follow rename history in the command is correct
+	@Test
+	public void testRenamedFileInCset() throws Exception {
+		repo = Configuration.get().find("log-renames");
+		HgCatCommand cmd1 = new HgCatCommand(repo);
+		HgCatCommand cmd2 = new HgCatCommand(repo);
+		cmd1.file(Path.create("a")); // a is initial b through temporary c
+		cmd2.file(Path.create("c"));
+		ByteArrayChannel sink1, sink2;
+		// a from wc/tip was c in rev 4
+		cmd1.changeset(4).execute(sink1 = new ByteArrayChannel());
+		cmd2.changeset(4).execute(sink2 = new ByteArrayChannel());
+		assertArrayEquals(sink2.toArray(), sink1.toArray());
+		//
+		// d from wc/tip was a in 0..2 and b in rev 3..4. Besides, there's another d in r4 
+		cmd2.file(Path.create("d"));
+		cmd1.changeset(2).execute(sink1 = new ByteArrayChannel());
+		cmd2.changeset(2).execute(sink2 = new ByteArrayChannel());
+		assertArrayEquals(sink1.toArray(), sink2.toArray());
+		// 
+		cmd1.file(Path.create("b"));
+		cmd1.changeset(3).execute(sink1 = new ByteArrayChannel());
+		cmd2.changeset(3).execute(sink2 = new ByteArrayChannel());
+		assertArrayEquals(sink1.toArray(), sink2.toArray());
+		//
+		cmd2.changeset(4).execute(sink2 = new ByteArrayChannel()); // ensure d in r4 is not from a or b
+		assertArrayEquals("d:4\n".getBytes(), sink2.toArray());
+		cmd2.changeset(5).execute(sink2 = new ByteArrayChannel()); // d in r5 is copy of b in r4
+		cmd1.changeset(4).execute(sink1 = new ByteArrayChannel());
+		assertArrayEquals(sink1.toArray(), sink2.toArray());
+	}
 }

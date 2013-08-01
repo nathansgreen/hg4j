@@ -433,7 +433,7 @@ public class HgWorkingCopyStatusCollector {
 							continue;
 						}
 						// see if file revision known in this parent got copied from one of baseRevNames
-						Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, fileRev, baseRevNames, baseRevision);
+						Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, fileRev, collect.files(), baseRevision);
 						if (origin != null) {
 							inspector.copied(getPathPool().mangle(origin), fname);
 							return;

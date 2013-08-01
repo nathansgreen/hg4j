@@ -31,6 +31,7 @@ import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
+import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -171,23 +172,22 @@ public class HgCatCommand extends HgAbstractCommand<HgCatCommand> {
 			}
 			int revToExtract;
 			if (cset != null) {
-				int csetRev = repo.getChangelog().getRevisionIndex(cset);
-				Nodeid toExtract = null;
-				do {
-					// TODO post-1.0 perhaps, HgChangesetFileSneaker may come handy?
-					toExtract = repo.getManifest().getFileRevision(csetRev, file);
-					if (toExtract == null) {
-						if (dataFile.isCopy()) {
-							file = dataFile.getCopySourceName();
-							dataFile = repo.getFileNode(file);
-						} else {
-							break;
-						}
+				// TODO HgChangesetFileSneaker is handy, but bit too much here, shall extract follow rename code into separate utility
+				HgChangesetFileSneaker fsneaker = new HgChangesetFileSneaker(repo);
+				fsneaker.changeset(cset).followRenames(true);
+				Outcome o = fsneaker.check(file);
+				if (!o.isOk()) {
+					if (o.getException() instanceof HgRuntimeException) {
+						throw new HgLibraryFailureException(o.getMessage(), (HgRuntimeException) o.getException());
 					}
-				} while (toExtract == null);
-				if (toExtract == null) {
-					String m = String.format("File %s nor its origins were known at repository's %s revision", file, cset.shortNotation());
-					throw new HgPathNotFoundException(m, file).setRevision(cset);
+					throw new HgBadArgumentException(o.getMessage(), o.getException()).setFileName(file).setRevision(cset);
+				}
+				if (!fsneaker.exists()) {
+					throw new HgPathNotFoundException(o.getMessage(), file).setRevision(cset);
+				}
+				Nodeid toExtract = fsneaker.revision();
+				if (fsneaker.hasAnotherName()) {
+					dataFile = repo.getFileNode(fsneaker.filename());
 				}
 				revToExtract = dataFile.getRevisionIndex(toExtract);
 			} else if (revision != null) {

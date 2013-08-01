@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,14 +16,18 @@
  */
 package org.tmatesoft.hg.core;
 
+import java.util.ArrayDeque;
+
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgInvalidStateException;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgManifest.Flags;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
-import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.Outcome;
+import org.tmatesoft.hg.util.Pair;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * Primary purpose is to provide information about file revisions at specific changeset. Multiple {@link #check(Path)} calls 
@@ -131,7 +135,6 @@ public final class HgChangesetFileSneaker {
 			return checkResult;
 		}
 		Nodeid toExtract = null;
-		HgManifest.Flags extractRevFlags = null;
 		String phaseMsg = "Extract manifest revision failed";
 		try {
 			if (cachedManifest == null) {
@@ -141,27 +144,59 @@ public final class HgChangesetFileSneaker {
 				// cachedManifest shall be meaningful - changelog.getRevisionIndex() above ensures we've got version that exists.
 			}
 			toExtract = cachedManifest.nodeid(file);
-			extractRevFlags = cachedManifest.flags(file);
 			phaseMsg = "Follow copy/rename failed";
 			if (toExtract == null && followRenames) {
-				while (toExtract == null && dataFile.isCopy()) {
-					renamed = true;
-					file = dataFile.getCopySourceName();
-					dataFile = repo.getFileNode(file);
-					toExtract = cachedManifest.nodeid(file);
-					extractRevFlags = cachedManifest.flags(file);
+				int csetIndex = repo.getChangelog().getRevisionIndex(cset);
+				int ccFileRevIndex = dataFile.getLastRevision(); // copy candidate
+				int csetFileEnds = dataFile.getChangesetRevisionIndex(ccFileRevIndex);
+				if (csetIndex > csetFileEnds) {
+					return new Outcome(Outcome.Kind.Success, String.format("%s: last known changeset for the file %s is %d. Follow renames is possible towards older changesets only", phaseMsg, file, csetFileEnds));
 				}
+				// XXX code is similar to that in HgStatusCollector#getOriginIfCopy. Why it's different in lastOrigin processing then?
+				// traceback stack keeps record of all files with isCopy(fileRev) == true we've tried to follow, so that we can try earlier file
+				// revisions in case followed fileRev didn't succeed
+				ArrayDeque<Pair<HgDataFile, Integer>> traceback = new ArrayDeque<Pair<HgDataFile, Integer>>();
+				do {
+					int ccCsetIndex = dataFile.getChangesetRevisionIndex(ccFileRevIndex);
+					if (ccCsetIndex <= csetIndex) {
+						// present dataFile is our (distant) origin
+						toExtract = dataFile.getRevision(ccFileRevIndex);
+						renamed = true;
+						break;
+					}
+					if (!dataFile.isCopy(ccFileRevIndex)) {
+						// nothing left to return to when traceback.isEmpty()
+						while (ccFileRevIndex == 0 && !traceback.isEmpty()) {
+							Pair<HgDataFile, Integer> lastTurnPoint = traceback.pop();
+							dataFile = lastTurnPoint.first();
+							ccFileRevIndex = lastTurnPoint.second(); // generally ccFileRevIndex != 0 here, but doesn't hurt to check, hence while
+							// fall through to shift down from the file revision we've already looked at
+						}
+						ccFileRevIndex--;
+						continue;
+					}
+					if (ccFileRevIndex > 0) {
+						// there's no reason to memorize turn point if it's the very first revision
+						// of the file and we won't be able to try any other earlier revision
+						traceback.push(new Pair<HgDataFile, Integer>(dataFile, ccFileRevIndex));
+					}
+					HgFileRevision origin = dataFile.getCopySource(ccFileRevIndex);
+					dataFile = repo.getFileNode(origin.getPath());
+					ccFileRevIndex = dataFile.getRevisionIndex(origin.getRevision());
+				} while (ccFileRevIndex >= 0);
+				// didn't get to csetIndex, no ancestor in file rename history found.
 			}
 		} catch (HgRuntimeException ex) {
 			checkResult = new Outcome(Outcome.Kind.Failure, phaseMsg, ex);
 			return checkResult;
 		}
 		if (toExtract != null) {
+			Flags extractRevFlags = cachedManifest.flags(dataFile.getPath());
 			fileRevision = new HgFileRevision(repo, toExtract, extractRevFlags, dataFile.getPath());
 			checkResult = new Outcome(Outcome.Kind.Success, String.format("File %s, revision %s found at changeset %s", dataFile.getPath(), toExtract.shortNotation(), cset.shortNotation()));
 			return checkResult;
 		} 
-		checkResult = new Outcome(Outcome.Kind.Success, String.format("File %s nor its origins were known at repository %s revision", file, cset.shortNotation()));
+		checkResult = new Outcome(Outcome.Kind.Success, String.format("File %s nor its origins were known at revision %s", file, cset.shortNotation()));
 		return checkResult;
 	}
 	
