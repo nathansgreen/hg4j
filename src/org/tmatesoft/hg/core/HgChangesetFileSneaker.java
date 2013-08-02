@@ -152,7 +152,7 @@ public final class HgChangesetFileSneaker {
 				if (csetIndex > csetFileEnds) {
 					return new Outcome(Outcome.Kind.Success, String.format("%s: last known changeset for the file %s is %d. Follow renames is possible towards older changesets only", phaseMsg, file, csetFileEnds));
 				}
-				// XXX code is similar to that in HgStatusCollector#getOriginIfCopy. Why it's different in lastOrigin processing then?
+				// @see FileRenameHistory, with similar code, which doesn't trace alternative paths
 				// traceback stack keeps record of all files with isCopy(fileRev) == true we've tried to follow, so that we can try earlier file
 				// revisions in case followed fileRev didn't succeed
 				ArrayDeque<Pair<HgDataFile, Integer>> traceback = new ArrayDeque<Pair<HgDataFile, Integer>>();

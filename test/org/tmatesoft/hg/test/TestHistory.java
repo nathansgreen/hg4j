@@ -21,6 +21,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.tmatesoft.hg.core.HgIterateDirection.NewToOld;
+import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -69,7 +70,7 @@ public class TestHistory {
 	private LogOutputParser changelogParser;
 	
 	public static void main(String[] args) throws Throwable {
-		TestHistory th = new TestHistory();
+		TestHistory th = new TestHistory(new HgLookup().detectFromWorkingDir());
 		th.testCompleteLog();
 		th.testFollowHistory();
 		th.errorCollector.verify();
@@ -81,19 +82,22 @@ public class TestHistory {
 		th.errorCollector.verify();
 	}
 	
-	public TestHistory() throws Exception {
-		this(new HgLookup().detectFromWorkingDir());
-//		this(new HgLookup().detect("\\temp\\hg\\hello"));
+	public TestHistory() {
+		eh = new ExecHelper(changelogParser = new LogOutputParser(true), null);
 	}
 
 	private TestHistory(HgRepository hgRepo) {
+		this();
 		repo = hgRepo;
-		eh = new ExecHelper(changelogParser = new LogOutputParser(true), repo.getWorkingDir());
-		
+		eh.cwd(repo.getWorkingDir());
 	}
-
+	
 	@Test
 	public void testCompleteLog() throws Exception {
+		if (repo == null) {
+			repo = Configuration.get().own();
+			eh.cwd(repo.getWorkingDir());
+		}
 		changelogParser.reset();
 		eh.run("hg", "log", "--debug");
 		List<HgChangeset> r = new HgLogCommand(repo).execute();
@@ -105,6 +109,10 @@ public class TestHistory {
 	
 	@Test
 	public void testFollowHistory() throws Exception {
+		if (repo == null) {
+			repo = Configuration.get().own();
+			eh.cwd(repo.getWorkingDir());
+		}
 		final Path f = Path.create("cmdline/org/tmatesoft/hg/console/Remote.java");
 		assertTrue(repo.getFileNode(f).exists());
 		changelogParser.reset();
@@ -408,6 +416,37 @@ public class TestHistory {
 		assertRename(fname1, fname2, rh.renames.get(0));
 		report("HgChangesetHandler+RenameHandler with followRenames = false, new2old iteration order", h1.getChanges(), false);
 		report("HgChangesetTreeHandler+RenameHandler with followRenames = false, new2old iteration order", h2.getResult(), false);
+	}
+
+	@Test
+	public void testFollowMultipleRenames() throws Exception {
+		repo = Configuration.get().find("log-renames");
+		String fname = "a";
+		eh.run("hg", "log", "--debug", "--follow", fname, "--cwd", repo.getLocation());
+		HgLogCommand cmd = new HgLogCommand(repo);
+		cmd.file(fname, true, true);
+		CollectWithRenameHandler h1;
+		//
+		cmd.order(OldToNew).execute(h1 = new CollectWithRenameHandler());
+		errorCollector.assertEquals(2, h1.rh.renames.size());
+		report("Follow a->c->b, old2new:", h1.getChanges(), true);
+		//
+		cmd.order(NewToOld).execute(h1 = new CollectWithRenameHandler());
+		errorCollector.assertEquals(2, h1.rh.renames.size());
+		report("Follow a->c->b, new2old:", h1.getChanges(), false);
+		//
+		//
+		TreeCollectHandler h2 = new TreeCollectHandler(false);
+		RenameCollector rh = new RenameCollector(h2);
+		cmd.order(OldToNew).execute(h2);
+		errorCollector.assertEquals(2, rh.renames.size());
+		report("Tree. Follow a->c->b, old2new:", h2.getResult(), true);
+		//
+		h2 = new TreeCollectHandler(false);
+		rh = new RenameCollector(h2);
+		cmd.order(NewToOld).execute(h2);
+		errorCollector.assertEquals(2, rh.renames.size());
+		report("Tree. Follow a->c->b, new2old:", h2.getResult(), false);
 	}
 	
 	private void assertRename(String fnameFrom, String fnameTo, Pair<HgFileRevision, HgFileRevision> rename) {

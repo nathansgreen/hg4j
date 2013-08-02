@@ -17,14 +17,15 @@
 package org.tmatesoft.hg.internal;
 
 import static org.tmatesoft.hg.core.HgIterateDirection.NewToOld;
+import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 
 import java.util.Collections;
 import java.util.LinkedList;
 
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.FileRenameHistory.Chunk;
 import org.tmatesoft.hg.repo.HgDataFile;
-import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
@@ -58,42 +59,28 @@ public class FileHistory {
 	}
 
 	public void build() throws HgRuntimeException {
-		assert fileCompleteHistory.isEmpty();
-		HgDataFile currentFile = df;
-		final int changelogRevIndexEnd = csetTo;
-		final int changelogRevIndexStart = csetFrom;
-		int fileLastClogRevIndex = changelogRevIndexEnd;
-		FileRevisionHistoryChunk nextChunk = null;
 		fileCompleteHistory.clear(); // just in case, #build() is not expected to be called more than once
-		do {
-			FileRevisionHistoryChunk fileHistory = new FileRevisionHistoryChunk(currentFile);
-			fileHistory.init(fileLastClogRevIndex);
-			fileHistory.linkTo(nextChunk);
-			fileCompleteHistory.addFirst(fileHistory); // to get the list in old-to-new order
-			nextChunk = fileHistory;
-			if (fileHistory.changeset(0) > changelogRevIndexStart && currentFile.isCopy()) {
-				// fileHistory.changeset(0) is the earliest revision we know about so far,
-				// once we get to revisions earlier than the requested start, stop digging.
-				// The reason there's NO == (i.e. not >=) because:
-				// (easy): once it's equal, we've reached our intended start
-				// (hard): if changelogRevIndexStart happens to be exact start of one of renames in the 
-				// chain of renames (test-annotate2 repository, file1->file1a->file1b, i.e. points 
-				// to the very start of file1a or file1 history), presence of == would get us to the next 
-				// chunk and hence changed parents of present chunk's first element. Our annotate alg 
-				// relies on parents only (i.e. knows nothing about 'last iteration element') to find out 
-				// what to compare, and hence won't report all lines of 'last iteration element' (which is the
-				// first revision of the renamed file) as "added in this revision", leaving gaps in annotate
-				HgRepository repo = currentFile.getRepo();
-				Nodeid originLastRev = currentFile.getCopySourceRevision();
-				currentFile = repo.getFileNode(currentFile.getCopySourceName());
-				fileLastClogRevIndex = currentFile.getChangesetRevisionIndex(currentFile.getRevisionIndex(originLastRev));
-				// XXX perhaps, shall fail with meaningful exception if new file doesn't exist (.i/.d not found for whatever reason)
-				// or source revision is missing?
-			} else {
-				fileHistory.chopAtChangeset(changelogRevIndexStart);
-				currentFile = null; // stop iterating
+		Nodeid fileRev = df.getRepo().getManifest().getFileRevision(csetTo, df.getPath());
+		int fileRevIndex = df.getRevisionIndex(fileRev);
+		FileRenameHistory frh = new FileRenameHistory(csetFrom, csetTo);
+		if (frh.isOutOfRange(df, fileRevIndex)) {
+			return;
+		}
+		frh.build(df, fileRevIndex);
+		FileRevisionHistoryChunk prevChunk = null;
+		for (Chunk c : frh.iterate(OldToNew)) {
+			FileRevisionHistoryChunk fileHistory = new FileRevisionHistoryChunk(c.file(), c.firstCset(), c.lastCset(), c.firstFileRev(), c.lastFileRev());
+			fileHistory.init();
+			if (fileHistory.revisionCount() == 0) {
+				// no revisions on our cset range of interest
+				continue;
 			}
-		} while (currentFile != null && fileLastClogRevIndex > changelogRevIndexStart);
+			if (prevChunk != null) {
+				prevChunk.linkTo(fileHistory);
+			}
+			fileCompleteHistory.addLast(fileHistory); // to get the list in old-to-new order
+			prevChunk = fileHistory;
+		}
 		// fileCompleteHistory is in (origin, intermediate target, ultimate target) order
 	}
 	

@@ -26,8 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
-import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.FileRenameHistory;
+import org.tmatesoft.hg.internal.FileRenameHistory.Chunk;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
@@ -376,45 +377,21 @@ public class HgStatusCollector {
 		assert fnameRev != null;
 		assert !Nodeid.NULL.equals(fnameRev); 
 		int fileRevIndex = fnameRev == null ? 0 : df.getRevisionIndex(fnameRev);
-		Path lastOriginFound = null;
-		while(fileRevIndex >=0) {
-			if (!df.isCopy(fileRevIndex)) {
-				fileRevIndex--;
-				continue;
-			}
-			int csetRevIndex = df.getChangesetRevisionIndex(fileRevIndex);
-			if (csetRevIndex <= originalChangesetIndex) {
-				// we've walked past originalChangelogRevIndex and no chances we'll find origin
-				// if we get here, it means either fname's origin is not from the base revision
-				// or the last found rename is still valid
-				return lastOriginFound;
-			}
-			HgFileRevision origin = df.getCopySource(fileRevIndex);
-			// prepare for the next step, df(copyFromFileRev) would point to copy origin and its revision
-			df = hgRepo.getFileNode(origin.getPath());
-			int copyFromFileRevIndex = df.getRevisionIndex(origin.getRevision());
-			if (originals.contains(origin.getPath())) {
-				int copyFromCsetIndex = df.getChangesetRevisionIndex(copyFromFileRevIndex);
-				if (copyFromCsetIndex <= originalChangesetIndex) {
-					// copy/rename source was known prior to rev1 
-					// (both r1Files.contains is true and original was created earlier than rev1)
-					// without r1Files.contains changelogRevision <= rev1 won't suffice as the file
-					// might get removed somewhere in between (changelogRevision < R < rev1)
-					return origin.getPath();
-				}
-				// copy/rename happened in [copyFromCsetIndex..target], let's see if
-				// origin wasn't renamed once more in [originalChangesetIndex..copyFromCsetIndex]
-				lastOriginFound = origin.getPath();
-				// FALL-THROUGH
-			} else {
-				// clear last known origin if the file was renamed once again to something we don't have in base
-				lastOriginFound = null;
-			}
-			// try more steps away
-			// copyFromFileRev or one of its predecessors might be copies as well
-			fileRevIndex = copyFromFileRevIndex; // df is already origin file
+		FileRenameHistory frh = new FileRenameHistory(originalChangesetIndex, df.getChangesetRevisionIndex(fileRevIndex));
+		if (frh.isOutOfRange(df, fileRevIndex)) {
+			return null;
 		}
-		return lastOriginFound;
+		frh.build(df, fileRevIndex);
+		Chunk c = frh.chunkAt(originalChangesetIndex);
+		if (c == null) {
+			// file rename history doesn't go deep up to changeset of interest
+			return null;
+		}
+		Path nameAtOrigin = c.file().getPath();
+		if (originals.contains(nameAtOrigin)) {
+			return nameAtOrigin;
+		}
+		return null;
 	}
 
 	// XXX for r1..r2 status, only modified, added, removed (and perhaps, clean) make sense
