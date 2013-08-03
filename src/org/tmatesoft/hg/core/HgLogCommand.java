@@ -36,6 +36,8 @@ import java.util.TreeSet;
 import org.tmatesoft.hg.internal.AdapterPlug;
 import org.tmatesoft.hg.internal.BatchRangeHelper;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
+import org.tmatesoft.hg.internal.FileRenameHistory;
+import org.tmatesoft.hg.internal.FileRenameHistory.Chunk;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.IntVector;
 import org.tmatesoft.hg.internal.Internals;
@@ -329,13 +331,14 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			if (repo.getChangelog().getRevisionCount() == 0) {
 				return;
 			}
+			final int firstCset = startRev;
 			final int lastCset = endRev == TIP ? repo.getChangelog().getLastRevision() : endRev;
 			// XXX pretty much like HgInternals.checkRevlogRange
 			if (lastCset < 0 || lastCset > repo.getChangelog().getLastRevision()) {
 				throw new HgBadArgumentException(String.format("Bad value %d for end revision", lastCset), null);
 			}
-			if (startRev < 0 || startRev > lastCset) {
-				throw new HgBadArgumentException(String.format("Bad value %d for start revision for range [%1$d..%d]", startRev, lastCset), null);
+			if (firstCset < 0 || firstCset > lastCset) {
+				throw new HgBadArgumentException(String.format("Bad value %d for start revision for range [%1$d..%d]", firstCset, lastCset), null);
 			}
 			final int BATCH_SIZE = 100;
 			count = 0;
@@ -347,18 +350,19 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			// prior to passing cset to next Inspector, which is either (a) collector to reverse cset order, then invokes 
 			// transformer from (b), below, with alternative cset order or (b) transformer to hi-level csets. 
 			FilteringInspector filterInsp = new FilteringInspector();
-			filterInsp.changesets(startRev, lastCset);
+			filterInsp.changesets(firstCset, lastCset);
 			if (file == null) {
-				progressHelper.start(lastCset - startRev + 1);
+				progressHelper.start(lastCset - firstCset + 1);
 				if (iterateDirection == HgIterateDirection.OldToNew) {
 					filterInsp.delegateTo(csetTransform);
-					repo.getChangelog().range(startRev, lastCset, filterInsp);
+					repo.getChangelog().range(firstCset, lastCset, filterInsp);
 					csetTransform.checkFailure();
 				} else {
 					assert iterateDirection == HgIterateDirection.NewToOld;
-					BatchRangeHelper brh = new BatchRangeHelper(startRev, lastCset, BATCH_SIZE, true);
-					BatchChangesetInspector batchInspector = new BatchChangesetInspector(Math.min(lastCset-startRev+1, BATCH_SIZE));
+					BatchRangeHelper brh = new BatchRangeHelper(firstCset, lastCset, BATCH_SIZE, true);
+					BatchChangesetInspector batchInspector = new BatchChangesetInspector(Math.min(lastCset-firstCset+1, BATCH_SIZE));
 					filterInsp.delegateTo(batchInspector);
+					// XXX this batching code is bit verbose, refactor
 					while (brh.hasNext()) {
 						brh.next();
 						repo.getChangelog().range(brh.start(), brh.end(), filterInsp);
@@ -373,16 +377,16 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 				filterInsp.delegateTo(csetTransform);
 				final HgFileRenameHandlerMixin withCopyHandler = Adaptable.Factory.getAdapter(handler, HgFileRenameHandlerMixin.class, null);
 				FileRenameQueueBuilder frqBuilder = new FileRenameQueueBuilder();
-				List<Pair<HgDataFile, Nodeid>> fileRenames = frqBuilder.buildFileRenamesQueue();
+				List<QueueElement> fileRenames = frqBuilder.buildFileRenamesQueue(firstCset, lastCset);
 				progressHelper.start(fileRenames.size());
 				for (int nameIndex = 0, fileRenamesSize = fileRenames.size(); nameIndex < fileRenamesSize; nameIndex++) {
-					Pair<HgDataFile, Nodeid> curRename = fileRenames.get(nameIndex);
-					HgDataFile fileNode = curRename.first();
+					QueueElement curRename = fileRenames.get(nameIndex);
+					HgDataFile fileNode = curRename.file();
 					if (followAncestry) {
 						TreeBuildInspector treeBuilder = new TreeBuildInspector(followAncestry);
 						@SuppressWarnings("unused")
-						List<HistoryNode> fileAncestry = treeBuilder.go(fileNode, curRename.second());
-						int[] commitRevisions = narrowChangesetRange(treeBuilder.getCommitRevisions(), startRev, lastCset);
+						List<HistoryNode> fileAncestry = treeBuilder.go(curRename);
+						int[] commitRevisions = narrowChangesetRange(treeBuilder.getCommitRevisions(), firstCset, lastCset);
 						if (iterateDirection == HgIterateDirection.OldToNew) {
 							repo.getChangelog().range(filterInsp, commitRevisions);
 							csetTransform.checkFailure();
@@ -396,8 +400,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 						}
 					} else {
 						// report complete file history (XXX may narrow range with [startRev, endRev], but need to go from file rev to link rev)
-						int fileStartRev = 0; //fileNode.getChangesetRevisionIndex(0) >= startRev
-						int fileEndRev = fileNode.getLastRevision();
+						int fileStartRev = curRename.fileFrom();
+						int fileEndRev = curRename.file().getLastRevision(); //curRename.fileTo();
 						if (iterateDirection == HgIterateDirection.OldToNew) {
 							fileNode.history(fileStartRev, fileEndRev, filterInsp);
 							csetTransform.checkFailure();
@@ -418,18 +422,18 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 						}
 					}
 					if (withCopyHandler != null && nameIndex + 1 < fileRenamesSize) {
-						Pair<HgDataFile, Nodeid> nextRename = fileRenames.get(nameIndex+1);
+						QueueElement nextRename = fileRenames.get(nameIndex+1);
 						HgFileRevision src, dst;
 						// A -> B
 						if (iterateDirection == HgIterateDirection.OldToNew) {
 							// curRename: A, nextRename: B
-							src = new HgFileRevision(fileNode, curRename.second(), null);
-							dst = new HgFileRevision(nextRename.first(), nextRename.first().getRevision(0), src.getPath());
+							src = curRename.last();
+							dst = nextRename.first(src);
 						} else {
 							assert iterateDirection == HgIterateDirection.NewToOld;
 							// curRename: B, nextRename: A
-							src = new HgFileRevision(nextRename.first(), nextRename.second(), null);
-							dst = new HgFileRevision(fileNode, fileNode.getRevision(0), src.getPath());
+							src = nextRename.last();
+							dst = curRename.first(src);
 						}
 						withCopyHandler.copy(src, dst);
 					}
@@ -540,6 +544,15 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		if (file == null) {
 			throw new IllegalArgumentException("History tree is supported for files only (at least now), please specify file");
 		}
+		final int firstCset = startRev;
+		final int lastCset = endRev == TIP ? repo.getChangelog().getLastRevision() : endRev;
+		// XXX pretty much like HgInternals.checkRevlogRange
+		if (lastCset < 0 || lastCset > repo.getChangelog().getLastRevision()) {
+			throw new HgBadArgumentException(String.format("Bad value %d for end revision", lastCset), null);
+		}
+		if (firstCset < 0 || startRev > lastCset) {
+			throw new HgBadArgumentException(String.format("Bad value %d for start revision for range [%1$d..%d]", startRev, lastCset), null);
+		}
 		final ProgressSupport progressHelper = getProgressSupport(handler);
 		final CancelSupport cancelHelper = getCancelSupport(handler, true);
 		final HgFileRenameHandlerMixin renameHandler = Adaptable.Factory.getAdapter(handler, HgFileRenameHandlerMixin.class, null);
@@ -559,13 +572,13 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			// renamed files in the queue are placed with respect to #iterateDirection
 			// i.e. if we iterate from new to old, recent filenames come first
 			FileRenameQueueBuilder frqBuilder = new FileRenameQueueBuilder();
-			List<Pair<HgDataFile, Nodeid>> fileRenamesQueue = frqBuilder.buildFileRenamesQueue();
+			List<QueueElement> fileRenamesQueue = frqBuilder.buildFileRenamesQueue(firstCset, lastCset);
 			// XXX perhaps, makes sense to look at selected file's revision when followAncestry is true
 			// to ensure file we attempt to trace is in the WC's parent. Native hg aborts if not.
 			progressHelper.start(4 * fileRenamesQueue.size());
 			for (int namesIndex = 0, renamesQueueSize = fileRenamesQueue.size(); namesIndex < renamesQueueSize; namesIndex++) {
 	 
-				final Pair<HgDataFile, Nodeid> renameInfo = fileRenamesQueue.get(namesIndex);
+				final QueueElement renameInfo = fileRenamesQueue.get(namesIndex);
 				dispatcher.prepare(progressHelper, renameInfo);
 				cancelHelper.checkCancelled();
 				if (namesIndex > 0) {
@@ -587,6 +600,44 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			throw new HgLibraryFailureException(ex);
 		}
 		progressHelper.done();
+	}
+	
+	private static class QueueElement {
+		private final HgDataFile df;
+		private final Nodeid lastRev;
+		private final int firstRevIndex, lastRevIndex;
+
+		QueueElement(HgDataFile file, Nodeid fileLastRev) {
+			df = file;
+			lastRev = fileLastRev;
+			firstRevIndex = 0;
+			lastRevIndex = lastRev == null ? df.getLastRevision() : df.getRevisionIndex(lastRev);
+		}
+		QueueElement(HgDataFile file, int firstFileRev, int lastFileRev) {
+			df = file;
+			firstRevIndex = firstFileRev;
+			lastRevIndex = lastFileRev;
+			lastRev = null;
+		}
+		HgDataFile file() {
+			return df;
+		}
+		int fileFrom() {
+			return firstRevIndex;
+		}
+		int fileTo() {
+			return lastRevIndex;
+		}
+		// never null
+		Nodeid lastFileRev() {
+			return lastRev == null ? df.getRevision(fileTo()) : lastRev;
+		}
+		HgFileRevision last() {
+			return new HgFileRevision(df, lastFileRev(), null);
+		}
+		HgFileRevision first(HgFileRevision from) {
+			return new HgFileRevision(df, df.getRevision(0), from.getPath());
+		}
 	}
 	
 	/**
@@ -611,8 +662,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		 * @return list of file renames, ordered with respect to {@link #iterateDirection}
 		 * @throws HgRuntimeException 
 		 */
-		public List<Pair<HgDataFile, Nodeid>> buildFileRenamesQueue() throws HgPathNotFoundException, HgRuntimeException {
-			LinkedList<Pair<HgDataFile, Nodeid>> rv = new LinkedList<Pair<HgDataFile, Nodeid>>();
+		public List<QueueElement> buildFileRenamesQueue(int csetStart, int csetEnd) throws HgPathNotFoundException, HgRuntimeException {
+			LinkedList<QueueElement> rv = new LinkedList<QueueElement>();
 			Nodeid startRev = null;
 			HgDataFile fileNode = repo.getFileNode(file);
 			if (!fileNode.exists()) {
@@ -628,34 +679,17 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 				}
 				// else fall-through, assume null (eventually, lastRevision()) is ok here
 			}
-			Pair<HgDataFile, Nodeid> p = new Pair<HgDataFile, Nodeid>(fileNode, startRev);
-			rv.add(p);
+			QueueElement p = new QueueElement(fileNode, startRev);
 			if (!followRenames) {
+				rv.add(p);
 				return rv;
 			}
-			while (hasOrigin(p)) {
-				p = origin(p);
-				if (iterateDirection == HgIterateDirection.OldToNew) {
-					rv.addFirst(p);
-				} else {
-					assert iterateDirection == HgIterateDirection.NewToOld;
-					rv.addLast(p);
-				}
-			};
+			FileRenameHistory frh = new FileRenameHistory(csetStart, csetEnd);
+			frh.build(fileNode, p.fileTo());
+			for (Chunk c : frh.iterate(iterateDirection)) {
+				rv.add(new QueueElement(c.file(), c.firstFileRev(), c.lastFileRev()));
+			}
 			return rv;
-		}
-		
-		public boolean hasOrigin(Pair<HgDataFile, Nodeid> p) throws HgRuntimeException {
-			return p.first().isCopy();
-		}
-
-		public Pair<HgDataFile, Nodeid> origin(Pair<HgDataFile, Nodeid> p) throws HgRuntimeException {
-			HgDataFile fileNode = p.first();
-			assert fileNode.isCopy();
-			Path fp = fileNode.getCopySourceName();
-			Nodeid copyRev = fileNode.getCopySourceRevision();
-			fileNode = repo.getFileNode(fp);
-			return new Pair<HgDataFile, Nodeid>(fileNode, copyRev);
 		}
 		
 		/**
@@ -665,23 +699,24 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		 * @param queue value from {@link #buildFileRenamesQueue()}
 		 * @param renameHandler may be <code>null</code>
 		 */
-		public void reportRenameIfNotInQueue(List<Pair<HgDataFile, Nodeid>> queue, HgFileRenameHandlerMixin renameHandler) throws HgCallbackTargetException, HgRuntimeException {
+		public void reportRenameIfNotInQueue(List<QueueElement> queue, HgFileRenameHandlerMixin renameHandler) throws HgCallbackTargetException, HgRuntimeException {
 			if (renameHandler != null && !followRenames) {
 				// If followRenames is true, all the historical names were in the queue and are processed already.
 				// Hence, shall process origin explicitly only when renameHandler is present but followRenames is not requested.
 				assert queue.size() == 1; // see the way queue is constructed above
-				Pair<HgDataFile, Nodeid> curRename = queue.get(0);
-				if (hasOrigin(curRename)) {
-					Pair<HgDataFile, Nodeid> origin = origin(curRename);
-					HgFileRevision src, dst;
-					src = new HgFileRevision(origin.first(), origin.second(), null);
-					dst = new HgFileRevision(curRename.first(), curRename.first().getRevision(0), src.getPath());
+				QueueElement curRename = queue.get(0);
+				if (curRename.file().isCopy(curRename.fileFrom())) {
+					final HgFileRevision src = curRename.file().getCopySource(curRename.fileFrom());
+					HgFileRevision dst = curRename.first(src);
 					renameHandler.copy(src, dst);
 				}
 			}
 		}
 	}
 	
+	/**
+	 * Builds list of {@link HistoryNode HistoryNodes} to visit for a given chunk of file rename history
+	 */
 	private static class TreeBuildInspector implements HgChangelog.ParentInspector, HgChangelog.RevisionInspector {
 		private final boolean followAncestry;
 
@@ -733,6 +768,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		}
 		
 		/**
+		 * FIXME pretty much the same as FileRevisionHistoryChunk
+		 * 
 		 * Builds history of file changes (in natural order, from oldest to newest) up to (and including) file revision specified.
 		 * If {@link TreeBuildInspector} follows ancestry, only elements that are on the line of ancestry of the revision at 
 		 * lastRevisionIndex would be included.
@@ -740,18 +777,22 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		 * @return list of history elements, from oldest to newest. In case {@link #followAncestry} is <code>true</code>, the list
 		 * is modifiable (to further augment with last/first elements of renamed file histories)
 		 */
-		List<HistoryNode> go(HgDataFile fileNode, Nodeid fileLastRevisionToVisit) throws HgRuntimeException {
+		List<HistoryNode> go(QueueElement qe) throws HgRuntimeException {
 			resultHistory = null;
-			int fileLastRevIndexToVisit = fileLastRevisionToVisit == null ? fileNode.getLastRevision() : fileNode.getRevisionIndex(fileLastRevisionToVisit);
+			HgDataFile fileNode = qe.file();
+			// TODO int fileLastRevIndexToVisit = qe.fileTo
+			int fileLastRevIndexToVisit = followAncestry ? fileNode.getRevisionIndex(qe.lastFileRev()) : fileNode.getLastRevision();
 			completeHistory = new HistoryNode[fileLastRevIndexToVisit+1];
 			commitRevisions = new int[completeHistory.length];
-			fileNode.indexWalk(0, fileLastRevIndexToVisit, this);
+			fileNode.indexWalk(qe.fileFrom(), fileLastRevIndexToVisit, this);
 			if (!followAncestry) {
-				// in case when ancestor not followed, it's safe to return unmodifiable list
-				resultHistory = Arrays.asList(completeHistory);
+				resultHistory = new ArrayList<HistoryNode>(fileLastRevIndexToVisit - qe.fileFrom() + 1);
+				// items in completeHistory with index < qe.fileFrom are empty
+				for (int i = qe.fileFrom(); i <= fileLastRevIndexToVisit; i++) {
+					resultHistory.add(completeHistory[i]);
+				}
 				completeHistory = null;
-				// keep commitRevisions initialized, no need to recalculate them
-				// as they correspond 1:1 to resultHistory
+				commitRevisions = null;
 				return resultHistory;
 			}
 			/*
@@ -801,9 +842,6 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			});
 			completeHistory = null;
 			commitRevisions = null;
-			// collected values are no longer valid - shall 
-			// strip off elements for missing HistoryNodes, but it's easier just to re-create the array
-			// from resultHistory later, once (and if) needed
 			return resultHistory = strippedHistoryList;
 		}
 		
@@ -822,6 +860,9 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		}
 	};
 
+	/**
+	 * Sends {@link ElementImpl} for each {@link HistoryNode}, and keeps track of junction points - revisions with renames
+	 */
 	private abstract class HandlerDispatcher {
 		private final int CACHE_CSET_IN_ADVANCE_THRESHOLD = 100; /* XXX is it really worth it? */
 		// builds tree of nodes according to parents in file's revlog
@@ -837,11 +878,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		private HgFileRevision copiedFrom, copiedTo; 
 
 		// parentProgress shall be initialized with 4 XXX refactor all this stuff with parentProgress 
-		public void prepare(ProgressSupport parentProgress, Pair<HgDataFile, Nodeid> renameInfo) throws HgRuntimeException {
-			// if we don't followAncestry, take complete history
-			// XXX treeBuildInspector knows followAncestry, perhaps the logic 
-			// whether to take specific revision or the last one shall be there?
-			changeHistory = treeBuildInspector.go(renameInfo.first(), followAncestry ? renameInfo.second() : null);
+		public void prepare(ProgressSupport parentProgress, QueueElement renameInfo) throws HgRuntimeException {
+			changeHistory = treeBuildInspector.go(renameInfo);
 			assert changeHistory.size() > 0;
 			parentProgress.worked(1);
 			int historyNodeCount = changeHistory.size();
@@ -863,18 +901,18 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 			}
 			progress.start(historyNodeCount);
 			// switch to present chunk's file node 
-			switchTo(renameInfo.first());
+			switchTo(renameInfo.file());
 		}
 		
-		public void updateJunctionPoint(Pair<HgDataFile, Nodeid> curRename, Pair<HgDataFile, Nodeid> nextRename, boolean needCopyFromTo) throws HgRuntimeException {
+		public void updateJunctionPoint(QueueElement curRename, QueueElement nextRename, boolean needCopyFromTo) throws HgRuntimeException {
 			copiedFrom = copiedTo = null;
 			//
 			// A (old) renamed to B(new).  A(0..k..n) -> B(0..m). If followAncestry, k == n
 			// curRename.second() points to A(k)
 			if (iterateDirection == HgIterateDirection.OldToNew) {
 				// looking at A chunk (curRename), nextRename points to B
-				HistoryNode junctionSrc = findJunctionPointInCurrentChunk(curRename.second()); // A(k)
-				HistoryNode junctionDestMock = treeBuildInspector.one(nextRename.first(), 0); // B(0)
+				HistoryNode junctionSrc = findJunctionPointInCurrentChunk(curRename.lastFileRev()); // A(k)
+				HistoryNode junctionDestMock = treeBuildInspector.one(nextRename.file(), 0); // B(0)
 				// junstionDestMock is mock object, once we iterate next rename, there'd be different HistoryNode
 				// for B's first revision. This means we read it twice, but this seems to be reasonable
 				// price for simplicity of the code (and opportunity to follow renames while not following ancestry)
@@ -883,15 +921,15 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 				// moreover, children of original A(k) (junctionSrc) would list mock B(0) which is undesired once we iterate over real B
 				junctionNode = new HistoryNode(junctionSrc.changeset, junctionSrc.fileRevision, null, null);
 				if (needCopyFromTo) {
-					copiedFrom = new HgFileRevision(curRename.first(), junctionNode.fileRevision, null); // "A", A(k)
-					copiedTo = new HgFileRevision(nextRename.first(), junctionDestMock.fileRevision, copiedFrom.getPath()); // "B", B(0)
+					copiedFrom = new HgFileRevision(curRename.file(), junctionNode.fileRevision, null); // "A", A(k)
+					copiedTo = new HgFileRevision(nextRename.file(), junctionDestMock.fileRevision, copiedFrom.getPath()); // "B", B(0)
 				}
 			} else {
 				assert iterateDirection == HgIterateDirection.NewToOld;
 				// looking at B chunk (curRename), nextRename points at A
 				HistoryNode junctionDest = changeHistory.get(0); // B(0)
 				// prepare mock A(k)
-				HistoryNode junctionSrcMock = treeBuildInspector.one(nextRename.first(), nextRename.second()); // A(k)
+				HistoryNode junctionSrcMock = treeBuildInspector.one(nextRename.file(), nextRename.lastFileRev()); // A(k)
 				// B(0) to list A(k) as its parent
 				// NOTE, A(k) would be different when we reach A chunk on the next iteration,
 				// but we do not care as long as TreeElement needs only parent/child changesets
@@ -902,8 +940,8 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 				// Save mock B(0), for reasons see above for opposite direction
 				junctionNode = new HistoryNode(junctionDest.changeset, junctionDest.fileRevision, null, null);
 				if (needCopyFromTo) {
-					copiedFrom = new HgFileRevision(nextRename.first(), junctionSrcMock.fileRevision, null); // "A", A(k)
-					copiedTo = new HgFileRevision(curRename.first(), junctionNode.fileRevision, copiedFrom.getPath()); // "B", B(0)
+					copiedFrom = new HgFileRevision(nextRename.file(), junctionSrcMock.fileRevision, null); // "A", A(k)
+					copiedTo = new HgFileRevision(curRename.file(), junctionNode.fileRevision, copiedFrom.getPath()); // "B", B(0)
 				}
 			}
 		}
@@ -924,7 +962,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 		/**
 		 * Replace mock src/dest HistoryNode connected to junctionNode with a real one
 		 */
-		public void connectWithLastJunctionPoint(Pair<HgDataFile, Nodeid> curRename, Pair<HgDataFile, Nodeid> prevRename) {
+		public void connectWithLastJunctionPoint(QueueElement curRename, QueueElement prevRename) {
 			assert junctionNode != null;
 			// A renamed to B. A(0..k..n) -> B(0..m). If followAncestry: k == n  
 			if (iterateDirection == HgIterateDirection.OldToNew) {
@@ -941,7 +979,7 @@ public class HgLogCommand extends HgAbstractCommand<HgLogCommand> {
 				// Already reported B(m), B(m-1)...B(0), B(0) is in junctionNode
 				// Shall connect histories A(k).bind(B(0))
 				// if followAncestry: A(k) is latest in changeHistory (k == n)
-				HistoryNode junctionSrc = findJunctionPointInCurrentChunk(curRename.second()); // A(k)
+				HistoryNode junctionSrc = findJunctionPointInCurrentChunk(curRename.lastFileRev()); // A(k)
 				junctionSrc.bindChild(junctionNode);
 			}
 		}
