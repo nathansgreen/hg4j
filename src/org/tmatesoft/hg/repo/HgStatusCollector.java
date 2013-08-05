@@ -299,7 +299,6 @@ public class HgStatusCollector {
 
 		final CancelSupport cs = CancelSupport.Factory.get(inspector);
 
-		
 		Collection<Path> allBaseFiles = r1.files();
 		TreeSet<Path> r1Files = new TreeSet<Path>(allBaseFiles);
 		for (Path r2fname : r2.files()) {

@@ -16,7 +16,10 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.repo.HgRepository.BAD_REVISION;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -24,6 +27,8 @@ import java.util.List;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgIterateDirection;
 import org.tmatesoft.hg.repo.HgDataFile;
+import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * Traces file renames. Quite similar to HgChangesetFileSneaker, although the latter tries different paths
@@ -61,8 +66,9 @@ public final class FileRenameHistory {
 		LinkedList<Chunk> chunks = new LinkedList<Chunk>();
 		int chunkStart = 0, chunkEnd = fileRev;
 		int csetChunkEnd = -1, csetChunkStart = -1;
+		BasicRevMap csetMap = new BasicRevMap(0, fileRev).collect(df);
 		while (fileRev >= 0) {
-			int cset = df.getChangesetRevisionIndex(fileRev);
+			int cset = csetMap.changesetAt(fileRev);
 			if (csetChunkEnd == -1) {
 				csetChunkEnd = cset;
 			}
@@ -82,6 +88,7 @@ public final class FileRenameHistory {
 				HgFileRevision origin = df.getCopySource(fileRev);
 				df = df.getRepo().getFileNode(origin.getPath());
 				fileRev = chunkEnd = df.getRevisionIndex(origin.getRevision());
+				csetMap = new BasicRevMap(0, fileRev).collect(df);
 				chunkStart = 0;
 				csetChunkEnd = cset - 1; // if df is copy, cset can't be 0
 				csetChunkStart = -1;
@@ -130,7 +137,7 @@ public final class FileRenameHistory {
 	/**
 	 * file has changes [firstFileRev..lastFileRev] that have occurred somewhere in [firstCset..lastCset] 
 	 */
-	public static class Chunk {
+	public static final class Chunk {
 		private final HgDataFile df;
 		private final int fileRevFrom;
 		private final int fileRevTo;
@@ -157,6 +164,34 @@ public final class FileRenameHistory {
 		}
 		public int lastCset() {
 			return csetTo;
+		}
+	}
+	
+	private static final class BasicRevMap implements HgDataFile.LinkRevisionInspector {
+		private final int[] revs;
+		private final int fromRev;
+		private final int toRev;
+		public BasicRevMap(int startRev, int endRev) {
+			revs = new int[endRev+1]; // for simplicity, just ignore startRev now (it's 0 in local use anyway)
+			fromRev = startRev;
+			toRev = endRev;
+			Arrays.fill(revs, BAD_REVISION);
+		}
+		
+		public BasicRevMap collect(HgDataFile df) {
+			df.indexWalk(fromRev, toRev, this);
+			return this;
+		}
+
+		public void next(int revisionIndex, int linkedRevisionIndex) throws HgRuntimeException {
+			revs[revisionIndex] = linkedRevisionIndex;
+		}
+		
+		/**
+		 * @return {@link HgRepository#BAD_REVISION} if there's no mapping
+		 */
+		public int changesetAt(int rev) {
+			return revs[rev];
 		}
 	}
 }

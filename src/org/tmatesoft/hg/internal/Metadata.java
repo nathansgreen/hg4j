@@ -16,6 +16,7 @@
  */
 package org.tmatesoft.hg.internal;
 
+import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.io.ByteArrayOutputStream;
@@ -50,18 +51,24 @@ public final class Metadata {
 	private final Metadata.Record NONE = new Record(-1, null); // don't want statics
 
 	private final LogFacility log;
+	
+	private int lastRevRead = NO_REVISION;
 
 	public Metadata(SessionContext.Source sessionCtx) {
 		log = sessionCtx.getSessionContext().getLog();
 	}
 	
-	// true when there's metadata for given revision
+	/**
+	 * @return <code>true</code> when there's metadata for given revision
+	 */
 	public boolean known(int revision) {
 		Metadata.Record i = entries.get(revision);
 		return i != null && NONE != i;
 	}
 
-	// true when revision has been checked for metadata presence.
+	/**
+	 * @return <code>true</code> when revision has been checked for metadata presence.
+	 */
 	public boolean checked(int revision) {
 		return entries.containsKey(revision);
 	}
@@ -70,6 +77,14 @@ public final class Metadata {
 	public boolean none(int revision) {
 		Metadata.Record i = entries.get(revision);
 		return i == NONE;
+	}
+	
+	/**
+	 * Get the greatest revision index visited so far.
+	 * Note, doesn't imply all revisions up to this has been visited.
+	 */
+	public int lastRevisionRead() {
+		return lastRevRead;
 	}
 
 	// mark revision as having no metadata.
@@ -98,6 +113,9 @@ public final class Metadata {
 	 */
 	public boolean tryRead(int revisionNumber, DataAccess data) throws IOException, HgInvalidControlFileException {
 		final int daLength = data.length();
+		if (lastRevRead == NO_REVISION || revisionNumber > lastRevRead) {
+			lastRevRead = revisionNumber;
+		}
 		if (daLength < 4 || data.readByte() != 1 || data.readByte() != 10) {
 			recordNone(revisionNumber);
 			return false;

@@ -334,6 +334,8 @@ abstract class Revlog {
 	 * EXPERIMENTAL CODE, DO NOT USE
 	 * 
 	 * Alternative revlog iteration
+	 * There's an implicit ordering of inspectors. Less inspector needs, earlier its invocation occurs.
+	 * E.g. ParentInspector goes after RevisionInspector. LinkRevisionInspector goes before RevisionInspector
 	 * 
 	 * @param start
 	 * @param end
@@ -349,6 +351,7 @@ abstract class Revlog {
 		}
 		final RevisionInspector revisionInsp = Adaptable.Factory.getAdapter(inspector, RevisionInspector.class, null);
 		final ParentInspector parentInsp = Adaptable.Factory.getAdapter(inspector, ParentInspector.class, null);
+		final LinkRevisionInspector linkRevInspector = Adaptable.Factory.getAdapter(inspector, LinkRevisionInspector.class, null);
 		final Nodeid[] allRevisions = parentInsp == null ? null : new Nodeid[end - _start + 1];
 		// next are to build set of parent indexes that are not part of the range iteration
 		// i.e. those parents we need to read separately. See Issue 31 for details.
@@ -360,6 +363,14 @@ abstract class Revlog {
 			private int i = 0;
 			
 			public void next(int revisionIndex, int actualLen, int baseRevIndex, int linkRevIndex, int parent1RevIndex, int parent2RevIndex, byte[] nodeid, DataAccess data) throws HgRuntimeException {
+				// FIXME refactor either as chain of RevlogStream.Inspector or an external AnyOf() runner not to keep everything
+				// in a single method
+				if (linkRevInspector != null) {
+					linkRevInspector.next(revisionIndex, linkRevIndex);
+					if (parentInsp == null && revisionInsp == null) {
+						return;
+					}
+				}
 				Nodeid nid = Nodeid.fromBinary(nodeid, 0);
 				if (revisionInsp != null) {
 					revisionInsp.next(revisionIndex, nid, linkRevIndex);
@@ -437,6 +448,11 @@ abstract class Revlog {
 	@Experimental
 	public interface RevisionInspector extends Inspector {
 		void next(int revisionIndex, Nodeid revision, int linkedRevisionIndex) throws HgRuntimeException;
+	}
+
+	@Experimental
+	public interface LinkRevisionInspector extends Inspector {
+		void next(int revisionIndex, int linkedRevisionIndex) throws HgRuntimeException;
 	}
 
 	@Experimental

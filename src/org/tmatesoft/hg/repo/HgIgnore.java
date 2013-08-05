@@ -25,7 +25,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -44,11 +46,16 @@ public class HgIgnore implements Path.Matcher {
 
 	private List<Pattern> entries;
 	private final PathRewrite globPathHelper;
-	private FileChangeMonitor ignoreFileTracker; 
+	private FileChangeMonitor ignoreFileTracker;
+	// if pattern matches first fragment of a path, it will
+	// match any other path with this fragment, so we can avoid pattern matching
+	// if path starts with one of such fragments (often for e.g. ignored 'bin/' folders)
+	private final Set<String> ignoredFirstFragments;
 
 	HgIgnore(PathRewrite globPathRewrite) {
 		entries = Collections.emptyList();
 		globPathHelper = globPathRewrite;
+		ignoredFirstFragments = new HashSet<String>();
 	}
 
 	/* package-local */ void read(Internals repo) throws HgInvalidControlFileException {
@@ -230,18 +237,28 @@ public class HgIgnore implements Path.Matcher {
 	 */
 	public boolean isIgnored(Path path) {
 		String ps = path.toString();
+		int x = ps.indexOf('/');
+		if (x != -1 && ignoredFirstFragments.contains(ps.substring(0, x))) {
+			return true;
+		}
 		for (Pattern p : entries) {
-			int x = ps.indexOf('/'); // reset for each pattern
 			if (p.matcher(ps).find()) {
 				return true;
 			}
-			while (x != -1 && x+1 != ps.length() /*skip very last segment not to check complete string twice*/) {
-				String fragment = ps.substring(0, x);
+		}
+		boolean firstFragment = true;
+		while (x != -1 && x+1 != ps.length() /*skip very last segment not to check complete string twice*/) {
+			String fragment = ps.substring(0, x);
+			for (Pattern p : entries) {
 				if (p.matcher(fragment).matches()) {
+					if (firstFragment) {
+						ignoredFirstFragments.add(new String(fragment));
+					}
 					return true;
 				}
-				x = ps.indexOf('/', x+1);
 			}
+			x = ps.indexOf('/', x+1);
+			firstFragment = false;
 		}
 		return false;
 	}

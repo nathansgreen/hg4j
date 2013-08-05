@@ -63,7 +63,12 @@ public final class HgDataFile extends Revlog {
 	// slashes, unix-style?
 	// repo location agnostic, just to give info to user, not to access real storage
 	private final Path path;
-	private Metadata metadata; // get initialized on first access to file content.
+	/*
+	 * Get initialized on first access to file content.
+	 * We read metadata starting from rev 0 always, so that Metadata#lastRevisionRead()
+	 * shows the region of file history [0..lastRevisionRead] we know metadata for
+	 */
+	private Metadata metadata;
 	
 	/*package-local*/HgDataFile(HgRepository hgRepo, Path filePath, RevlogStream content) {
 		super(hgRepo, content, false);
@@ -477,12 +482,17 @@ public final class HgDataFile extends Revlog {
 	}
 	
 	private void checkAndRecordMetadata(int localRev) throws HgRuntimeException {
+		int startRev;
 		if (metadata == null) {
 			metadata = new Metadata(getRepo());
+			startRev = 0; // read from the very beginning with one shot - likely isCopy(localRev-i) will be of interest, too
+		} else {
+			startRev = metadata.lastRevisionRead() + 1;
 		}
+		assert localRev >= startRev; // callers of this method ensure that metadata has been checked beforehand
 		// use MetadataInspector without delegate to process metadata only
 		RevlogStream.Inspector insp = new MetadataInspector(metadata, null);
-		super.content.iterate(localRev, localRev, true, insp);
+		super.content.iterate(startRev, localRev, true, insp);
 	}
 
 	private static class MetadataInspector extends ErrorHandlingInspector implements RevlogStream.Inspector {
@@ -501,17 +511,16 @@ public final class HgDataFile extends Revlog {
 
 		public void next(int revisionNumber, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgRuntimeException {
 			try {
-				if (metadata.tryRead(revisionNumber, data)) {
-					// da is in prepared state (i.e. we consumed all bytes up to metadata end).
-					// However, it's not safe to assume delegate won't call da.reset() for some reason,
-					// and we need to ensure predictable result.
-					data.reset();
-					int offset = metadata.dataOffset(revisionNumber);
-					data = new FilterDataAccess(data, offset, data.length() - offset);
-				} else {
-					data.reset();
-				}
+				final boolean gotMetadata = metadata.tryRead(revisionNumber, data);
 				if (delegate != null) {
+					data.reset();
+					if (gotMetadata) {
+						// da is in prepared state (i.e. we consumed all bytes up to metadata end).
+						// However, it's not safe to assume delegate won't call da.reset() for some reason,
+						// and we need to ensure predictable result.
+						int offset = metadata.dataOffset(revisionNumber);
+						data = new FilterDataAccess(data, offset, data.length() - offset);
+					}
 					delegate.next(revisionNumber, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeid, data);
 				}
 			} catch (IOException ex) {

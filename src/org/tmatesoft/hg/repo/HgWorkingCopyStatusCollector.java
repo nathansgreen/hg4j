@@ -420,20 +420,11 @@ public class HgWorkingCopyStatusCollector {
 			// removed: nothing to report, 
 			if (ds.checkNormal(fname) != null || ds.checkMerged(fname) != null) {
 				try {
-					// FIXME refactor, done numerous time e.g. in TestStatus#testStatusCommand with base = 3
-					ArrayList<Nodeid> parents = new ArrayList<Nodeid>(2);
-					parents.add(ds.parents().first());
-					parents.add(ds.parents().second());
-					parents.remove(Nodeid.NULL);
-					// try either parent if file came through one of them, or both
-					for (Nodeid parent : parents) {
-						int csetIndex = repo.getChangelog().getRevisionIndex(parent);
-						Nodeid fileRev = repo.getManifest().getFileRevision(csetIndex, fname);
-						if (fileRev == null) {
-							continue;
-						}
+					// XXX perhaps, shall take second parent into account if not null, too?
+					Nodeid nidFromDirstate = getDirstateParentManifest().nodeid(fname);
+					if (nidFromDirstate != null) {
 						// see if file revision known in this parent got copied from one of baseRevNames
-						Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, fileRev, collect.files(), baseRevision);
+						Path origin = HgStatusCollector.getOriginIfCopy(repo, fname, nidFromDirstate, collect.files(), baseRevision);
 						if (origin != null) {
 							inspector.copied(getPathPool().mangle(origin), fname);
 							return;
