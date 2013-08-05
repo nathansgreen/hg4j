@@ -4,3 +4,5 @@ hg4j*.jar
 TEST-*.xml
 build/
 .gradle/
+lib/trilead-ssh2-1.0.0-build217-javadoc.jar
+lib/trilead-ssh2-1.0.0-build217-sources.jar
