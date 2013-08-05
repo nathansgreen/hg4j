@@ -31,6 +31,7 @@ import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.IntMap;
 import org.tmatesoft.hg.internal.Preview;
 import org.tmatesoft.hg.internal.RevisionLookup;
+import org.tmatesoft.hg.internal.RevlogDelegate;
 import org.tmatesoft.hg.internal.RevlogStream;
 import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.ByteChannel;
@@ -352,92 +353,21 @@ abstract class Revlog {
 		final RevisionInspector revisionInsp = Adaptable.Factory.getAdapter(inspector, RevisionInspector.class, null);
 		final ParentInspector parentInsp = Adaptable.Factory.getAdapter(inspector, ParentInspector.class, null);
 		final LinkRevisionInspector linkRevInspector = Adaptable.Factory.getAdapter(inspector, LinkRevisionInspector.class, null);
-		final Nodeid[] allRevisions = parentInsp == null ? null : new Nodeid[end - _start + 1];
-		// next are to build set of parent indexes that are not part of the range iteration
-		// i.e. those parents we need to read separately. See Issue 31 for details.
-		final int[]      firstParentIndexes = parentInsp == null || _start == 0 ? null : new int[allRevisions.length];
-		final int[]     secondParentIndexes = parentInsp == null || _start == 0 ? null : new int[allRevisions.length];
-		final IntMap<Nodeid> missingParents = parentInsp == null || _start == 0 ? null : new IntMap<Nodeid>(16); 
-
-		content.iterate(_start, end, false, new RevlogStream.Inspector() {
-			private int i = 0;
-			
-			public void next(int revisionIndex, int actualLen, int baseRevIndex, int linkRevIndex, int parent1RevIndex, int parent2RevIndex, byte[] nodeid, DataAccess data) throws HgRuntimeException {
-				// FIXME refactor either as chain of RevlogStream.Inspector or an external AnyOf() runner not to keep everything
-				// in a single method
-				if (linkRevInspector != null) {
-					linkRevInspector.next(revisionIndex, linkRevIndex);
-					if (parentInsp == null && revisionInsp == null) {
-						return;
-					}
-				}
-				Nodeid nid = Nodeid.fromBinary(nodeid, 0);
-				if (revisionInsp != null) {
-					revisionInsp.next(revisionIndex, nid, linkRevIndex);
-				}
-				if (parentInsp != null) {
-					allRevisions[i] = nid;
-					if (_start > 0) {
-						// there are chances we don't know parents here,
-						// postpone parent dispatching for later, now just collect what's missing
-						firstParentIndexes[i] = parent1RevIndex;
-						secondParentIndexes[i] = parent2RevIndex;
-						if (parent1RevIndex < _start && parent1RevIndex >= 0) {
-							missingParents.put(parent1RevIndex, null);
-						}
-						if (parent2RevIndex < _start && parent2RevIndex >= 0) {
-							missingParents.put(parent2RevIndex, null);
-						}
-					} else {
-						// we iterate from the very beginning, got every index we'll need
-						Nodeid p1 = parent1RevIndex == -1 ? Nodeid.NULL : allRevisions[parent1RevIndex];
-						Nodeid p2 = parent2RevIndex == -1 ? Nodeid.NULL : allRevisions[parent2RevIndex];
-						parentInsp.next(revisionIndex, allRevisions[i], parent1RevIndex, parent2RevIndex, p1, p2);
-					}
-					i++;
-				}
-			}
-		});
-		if (parentInsp != null && _start > 0 ) {
-			if (missingParents.size() > 0) {
-				// it's possible to get empty missingParents when _start > 0 e.g. when n-th file revision
-				// is a copy of another file and hence got -1,-1 parents in this revlog, and we indexWalk(n,n)
-				for (int k = missingParents.firstKey(), l = missingParents.lastKey(); k <= l; k++) {
-					// TODO [post-1.1] int[] IntMap#keys() or even sort of iterator that can modify values
-					if (missingParents.containsKey(k)) {
-						Nodeid nid = getRepo().getChangelog().getRevision(k);
-						missingParents.put(k, nid);
-					}
-				}
-			}
-
-			for (int i = 0, revNum = _start; i < allRevisions.length; i++, revNum++) {
-				int riP1 = firstParentIndexes[i];
-				int riP2 = secondParentIndexes[i];
-				Nodeid p1, p2;
-				p1 = p2 = Nodeid.NULL;
-				if (riP1 >= _start) {
-					// p1 of revNum's revision is out of iterated range
-					// (don't check for riP1<end as I assume parents come prior to children in the changelog)
-					p1 = allRevisions[riP1 - start];
-				} else if (riP1 != -1) {
-					assert riP1 >=0 && riP1 < _start;
-					p1 = missingParents.get(riP1);
-					assert p1 != null;
-				}
-				// same for Pp2
-				if (riP2 >= _start) {
-					p2 = allRevisions[riP2 - start];
-				} else if (riP2 != -1) {
-					assert riP2 >= 0 && riP2 < _start;
-					p2 = missingParents.get(riP2);
-					assert p2 != null;
-				}
-				parentInsp.next(revNum, allRevisions[i], riP1, riP2, p1, p2);
-			}
+		
+		// instantiate implementors in reverse order
+		RevlogDelegate head = parentInsp == null ? null : new ParentDelegate(parentInsp, null, _start, end);
+		if (revisionInsp != null) {
+			head = new RevisionDelegate(revisionInsp, head);
 		}
-	}
+		if (linkRevInspector != null) {
+			head = new LinkRevDelegate(linkRevInspector, head);
+		}
+		// first to get notified is created last
 
+		assert head != null; // we know all subclasses of Revlog.Inspector
+		head.walk(getRepo(), content, _start, end);
+	}
+	
 	/**
 	 * MARKER 
 	 */
@@ -574,6 +504,129 @@ abstract class Revlog {
 				recordFailure(ex);
 			} catch (CancelledException ex) {
 				recordFailure(ex);
+			}
+		}
+	}
+
+
+	private static final class LinkRevDelegate extends RevlogDelegate {
+		private final LinkRevisionInspector insp;
+
+		public LinkRevDelegate(LinkRevisionInspector inspector, RevlogDelegate next) {
+			super(next);
+			assert inspector != null;
+			insp = inspector;
+		}
+		@Override
+		public void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgRuntimeException {
+			insp.next(revisionIndex, linkRevision);
+			super.next(revisionIndex, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeid, data);
+		}
+	}
+	
+	private static final class RevisionDelegate extends RevlogDelegate {
+		private final RevisionInspector insp;
+		public RevisionDelegate(RevisionInspector inspector, RevlogDelegate next) {
+			super(next);
+			assert inspector != null;
+			insp = inspector;
+		}
+		@Override
+		public void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1Revision, int parent2Revision, byte[] nodeid, DataAccess data) throws HgRuntimeException {
+			Nodeid nid = getRevision(nodeid);
+			insp.next(revisionIndex, nid, linkRevision);
+			super.next(revisionIndex, actualLen, baseRevision, linkRevision, parent1Revision, parent2Revision, nodeid, data);
+		}
+	}
+	
+	private static class ParentDelegate extends RevlogDelegate {
+		private final ParentInspector insp;
+		private int i = 0;
+		private final Nodeid[] allRevisions;
+		// next are to build set of parent indexes that are not part of the range iteration
+		// i.e. those parents we need to read separately. See Issue 31 for details.
+		private final int[]      firstParentIndexes;
+		private final int[]     secondParentIndexes;
+		private final IntMap<Nodeid> missingParents;
+		private final int start; 
+
+		public ParentDelegate(ParentInspector inspector, RevlogDelegate next, int _start, int end) {
+			super(next);
+			insp = inspector;
+			start = _start;
+			allRevisions = new Nodeid[end - _start + 1];
+			firstParentIndexes = _start == 0 ? null : new int[allRevisions.length];
+			secondParentIndexes = _start == 0 ? null : new int[allRevisions.length];
+			missingParents = _start == 0 ? null : new IntMap<Nodeid>(16);
+		}
+		@Override
+		public void next(int revisionIndex, int actualLen, int baseRevision, int linkRevision, int parent1RevIndex, int parent2RevIndex, byte[] nodeid, DataAccess data) throws HgRuntimeException {
+			allRevisions[i] = getRevision(nodeid);
+			if (start > 0) {
+				// there are chances we don't know parents here,
+				// postpone parent dispatching for later, now just collect what's missing
+				firstParentIndexes[i] = parent1RevIndex;
+				secondParentIndexes[i] = parent2RevIndex;
+				if (parent1RevIndex < start && parent1RevIndex >= 0) {
+					missingParents.put(parent1RevIndex, null);
+				}
+				if (parent2RevIndex < start && parent2RevIndex >= 0) {
+					missingParents.put(parent2RevIndex, null);
+				}
+			} else {
+				// we iterate from the very beginning, got every index we'll need
+				Nodeid p1 = parent1RevIndex == -1 ? Nodeid.NULL : allRevisions[parent1RevIndex];
+				Nodeid p2 = parent2RevIndex == -1 ? Nodeid.NULL : allRevisions[parent2RevIndex];
+				insp.next(revisionIndex, allRevisions[i], parent1RevIndex, parent2RevIndex, p1, p2);
+			}
+			i++;
+			super.next(revisionIndex, actualLen, baseRevision, linkRevision, parent1RevIndex, parent2RevIndex, nodeid, data);
+		}
+
+		@Override
+		protected void postWalk(HgRepository hgRepo) {
+			if (start > 0) {
+				complete(hgRepo);
+			}
+			super.postWalk(hgRepo);
+		}
+
+		private void complete(HgRepository repo) {
+			if (missingParents.size() > 0) {
+				// it's possible to get empty missingParents when _start > 0 e.g. when n-th file revision
+				// is a copy of another file and hence got -1,-1 parents in this revlog, and we indexWalk(n,n)
+				for (int k = missingParents.firstKey(), l = missingParents.lastKey(); k <= l; k++) {
+					// TODO [post-1.1] int[] IntMap#keys() or even sort of iterator that can modify values
+					if (missingParents.containsKey(k)) {
+						Nodeid nid = repo.getChangelog().getRevision(k);
+						missingParents.put(k, nid);
+					}
+				}
+			}
+
+			for (int i = 0, revNum = start; i < allRevisions.length; i++, revNum++) {
+				int riP1 = firstParentIndexes[i];
+				int riP2 = secondParentIndexes[i];
+				Nodeid p1, p2;
+				p1 = p2 = Nodeid.NULL;
+				if (riP1 >= start) {
+					// p1 of revNum's revision is out of iterated range
+					// (don't check for riP1<end as I assume parents come prior to children in the changelog)
+					p1 = allRevisions[riP1 - start];
+				} else if (riP1 != -1) {
+					assert riP1 >=0 && riP1 < start;
+					p1 = missingParents.get(riP1);
+					assert p1 != null;
+				}
+				// same for Pp2
+				if (riP2 >= start) {
+					p2 = allRevisions[riP2 - start];
+				} else if (riP2 != -1) {
+					assert riP2 >= 0 && riP2 < start;
+					p2 = missingParents.get(riP2);
+					assert p2 != null;
+				}
+				insp.next(revNum, allRevisions[i], riP1, riP2, p1, p2);
 			}
 		}
 	}
