@@ -367,6 +367,8 @@ abstract class Revlog {
 				if (parentInsp != null) {
 					allRevisions[i] = nid;
 					if (_start > 0) {
+						// there are chances we don't know parents here,
+						// postpone parent dispatching for later, now just collect what's missing
 						firstParentIndexes[i] = parent1RevIndex;
 						secondParentIndexes[i] = parent2RevIndex;
 						if (parent1RevIndex < _start && parent1RevIndex >= 0) {
@@ -376,6 +378,7 @@ abstract class Revlog {
 							missingParents.put(parent2RevIndex, null);
 						}
 					} else {
+						// we iterate from the very beginning, got every index we'll need
 						Nodeid p1 = parent1RevIndex == -1 ? Nodeid.NULL : allRevisions[parent1RevIndex];
 						Nodeid p2 = parent2RevIndex == -1 ? Nodeid.NULL : allRevisions[parent2RevIndex];
 						parentInsp.next(revisionIndex, allRevisions[i], parent1RevIndex, parent2RevIndex, p1, p2);
@@ -384,13 +387,16 @@ abstract class Revlog {
 				}
 			}
 		});
-		if (parentInsp != null && _start > 0) {
-			assert missingParents.size() > 0; // in fact, more relaxed than assert. rather 'assume'
-			// TODO [post-1.1] int[] IntMap#keys() or even sort of iterator that can modify values
-			for (int k = missingParents.firstKey(), l = missingParents.lastKey(); k <= l; k++) {
-				if (missingParents.containsKey(k)) {
-					Nodeid nid = getRepo().getChangelog().getRevision(k);
-					missingParents.put(k, nid);
+		if (parentInsp != null && _start > 0 ) {
+			if (missingParents.size() > 0) {
+				// it's possible to get empty missingParents when _start > 0 e.g. when n-th file revision
+				// is a copy of another file and hence got -1,-1 parents in this revlog, and we indexWalk(n,n)
+				for (int k = missingParents.firstKey(), l = missingParents.lastKey(); k <= l; k++) {
+					// TODO [post-1.1] int[] IntMap#keys() or even sort of iterator that can modify values
+					if (missingParents.containsKey(k)) {
+						Nodeid nid = getRepo().getChangelog().getRevision(k);
+						missingParents.put(k, nid);
+					}
 				}
 			}
 
@@ -406,6 +412,7 @@ abstract class Revlog {
 				} else if (riP1 != -1) {
 					assert riP1 >=0 && riP1 < _start;
 					p1 = missingParents.get(riP1);
+					assert p1 != null;
 				}
 				// same for Pp2
 				if (riP2 >= _start) {
@@ -413,6 +420,7 @@ abstract class Revlog {
 				} else if (riP2 != -1) {
 					assert riP2 >= 0 && riP2 < _start;
 					p2 = missingParents.get(riP2);
+					assert p2 != null;
 				}
 				parentInsp.next(revNum, allRevisions[i], riP1, riP2, p1, p2);
 			}
