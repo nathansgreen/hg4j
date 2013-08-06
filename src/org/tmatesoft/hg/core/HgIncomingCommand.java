@@ -155,9 +155,17 @@ public class HgIncomingCommand extends HgAbstractCommand<HgIncomingCommand> {
 				
 				public void next(int revisionNumber, Nodeid nodeid, RawChangeset cset) throws HgRuntimeException {
 					if (parentHelper.knownNode(nodeid)) {
-						if (!common.contains(nodeid)) {
-							throw new HgInvalidStateException("Bundle shall not report known nodes other than roots we've supplied");
-						}
+						// FIXME getCommon() and remote.changegroup do not work together nicely.
+						// e.g. for hgtest-annotate-merge repository and TestIncoming, common reports r0 and r5 (ancestor of r5)
+						// because there's a distinct branch from r0 (in addition to those after r5). 
+						// remote.changegroup however answers with revisions that are children of either, 
+						/// so revisions 0..5 are reported as well and the next check fails. Instead, shall pass
+						// not common, but 'first to load' to remote.changegroup() or use another method (e.g. getbundle)
+						// Note, sending r5 only (i.e. checking for ancestors in common) won't help, changegroup sends children of
+						// requested roots only, and doesn't look for anything else
+//						if (!common.contains(nodeid)) {
+//							throw new HgInvalidStateException("Bundle shall not report known nodes other than roots we've supplied");
+//						}
 						return;
 					}
 					transformer.next(localIndex++, nodeid, cset);

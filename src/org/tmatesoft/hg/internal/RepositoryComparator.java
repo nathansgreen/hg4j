@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
@@ -201,7 +202,7 @@ public class RepositoryComparator {
 	public List<BranchChain> calculateMissingBranches() throws HgRemoteConnectionException {
 		List<Nodeid> remoteHeads = remoteRepo.heads();
 		LinkedList<Nodeid> common = new LinkedList<Nodeid>(); // these remotes are known in local
-		LinkedList<Nodeid> toQuery = new LinkedList<Nodeid>(); // these need further queries to find common
+		LinkedHashSet<Nodeid> toQuery = new LinkedHashSet<Nodeid>(); // these need further queries to find common
 		for (Nodeid rh : remoteHeads) {
 			if (localRepo.knownNode(rh)) {
 				common.add(rh);
@@ -218,7 +219,7 @@ public class RepositoryComparator {
 		// records relation between branch head and its parent branch, if any
 		HashMap<Nodeid, BranchChain> head2chain = new HashMap<Nodeid, BranchChain>();
 		while (!toQuery.isEmpty()) {
-			List<RemoteBranch> remoteBranches = remoteRepo.branches(toQuery);	//head, root, first parent, second parent
+			List<RemoteBranch> remoteBranches = remoteRepo.branches(new ArrayList<Nodeid>(toQuery));	//head, root, first parent, second parent
 			toQuery.clear();
 			while(!remoteBranches.isEmpty()) {
 				RemoteBranch rb = remoteBranches.remove(0);
@@ -240,10 +241,10 @@ public class RepositoryComparator {
 					if (hasP1 && !localRepo.knownNode(rb.p1)) {
 						toQuery.add(rb.p1);
 						// we might have seen parent node already, and recorded it as a branch chain
-						// we shall reuse existing BC to get it completely initializer (head2chain map
+						// we shall reuse existing BC to get it completely initialized (head2chain map
 						// on second put with the same key would leave first BC uninitialized.
 						
-						// It seems there's no reason to be affraid (XXX although shall double-check)
+						// It seems there's no reason to be afraid (XXX although shall double-check)
 						// that BC's chain would get corrupt (its p1 and p2 fields assigned twice with different values)
 						// as parents are always the same (and likely, BC that is common would be the last unknown)
 						BranchChain bc = head2chain.get(rb.p1);
@@ -352,7 +353,7 @@ public class RepositoryComparator {
 
 		@Override
 		public String toString() {
-			return String.format("BranchChain [%s, %s]", branchRoot, branchHead);
+			return String.format("BranchChain [root:%s, head:%s]", branchRoot, branchHead);
 		}
 
 		void dump() {

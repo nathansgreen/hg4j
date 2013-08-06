@@ -21,17 +21,12 @@ import static org.tmatesoft.hg.util.Outcome.Kind.Failure;
 import static org.tmatesoft.hg.util.Outcome.Kind.Success;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StreamTokenizer;
-import java.net.ContentHandler;
-import java.net.ContentHandlerFactory;
-import java.net.URL;
-import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -58,8 +53,8 @@ import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.PropertyMarshal;
 import org.tmatesoft.hg.internal.remote.Connector;
-import org.tmatesoft.hg.internal.remote.HttpConnector;
-import org.tmatesoft.hg.internal.remote.SshConnector;
+import org.tmatesoft.hg.internal.remote.RemoteConnectorDescriptor;
+import org.tmatesoft.hg.repo.HgLookup.RemoteDescriptor;
 import org.tmatesoft.hg.util.LogFacility.Severity;
 import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Pair;
@@ -81,41 +76,14 @@ public class HgRemoteRepository implements SessionContext.Source {
 	private Set<String> remoteCapabilities;
 	private Connector remote;
 	
-	static {
-		URLConnection.setContentHandlerFactory(new ContentHandlerFactory() {
-			
-			public ContentHandler createContentHandler(String mimetype) {
-				if ("application/mercurial-0.1".equals(mimetype)) {
-					return new ContentHandler() {
-						
-						@Override
-						public Object getContent(URLConnection urlc) throws IOException {
-							if (urlc.getContentLength() > 0) {
-								ByteArrayOutputStream bos = new ByteArrayOutputStream();
-								InputStream is = urlc.getInputStream();
-								int r;
-								while ((r = is.read()) != -1) {
-									bos.write(r);
-								}
-								return new String(bos.toByteArray());
-							}
-							return "<empty>";
-						}
-					};
-				}
-				return null;
-			}
-		});
-	}
-	
-	HgRemoteRepository(SessionContext ctx, URL url) throws HgBadArgumentException {
-		if (url == null || ctx == null) {
-			throw new IllegalArgumentException();
+	HgRemoteRepository(SessionContext ctx, RemoteDescriptor rd) throws HgBadArgumentException {
+		if (false == rd instanceof RemoteConnectorDescriptor) {
+			throw new IllegalArgumentException(String.format("Present implementation supports remote connections via %s only", Connector.class.getName()));
 		}
 		sessionContext = ctx;
 		debug = new PropertyMarshal(ctx).getBoolean("hg4j.remote.debug", false);
-		remote = "ssh".equals(url.getProtocol()) ? new SshConnector() : new HttpConnector();
-		remote.init(url, ctx, null);
+		remote = ((RemoteConnectorDescriptor) rd).createConnector();
+		remote.init(rd.getURI(), ctx, null);
 	}
 	
 	public boolean isInvalid() throws HgRemoteConnectionException {
@@ -517,6 +485,19 @@ public class HgRemoteRepository implements SessionContext.Source {
 			RemoteBranch o = (RemoteBranch) obj;
 			// in fact, p1 and p2 are not supposed to be null, ever (at least for RemoteBranch created from server output)
 			return head.equals(o.head) && root.equals(o.root) && (p1 == null && o.p1 == null || p1.equals(o.p1)) && (p2 == null && o.p2 == null || p2.equals(o.p2));
+		}
+		
+		@Override
+		public int hashCode() {
+			return head.hashCode() ^ root.hashCode();
+		}
+		
+		@Override
+		public String toString() {
+			String none = String.valueOf(-1);
+			String s1 = p1 == null || p1.isNull() ? none : p1.shortNotation();
+			String s2 = p2 == null || p2.isNull() ? none : p2.shortNotation();
+			return String.format("RemoteBranch[root: %s, head:%s, p1:%s, p2:%s]", root.shortNotation(), head.shortNotation(), s1, s2);
 		}
 	}
 

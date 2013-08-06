@@ -19,8 +19,12 @@ package org.tmatesoft.hg.repo;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
-import java.net.MalformedURLException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLStreamHandler;
+import java.net.URLStreamHandlerFactory;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.HgIOException;
@@ -29,7 +33,7 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
-import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.repo.HgRepoConfig.PathsSection;
 
@@ -112,16 +116,16 @@ public class HgLookup implements SessionContext.Source {
 	 * @throws HgBadArgumentException if anything is wrong with the remote server's URL
 	 */
 	public HgRemoteRepository detectRemote(String key, HgRepository hgRepo) throws HgBadArgumentException {
-		URL url;
+		URI uri;
 		Exception toReport;
 		try {
-			url = new URL(key);
+			uri = new URI(key);
 			toReport = null;
-		} catch (MalformedURLException ex) {
-			url = null;
+		} catch (URISyntaxException ex) {
+			uri = null;
 			toReport = ex;
 		}
-		if (url == null) {
+		if (uri == null) {
 			String server = null;
 			if (hgRepo != null && !hgRepo.isInvalid()) {
 				PathsSection ps = hgRepo.getConfiguration().getPaths();
@@ -136,22 +140,55 @@ public class HgLookup implements SessionContext.Source {
 				throw new HgBadArgumentException(String.format("Can't find server %s specification in the config", key), toReport);
 			}
 			try {
-				url = new URL(server);
-			} catch (MalformedURLException ex) {
+				uri = new URI(server);
+			} catch (URISyntaxException ex) {
 				throw new HgBadArgumentException(String.format("Found %s server spec in the config, but failed to initialize with it", key), ex);
 			}
 		}
-		return new HgRemoteRepository(getSessionContext(), url);
+		return detectRemote(uri);
 	}
 	
+	/**
+	 * Detect remote repository
+	 * <p>Use of this method is discouraged, please use {@link #detectRemote(URI)} instead}
+	 * 
+	 * @param url location of remote repository
+	 * @return instance to interact with remote repository
+	 * @throws HgBadArgumentException if location format is not a valid {@link URI}
+	 * @throws IllegalArgumentException if url is <code>null</code>
+	 */
 	public HgRemoteRepository detect(URL url) throws HgBadArgumentException {
 		if (url == null) {
 			throw new IllegalArgumentException();
 		}
-		if (Boolean.FALSE.booleanValue()) {
-			throw Internals.notImplemented();
+		try {
+			return detectRemote(url.toURI());
+		} catch (URISyntaxException ex) {
+			throw new HgBadArgumentException(String.format("Bad remote repository location: %s", url), ex);
 		}
-		return new HgRemoteRepository(getSessionContext(), url);
+	}
+	
+	/**
+	 * Resolves location of remote repository.
+	 * 
+	 * <p>Choice between {@link URI URIs} and {@link URL URLs} done in favor of former because they are purely syntactical,
+	 * while latter have semantics of {@link URL#openConnection() connection} establishing, which is not always possible.
+	 * E.g. one can't instantiate <code>new URL("ssh://localhost/")</code> as long as there's no local {@link URLStreamHandler} 
+	 * for the protocol, which is the case for certain JREs out there. The way {@link URLStreamHandlerFactory URLStreamHandlerFactories} 
+	 * are installed (static field/method) is quite fragile, and definitely not the one to rely on from a library's code (apps can carefully
+	 * do this, but library can't install own nor expect anyone outside there would do). Use of fake {@link URLStreamHandler} (fails to open
+	 * every connection) is possible, of course, although it seems to be less appropriate when there is alternative with {@link URI URIs}.
+	 * 
+	 * @param uriRemote remote repository location
+	 * @return instance to interact with remote repository
+	 * @throws HgBadArgumentException
+	 */
+	public HgRemoteRepository detectRemote(URI uriRemote) throws HgBadArgumentException {
+		RemoteDescriptor rd = getSessionContext().getRemoteDescriptor(uriRemote);
+		if (rd == null) {
+			throw new HgBadArgumentException(String.format("Unsupported remote repository location:%s", uriRemote), null);
+		}
+		return new HgRemoteRepository(getSessionContext(), rd);
 	}
 
 	private ConfigFile getGlobalConfig() {
@@ -172,5 +209,42 @@ public class HgLookup implements SessionContext.Source {
 			sessionContext = new BasicSessionContext(null);
 		}
 		return sessionContext;
+	}
+
+	
+	/**
+	 * Session context  ({@link SessionContext#getRemoteDescriptor(URI)} gives descriptor of remote when asked.
+	 */
+	@Experimental(reason="Work in progress")
+	public interface RemoteDescriptor {
+		URI getURI();
+		Authenticator getAuth();
+	}
+	
+	@Experimental(reason="Work in progress")
+	public interface Authenticator {
+		public void authenticate(RemoteDescriptor remote, AuthMethod authMethod);
+	}
+
+	/**
+	 * Clients do not implement this interface, instead, they invoke appropriate authentication method
+	 * once they got user input
+	 */
+	@Experimental(reason="Work in progress")
+	public interface AuthMethod {
+		public void noCredentials() throws AuthFailedException;
+		public boolean supportsPassword();
+		public void withPassword(String username, byte[] password) throws AuthFailedException;
+		public boolean supportsPublicKey();
+		public void withPublicKey(String username, InputStream publicKey, String passphrase) throws AuthFailedException;
+		public boolean supportsCertificate();
+		public void withCertificate() throws AuthFailedException;
+	}
+	
+	@SuppressWarnings("serial")
+	public class AuthFailedException extends Exception /*XXX HgRemoteException?*/ {
+		public AuthFailedException(String message, Throwable cause) {
+			super(message, cause);
+		}
 	}
 }

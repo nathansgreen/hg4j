@@ -28,6 +28,7 @@ import java.io.OutputStream;
 import java.io.SequenceInputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.security.cert.CertificateException;
@@ -56,6 +57,7 @@ import org.tmatesoft.hg.repo.HgRuntimeException;
  * @author TMate Software Ltd.
  */
 public class HttpConnector implements Connector {
+	private URI uri;
 	private URL url;
 	private SSLContext sslContext;
 	private String authInfo;
@@ -64,16 +66,16 @@ public class HttpConnector implements Connector {
 	//
 	private HttpURLConnection conn;
 
-	public void init(URL url, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
-		this.url = url;
+	public void init(URI uri, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
+		this.uri = uri;
 		sessionCtx = sessionContext;
 		debug = new PropertyMarshal(sessionCtx).getBoolean("hg4j.remote.debug", false);
-		if (url.getUserInfo() != null) {
+		if (uri.getUserInfo() != null) {
 			String ai = null;
 			try {
 				// Hack to get Base64-encoded credentials
 				Preferences tempNode = Preferences.userRoot().node("xxx");
-				tempNode.putByteArray("xxx", url.getUserInfo().getBytes());
+				tempNode.putByteArray("xxx", uri.getUserInfo().getBytes());
 				ai = tempNode.get("xxx", null);
 				tempNode.removeNode();
 			} catch (BackingStoreException ex) {
@@ -87,6 +89,11 @@ public class HttpConnector implements Connector {
 	}
 	
 	public void connect() throws HgRemoteConnectionException, HgRuntimeException {
+		try {
+			url = uri.toURL();
+		} catch (MalformedURLException ex) {
+			throw new HgRemoteConnectionException("Bad URL", ex);
+		}
 		if ("https".equals(url.getProtocol())) {
 			try {
 				sslContext = SSLContext.getInstance("SSL");
@@ -132,13 +139,13 @@ public class HttpConnector implements Connector {
 	}
 	
 	public String getServerLocation() {
-		if (url.getUserInfo() == null) {
-			return url.toExternalForm();
+		if (uri.getUserInfo() == null) {
+			return uri.toString();
 		}
-		if (url.getPort() != -1) {
-			return String.format("%s://%s:%d%s", url.getProtocol(), url.getHost(), url.getPort(), url.getPath());
+		if (uri.getPort() != -1) {
+			return String.format("%s://%s:%d%s", uri.getScheme(), uri.getHost(), uri.getPort(), uri.getPath());
 		} else {
-			return String.format("%s://%s%s", url.getProtocol(), url.getHost(), url.getPath());
+			return String.format("%s://%s%s", uri.getScheme(), uri.getHost(), uri.getPath());
 		}
 	}
 
@@ -294,7 +301,6 @@ public class HttpConnector implements Connector {
 					super.close();
 					if (debug) {
 						dumpResponseHeader(u);
-						dumpResponse();
 					}
 					try {
 						checkResponseOk("Push", CMD_UNBUNDLE);
@@ -393,13 +399,6 @@ public class HttpConnector implements Connector {
 		final Map<String, List<String>> headerFields = conn.getHeaderFields();
 		for (String s : headerFields.keySet()) {
 			System.out.printf("%s: %s\n", s, conn.getHeaderField(s));
-		}
-	}
-	
-	private void dumpResponse() throws IOException {
-		if (conn.getContentLength() > 0) {
-			final Object content = conn.getContent();
-			System.out.println(content);
 		}
 	}
 }

@@ -28,7 +28,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
-import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -54,7 +54,7 @@ import com.trilead.ssh2.StreamGobbler;
  */
 public class SshConnector implements Connector {
 	private SessionContext sessionCtx;
-	private URL url;
+	private URI uri;
 	private Connection conn;
 	private Session session;
 	private int sessionUse;
@@ -62,14 +62,14 @@ public class SshConnector implements Connector {
 	private StreamGobbler remoteErr, remoteOut;
 	private OutputStream remoteIn;
 	
-	public void init(URL url, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
+	public void init(URI uri, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
 		sessionCtx = sessionContext;
-		this.url = url;
+		this.uri = uri;
 	}
 	
 	public void connect() throws HgRemoteConnectionException, HgRuntimeException {
 		try {
-			conn = new Connection(url.getHost(), url.getPort() == -1 ? 22 : url.getPort());
+			conn = new Connection(uri.getHost(), uri.getPort() == -1 ? 22 : uri.getPort());
 			conn.connect();
 		} catch (IOException ex) {
 			throw new HgRemoteConnectionException("Failed to establish connection");
@@ -101,7 +101,7 @@ public class SshConnector implements Connector {
 		}
 		try {
 			session = conn.openSession();
-			final String path = url.getPath();
+			final String path = uri.getPath();
 			session.execCommand(String.format("hg -R %s serve --stdio", path.charAt(0) == '/' ? path.substring(1) : path));
 			remoteErr = new StreamGobbler(session.getStderr());
 			remoteOut = new StreamGobbler(session.getStdout());
@@ -123,7 +123,7 @@ public class SshConnector implements Connector {
 	}
 
 	public String getServerLocation() {
-		return url.toString(); // FIXME
+		return uri.toString(); // FIXME
 	}
 	
 	public String getCapabilities() throws HgRemoteConnectionException {

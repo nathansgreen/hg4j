@@ -52,6 +52,8 @@ public class TestIncoming {
 	}
 
 	public TestIncoming() {
+//		Configuration.get().remoteServers("http://hg.serpentine.com/tutorial/hello/");
+//		Configuration.get().remoteServers("ssh://localhost/hg/hgtest-annotate-merge/");
 //		Configuration.get().remoteServers("http://localhost:8000/");
 	}
 

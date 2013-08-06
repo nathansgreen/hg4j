@@ -18,15 +18,15 @@ package org.tmatesoft.hg.internal.remote;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URL;
+import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
+import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
  * 
@@ -46,7 +46,7 @@ public interface Connector {
 	static final String NS_BOOKMARKS = "bookmarks";
 	static final String NS_PHASES = "phases";
 	
-	void init(URL url, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException;
+	void init(URI uri, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException;
 	String getServerLocation();
 	//
 	void connect() throws HgRemoteConnectionException, HgRuntimeException;

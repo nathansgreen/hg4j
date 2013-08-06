@@ -16,6 +16,12 @@
  */
 package org.tmatesoft.hg.core;
 
+import java.net.URI;
+
+import org.tmatesoft.hg.internal.BasicSessionContext;
+import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.remote.RemoteConnectorDescriptor;
+import org.tmatesoft.hg.repo.HgLookup.RemoteDescriptor;
 import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Path;
 
@@ -64,6 +70,23 @@ public abstract class SessionContext {
 				return Path.create(p);
 			}
 		};
+	}
+
+	/**
+	 * Work in progress, provisional API.
+	 * 
+	 * Provides descriptor that knows how to handle connections of specific kind
+	 * 
+	 * FIXME Perhaps, implementation here shall return null for any URI, while the one
+	 * in {@link BasicSessionContext} shall use our internal classes? However,
+	 * present implementation provides support for uris handled in the library itself, and likely
+	 * most clients need this, even if they supply own SessionContext
+	 *  
+	 * @return <code>null</code> if supplied URI doesn't point to a remote repository or repositories of that kind are not supported
+	 */
+	@Experimental(reason="Work in progress, provisional API")
+	public RemoteDescriptor getRemoteDescriptor(URI uri) {
+		return new RemoteConnectorDescriptor.Provider().get(this, uri);
 	}
 
 	/**
