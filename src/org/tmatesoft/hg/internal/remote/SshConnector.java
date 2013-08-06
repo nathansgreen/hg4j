@@ -17,6 +17,7 @@
 package org.tmatesoft.hg.internal.remote;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.File;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.SequenceInputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -99,9 +101,11 @@ public class SshConnector implements Connector {
 		}
 		try {
 			session = conn.openSession();
-			session.execCommand(String.format("hg -R %s serve --stdio", url.getPath()));
+			final String path = url.getPath();
+			session.execCommand(String.format("hg -R %s serve --stdio", path.charAt(0) == '/' ? path.substring(1) : path));
 			remoteErr = new StreamGobbler(session.getStderr());
 			remoteOut = new StreamGobbler(session.getStdout());
+			remoteIn = session.getStdin();
 			sessionUse = 1;
 		} catch (IOException ex) {
 			throw new HgRemoteConnectionException("Failed to create ssh session", ex);
@@ -119,7 +123,7 @@ public class SshConnector implements Connector {
 	}
 
 	public String getServerLocation() {
-		return ""; // FIXME
+		return url.toString(); // FIXME
 	}
 	
 	public String getCapabilities() throws HgRemoteConnectionException {
@@ -156,7 +160,7 @@ public class SshConnector implements Connector {
 	}
 
 	public InputStream heads() throws HgRemoteConnectionException {
-		return executeCommand("heads", Collections.<Parameter>emptyList());
+		return executeCommand("heads", Collections.<Parameter>emptyList(), true);
 	}
 	
 	public InputStream between(Collection<Range> ranges) throws HgRemoteConnectionException {
@@ -167,17 +171,19 @@ public class SshConnector implements Connector {
 		if (!ranges.isEmpty()) {
 			sb.setLength(sb.length() - 1);
 		}
-		return executeCommand("between", Collections.singletonList(new Parameter("pairs", sb.toString())));
+		return executeCommand("between", Collections.singletonList(new Parameter("pairs", sb.toString())), true);
 	}
 	
 	public InputStream branches(List<Nodeid> nodes) throws HgRemoteConnectionException {
 		String l = join(nodes, ' ');
-		return executeCommand("branches", Collections.singletonList(new Parameter("nodes", l)));
+		return executeCommand("branches", Collections.singletonList(new Parameter("nodes", l)), true);
 	}
 	
 	public InputStream changegroup(List<Nodeid> roots) throws HgRemoteConnectionException, HgRuntimeException {
 		String l = join(roots, ' ');
-		return executeCommand("changegroup", Collections.singletonList(new Parameter("roots", l)));
+		InputStream cg = executeCommand("changegroup", Collections.singletonList(new Parameter("roots", l)), false);
+		InputStream prefix = new ByteArrayInputStream("HG10UN".getBytes());
+		return new SequenceInputStream(prefix, cg);
 	}
 
 	public OutputStream unbundle(long outputLen, List<Nodeid> remoteHeads) throws HgRemoteConnectionException, HgRuntimeException {
@@ -210,14 +216,14 @@ public class SshConnector implements Connector {
 		p.add(new Parameter("key", key));
 		p.add(new Parameter("old", oldValue));
 		p.add(new Parameter("new", newValue));
-		return executeCommand("pushkey", p);
+		return executeCommand("pushkey", p, true);
 	}
 	
 	public InputStream listkeys(String namespace, String actionName) throws HgRemoteConnectionException, HgRuntimeException {
-		return executeCommand("listkeys", Collections.singletonList(new Parameter("namespace", namespace)));
+		return executeCommand("listkeys", Collections.singletonList(new Parameter("namespace", namespace)), true);
 	}
 	
-	private InputStream executeCommand(String cmd, List<Parameter> parameters) throws HgRemoteConnectionException {
+	private InputStream executeCommand(String cmd, List<Parameter> parameters, boolean expectResponseLength) throws HgRemoteConnectionException {
 		try {
 			consume(remoteOut);
 			consume(remoteErr);
@@ -225,9 +231,13 @@ public class SshConnector implements Connector {
 			remoteIn.write('\n');
 			writeParameters(parameters);
 			checkError();
-			int responseLen = readResponseLength();
-			checkError();
-			return new FilterStream(remoteOut, responseLen);
+			if (expectResponseLength) {
+				int responseLen = readResponseLength();
+				checkError();
+				return new FilterStream(remoteOut, responseLen);
+			} else {
+				return new FilterStream(remoteOut, Integer.MAX_VALUE);
+			}
 		} catch (IOException ex) {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand(cmd).setServerInfo(getServerLocation());
 		}
@@ -376,6 +386,7 @@ public class SshConnector implements Connector {
 		}
 		@Override
 		public void close() throws IOException {
+			length = 0;
 			// INTENTIONALLY DOES NOT CLOSE THE STREAM
 		}
 	}

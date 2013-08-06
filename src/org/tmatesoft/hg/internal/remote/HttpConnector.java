@@ -19,11 +19,13 @@ package org.tmatesoft.hg.internal.remote;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.SequenceInputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -261,9 +263,13 @@ public class HttpConnector implements Connector {
 			if (debug) {
 				dumpResponseHeader(u);
 			}
-			return conn.getInputStream();
-		} catch (MalformedURLException ex) { // XXX in fact, this exception might be better to be re-thrown as RuntimeEx,
-			// as there's little user can do about this issue (URLs are constructed by our code)
+			InputStream cg = conn.getInputStream();
+			InputStream prefix = new ByteArrayInputStream("HG10GZ".getBytes()); // didn't see any other that zip
+			return new SequenceInputStream(prefix, cg);
+		} catch (MalformedURLException ex) {
+			// although there's little user can do about this issue (URLs are constructed by our code)
+			// it's still better to throw it as checked exception than RT because url is likely malformed due to parameters
+			// and this may help user to understand the cause (and e.g. change them)
 			throw new HgRemoteConnectionException("Bad URL", ex).setRemoteCommand("changegroup").setServerInfo(getServerLocation());
 		} catch (IOException ex) {
 			throw new HgRemoteConnectionException("Communication failure", ex).setRemoteCommand("changegroup").setServerInfo(getServerLocation());

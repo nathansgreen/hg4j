@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.FileChannel;
 
 import org.tmatesoft.hg.core.HgIOException;
@@ -92,6 +93,17 @@ public final class FileUtils {
 		 * Linux&Windows: 300-400 ms,
 		 * Windows uncached run: 1.6 seconds
 		 */
+	}
+	
+	public void write(InputStream is, File file) throws IOException {
+		FileOutputStream fos = new FileOutputStream(file);
+		int r;
+		byte[] buf = new byte[8*1024];
+		while ((r = is.read(buf)) != -1) {
+			fos.write(buf, 0, r);
+		}
+		fos.flush();
+		fos.close();
 	}
 
 	public void closeQuietly(Closeable stream) {
