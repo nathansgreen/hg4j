@@ -20,7 +20,6 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.EOFException;
-import java.io.File;
 import java.io.FilterInputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -28,21 +27,22 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.tmatesoft.hg.auth.HgAuthFailedException;
+import org.tmatesoft.hg.auth.HgAuthenticator;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
+import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteDescriptor;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 import org.tmatesoft.hg.util.LogFacility.Severity;
 
 import com.trilead.ssh2.Connection;
-import com.trilead.ssh2.ConnectionInfo;
 import com.trilead.ssh2.Session;
 import com.trilead.ssh2.StreamGobbler;
 
@@ -52,9 +52,9 @@ import com.trilead.ssh2.StreamGobbler;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class SshConnector implements Connector {
+public class SshConnector extends ConnectorBase {
+	private RemoteDescriptor rd;
 	private SessionContext sessionCtx;
-	private URI uri;
 	private Connection conn;
 	private Session session;
 	private int sessionUse;
@@ -62,30 +62,39 @@ public class SshConnector implements Connector {
 	private StreamGobbler remoteErr, remoteOut;
 	private OutputStream remoteIn;
 	
-	public void init(URI uri, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
+	public void init(RemoteDescriptor remote, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
+		rd = remote;
 		sessionCtx = sessionContext;
-		this.uri = uri;
+		setURI(remote.getURI());
 	}
 	
-	public void connect() throws HgRemoteConnectionException, HgRuntimeException {
+	public void connect() throws HgAuthFailedException, HgRemoteConnectionException, HgRuntimeException {
 		try {
 			conn = new Connection(uri.getHost(), uri.getPort() == -1 ? 22 : uri.getPort());
 			conn.connect();
+			authenticateClient();
 		} catch (IOException ex) {
-			throw new HgRemoteConnectionException("Failed to establish connection");
+			throw new HgRemoteConnectionException("Failed to establish connection").setServerInfo(getServerLocation());
 		}
-		try {
-			conn.authenticateWithPublicKey(System.getProperty("user.name"), new File(System.getProperty("user.home"), ".ssh/id_rsa"), null);
-			ConnectionInfo ci = conn.getConnectionInfo();
-			System.out.printf("%s %s %s %d %s %s %s\n", ci.clientToServerCryptoAlgorithm, ci.clientToServerMACAlgorithm, ci.keyExchangeAlgorithm, ci.keyExchangeCounter, ci.serverHostKeyAlgorithm, ci.serverToClientCryptoAlgorithm, ci.serverToClientMACAlgorithm);
-		} catch (IOException ex) {
-			throw new HgRemoteConnectionException("Failed to authenticate", ex).setServerInfo(getServerLocation());
+	}
+
+	private void authenticateClient() throws HgAuthFailedException {
+		SshAuthMethod m = new SshAuthMethod(conn);
+		if (uri.getUserInfo() != null) {
+			try {
+				m.tryWithUserInfo(uri.getUserInfo());
+				return;
+			} catch (HgAuthFailedException ex) {
+				// FALL-THROUGH to try with Authenticator
+			}
 		}
+		HgAuthenticator auth = sessionCtx.getAuthenticator(rd);
+		auth.authenticate(rd, m);
 	}
 	
 	public void disconnect() throws HgRemoteConnectionException {
 		if (session != null) {
-			forceSessionClose();
+			doSessionClose();
 		}
 		if (conn != null) {
 			conn.close();
@@ -119,13 +128,9 @@ public class SshConnector implements Connector {
 			sessionUse--;
 			return;
 		}
-		forceSessionClose();
+		doSessionClose();
 	}
 
-	public String getServerLocation() {
-		return uri.toString(); // FIXME
-	}
-	
 	public String getCapabilities() throws HgRemoteConnectionException {
 		try {
 			consume(remoteOut);
@@ -291,7 +296,7 @@ public class SshConnector implements Connector {
 	}
 
 
-	private void forceSessionClose() {
+	private void doSessionClose() {
 		if (session != null) {
 			closeQuietly(remoteErr);
 			closeQuietly(remoteOut);

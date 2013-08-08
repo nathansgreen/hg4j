@@ -22,8 +22,6 @@ import java.util.Map;
 
 import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.SessionContext;
-import org.tmatesoft.hg.repo.HgLookup.Authenticator;
-import org.tmatesoft.hg.repo.HgLookup.RemoteDescriptor;
 import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.util.Pair;
 
@@ -38,7 +36,7 @@ import org.tmatesoft.hg.util.Pair;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class RemoteConnectorDescriptor implements RemoteDescriptor {
+public class RemoteConnectorDescriptor implements HgRemoteRepository.RemoteDescriptor {
 	
 	private Map<String, Pair<ClassLoader, String>> connFactory;
 	private final URI uri;
@@ -54,11 +52,6 @@ public class RemoteConnectorDescriptor implements RemoteDescriptor {
 
 	public URI getURI() {
 		return uri;
-	}
-
-	public Authenticator getAuth() {
-		// TODO Auto-generated method stub
-		return null;
 	}
 
 	public Connector createConnector() throws HgBadArgumentException {
@@ -95,7 +88,7 @@ public class RemoteConnectorDescriptor implements RemoteDescriptor {
 			knownConnectors.put("ssh", new Pair<ClassLoader, String>(cl, SshConnector.class.getName()));
 		}
 
-		public RemoteDescriptor get(SessionContext ctx, URI uri) {
+		public HgRemoteRepository.RemoteDescriptor get(SessionContext ctx, URI uri) {
 			if (knownConnectors.containsKey(uri.getScheme())) {
 				return new RemoteConnectorDescriptor(knownConnectors, uri);
 			}

@@ -16,8 +16,6 @@
  */
 package org.tmatesoft.hg.internal.remote;
 
-import static org.tmatesoft.hg.util.LogFacility.Severity.Info;
-
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.FilterOutputStream;
@@ -28,27 +26,20 @@ import java.io.OutputStream;
 import java.io.SequenceInputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.prefs.BackingStoreException;
-import java.util.prefs.Preferences;
 
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-
+import org.tmatesoft.hg.auth.HgAuthFailedException;
+import org.tmatesoft.hg.auth.HgAuthenticator;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.PropertyMarshal;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
+import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteDescriptor;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
@@ -56,69 +47,43 @@ import org.tmatesoft.hg.repo.HgRuntimeException;
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
  */
-public class HttpConnector implements Connector {
-	private URI uri;
+public class HttpConnector extends ConnectorBase {
+	private RemoteDescriptor rd;
 	private URL url;
-	private SSLContext sslContext;
-	private String authInfo;
 	private boolean debug;
 	private SessionContext sessionCtx;
 	//
 	private HttpURLConnection conn;
+	private HttpAuthMethod authMediator;
 
-	public void init(URI uri, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
-		this.uri = uri;
+	public void init(RemoteDescriptor remote, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException {
+		rd = remote;
+		setURI(remote.getURI());
 		sessionCtx = sessionContext;
-		debug = new PropertyMarshal(sessionCtx).getBoolean("hg4j.remote.debug", false);
-		if (uri.getUserInfo() != null) {
-			String ai = null;
-			try {
-				// Hack to get Base64-encoded credentials
-				Preferences tempNode = Preferences.userRoot().node("xxx");
-				tempNode.putByteArray("xxx", uri.getUserInfo().getBytes());
-				ai = tempNode.get("xxx", null);
-				tempNode.removeNode();
-			} catch (BackingStoreException ex) {
-				sessionContext.getLog().dump(getClass(), Info, ex, null);
-				// IGNORE
-			}
-			authInfo = ai;
-		} else {
-			authInfo = null;
-		}
+		debug = new PropertyMarshal(sessionContext).getBoolean("hg4j.remote.debug", false);
 	}
 	
-	public void connect() throws HgRemoteConnectionException, HgRuntimeException {
+	public void connect() throws HgAuthFailedException, HgRemoteConnectionException, HgRuntimeException {
 		try {
 			url = uri.toURL();
 		} catch (MalformedURLException ex) {
 			throw new HgRemoteConnectionException("Bad URL", ex);
 		}
-		if ("https".equals(url.getProtocol())) {
+		authMediator = new HttpAuthMethod(sessionCtx, url);
+		authenticateClient();
+	}
+
+	private void authenticateClient() throws HgAuthFailedException {
+		String userInfo = url.getUserInfo();
+		if (userInfo != null) {
 			try {
-				sslContext = SSLContext.getInstance("SSL");
-				class TrustEveryone implements X509TrustManager {
-					public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-						if (debug) {
-							System.out.println("checkClientTrusted:" + authType);
-						}
-					}
-					public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-						if (debug) {
-							System.out.println("checkServerTrusted:" + authType);
-						}
-					}
-					public X509Certificate[] getAcceptedIssuers() {
-						return new X509Certificate[0];
-					}
-				};
-				sslContext.init(null, new TrustManager[] { new TrustEveryone() }, null);
-			} catch (Exception ex) {
-				throw new HgRemoteConnectionException("Can't initialize secure connection", ex);
+				authMediator.tryWithUserInfo(userInfo);
+			} catch (HgAuthFailedException ex) {
+				// FALL THROUGH to try Authenticator 
 			}
-		} else {
-			sslContext = null;
 		}
+		HgAuthenticator auth = sessionCtx.getAuthenticator(rd);
+		auth.authenticate(rd, authMediator);
 	}
 
 	public void disconnect() throws HgRemoteConnectionException, HgRuntimeException {
@@ -138,17 +103,6 @@ public class HttpConnector implements Connector {
 		}
 	}
 	
-	public String getServerLocation() {
-		if (uri.getUserInfo() == null) {
-			return uri.toString();
-		}
-		if (uri.getPort() != -1) {
-			return String.format("%s://%s:%d%s", uri.getScheme(), uri.getHost(), uri.getPort(), uri.getPath());
-		} else {
-			return String.format("%s://%s%s", uri.getScheme(), uri.getHost(), uri.getPath());
-		}
-	}
-
 	public String getCapabilities() throws HgRemoteConnectionException {
 		// say hello to server, check response
 		try {
@@ -367,13 +321,7 @@ public class HttpConnector implements Connector {
 	private HttpURLConnection setupConnection(URLConnection urlConnection) {
 		urlConnection.setRequestProperty("User-Agent", "hg4j/1.0.0");
 		urlConnection.addRequestProperty("Accept", "application/mercurial-0.1");
-		if (authInfo != null) {
-			urlConnection.addRequestProperty("Authorization", "Basic " + authInfo);
-		}
-		if (sslContext != null) {
-			((HttpsURLConnection) urlConnection).setSSLSocketFactory(sslContext.getSocketFactory());
-		}
-		return (HttpURLConnection) urlConnection;
+		return authMediator.setupConnection((HttpURLConnection) urlConnection);
 	}
 	
 	private StringBuilder appendNodeidListArgument(String key, List<Nodeid> values, StringBuilder sb) {

@@ -18,14 +18,15 @@ package org.tmatesoft.hg.internal.remote;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 
+import org.tmatesoft.hg.auth.HgAuthFailedException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.repo.HgRemoteRepository.Range;
+import org.tmatesoft.hg.repo.HgRemoteRepository.RemoteDescriptor;
 import org.tmatesoft.hg.repo.HgRuntimeException;
 
 /**
@@ -46,10 +47,11 @@ public interface Connector {
 	static final String NS_BOOKMARKS = "bookmarks";
 	static final String NS_PHASES = "phases";
 	
-	void init(URI uri, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException;
+	// note, #init shall not assume remote is instanceof RemoteConnectorDescriptor, but Adaptable to it, instead
+	void init(RemoteDescriptor remote, SessionContext sessionContext, Object globalConfig) throws HgRuntimeException;
 	String getServerLocation();
 	//
-	void connect() throws HgRemoteConnectionException, HgRuntimeException;
+	void connect() throws HgAuthFailedException, HgRemoteConnectionException, HgRuntimeException;
 	void disconnect() throws HgRemoteConnectionException, HgRuntimeException;
 	void sessionBegin() throws HgRemoteConnectionException, HgRuntimeException;
 	void sessionEnd() throws HgRemoteConnectionException, HgRuntimeException;

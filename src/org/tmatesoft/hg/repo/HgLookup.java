@@ -19,7 +19,6 @@ package org.tmatesoft.hg.repo;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 
 import java.io.File;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -33,7 +32,6 @@ import org.tmatesoft.hg.core.SessionContext;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.ConfigFile;
 import org.tmatesoft.hg.internal.DataAccessProvider;
-import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.RequiresFile;
 import org.tmatesoft.hg.repo.HgRepoConfig.PathsSection;
 
@@ -184,7 +182,7 @@ public class HgLookup implements SessionContext.Source {
 	 * @throws HgBadArgumentException
 	 */
 	public HgRemoteRepository detectRemote(URI uriRemote) throws HgBadArgumentException {
-		RemoteDescriptor rd = getSessionContext().getRemoteDescriptor(uriRemote);
+		HgRemoteRepository.RemoteDescriptor rd = getSessionContext().getRemoteDescriptor(uriRemote);
 		if (rd == null) {
 			throw new HgBadArgumentException(String.format("Unsupported remote repository location:%s", uriRemote), null);
 		}
@@ -209,42 +207,5 @@ public class HgLookup implements SessionContext.Source {
 			sessionContext = new BasicSessionContext(null);
 		}
 		return sessionContext;
-	}
-
-	
-	/**
-	 * Session context  ({@link SessionContext#getRemoteDescriptor(URI)} gives descriptor of remote when asked.
-	 */
-	@Experimental(reason="Work in progress")
-	public interface RemoteDescriptor {
-		URI getURI();
-		Authenticator getAuth();
-	}
-	
-	@Experimental(reason="Work in progress")
-	public interface Authenticator {
-		public void authenticate(RemoteDescriptor remote, AuthMethod authMethod);
-	}
-
-	/**
-	 * Clients do not implement this interface, instead, they invoke appropriate authentication method
-	 * once they got user input
-	 */
-	@Experimental(reason="Work in progress")
-	public interface AuthMethod {
-		public void noCredentials() throws AuthFailedException;
-		public boolean supportsPassword();
-		public void withPassword(String username, byte[] password) throws AuthFailedException;
-		public boolean supportsPublicKey();
-		public void withPublicKey(String username, InputStream publicKey, String passphrase) throws AuthFailedException;
-		public boolean supportsCertificate();
-		public void withCertificate() throws AuthFailedException;
-	}
-	
-	@SuppressWarnings("serial")
-	public class AuthFailedException extends Exception /*XXX HgRemoteException?*/ {
-		public AuthFailedException(String message, Throwable cause) {
-			super(message, cause);
-		}
 	}
 }

@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StreamTokenizer;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.tmatesoft.hg.auth.HgAuthFailedException;
 import org.tmatesoft.hg.core.HgBadArgumentException;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRemoteConnectionException;
@@ -49,12 +51,13 @@ import org.tmatesoft.hg.internal.BundleSerializer;
 import org.tmatesoft.hg.internal.DataSerializer;
 import org.tmatesoft.hg.internal.DataSerializer.OutputStreamSerializer;
 import org.tmatesoft.hg.internal.EncodingHelper;
+import org.tmatesoft.hg.internal.Experimental;
 import org.tmatesoft.hg.internal.FileUtils;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.PropertyMarshal;
 import org.tmatesoft.hg.internal.remote.Connector;
 import org.tmatesoft.hg.internal.remote.RemoteConnectorDescriptor;
-import org.tmatesoft.hg.repo.HgLookup.RemoteDescriptor;
+import org.tmatesoft.hg.util.Adaptable;
 import org.tmatesoft.hg.util.LogFacility.Severity;
 import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Pair;
@@ -77,13 +80,14 @@ public class HgRemoteRepository implements SessionContext.Source {
 	private Connector remote;
 	
 	HgRemoteRepository(SessionContext ctx, RemoteDescriptor rd) throws HgBadArgumentException {
-		if (false == rd instanceof RemoteConnectorDescriptor) {
+		RemoteConnectorDescriptor rcd = Adaptable.Factory.getAdapter(rd, RemoteConnectorDescriptor.class, null);
+		if (rcd == null) {
 			throw new IllegalArgumentException(String.format("Present implementation supports remote connections via %s only", Connector.class.getName()));
 		}
 		sessionContext = ctx;
 		debug = new PropertyMarshal(ctx).getBoolean("hg4j.remote.debug", false);
-		remote = ((RemoteConnectorDescriptor) rd).createConnector();
-		remote.init(rd.getURI(), ctx, null);
+		remote = rcd.createConnector();
+		remote.init(rd /*sic! pass original*/, ctx, null);
 	}
 	
 	public boolean isInvalid() throws HgRemoteConnectionException {
@@ -369,7 +373,11 @@ public class HgRemoteRepository implements SessionContext.Source {
 		if (remoteCapabilities != null) {
 			return;
 		}
-		remote.connect();
+		try {
+			remote.connect();
+		} catch (HgAuthFailedException ex) {
+			throw new HgRemoteConnectionException("Failed to authenticate", ex).setServerInfo(remote.getServerLocation());
+		}
 		try {
 			remote.sessionBegin();
 			String capsLine = remote.getCapabilities();
@@ -539,5 +547,20 @@ public class HgRemoteRepository implements SessionContext.Source {
 		public boolean isPublishingServer() {
 			return pub;
 		}
+	}
+
+	/**
+	 * Session context  ({@link SessionContext#getRemoteDescriptor(URI)} gives descriptor of remote when asked.
+	 * Clients may supply own descriptors e.g. if need to pass extra information into Authenticator. 
+	 * Present implementation of {@link HgRemoteRepository} will be happy with any {@link RemoteDescriptor} subclass
+	 * as long as it's {@link Adaptable adaptable} to {@link RemoteConnectorDescriptor} 
+	 * @since 1.2
+	 */
+	@Experimental(reason="Provisional API. Work in progress")
+	public interface RemoteDescriptor {
+		/**
+		 * @return remote location, never <code>null</code>
+		 */
+		URI getURI();
 	}
 }

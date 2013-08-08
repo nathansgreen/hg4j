@@ -18,10 +18,12 @@ package org.tmatesoft.hg.core;
 
 import java.net.URI;
 
+import org.tmatesoft.hg.auth.HgAuthenticator;
 import org.tmatesoft.hg.internal.BasicSessionContext;
 import org.tmatesoft.hg.internal.Experimental;
+import org.tmatesoft.hg.internal.remote.BasicAuthenticator;
 import org.tmatesoft.hg.internal.remote.RemoteConnectorDescriptor;
-import org.tmatesoft.hg.repo.HgLookup.RemoteDescriptor;
+import org.tmatesoft.hg.repo.HgRemoteRepository;
 import org.tmatesoft.hg.util.LogFacility;
 import org.tmatesoft.hg.util.Path;
 
@@ -84,9 +86,18 @@ public abstract class SessionContext {
 	 *  
 	 * @return <code>null</code> if supplied URI doesn't point to a remote repository or repositories of that kind are not supported
 	 */
-	@Experimental(reason="Work in progress, provisional API")
-	public RemoteDescriptor getRemoteDescriptor(URI uri) {
+	@Experimental(reason="Provisional API. Work in progress")
+	public HgRemoteRepository.RemoteDescriptor getRemoteDescriptor(URI uri) {
 		return new RemoteConnectorDescriptor.Provider().get(this, uri);
+	}
+	
+	/**
+	 * Facility to perform authentication for a given remote connection
+	 * @return never <code>null</code>
+	 */
+	@Experimental(reason="Provisional API. Work in progress")
+	public HgAuthenticator getAuthenticator(HgRemoteRepository.RemoteDescriptor rd) {
+		return new BasicAuthenticator(getLog());
 	}
 
 	/**

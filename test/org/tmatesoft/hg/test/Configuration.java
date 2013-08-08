@@ -84,7 +84,7 @@ public class Configuration {
 		if (remoteServers == null) {
 			String rr = System.getProperty("hg4j.tests.remote");
 			assertNotNull("System property hg4j.tests.remote is undefined", rr);
-			remoteServers = Arrays.asList(rr.split(" "));
+			remoteServers = Arrays.asList(rr.split("\\s"));
 		}
 		ArrayList<HgRemoteRepository> rv = new ArrayList<HgRemoteRepository>(remoteServers.size());
 		for (String key : remoteServers) {
