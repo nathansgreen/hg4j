@@ -84,8 +84,7 @@ public class RemoteConnectorDescriptor implements HgRemoteRepository.RemoteDescr
 			final ClassLoader cl = Provider.class.getClassLoader();
 			knownConnectors.put("http", new Pair<ClassLoader, String>(cl, HttpConnector.class.getName()));
 			knownConnectors.put("https", new Pair<ClassLoader, String>(cl, HttpConnector.class.getName()));
-			 // FIXME replace SshConnector.class with fqn string to avoid dependency from the trilead library in runtime
-			knownConnectors.put("ssh", new Pair<ClassLoader, String>(cl, SshConnector.class.getName()));
+			knownConnectors.put("ssh", new Pair<ClassLoader, String>(cl, "org.tmatesoft.hg.internal.remote.SshConnector"));
 		}
 
 		public HgRemoteRepository.RemoteDescriptor get(SessionContext ctx, URI uri) {

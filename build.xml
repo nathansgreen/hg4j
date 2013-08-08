@@ -26,8 +26,8 @@
 	</description>
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
-	<property name="ssh.jar" value="lib/ganymed-ssh2-build251beta1.jar" />
-	<property name="ver.qualifier" value="" />
+	<property name="ssh.jar" value="lib/trilead-ssh2-1.0.0-build217.jar" />
+	<property name="ver.qualifier" value="m2" />
 	<property name="version.lib" value="1.2" />
 	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
 	<property name="compile-with-debug" value="yes"/>
@@ -129,6 +129,7 @@
 			<fileset dir="test/" includes="org/tmatesoft/hg/**" />
 			<fileset dir="cmdline/" includes="org/tmatesoft/hg/**" />
 			<fileset file="COPYING"/>
+			<fileset file="LICENSE-TRILEAD.txt"/>
 		</jar>
 	</target>
 	
@@ -159,6 +160,7 @@
 				<include name="org/tmatesoft/hg/internal/**" />
 			</fileset>
 			<fileset file="COPYING"/>
+			<fileset file="LICENSE-TRILEAD.txt"/>
 		</jar>
 	</target>
 
