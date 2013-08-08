@@ -57,6 +57,7 @@ def isRelease = false
   }
   
   dependencies {
+    compile 'com.trilead:trilead-ssh2:1.0.0-build217'
     testCompile 'junit:junit:4.8.2'
     cliCompile 'junit:junit:4.8.2'
     cliCompile files(sourceSets.main.output) {
@@ -67,6 +68,7 @@ def isRelease = false
     
   def sharedMetaInf = {
     from project.file('COPYING')
+    from project.file('LICENSE-TRILEAD.txt')
   }
 
 
