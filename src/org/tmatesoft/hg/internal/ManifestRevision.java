@@ -23,6 +23,7 @@ import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.util.Convertor;
 import org.tmatesoft.hg.util.Path;
 
@@ -50,8 +51,17 @@ public final class ManifestRevision implements HgManifest.Inspector {
 		flagsMap = new TreeMap<Path, HgManifest.Flags>();
 	}
 	
+	public ManifestRevision init(HgRepository hgRepo, int csetIndex) {
+		hgRepo.getManifest().walk(csetIndex, csetIndex, this);
+		return this;
+	}
+	
 	public Collection<Path> files() {
 		return idsMap.keySet();
+	}
+	
+	public boolean contains(Path file) {
+		return idsMap.containsKey(file);
 	}
 
 	public Nodeid nodeid(Path fname) {

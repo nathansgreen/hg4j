@@ -173,4 +173,8 @@ public class HgRepoFacade implements SessionContext.Source {
 	public HgPullCommand createPullCommand() {
 		return new HgPullCommand(repo);
 	}
+
+	public HgMergeCommand createMergeCommand() {
+		return new HgMergeCommand(repo);
+	}
 }

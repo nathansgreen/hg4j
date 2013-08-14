@@ -59,6 +59,7 @@ public class HgPullCommand extends HgAbstractCommand<HgPullCommand> {
 		return this;
 	}
 
+	// FIXME get repository lock
 	public void execute() throws HgRemoteConnectionException, HgIOException, HgLibraryFailureException, CancelledException {
 		final ProgressSupport progress = getProgressSupport(null);
 		try {
