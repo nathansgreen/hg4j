@@ -17,12 +17,12 @@
 package org.tmatesoft.hg.test;
 
 import static org.junit.Assert.*;
-import static org.tmatesoft.hg.internal.DiffHelper.LineSequence.newlines;
+import static org.tmatesoft.hg.internal.diff.DiffHelper.LineSequence.newlines;
 
 import org.junit.Test;
-import org.tmatesoft.hg.internal.DiffHelper;
-import org.tmatesoft.hg.internal.DiffHelper.ChunkSequence;
-import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
+import org.tmatesoft.hg.internal.diff.DiffHelper;
+import org.tmatesoft.hg.internal.diff.DiffHelper.ChunkSequence;
+import org.tmatesoft.hg.internal.diff.DiffHelper.LineSequence;
 import org.tmatesoft.hg.internal.IntVector;
 
 /**

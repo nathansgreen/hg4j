@@ -14,9 +14,12 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.internal;
+package org.tmatesoft.hg.internal.diff;
 
 import java.util.Formatter;
+
+import org.tmatesoft.hg.internal.IntSliceSeq;
+import org.tmatesoft.hg.internal.IntTuple;
 
 /**
  * Sequence of range pairs (denoted origin and target), {originStart, targetStart, length}, tailored for diff/annotate

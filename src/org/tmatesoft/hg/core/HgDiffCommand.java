@@ -19,10 +19,10 @@ package org.tmatesoft.hg.core;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
-import org.tmatesoft.hg.internal.BlameHelper;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.FileHistory;
 import org.tmatesoft.hg.internal.FileRevisionHistoryChunk;
+import org.tmatesoft.hg.internal.diff.BlameHelper;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;

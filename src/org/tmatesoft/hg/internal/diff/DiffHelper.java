@@ -14,11 +14,16 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.internal;
+package org.tmatesoft.hg.internal.diff;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.tmatesoft.hg.internal.IntMap;
+import org.tmatesoft.hg.internal.IntSliceSeq;
+import org.tmatesoft.hg.internal.IntTuple;
+import org.tmatesoft.hg.internal.IntVector;
 
 /**
  * Mercurial cares about changes only up to the line level, e.g. a simple file version dump in manifest looks like (RevlogDump output):

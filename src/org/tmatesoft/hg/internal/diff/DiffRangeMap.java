@@ -18,11 +18,10 @@ package org.tmatesoft.hg.internal.diff;
 
 import java.util.ArrayList;
 
-import org.tmatesoft.hg.internal.DiffHelper;
-import org.tmatesoft.hg.internal.DiffHelper.MatchInspector;
 import org.tmatesoft.hg.internal.IntSliceSeq;
 import org.tmatesoft.hg.internal.IntTuple;
-import org.tmatesoft.hg.internal.DiffHelper.ChunkSequence;
+import org.tmatesoft.hg.internal.diff.DiffHelper.ChunkSequence;
+import org.tmatesoft.hg.internal.diff.DiffHelper.MatchInspector;
 
 /**
  * Sequence of pairs of ranges (s1Start,s1End) - (s2Start, s2End)

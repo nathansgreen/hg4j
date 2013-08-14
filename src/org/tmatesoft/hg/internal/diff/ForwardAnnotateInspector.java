@@ -14,12 +14,15 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.internal;
+package org.tmatesoft.hg.internal.diff;
 
 import org.tmatesoft.hg.core.HgAnnotateCommand.Inspector;
 import org.tmatesoft.hg.core.HgBlameInspector;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgIterateDirection;
+import org.tmatesoft.hg.internal.IntMap;
+import org.tmatesoft.hg.internal.IntSliceSeq;
+import org.tmatesoft.hg.internal.IntTuple;
 import org.tmatesoft.hg.util.CancelSupport;
 import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.ProgressSupport;

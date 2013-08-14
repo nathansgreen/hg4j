@@ -16,8 +16,9 @@
  */
 package org.tmatesoft.hg.internal;
 
-import org.tmatesoft.hg.internal.DiffHelper.DeltaInspector;
-import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
+import org.tmatesoft.hg.internal.diff.DiffHelper;
+import org.tmatesoft.hg.internal.diff.DiffHelper.DeltaInspector;
+import org.tmatesoft.hg.internal.diff.DiffHelper.LineSequence;
 
 class GeneratePatchInspector extends DeltaInspector<LineSequence> {
 	private final Patch deltaCollector;

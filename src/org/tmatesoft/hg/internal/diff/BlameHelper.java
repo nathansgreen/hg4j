@@ -14,7 +14,7 @@
  * the terms of a license other than GNU General Public License
  * contact TMate Software at support@hg4j.com
  */
-package org.tmatesoft.hg.internal;
+package org.tmatesoft.hg.internal.diff;
 
 import static org.tmatesoft.hg.core.HgIterateDirection.OldToNew;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
@@ -28,9 +28,14 @@ import java.util.ListIterator;
 
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.Nodeid;
-import org.tmatesoft.hg.internal.DiffHelper.LineSequence;
-import org.tmatesoft.hg.internal.DiffHelper.LineSequence.ByteChain;
-import org.tmatesoft.hg.internal.diff.DiffRangeMap;
+import org.tmatesoft.hg.internal.ByteArrayChannel;
+import org.tmatesoft.hg.internal.FileHistory;
+import org.tmatesoft.hg.internal.FileRevisionHistoryChunk;
+import org.tmatesoft.hg.internal.IntSliceSeq;
+import org.tmatesoft.hg.internal.IntTuple;
+import org.tmatesoft.hg.internal.IntVector;
+import org.tmatesoft.hg.internal.diff.DiffHelper.LineSequence;
+import org.tmatesoft.hg.internal.diff.DiffHelper.LineSequence.ByteChain;
 import org.tmatesoft.hg.internal.diff.DiffRangeMap.RangePair;
 import org.tmatesoft.hg.core.HgBlameInspector;
 import org.tmatesoft.hg.core.HgBlameInspector.*;

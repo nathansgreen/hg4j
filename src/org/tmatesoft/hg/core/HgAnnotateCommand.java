@@ -20,7 +20,7 @@ import static org.tmatesoft.hg.repo.HgRepository.TIP;
 
 import org.tmatesoft.hg.internal.Callback;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
-import org.tmatesoft.hg.internal.ForwardAnnotateInspector;
+import org.tmatesoft.hg.internal.diff.ForwardAnnotateInspector;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRuntimeException;
