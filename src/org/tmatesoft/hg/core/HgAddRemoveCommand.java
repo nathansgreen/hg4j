@@ -18,7 +18,6 @@ package org.tmatesoft.hg.core;
 
 import java.util.LinkedHashSet;
 
-import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.DirstateBuilder;
 import org.tmatesoft.hg.internal.DirstateReader;
 import org.tmatesoft.hg.internal.Internals;
@@ -123,7 +122,7 @@ public class HgAddRemoveCommand extends HgAbstractCommand<HgAddRemoveCommand> {
 				progress.worked(1);
 				cancellation.checkCancelled();
 			}
-			Transaction.Factory trFactory = new COWTransaction.Factory();
+			Transaction.Factory trFactory = implRepo.getTransactionFactory();
 			Transaction tr = trFactory.create(repo);
 			try {
 				dirstateBuilder.serialize(tr);

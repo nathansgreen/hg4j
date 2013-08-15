@@ -92,6 +92,22 @@ public class DirstateBuilder {
 		removed.put(fname, n);
 	}
 	
+	public void recordMerged(Path fname, int fmode, int mtime, int bytesWritten) {
+		forget(fname);
+		merged.put(fname, new HgDirstate.Record(fmode, bytesWritten,mtime, fname, null));
+	}
+	
+	/**
+	 * From DirState wiki:
+	 * <p>"size is ... when the dirstate is in a merge state: -2 will *always* return dirty, it is used to mark a file that was cleanly picked from p2"
+	 * and  
+	 * <p>"Additional meta status...'np2': merged from other parent (status == 'n', size == -2)"
+	 */
+	public void recordMergedFromP2(Path fname) {
+		forget(fname);
+		normal.put(fname, new HgDirstate.Record(0, -2, -1, fname, null));
+	}
+	
 	private HgDirstate.Record forget(Path fname) {
 		HgDirstate.Record r;
 		if ((r = normal.remove(fname)) != null) {

@@ -105,7 +105,7 @@ public final class FileUtils {
 		fos.flush();
 		fos.close();
 	}
-
+	
 	public void closeQuietly(Closeable stream) {
 		closeQuietly(stream, null);
 	}
@@ -125,5 +125,10 @@ public final class FileUtils {
 				log.dump(troublemaker == null ? getClass() : troublemaker, Severity.Warn, ex, msg);
 			}
 		}
+	}
+
+	// nothing special, just a single place with common prefix
+	public File createTempFile() throws IOException {
+		return File.createTempFile("hg4j-", null);
 	}
 }

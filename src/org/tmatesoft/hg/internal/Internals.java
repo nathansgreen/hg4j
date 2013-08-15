@@ -513,6 +513,10 @@ public final class Internals implements SessionContext.Source {
 	public RevlogStream resolveStoreFile(Path path) {
 		return streamProvider.getStoreFile(path, false);
 	}
+	
+	public Transaction.Factory getTransactionFactory() {
+		return new COWTransaction.Factory();
+	}
 
 	// marker method
 	public static IllegalStateException notImplemented() {

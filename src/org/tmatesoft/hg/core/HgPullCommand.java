@@ -21,7 +21,6 @@ import java.util.Collections;
 import java.util.List;
 
 import org.tmatesoft.hg.internal.AddRevInspector;
-import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.PhasesHelper;
 import org.tmatesoft.hg.internal.RepositoryComparator;
@@ -78,7 +77,7 @@ public class HgPullCommand extends HgAbstractCommand<HgPullCommand> {
 			// add revisions to changelog, manifest, files
 			final Internals implRepo = HgInternals.getImplementationRepo(repo);
 			final AddRevInspector insp;
-			Transaction.Factory trFactory = new COWTransaction.Factory();
+			Transaction.Factory trFactory = implRepo.getTransactionFactory();
 			Transaction tr = trFactory.create(repo);
 			try {
 				incoming.inspectAll(insp = new AddRevInspector(implRepo, tr));

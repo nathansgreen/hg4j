@@ -56,8 +56,8 @@ public class Merge {
 
 	static class Dump implements HgMergeCommand.Mediator {
 
-		public void same(HgFileRevision first, HgFileRevision second, Resolver resolver) throws HgCallbackTargetException {
-			System.out.printf("Unchanged %s:%s", first.getPath(), first.getRevision().shortNotation());
+		public void same(HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {
+			System.out.printf("Unchanged %s:%s", rev.getPath(), rev.getRevision().shortNotation());
 		}
 
 		public void onlyA(HgFileRevision base, HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {

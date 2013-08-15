@@ -212,7 +212,7 @@ public final class CommitFacility {
 		}
 		// bring dirstate up to commit state, TODO share this code with HgAddRemoveCommand
 		final DirstateBuilder dirstateBuilder = new DirstateBuilder(repo);
-		dirstateBuilder.fillFrom(new DirstateReader(repo, new Path.SimpleSource()));
+		dirstateBuilder.fillFrom(new DirstateReader(repo, repo.getSessionContext().getPathFactory()));
 		for (Path p : removals) {
 			dirstateBuilder.recordRemoved(p);
 		}

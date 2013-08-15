@@ -231,8 +231,8 @@ public class HgCheckoutCommand extends HgAbstractCommand<HgCheckoutCommand>{
 				lastFileMode = workingDirWriter.fmode();
 				lastFileModificationTime = workingDirWriter.mtime();
 				return true;
-			} catch (IOException ex) {
-				failure = new HgIOException("Failed to write down file revision", ex, workingDirWriter.getDestinationFile());
+			} catch (HgIOException ex) {
+				failure = ex;
 			} catch (HgRuntimeException ex) {
 				failure = new HgLibraryFailureException(ex);
 			}

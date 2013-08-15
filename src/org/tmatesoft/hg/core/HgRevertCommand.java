@@ -21,7 +21,6 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CsetParamKeeper;
 import org.tmatesoft.hg.internal.DirstateBuilder;
 import org.tmatesoft.hg.internal.DirstateReader;
@@ -160,7 +159,7 @@ public class HgRevertCommand extends HgAbstractCommand<HgRevertCommand> {
 				progress.worked(1);
 				cancellation.checkCancelled();
 			}
-			Transaction.Factory trFactory = new COWTransaction.Factory();
+			Transaction.Factory trFactory = implRepo.getTransactionFactory();
 			Transaction tr = trFactory.create(repo);
 			try {
 				// TODO same code in HgAddRemoveCommand and similar in HgCommitCommand

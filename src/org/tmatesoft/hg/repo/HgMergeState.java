@@ -218,7 +218,7 @@ public class HgMergeState {
 
 	/**
 	 * List of conflicts as recorded in the merge state information file. 
-	 * Note, this information is valid unless {@link #isStale()} is <code>true</code>.
+	 * Note, this information is not valid unless {@link #isStale()} is <code>true</code>.
 	 * 
 	 * @return non-<code>null</code> list with both resolved and unresolved conflicts.
 	 */

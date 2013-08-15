@@ -20,7 +20,6 @@ import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 
 import java.io.IOException;
 
-import org.tmatesoft.hg.internal.COWTransaction;
 import org.tmatesoft.hg.internal.CommitFacility;
 import org.tmatesoft.hg.internal.CompleteRepoLock;
 import org.tmatesoft.hg.internal.FileContentSupplier;
@@ -112,7 +111,8 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 				newRevision = Nodeid.NULL;
 				return new Outcome(Kind.Failure, "nothing to add");
 			}
-			CommitFacility cf = new CommitFacility(Internals.getInstance(repo), parentRevs[0], parentRevs[1]);
+			final Internals implRepo = Internals.getInstance(repo);
+			CommitFacility cf = new CommitFacility(implRepo, parentRevs[0], parentRevs[1]);
 			for (Path m : status.getModified()) {
 				HgDataFile df = repo.getFileNode(m);
 				cf.add(df, new WorkingCopyContent(df));
@@ -131,7 +131,7 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 			}
 			cf.branch(detectBranch());
 			cf.user(detectUser());
-			Transaction.Factory trFactory = new COWTransaction.Factory();
+			Transaction.Factory trFactory = implRepo.getTransactionFactory();
 			Transaction tr = trFactory.create(repo);
 			try {
 				newRevision = cf.commit(message, tr);

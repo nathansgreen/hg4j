@@ -21,9 +21,12 @@ import static org.tmatesoft.hg.util.LogFacility.Severity.Warn;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
+import org.tmatesoft.hg.core.HgFileRevision;
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgRuntimeException;
@@ -65,45 +68,94 @@ public class WorkingDirFileWriter implements ByteChannel {
 	 * Executable bit is set if specified and filesystem supports it. 
 	 * @throws HgRuntimeException 
 	 */
-	public void processFile(HgDataFile df, int fileRevIndex, HgManifest.Flags flags) throws IOException, HgRuntimeException {
+	public void processFile(final HgDataFile df, final int fileRevIndex, HgManifest.Flags flags) throws HgIOException, HgRuntimeException {
+		processFile(df.getPath(), new Fetch() {
+			public void readInto(ByteChannel ch) {
+				try {
+					df.contentWithFilters(fileRevIndex, ch);
+				} catch (CancelledException ex) {
+					handleUnexpectedCancel(ex);
+				}
+			}
+		}, flags);
+	}
+	
+	public void processFile(final HgFileRevision fr) throws HgIOException, HgRuntimeException {
+		processFile(fr.getPath(), new Fetch() {
+			
+			public void readInto(ByteChannel ch) throws IOException, HgRuntimeException {
+				try {
+					fr.putContentTo(ch);
+				} catch (CancelledException ex) {
+					handleUnexpectedCancel(ex);
+				}
+			}
+		}, fr.getFileFlags());
+	}
+	
+	/**
+	 * Closes supplied content stream 
+	 */
+	public void processFile(Path fname, final InputStream content, HgManifest.Flags flags) throws HgIOException, HgRuntimeException {
+		processFile(fname, new Fetch() {
+			
+			public void readInto(ByteChannel ch) throws IOException, HgRuntimeException {
+				try {
+					 ByteBuffer bb = ByteBuffer.wrap(new byte[8*1024]);
+					 int r;
+					 while ((r = content.read(bb.array())) != -1) {
+						 bb.position(0).limit(r);
+						 for (int wrote = 0; wrote < r; ) {
+							 r -= wrote; 
+							 wrote = ch.write(bb);
+							 assert bb.remaining() == r - wrote;
+						 }
+					 }
+				} catch (CancelledException ex) {
+					handleUnexpectedCancel(ex);
+				}
+			}
+		}, flags);
+	}
+	
+	private interface Fetch {
+		void readInto(ByteChannel ch) throws IOException, HgRuntimeException;
+	}
+
+	private void processFile(Path fname, Fetch fetch, HgManifest.Flags flags) throws HgIOException, HgRuntimeException {
 		try {
-			prepare(df.getPath());
-			if (flags != HgManifest.Flags.Link) {
-				destChannel = new FileOutputStream(dest).getChannel();
-			} else {
-				linkChannel = new ByteArrayChannel();
-			}
-			df.contentWithFilters(fileRevIndex, this);
-		} catch (CancelledException ex) {
-			hgRepo.getSessionContext().getLog().dump(getClass(), Severity.Error, ex, "Our impl doesn't throw cancellation");
-		} finally {
-			if (flags != HgManifest.Flags.Link) {
-				destChannel.close();
-				destChannel = null;
-				// leave dest in case anyone enquires with #getDestinationFile
-			}
-		}
-		if (linkChannel != null && symlinkCap) {
-			assert flags == HgManifest.Flags.Link;
-			fileFlagsHelper.createSymlink(dest.getParentFile(), dest.getName(), linkChannel.toArray());
-		} else if (flags == HgManifest.Flags.Exec && execCap) {
-			fileFlagsHelper.setExecutableBit(dest.getParentFile(), dest.getName());
-		}
-		// Although HgWCStatusCollector treats 644 (`hg manifest -v`) and 664 (my fs) the same, it's better
-		// to detect actual flags here
-		fmode = flags.fsMode(); // default to one from manifest
-		if (fileFlagsHelper != null) {
-			// if neither execBit nor link is supported by fs, it's unlikely file mode is supported, too.
+			byte[] symlinkContent = null;
 			try {
-				fmode = fileFlagsHelper.getFileMode(dest, fmode);
-			} catch (IOException ex) {
-				// Warn, we've got default value and can live with it
-				hgRepo.getSessionContext().getLog().dump(getClass(), Warn, ex, "Failed get file access rights");
+				prepare(fname, flags);
+				fetch.readInto(this);
+			} finally {
+				symlinkContent = close(fname, flags);
 			}
+			if (flags == HgManifest.Flags.Link && symlinkCap) {
+				assert symlinkContent != null;
+				fileFlagsHelper.createSymlink(dest.getParentFile(), dest.getName(), symlinkContent);
+			} else if (flags == HgManifest.Flags.Exec && execCap) {
+				fileFlagsHelper.setExecutableBit(dest.getParentFile(), dest.getName());
+			}
+			// Although HgWCStatusCollector treats 644 (`hg manifest -v`) and 664 (my fs) the same, it's better
+			// to detect actual flags here
+			fmode = flags.fsMode(); // default to one from manifest
+			if (fileFlagsHelper != null) {
+				// if neither execBit nor link is supported by fs, it's unlikely file mode is supported, too.
+				try {
+					fmode = fileFlagsHelper.getFileMode(dest, fmode);
+				} catch (IOException ex) {
+					// Warn, we've got default value and can live with it
+					hgRepo.getSessionContext().getLog().dump(getClass(), Warn, ex, "Failed get file access rights");
+				}
+			}
+		} catch (IOException ex) {
+			String msg = String.format("Failed to write file %s to the working directory", fname);
+			throw new HgIOException(msg, ex, dest);
 		}
 	}
 
-	public void prepare(Path fname) throws IOException {
+	private void prepare(Path fname, HgManifest.Flags flags) throws IOException {
 		String fpath = fname.toString();
 		dest = new File(hgRepo.getRepo().getWorkingDir(), fpath);
 		if (fpath.indexOf('/') != -1) {
@@ -113,6 +165,25 @@ public class WorkingDirFileWriter implements ByteChannel {
 		linkChannel = null;
 		totalBytesWritten = 0;
 		fmode = 0;
+		if (flags != HgManifest.Flags.Link) {
+			destChannel = new FileOutputStream(dest).getChannel();
+		} else {
+			linkChannel = new ByteArrayChannel();
+		}
+	}
+	
+	private byte[] close(Path fname, HgManifest.Flags flags) throws IOException {
+		if (flags != HgManifest.Flags.Link) {
+			destChannel.close();
+			destChannel = null;
+			// leave dest in case anyone enquires with #getDestinationFile
+		}
+		if (linkChannel != null) {
+			final byte[] rv = linkChannel.toArray();
+			linkChannel = null;
+			return rv;
+		}
+		return null;
 	}
 
 	public int write(ByteBuffer buffer) throws IOException, CancelledException {
@@ -143,5 +214,9 @@ public class WorkingDirFileWriter implements ByteChannel {
 
 	public int mtime() {
 		return (int) (dest.lastModified() / 1000);
+	}
+
+	private void handleUnexpectedCancel(CancelledException ex) {
+		hgRepo.getSessionContext().getLog().dump(WorkingDirFileWriter.class, Severity.Error, ex, "Our impl doesn't throw cancellation");
 	}
 }

@@ -214,6 +214,7 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 	public static class SimpleSource implements Source {
 		private final PathRewrite normalizer;
 		private final Convertor<Path> convertor;
+		private final Path.Source delegate;
 
 		public SimpleSource() {
 			this(new PathRewrite.Empty(), null);
@@ -224,12 +225,30 @@ public final class Path implements CharSequence, Comparable<Path>/*Cloneable? - 
 		}
 
 		public SimpleSource(PathRewrite pathRewrite, Convertor<Path> pathConvertor) {
+			assert pathRewrite != null;
 			normalizer = pathRewrite;
+			convertor = pathConvertor;
+			delegate = null;
+		}
+
+		public SimpleSource(Path.Source actual, Convertor<Path> pathConvertor) {
+			assert actual != null;
+			normalizer = null;
+			delegate = actual;
 			convertor = pathConvertor;
 		}
 
 		public Path path(CharSequence p) {
-			Path rv = Path.create(normalizer.rewrite(p));
+			// in fact, it's nicer to have sequence of sources, and a bunch of small
+			// Source implementations each responsible for specific aspect, like Convertor
+			// or delegation to another Source. However, these classes are just too small 
+			// to justify their existence
+			Path rv;
+			if (delegate != null) {
+				rv = delegate.path(p);
+			} else {
+				rv = Path.create(normalizer.rewrite(p));
+			}
 			if (convertor != null) {
 				return convertor.mangle(rv);
 			}
