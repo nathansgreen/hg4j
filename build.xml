@@ -27,7 +27,7 @@
 
 	<property name="junit.jar" value="lib/junit-4.8.2.jar" />
 	<property name="ssh.jar" value="lib/trilead-ssh2-1.0.0-build217.jar" />
-	<property name="ver.qualifier" value="m2" />
+	<property name="ver.qualifier" value="" />
 	<property name="version.lib" value="1.2" />
 	<property name="version.jar" value="${version.lib}${ver.qualifier}" />
 	<property name="compile-with-debug" value="yes"/>
@@ -87,6 +87,8 @@
 			<test name="org.tmatesoft.hg.test.TestConfigFileParser" />
 			<test name="org.tmatesoft.hg.test.TestTransaction" />
 			<test name="org.tmatesoft.hg.test.TestInflaterDataAccess" />
+			<test name="org.tmatesoft.hg.test.TestRevisionSet" />
+			<test name="org.tmatesoft.hg.test.TestRevisionMaps" />
 			<test name="org.tmatesoft.hg.test.TestHistory" />
 			<test name="org.tmatesoft.hg.test.TestManifest" />
 			<test name="org.tmatesoft.hg.test.TestStatus" />
@@ -110,12 +112,11 @@
 			<test name="org.tmatesoft.hg.test.TestRevert" />
 			<test name="org.tmatesoft.hg.test.TestCheckout" />
 			<test name="org.tmatesoft.hg.test.TestAddRemove" />
+			<test name="org.tmatesoft.hg.test.TestMerge" />
 			<test name="org.tmatesoft.hg.test.TestCommit" />
 			<test name="org.tmatesoft.hg.test.TestBlame" />
 			<test name="org.tmatesoft.hg.test.TestDiffHelper" />
 			<test name="org.tmatesoft.hg.test.TestRepositoryLock" />
-			<test name="org.tmatesoft.hg.test.TestRevisionSet" />
-			<test name="org.tmatesoft.hg.test.TestRevisionMaps" />
 			<test name="org.tmatesoft.hg.test.TestPush" />
 			<test name="org.tmatesoft.hg.test.TestPull" />
 			<test name="org.tmatesoft.hg.test.ComplexTest" />

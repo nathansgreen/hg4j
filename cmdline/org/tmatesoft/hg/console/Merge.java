@@ -57,12 +57,11 @@ public class Merge {
 	static class Dump implements HgMergeCommand.Mediator {
 
 		public void same(HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {
-			System.out.printf("Unchanged %s:%s", rev.getPath(), rev.getRevision().shortNotation());
+			System.out.printf("Unchanged %s:%s\n", rev.getPath(), rev.getRevision().shortNotation());
 		}
 
 		public void onlyA(HgFileRevision base, HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {
-			System.out.printf("Left in first trunk only %s:%s", rev.getPath(), rev.getRevision().shortNotation());
-			
+			System.out.printf("Left in first trunk only %s:%s\n", rev.getPath(), rev.getRevision().shortNotation());
 		}
 
 		public void onlyB(HgFileRevision base, HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {

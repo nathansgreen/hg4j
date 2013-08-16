@@ -362,9 +362,7 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 				} else {
 					dirstateBuilder.recordMerged(file, fw.fmode(), fw.mtime(), fw.bytesWritten());
 				}
-			} else {
-				assert false;
-			}
+			} // else no resolution was chosen, fine with that
 		}
 
 		public void use(HgFileRevision rev) {
