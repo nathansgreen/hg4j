@@ -25,6 +25,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.FileChannel;
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.util.LogFacility;
@@ -128,7 +131,29 @@ public final class FileUtils {
 	}
 
 	// nothing special, just a single place with common prefix
-	public File createTempFile() throws IOException {
+	public static File createTempFile() throws IOException {
 		return File.createTempFile("hg4j-", null);
 	}
+
+	public static void rmdir(File dest) throws IOException {
+		if (!dest.isDirectory()) {
+			return;
+		}
+		LinkedList<File> queue = new LinkedList<File>();
+		queue.addAll(Arrays.asList(dest.listFiles()));
+		while (!queue.isEmpty()) {
+			File next = queue.removeFirst();
+			if (next.isDirectory()) {
+				List<File> files = Arrays.asList(next.listFiles());
+				if (!files.isEmpty()) {
+					queue.addAll(files);
+					queue.add(next);
+				}
+				// fall through
+			} 
+			next.delete();
+		}
+		dest.delete();
+	}
+
 }

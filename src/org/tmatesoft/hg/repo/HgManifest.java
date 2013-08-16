@@ -122,7 +122,10 @@ public final class HgManifest extends Revlog {
 			return RegularFile;
 		}
 		
-		String nativeString() {
+		/**
+		 * String representation of the flag as of native Mercurial client. 
+		 */
+		public String mercurialString() {
 			if (this == Exec) {
 				return "x";
 			}

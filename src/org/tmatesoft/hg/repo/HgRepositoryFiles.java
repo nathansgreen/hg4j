@@ -33,10 +33,16 @@ public enum HgRepositoryFiles {
 	Branch(Home.Repo, "branch"), 
 	UndoBranch(Home.Repo, "undo.branch"), UndoDirstate(Home.Repo, "undo.dirstate"),
 	Phaseroots(Home.Store, "phaseroots"), FNCache(Home.Store, "fncache"),
-	WorkingCopyLock(Home.Repo, "wlock"), StoreLock(Home.Store, "lock");
+	WorkingCopyLock(Home.Repo, "wlock"), StoreLock(Home.Store, "lock"),
+	MergeState(Home.Repo, "merge/state");
 
 	/**
-	 * Possible file locations 
+	 * Possible file locations
+	 * <ul> 
+	 * <li>{@link #Root} lives in working copy
+	 * <li>{@link #Repo} files under <samp>.hg/</samp>
+	 * <li>#{@link #Store} files in storage area, either <samp>.hg/store/</samp> or <samp>.hg/</samp>
+	 * </ul>
 	 */
 	public enum Home {
 		Root, Repo, Store

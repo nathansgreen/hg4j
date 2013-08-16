@@ -18,18 +18,18 @@ package org.tmatesoft.hg.repo;
 
 import static org.tmatesoft.hg.core.Nodeid.NULL;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import org.tmatesoft.hg.core.HgFileRevision;
+import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.Nodeid;
 import org.tmatesoft.hg.internal.Internals;
+import org.tmatesoft.hg.internal.LineReader;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.util.Pair;
@@ -105,7 +105,7 @@ public class HgMergeState {
 		Pool<Path> fnamePool = new Pool<Path>();
 		Pair<Nodeid, Nodeid> wcParents = hgRepo.getWorkingCopyParents();
 		wcp1 = nodeidPool.unify(wcParents.first()); wcp2 = nodeidPool.unify(wcParents.second());
-		final File f = repo.getFileFromRepoDir("merge/state");
+		final File f = repo.getRepositoryFile(HgRepositoryFiles.MergeState);
 		if (!f.canRead()) {
 			// empty state
 			return;
@@ -120,12 +120,13 @@ public class HgMergeState {
 				final int rp2 = hgRepo.getChangelog().getRevisionIndex(wcp2);
 				hgRepo.getManifest().walk(rp2, rp2, m2);
 			}
-			BufferedReader br = new BufferedReader(new FileReader(f));
-			String s = br.readLine();
+			LineReader lr = new LineReader(f, repo.getLog());
+			Iterator<String> lines = lr.read(new LineReader.SimpleLineCollector(), new ArrayList<String>()).iterator();
+			String s = lines.next();
 			stateParent = nodeidPool.unify(Nodeid.fromAscii(s));
 			final int rp1 = hgRepo.getChangelog().getRevisionIndex(stateParent);
 			hgRepo.getManifest().walk(rp1, rp1, m1);
-			while ((s = br.readLine()) != null) {
+			while (lines.hasNext()) {
 				String[] r = s.split("\\00");
 				Path p1fname = pathPool.path(r[3]);
 				Nodeid nidP1 = m1.nodeid(p1fname);
@@ -162,8 +163,7 @@ public class HgMergeState {
 				result.add(e);
 			}
 			entries = result.toArray(new Entry[result.size()]);
-			br.close();
-		} catch (IOException ex) {
+		} catch (HgIOException ex) {
 			throw new HgInvalidControlFileException("Merge state read failed", ex, f);
 		}
 	}

@@ -16,15 +16,18 @@
  */
 package org.tmatesoft.hg.test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgMergeCommand;
 import org.tmatesoft.hg.core.HgMergeCommand.Resolver;
+import org.tmatesoft.hg.repo.HgLookup;
 import org.tmatesoft.hg.repo.HgRepository;
 
 /**
@@ -40,6 +43,8 @@ public class TestMerge {
 	@Test
 	public void testMediator() throws Exception {
 		HgRepository repo = Configuration.get().find("merge-1");
+		Assert.assertEquals("[sanity]", repo.getChangelog().getRevisionIndex(repo.getWorkingCopyParents().first()), 1);
+
 		HgMergeCommand cmd = new HgMergeCommand(repo);
 
 		MergeNotificationCollector c;
@@ -56,6 +61,33 @@ public class TestMerge {
 		errorCollector.assertTrue("file2", c.same.contains("file2"));
 		errorCollector.assertTrue("file3", c.onlyA.contains("file3"));
 		errorCollector.assertTrue("file4", c.same.contains("file4"));
+	}
+	
+	
+	@Test
+	public void testResolver() throws Exception {
+		File repoLoc1 = RepoUtils.copyRepoToTempLocation("merge-1", "test-merge-no-conflicts");
+		File repoLoc2 = RepoUtils.copyRepoToTempLocation("merge-1", "test-merge-with-conflicts");
+		HgRepository repo = new HgLookup().detect(repoLoc1);
+		Assert.assertEquals("[sanity]", repo.getChangelog().getRevisionIndex(repo.getWorkingCopyParents().first()), 1);
+
+		HgMergeCommand cmd = new HgMergeCommand(repo);
+		cmd.changeset(2).execute(new HgMergeCommand.MediatorBase() {
+			
+			public void resolve(HgFileRevision base, HgFileRevision first, HgFileRevision second, Resolver resolver) throws HgCallbackTargetException {
+				errorCollector.fail("There's no conflict in changesets 1 and 2 merge");
+			}
+		});
+		// FIXME run hg status to see changes
+		repo = new HgLookup().detect(repoLoc2);
+		cmd = new HgMergeCommand(repo);
+		cmd.changeset(3).execute(new HgMergeCommand.MediatorBase() {
+			
+			public void resolve(HgFileRevision base, HgFileRevision first, HgFileRevision second, Resolver resolver) throws HgCallbackTargetException {
+				resolver.unresolved();
+			}
+		});
+		// FIXME run hg status and hg resolve to see changes
 	}
 
 	private static class MergeNotificationCollector implements HgMergeCommand.Mediator {

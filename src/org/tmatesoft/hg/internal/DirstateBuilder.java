@@ -108,6 +108,22 @@ public class DirstateBuilder {
 		normal.put(fname, new HgDirstate.Record(0, -2, -1, fname, null));
 	}
 	
+	/**
+	 * Mark file from this dirstate as merged, using all the information 
+	 */
+	public void recordMergedExisting(Path fname, Path knownInDirstate) {
+		HgDirstate.Record r = forget(knownInDirstate);
+		HgDirstate.Record n;
+		if (r == null) {
+			assert false;
+			n = new HgDirstate.Record(0, -1, -1, fname, null);
+		} else {
+			n = new HgDirstate.Record(r.mode(), r.size(), r.modificationTime(), fname, r.copySource());
+		}
+		merged.put(fname, n);
+	}
+
+	
 	private HgDirstate.Record forget(Path fname) {
 		HgDirstate.Record r;
 		if ((r = normal.remove(fname)) != null) {

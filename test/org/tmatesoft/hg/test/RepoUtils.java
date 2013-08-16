@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
 
 import junit.framework.Assert;
 
@@ -175,21 +174,7 @@ public class RepoUtils {
 	}
 
 	static void rmdir(File dest) throws IOException {
-		LinkedList<File> queue = new LinkedList<File>();
-		queue.addAll(Arrays.asList(dest.listFiles()));
-		while (!queue.isEmpty()) {
-			File next = queue.removeFirst();
-			if (next.isDirectory()) {
-				List<File> files = Arrays.asList(next.listFiles());
-				if (!files.isEmpty()) {
-					queue.addAll(files);
-					queue.add(next);
-				}
-				// fall through
-			} 
-			next.delete();
-		}
-		dest.delete();
+		FileUtils.rmdir(dest);
 	}
 
 	static Nodeid[] allRevisions(HgRepository repo) {

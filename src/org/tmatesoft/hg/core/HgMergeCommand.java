@@ -36,6 +36,7 @@ import org.tmatesoft.hg.internal.Pool;
 import org.tmatesoft.hg.internal.Transaction;
 import org.tmatesoft.hg.internal.WorkingDirFileWriter;
 import org.tmatesoft.hg.repo.HgChangelog;
+import org.tmatesoft.hg.repo.HgManifest;
 import org.tmatesoft.hg.repo.HgParentChildMap;
 import org.tmatesoft.hg.repo.HgRepository;
 import org.tmatesoft.hg.repo.HgRepositoryLock;
@@ -86,9 +87,11 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 			final DirstateBuilder dirstateBuilder = new DirstateBuilder(implRepo);
 			dirstateBuilder.fillFrom(new DirstateReader(implRepo, new Path.SimpleSource(repo.getSessionContext().getPathFactory(), cacheFiles)));
 			final HgChangelog clog = repo.getChangelog();
-			dirstateBuilder.parents(clog.getRevision(firstCset), clog.getRevision(secondCset));
+			final Nodeid headCset1 = clog.getRevision(firstCset);
+			dirstateBuilder.parents(headCset1, clog.getRevision(secondCset));
 			//
 			MergeStateBuilder mergeStateBuilder = new MergeStateBuilder(implRepo);
+			mergeStateBuilder.prepare(headCset1);
 
 			ManifestRevision m1, m2, ma;
 			m1 = new ManifestRevision(cacheRevs, cacheFiles).init(repo, firstCset);
@@ -105,37 +108,38 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 						fileRevBase = ma.contains(f) ? ma.nodeid(f) : null;
 						if (fileRevA.equals(fileRevB)) {
 							HgFileRevision fr = new HgFileRevision(repo, fileRevA, m1.flags(f), f);
-							resolver.presentState(f, fr, fr);
+							resolver.presentState(f, fr, fr, null);
 							mediator.same(fr, resolver);
 						} else if (fileRevBase == fileRevA) {
 							assert fileRevBase != null;
 							HgFileRevision frBase = new HgFileRevision(repo, fileRevBase, ma.flags(f), f);
 							HgFileRevision frSecond= new HgFileRevision(repo, fileRevB, m2.flags(f), f);
-							resolver.presentState(f, frBase, frSecond);
+							resolver.presentState(f, frBase, frSecond, frBase);
 							mediator.fastForwardB(frBase, frSecond, resolver);
 						} else if (fileRevBase == fileRevB) {
 							assert fileRevBase != null;
 							HgFileRevision frBase = new HgFileRevision(repo, fileRevBase, ma.flags(f), f);
 							HgFileRevision frFirst = new HgFileRevision(repo, fileRevA, m1.flags(f), f);
-							resolver.presentState(f, frFirst, frBase);
+							resolver.presentState(f, frFirst, frBase, frBase);
 							mediator.fastForwardA(frBase, frFirst, resolver);
 						} else {
 							HgFileRevision frBase = fileRevBase == null ? null : new HgFileRevision(repo, fileRevBase, ma.flags(f), f);
 							HgFileRevision frFirst = new HgFileRevision(repo, fileRevA, m1.flags(f), f);
 							HgFileRevision frSecond= new HgFileRevision(repo, fileRevB, m2.flags(f), f);
-							resolver.presentState(f, frFirst, frSecond);
+							resolver.presentState(f, frFirst, frSecond, frBase);
 							mediator.resolve(frBase, frFirst, frSecond, resolver);
 						}
 					} else {
 						// m2 doesn't contain the file, either new in m1, or deleted in m2
 						HgFileRevision frFirst = new HgFileRevision(repo, m1.nodeid(f), m1.flags(f), f);
-						resolver.presentState(f, frFirst, null);
 						if (ma.contains(f)) {
 							// deleted in m2
 							HgFileRevision frBase = new HgFileRevision(repo, ma.nodeid(f), ma.flags(f), f);
+							resolver.presentState(f, frFirst, null, frBase);
 							mediator.onlyA(frBase, frFirst, resolver);
 						} else {
 							// new in m1
+							resolver.presentState(f, frFirst, null, null);
 							mediator.newInA(frFirst, resolver);
 						}
 					}
@@ -147,13 +151,14 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 					}
 					HgFileRevision frSecond= new HgFileRevision(repo, m2.nodeid(f), m2.flags(f), f);
 					// file in m2 is either new or deleted in m1
-					resolver.presentState(f, null, frSecond);
 					if (ma.contains(f)) {
 						// deleted in m1
 						HgFileRevision frBase = new HgFileRevision(repo, ma.nodeid(f), ma.flags(f), f);
+						resolver.presentState(f, null, frSecond, frBase);
 						mediator.onlyB(frBase, frSecond, resolver);
 					} else {
 						// new in m2
+						resolver.presentState(f, null, frSecond, null);
 						mediator.newInB(frSecond, resolver);
 					}
 					resolver.apply();
@@ -162,9 +167,11 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 				transaction.commit();
 			} catch (HgRuntimeException ex) {
 				transaction.rollback();
+				mergeStateBuilder.abandon();
 				throw ex;
 			} catch (HgIOException ex) {
 				transaction.rollback();
+				mergeStateBuilder.abandon();
 				throw ex;
 			}
 		} catch (HgRuntimeException ex) {
@@ -255,33 +262,70 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 		 * @throws IOException propagated exceptions from content
 		 */
 		public void use(InputStream content) throws IOException;
+		/**
+		 * Do not use this file for resolution. Marks the file for deletion, if appropriate.
+		 */
 		public void forget(HgFileRevision rev);
-		public void unresolved(); // record the file for later processing by 'hg resolve'
+		/**
+		 * Record the file for later processing by 'hg resolve'. It's required
+		 * that processed file present in both trunks. We need two file revisions
+		 * to put an entry into merge/state file.
+		 * 
+		 * XXX Perhaps, shall take two HgFileRevision arguments to facilitate
+		 * extra control over what goes into merge/state and to ensure this method
+		 * is not invoked when there are no conflicting revisions. 
+		 */
+		public void unresolved();
 	}
 
 	/**
-	 * Base mediator implementation, with regular resolution
+	 * Base mediator implementation, with regular resolution. 
+	 * Subclasses shall implement {@link #resolve(HgFileRevision, HgFileRevision, HgFileRevision, Resolver)} and
+	 * may optionally provide extra logic (e.g. ask user) for other cases.
 	 */
 	@Experimental(reason="Provisional API. Work in progress")
-	public abstract class MediatorBase implements Mediator {
+	public abstract static class MediatorBase implements Mediator {
+		/**
+		 * Implementation keeps this revision
+		 */
 		public void same(HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {
 			resolver.use(rev);
 		}
+		/**
+		 * Implementation keeps file revision from first/left/A trunk.
+		 * Subclasses may opt to {@link Resolver#forget(HgFileRevision) delete} it as it's done in second/right/B trunk.
+		 */
 		public void onlyA(HgFileRevision base, HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {
 			resolver.use(rev);
 		}
+		/**
+		 * Implementation restores file from second/right/B trunk. 
+		 * Subclasses may ask user to decide if it's necessary to do that 
+		 */
 		public void onlyB(HgFileRevision base, HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {
 			resolver.use(rev);
 		}
+		/**
+		 * Implementation keeps this revision
+		 */
 		public void newInA(HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {
 			resolver.use(rev);
 		}
+		/**
+		 * Implementation adds this revision. Subclasses my let user decide if it's necessary to add the file
+		 */
 		public void newInB(HgFileRevision rev, Resolver resolver) throws HgCallbackTargetException {
 			resolver.use(rev);
 		}
+		/**
+		 * Implementation keeps latest revision
+		 */
 		public void fastForwardA(HgFileRevision base, HgFileRevision first, Resolver resolver) throws HgCallbackTargetException {
 			resolver.use(first);
 		}
+		/**
+		 * Implementation keeps latest revision
+		 */
 		public void fastForwardB(HgFileRevision base, HgFileRevision second, Resolver resolver) throws HgCallbackTargetException {
 			resolver.use(second);
 		}
@@ -295,6 +339,7 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 		private boolean changedDirstate;
 		private HgFileRevision revA;
 		private HgFileRevision revB;
+		private HgFileRevision revBase;
 		private Path file;
 		// resolutions:
 		private HgFileRevision resolveUse, resolveForget;
@@ -312,14 +357,15 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 			if (changedDirstate) {
 				dirstateBuilder.serialize(tr);
 			}
-			mergeStateBuilder.serialize(tr);
+			mergeStateBuilder.serialize();
 		}
 
-		void presentState(Path p, HgFileRevision revA, HgFileRevision revB) {
+		void presentState(Path p, HgFileRevision revA, HgFileRevision revB, HgFileRevision base) {
 			assert revA != null || revB != null;
 			file = p;
 			this.revA = revA;
 			this.revB = revB;
+			revBase = base;
 			resolveUse = resolveForget = null;
 			resolveContent = null;
 			resolveMarkUnresolved = false;
@@ -327,9 +373,18 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 
 		void apply() throws HgIOException, HgRuntimeException {
 			if (resolveMarkUnresolved) {
-				mergeStateBuilder.unresolved(file);
+				HgFileRevision c = revBase;
+				if (revBase == null) {
+					// fake revision, null parent
+					c = new HgFileRevision(repo.getRepo(), Nodeid.NULL, HgManifest.Flags.RegularFile, file);
+				}
+				mergeStateBuilder.unresolved(file, revA, revB, c, revA.getFileFlags());
+				changedDirstate = true;
+				dirstateBuilder.recordMergedExisting(file, revA.getPath());
 			} else if (resolveForget != null) {
-				if (resolveForget == revA) {
+				// it revision to forget comes from second/B trunk, shall record it as removed
+				// only when corresponding file in first/A trunk is missing (merge:_forgetremoved())
+				if (resolveForget == revA || (resolveForget == revB && revA == null)) {
 					changedDirstate = true;
 					dirstateBuilder.recordRemoved(file);
 				}
@@ -381,10 +436,8 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 			assert resolveUse == null;
 			assert resolveForget == null;
 			try {
-				// cache new contents just to fail fast if there are troubles with content
-				final FileUtils fileUtils = new FileUtils(repo.getLog(), this);
-				resolveContent = fileUtils.createTempFile();
-				fileUtils.write(content, resolveContent);
+				resolveContent = FileUtils.createTempFile();
+				new FileUtils(repo.getLog(), this).write(content, resolveContent);
 			} finally {
 				content.close();
 			}
@@ -404,6 +457,9 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 		}
 
 		public void unresolved() {
+			if (revA == null || revB == null) {
+				throw new UnsupportedOperationException("To mark conflict as unresolved need two revisions");
+			}
 			resolveMarkUnresolved = true;
 		}
 	}

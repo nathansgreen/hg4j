@@ -217,6 +217,6 @@ public class WorkingDirFileWriter implements ByteChannel {
 	}
 
 	private void handleUnexpectedCancel(CancelledException ex) {
-		hgRepo.getSessionContext().getLog().dump(WorkingDirFileWriter.class, Severity.Error, ex, "Our impl doesn't throw cancellation");
+		hgRepo.getLog().dump(WorkingDirFileWriter.class, Severity.Error, ex, "Our impl doesn't throw cancellation");
 	}
 }
