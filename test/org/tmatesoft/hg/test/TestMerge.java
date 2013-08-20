@@ -16,8 +16,11 @@
  */
 package org.tmatesoft.hg.test;
 
+import static org.tmatesoft.hg.util.Path.create;
+
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.Assert;
@@ -27,8 +30,13 @@ import org.tmatesoft.hg.core.HgCallbackTargetException;
 import org.tmatesoft.hg.core.HgFileRevision;
 import org.tmatesoft.hg.core.HgMergeCommand;
 import org.tmatesoft.hg.core.HgMergeCommand.Resolver;
+import org.tmatesoft.hg.core.HgStatus.Kind;
+import org.tmatesoft.hg.core.HgStatusCommand;
 import org.tmatesoft.hg.repo.HgLookup;
+import org.tmatesoft.hg.repo.HgMergeState;
+import org.tmatesoft.hg.repo.HgMergeState.Entry;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Path;
 
 /**
  * 
@@ -78,16 +86,31 @@ public class TestMerge {
 				errorCollector.fail("There's no conflict in changesets 1 and 2 merge");
 			}
 		});
-		// FIXME run hg status to see changes
+		RepoUtils.assertHgVerifyOk(errorCollector, repoLoc1);
+		TestStatus.StatusCollector status = new TestStatus.StatusCollector();
+		new HgStatusCommand(repo).all().execute(status);
+		final List<Path> clean = status.get(Kind.Clean);
+		final List<Path> modified = status.get(Kind.Modified);
+		Collections.sort(clean);
+		Collections.sort(modified);
+		errorCollector.assertEquals(new Path[] {create("file1"), create("file3"), create("file4")}, clean.toArray());
+		errorCollector.assertEquals(new Path[] {create("file2"), create("file5")}, modified.toArray());
 		repo = new HgLookup().detect(repoLoc2);
 		cmd = new HgMergeCommand(repo);
-		cmd.changeset(3).execute(new HgMergeCommand.MediatorBase() {
-			
-			public void resolve(HgFileRevision base, HgFileRevision first, HgFileRevision second, Resolver resolver) throws HgCallbackTargetException {
-				resolver.unresolved();
-			}
-		});
-		// FIXME run hg status and hg resolve to see changes
+		cmd.changeset(3).execute(new HgMergeCommand.MediatorBase());
+		RepoUtils.assertHgVerifyOk(errorCollector, repoLoc2);
+		new HgStatusCommand(repo).all().execute(status = new TestStatus.StatusCollector());
+		errorCollector.assertEquals(1, status.get(Kind.Modified).size());
+		errorCollector.assertEquals(create("file1"), status.get(Kind.Modified).get(0));
+		final HgMergeState ms = repo.getMergeState();
+		ms.refresh();
+		errorCollector.assertTrue(ms.isMerging());
+		errorCollector.assertFalse(ms.isStale());
+		errorCollector.assertFalse(ms.getStateParent().isNull());
+		errorCollector.assertEquals(1, ms.getConflicts().size());
+		final Entry entry = ms.getConflicts().get(0);
+		errorCollector.assertEquals(create("file1"), entry.getActualFile());
+		errorCollector.assertEquals(HgMergeState.Kind.Unresolved, entry.getState());
 	}
 
 	private static class MergeNotificationCollector implements HgMergeCommand.Mediator {

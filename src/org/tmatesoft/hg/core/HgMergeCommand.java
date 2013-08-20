@@ -279,12 +279,11 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 	}
 
 	/**
-	 * Base mediator implementation, with regular resolution. 
-	 * Subclasses shall implement {@link #resolve(HgFileRevision, HgFileRevision, HgFileRevision, Resolver)} and
-	 * may optionally provide extra logic (e.g. ask user) for other cases.
+	 * Base mediator implementation, with regular resolution (and "don't delete anything" approach in mind). 
+	 * Subclasses shall override methods to provide alternative implementation or to add extra logic (e.g. ask user).
 	 */
 	@Experimental(reason="Provisional API. Work in progress")
-	public abstract static class MediatorBase implements Mediator {
+	public static class MediatorBase implements Mediator {
 		/**
 		 * Implementation keeps this revision
 		 */
@@ -328,6 +327,13 @@ public class HgMergeCommand extends HgAbstractCommand<HgMergeCommand> {
 		 */
 		public void fastForwardB(HgFileRevision base, HgFileRevision second, Resolver resolver) throws HgCallbackTargetException {
 			resolver.use(second);
+		}
+
+		/**
+		 * Implementation marks file as unresolved
+		 */
+		public void resolve(HgFileRevision base, HgFileRevision first, HgFileRevision second, Resolver resolver) throws HgCallbackTargetException {
+			resolver.unresolved();
 		}
 	}
 

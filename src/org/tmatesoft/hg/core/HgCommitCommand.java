@@ -102,9 +102,6 @@ public class HgCommitCommand extends HgAbstractCommand<HgCommitCommand> {
 		try {
 			int[] parentRevs = new int[2];
 			detectParentFromDirstate(parentRevs);
-			if (parentRevs[0] != NO_REVISION && parentRevs[1] != NO_REVISION) {
-				throw new HgBadArgumentException("Sorry, I'm not yet smart enough to perform merge commits", null);
-			}
 			HgWorkingCopyStatusCollector sc = new HgWorkingCopyStatusCollector(repo);
 			Record status = sc.status(HgRepository.WORKING_COPY);
 			if (status.getModified().size() == 0 && status.getAdded().size() == 0 && status.getRemoved().size() == 0) {

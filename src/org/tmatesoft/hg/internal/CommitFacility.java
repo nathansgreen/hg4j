@@ -19,14 +19,13 @@ package org.tmatesoft.hg.internal;
 import static org.tmatesoft.hg.repo.HgRepository.DEFAULT_BRANCH_NAME;
 import static org.tmatesoft.hg.repo.HgRepository.NO_REVISION;
 import static org.tmatesoft.hg.repo.HgRepositoryFiles.*;
-import static org.tmatesoft.hg.repo.HgRepositoryFiles.Branch;
-import static org.tmatesoft.hg.repo.HgRepositoryFiles.UndoBranch;
 import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -39,11 +38,14 @@ import org.tmatesoft.hg.core.HgCommitCommand;
 import org.tmatesoft.hg.core.HgIOException;
 import org.tmatesoft.hg.core.HgRepositoryLockException;
 import org.tmatesoft.hg.core.Nodeid;
+import org.tmatesoft.hg.internal.DataSerializer.ByteArraySerializer;
 import org.tmatesoft.hg.internal.DataSerializer.DataSource;
 import org.tmatesoft.hg.repo.HgChangelog;
 import org.tmatesoft.hg.repo.HgDataFile;
 import org.tmatesoft.hg.repo.HgPhase;
 import org.tmatesoft.hg.repo.HgRuntimeException;
+import org.tmatesoft.hg.util.ByteChannel;
+import org.tmatesoft.hg.util.CancelledException;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 
@@ -149,19 +151,42 @@ public final class CommitFacility {
 			DataSource bds = e.second();
 			Pair<Integer, Integer> fp = fileParents.get(df.getPath());
 			if (fp == null) {
-				// NEW FILE
-				fp = new Pair<Integer, Integer>(NO_REVISION, NO_REVISION);
+				// NEW FILE, either just added or resurrected from p2
+				Nodeid fileRevInP2;
+				if ((fileRevInP2 = c2Manifest.nodeid(df.getPath())) != null) {
+					fp = new Pair<Integer, Integer>(df.getRevisionIndex(fileRevInP2), NO_REVISION);
+				} else {
+					// brand new
+					fp = new Pair<Integer, Integer>(NO_REVISION, NO_REVISION);
+				}
 			}
-			RevlogStream contentStream = repo.getImplAccess().getStream(df);
+			// TODO if fp.first() != NO_REVISION and fp.second() != NO_REVISION check if one
+			// revision is ancestor of another and use the latest as p1, then
+			Nodeid fileRev = null;
 			final boolean isNewFile = !df.exists();
-			RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream, transaction);
-			Nodeid fileRev = fileWriter.addRevision(bds, clogRevisionIndex, fp.first(), fp.second()).second();
+			if (fp.first() != NO_REVISION && fp.second() == NO_REVISION && !isNewFile) {
+				// compare file contents to see if anything has changed, and reuse old revision, if unchanged.
+				// XXX ineffective, need better access to revision conten
+				ByteArraySerializer bas = new ByteArraySerializer();
+				bds.serialize(bas);
+				final byte[] newContent = bas.toByteArray();
+				// unless there's a way to reset DataSource, replace it with the content just read
+				bds = new DataSerializer.ByteArrayDataSource(newContent);
+				if (new ComparatorChannel(newContent).same(df, fp.first())) {
+					fileRev = df.getRevision(fp.first());
+				}
+			}
+			if (fileRev == null) {
+				RevlogStream contentStream = repo.getImplAccess().getStream(df);
+				RevlogStreamWriter fileWriter = new RevlogStreamWriter(repo, contentStream, transaction);
+				fileRev = fileWriter.addRevision(bds, clogRevisionIndex, fp.first(), fp.second()).second();
+				if (isNewFile) {
+					// registerNew shall go after fileWriter.addRevision as it needs to know if data is inlined or not
+					fncache.registerNew(df.getPath(), contentStream);
+				}
+			}
 			newManifestRevision.put(df.getPath(), fileRev);
 			touchInDirstate.add(df.getPath());
-			if (isNewFile) {
-				// registerNew shall go after fileWriter.addRevision as it needs to know if data is inlined or not
-				fncache.registerNew(df.getPath(), contentStream);
-			}
 		}
 		//
 		final EncodingHelper encHelper = repo.buildFileNameEncodingHelper();
@@ -251,6 +276,39 @@ public final class CommitFacility {
 			new FileUtils(repo.getLog(), this).closeQuietly(w, lastMessage);
 		}
 	}
+	
+	private static class ComparatorChannel implements ByteChannel {
+		private int index;
+		private final byte[] content;
+
+		public ComparatorChannel(byte[] contentToCompare) {
+			content = contentToCompare;
+		}
+
+		public int write(ByteBuffer buffer) throws IOException, CancelledException {
+			int consumed = 0;
+			while (buffer.hasRemaining()) {
+				byte b = buffer.get();
+				consumed++;
+				if (content[index++] != b) {
+					throw new CancelledException();
+				}
+			}
+			return consumed;
+		}
+		
+		public boolean same(HgDataFile df, int fileRevIndex) {
+			index = 0;
+			try {
+				df.contentWithFilters(fileRevIndex, this);
+				return index == content.length;
+			} catch (CancelledException ex) {
+				// comparison failed, content differs, ok to go on
+			}
+			return false;
+		}
+	}
+
 /*
 	private Pair<Integer, Integer> getManifestParents() {
 		return new Pair<Integer, Integer>(extractManifestRevisionIndex(p1Commit), extractManifestRevisionIndex(p2Commit));

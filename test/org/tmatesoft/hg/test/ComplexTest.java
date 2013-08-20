@@ -26,9 +26,12 @@ import org.tmatesoft.hg.core.HgAddRemoveCommand;
 import org.tmatesoft.hg.core.HgCheckoutCommand;
 import org.tmatesoft.hg.core.HgCommitCommand;
 import org.tmatesoft.hg.core.HgInitCommand;
+import org.tmatesoft.hg.core.HgMergeCommand;
 import org.tmatesoft.hg.core.HgRevertCommand;
 import org.tmatesoft.hg.repo.HgManifest;
+import org.tmatesoft.hg.repo.HgMergeState;
 import org.tmatesoft.hg.repo.HgRepository;
+import org.tmatesoft.hg.util.Outcome;
 import org.tmatesoft.hg.util.Path;
 
 /**
@@ -96,5 +99,55 @@ public class ComplexTest {
 		errorCollector.assertEquals(2, hgRepo.getFileNode(fc).getRevisionCount());
 		final HgManifest mf = hgRepo.getManifest();
 		errorCollector.assertEquals(mf.getFileRevision(0, fa), mf.getFileRevision(3, fa)); // "A2" was reverted
+	}
+
+	@Test
+	public void testMergeAndCommit() throws Exception {
+		File repoLoc = RepoUtils.createEmptyDir("composite-scenario-2");
+		HgRepository hgRepo = new HgInitCommand().location(repoLoc).revlogV1().execute();
+		Path fa = Path.create("file1"), fb = Path.create("file2"), fc = Path.create("file3");
+		final File fileA = new File(repoLoc, fa.toString());
+		final File fileB = new File(repoLoc, fb.toString());
+		// rev0: +file1, +file2
+		RepoUtils.createFile(fileA, "first file");
+		RepoUtils.createFile(fileB, "second file");
+		new HgAddRemoveCommand(hgRepo).add(fa, fb).execute();
+		final HgCommitCommand commitCmd = new HgCommitCommand(hgRepo);
+		commitCmd.message("FIRST").execute();
+		// rev1: *file1, *file2
+		RepoUtils.modifyFileAppend(fileA, "A1");
+		RepoUtils.modifyFileAppend(fileB, "B1");
+		commitCmd.message("SECOND").execute();
+		// rev2: *file1, -file2
+		RepoUtils.modifyFileAppend(fileA, "A2");
+		fileB.delete();
+		new HgAddRemoveCommand(hgRepo).remove(fb).execute();
+		commitCmd.message("THIRD").execute();
+		// rev3: fork rev0, +file3, *file2
+		new HgCheckoutCommand(hgRepo).changeset(0).clean(true).execute();
+		final File fileC = new File(repoLoc, fc.toString());
+		RepoUtils.createFile(fileC, "third file");
+		RepoUtils.modifyFileAppend(fileB, "B2");
+		new HgAddRemoveCommand(hgRepo).add(fc).execute();
+		commitCmd.message("FOURTH").execute();
+		// rev4: *file3
+		RepoUtils.modifyFileAppend(fileC, "C1");
+		commitCmd.message("FIFTH").execute();
+		// rev5: merge rev2 with rev3
+		new HgCheckoutCommand(hgRepo).changeset(2).clean(true).execute();
+		new HgMergeCommand(hgRepo).changeset(3).execute(new HgMergeCommand.MediatorBase());
+		commitCmd.message("SIXTH: merge rev2 and rev3");
+		errorCollector.assertTrue(commitCmd.isMergeCommit());
+		HgMergeState ms = hgRepo.getMergeState();
+		ms.refresh();
+		errorCollector.assertTrue(ms.isMerging());
+		errorCollector.assertFalse(ms.isStale());
+		errorCollector.assertEquals(0, ms.getConflicts().size());
+		Outcome o = commitCmd.execute();
+		errorCollector.assertTrue(o.getMessage(), o.isOk());
+		ms.refresh();
+		errorCollector.assertFalse(ms.isMerging());
+		errorCollector.assertEquals(0, ms.getConflicts().size());
+		RepoUtils.assertHgVerifyOk(errorCollector, repoLoc);
 	}
 }

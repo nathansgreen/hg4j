@@ -144,15 +144,19 @@ public class RevlogStreamWriter {
 		populateLastEntryContent();
 		//
 		byte[] contentByteArray = toByteArray(content);
-		Patch patch = GeneratePatchInspector.delta(lastFullContent.second(), contentByteArray);
-		int patchSerializedLength = patch.serializedLength();
-		
-		final boolean writeComplete = preferCompleteOverPatch(patchSerializedLength, contentByteArray.length);
-		DataSerializer.DataSource dataSource = writeComplete ? new ByteArrayDataSource(contentByteArray) : patch.new PatchDataSource();
-		//
 		Nodeid p1Rev = revision(p1);
 		Nodeid p2Rev = revision(p2);
 		Nodeid newRev = Nodeid.fromBinary(dh.sha1(p1Rev, p2Rev, contentByteArray).asBinary(), 0);
+		if (newRev.equals(p1Rev)) { // shall never happen, same content but different parents give new SHA. Doesn't hurt to check, though 
+			assert p2Rev.isNull();
+			return new Pair<Integer, Nodeid>(p1, p1Rev);
+		}
+		//
+		Patch patch = GeneratePatchInspector.delta(lastFullContent.second(), contentByteArray);
+		int patchSerializedLength = patch.serializedLength();
+		final boolean writeComplete = preferCompleteOverPatch(patchSerializedLength, contentByteArray.length);
+		DataSerializer.DataSource dataSource = writeComplete ? new ByteArrayDataSource(contentByteArray) : patch.new PatchDataSource();
+		//
 		doAdd(newRev, p1, p2, linkRevision, writeComplete ? lastEntryIndex+1 : lastEntryBase, contentByteArray.length, dataSource);
 		lastFullContent = new Pair<Integer, byte[]>(lastEntryIndex, contentByteArray);
 		return new Pair<Integer, Nodeid>(lastEntryIndex, lastEntryRevision);

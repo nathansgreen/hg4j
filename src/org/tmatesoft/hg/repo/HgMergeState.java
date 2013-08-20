@@ -32,6 +32,7 @@ import org.tmatesoft.hg.internal.Internals;
 import org.tmatesoft.hg.internal.LineReader;
 import org.tmatesoft.hg.internal.ManifestRevision;
 import org.tmatesoft.hg.internal.Pool;
+import org.tmatesoft.hg.util.LogFacility.Severity;
 import org.tmatesoft.hg.util.Pair;
 import org.tmatesoft.hg.util.Path;
 import org.tmatesoft.hg.util.PathRewrite;
@@ -127,7 +128,12 @@ public class HgMergeState {
 			final int rp1 = hgRepo.getChangelog().getRevisionIndex(stateParent);
 			hgRepo.getManifest().walk(rp1, rp1, m1);
 			while (lines.hasNext()) {
+				s = lines.next();
 				String[] r = s.split("\\00");
+				if (r.length < 7) {
+					repo.getLog().dump(getClass(), Severity.Error, "Expect at least 7 zero-separated fields in the merge state file, not %d. Entry skipped", r.length);
+					continue;
+				}
 				Path p1fname = pathPool.path(r[3]);
 				Nodeid nidP1 = m1.nodeid(p1fname);
 				Nodeid nidCA = nodeidPool.unify(Nodeid.fromAscii(r[5]));
@@ -218,7 +224,7 @@ public class HgMergeState {
 
 	/**
 	 * List of conflicts as recorded in the merge state information file. 
-	 * Note, this information is not valid unless {@link #isStale()} is <code>true</code>.
+	 * Note, this information is not valid when {@link #isStale()} is <code>true</code>.
 	 * 
 	 * @return non-<code>null</code> list with both resolved and unresolved conflicts.
 	 */
