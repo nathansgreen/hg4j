@@ -150,9 +150,13 @@ public interface HgBlameInspector {
 	
 	public interface AddBlock extends Block {
 		/**
-		 * @return line index in the origin where this block is inserted
+		 * @return line index in the origin (first parent in case of merge) where this block is inserted
 		 */
-		int insertedAt();  
+		int insertedAt();
+		/**
+		 * @return line index in the second (merge) parent, if this block comes into target as a result of a merge, or -1 otherwise. 
+		 */
+		int mergeLineAt();
 		/**
 		 * @return line index of the first added line in the target revision
 		 */

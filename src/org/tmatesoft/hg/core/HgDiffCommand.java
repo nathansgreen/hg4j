@@ -254,7 +254,7 @@ public class HgDiffCommand extends HgAbstractCommand<HgDiffCommand> {
 		progress.start(2);
 		try {
 			final CancelSupport cancel = getCancelSupport(insp, true);
-			int changelogRevisionIndex = clogRevIndexEnd.get();
+			int changelogRevisionIndex = clogRevIndexEnd.get(TIP);
 			// TODO detect if file is text/binary (e.g. looking for chars < ' ' and not \t\r\n\f
 			int fileRevIndex = fileRevIndex(df, changelogRevisionIndex);
 			int[] fileRevParents = new int[2];

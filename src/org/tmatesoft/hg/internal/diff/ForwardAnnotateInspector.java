@@ -92,7 +92,8 @@ public class ForwardAnnotateInspector implements HgBlameInspector, HgBlameInspec
 
 	public void added(AddBlock block) throws HgCallbackTargetException {
 		if (revDescriptor.isMerge() && block.originChangesetIndex() == revDescriptor.mergeChangesetIndex()) {
-			copyBlock(block.originChangesetIndex(), block.insertedAt(), block.totalAddedLines());
+			assert block.mergeLineAt() != -1;
+			copyBlock(block.originChangesetIndex(), block.mergeLineAt(), block.totalAddedLines());
 			return;
 		}
 		BlockData addedLines = block.addedLines();

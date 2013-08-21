@@ -145,7 +145,7 @@ public class ReverseAnnotateInspector implements HgBlameInspector, RevisionDescr
 			int lnInFinal = activeEquals.mapLineIndex(ln);
 			if (lnInFinal != -1/* && !knownLines[lnInFinal]*/) {
 				if (rs != null) {
-					rs.add(block.insertedAt() + i, lnInFinal, 1);
+					rs.add(block.mergeLineAt() + i, lnInFinal, 1);
 				} else {
 					line(lnInFinal, ln, block.targetChangesetIndex());
 				}

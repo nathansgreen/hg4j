@@ -377,42 +377,17 @@ public class TestBlame {
 		}
 	}
 	
-	private void ccc() throws Throwable {
-		HgRepository repo = new HgLookup().detect("/home/artem/hg/hgtest-annotate-merge/");
-		HgDataFile df = repo.getFileNode("file.txt");
-		DiffOutInspector dump = new DiffOutInspector(System.out);
-		dump.needRevisions(true);
-		HgDiffCommand diffCmd = new HgDiffCommand(repo);
-		diffCmd.file(df);
-		diffCmd.range(0, 8).order(NewToOld);
-		diffCmd.executeAnnotate(dump);
-//		af.annotateSingleRevision(df, 113, dump);
-//		System.out.println();
-//		af.annotate(df, TIP, new LineDumpInspector(true), HgIterateDirection.NewToOld);
-//		System.out.println();
-//		af.annotate(df, TIP, new LineDumpInspector(false), HgIterateDirection.NewToOld);
-//		System.out.println();
-		/*
-		OutputParser.Stub op = new OutputParser.Stub();
-		eh = new ExecHelper(op, repo.getWorkingDir());
-		for (int cs : new int[] { 24, 46, 49, 52, 59, 62, 64, TIP}) {
-			doLineAnnotateTest(df, cs, op);
-		}
-		errorCollector.verify();
-		*/
-		ForwardAnnotateInspector insp = new ForwardAnnotateInspector();
-		diffCmd.range(0, 8).order(insp.iterateDirection());
-		diffCmd.executeAnnotate(insp);
-		AnnotateInspector fa = new AnnotateInspector().fill(8, insp);
-		for (int i = 0; i < fa.changesets.size(); i++) {
-			final String line = fa.lines.get(i);
-			System.out.printf("%d: %s", fa.changesets.get(i), line == null ? "null\n" : line);
-		}
+	private void ddd() throws Throwable {
+//		HgRepository repo = new HgLookup().detect("/home/artem/hg/blame-merge/");
+		HgRepository repo = new HgLookup().detect("/home/artem/hg/junit-test-repos/test-annotate3/");
+		final DiffOutInspector insp = new DiffOutInspector(System.out);
+		insp.needRevisions(true);
+		new HgDiffCommand(repo).file(Path.create("file1")).executeParentsAnnotate(insp);
 	}
 
 	public static void main(String[] args) throws Throwable {
 		TestBlame tt = new TestBlame();
-		tt.ccc();
+		tt.ddd();
 	}
 
 	private static class DiffOutInspector implements HgBlameInspector {

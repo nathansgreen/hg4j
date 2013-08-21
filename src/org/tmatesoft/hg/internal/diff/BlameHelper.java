@@ -379,16 +379,21 @@ public class BlameHelper {
 						final int s1LinesLeft = s1TotalLines - s1ConsumedLines;
 						// how many lines we may report as changed (don't use more than in range unless it's the very last range)
 						final int s1LinesToBorrow = lastRange ? s1LinesLeft : Math.min(s1LinesLeft, rangeLen);
-						if (rangeOrigin != csetMergeParent && s1LinesToBorrow > 0) {
+						if (s1LinesToBorrow > 0) {
 							ChangeBlockImpl block = getChangeBlock(s1Start, s1LinesToBorrow, rangeStart, rangeLen);
 							block.setOriginAndTarget(rangeOrigin, csetTarget);
+							if (rangeOrigin == csetMergeParent) {
+								block.setMergeFromLine(p2MergeCommon.getLineInP2(rangeStart));
+							}
 							insp.changed(block);
 							s1ConsumedLines += s1LinesToBorrow;
 							s1Start += s1LinesToBorrow;
 						} else {
-							int blockInsPoint = rangeOrigin != csetMergeParent ? s1Start : p2MergeCommon.getLineInP2(rangeStart);
-							ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, blockInsPoint);
+							ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, s1Start);
 							block.setOriginAndTarget(rangeOrigin, csetTarget);
+							if (rangeOrigin == csetMergeParent) {
+								block.setMergeFromLine(p2MergeCommon.getLineInP2(rangeStart));
+							}
 							insp.added(block);
 						}
 					}
@@ -398,7 +403,7 @@ public class BlameHelper {
 						// or the ranges found were not enough to consume whole s2From..s2To
 						// The "deletion point" is shifted to the end of last csetOrigin->csetTarget change
 						int s2DeletePoint = s2From + s1ConsumedLines;
-						ChangeBlockImpl block =  new ChangeBlockImpl(annotatedRevision.origin, null, s1Start, s1To - s1Start, -1, -1, -1, s2DeletePoint);
+						ChangeBlockImpl block =  getDeleteBlock(s1Start, s1To - s1Start, s2DeletePoint);
 						block.setOriginAndTarget(csetOrigin, csetTarget);
 						insp.deleted(block);
 					}
@@ -425,11 +430,11 @@ public class BlameHelper {
 						int rangeOrigin = mergeRange.at(0);
 						int rangeStart = mergeRange.at(1);
 						int rangeLen = mergeRange.at(2);
-						// XXX likely need somewhat similar to the code above: 
-						// int blockInsPoint = rangeOrigin != csetMergeParent ? s1Start : p2MergeCommon.reverseMapLine(rangeStart);
-						//
 						ChangeBlockImpl block = getAddBlock(rangeStart, rangeLen, insPoint);
 						block.setOriginAndTarget(rangeOrigin, csetTarget);
+						if (rangeOrigin == csetMergeParent) {
+							block.setMergeFromLine(p2MergeCommon.getLineInP2(rangeStart));
+						}
 						insp.added(block);
 						// indicate insPoint moved down number of lines we just reported
 						insPoint += rangeLen;
@@ -450,7 +455,7 @@ public class BlameHelper {
 				return;
 			}
 			try {
-				ChangeBlockImpl block = new ChangeBlockImpl(annotatedRevision.origin, null, s1From, s1To - s1From, -1, -1, -1, s2DeletePoint);
+				ChangeBlockImpl block = getDeleteBlock(s1From, s1To - s1From, s2DeletePoint);
 				block.setOriginAndTarget(csetOrigin, csetTarget);
 				insp.deleted(block);
 			} catch (HgCallbackTargetException ex) {
@@ -488,6 +493,10 @@ public class BlameHelper {
 		
 		private ChangeBlockImpl getChangeBlock(int start1, int len1, int start2, int len2) {
 			return new ChangeBlockImpl(annotatedRevision.origin, annotatedRevision.target, start1, len1, start2, len2, start1, start2);
+		}
+		
+		private ChangeBlockImpl getDeleteBlock(int start, int len, int delPoint) {
+			return new ChangeBlockImpl(annotatedRevision.origin, null, start, len, -1, -1, -1, delPoint);
 		}
 	}
 	
@@ -560,6 +569,7 @@ public class BlameHelper {
 		private final int s1InsertPoint;
 		private final int s2DeletePoint;
 		private FilterBlock addedBlock, removedBlock;
+		private int mergedFromLine = -1;
 
 		public ChangeBlockImpl(ContentBlock c1, ContentBlock c2, int s1Start, int s1Len, int s2Start, int s2Len, int s1InsertPoint, int s2DeletePoint) {
 			oldContent = c1;
@@ -574,6 +584,10 @@ public class BlameHelper {
 		
 		public int insertedAt() {
 			return s1InsertPoint;
+		}
+		
+		public int mergeLineAt() {
+			return mergedFromLine;
 		}
 
 		public int firstAddedLine() {
@@ -619,6 +633,10 @@ public class BlameHelper {
 				return String.format("@@ -%d,%d +%d,0 @@", firstRemovedLine(), totalRemovedLines(), removedAt());
 			}
 			return String.format("@@ -%d,%d +%d,%d @@", firstRemovedLine(), totalRemovedLines(), firstAddedLine(), totalAddedLines());
+		}
+		
+		void setMergeFromLine(int lineInOrigin) {
+			mergedFromLine = lineInOrigin;
 		}
 	}
 	
@@ -732,6 +750,9 @@ public class BlameHelper {
 		 */
 		public IntSliceSeq combineAndMarkRangesWithSource(int start1, int end1, int start2, int end2, int source1, int source2);
 		public IntSliceSeq combineAndMarkRangesWithSource(int insPoint, int start, int end, int source1, int source2);
+		/**
+		 * index in p2 of the mergeLine's origin in p2
+		 */
 		public int getLineInP2(int mergeLine);
 	}
 
