@@ -564,7 +564,8 @@ public class HgWorkingCopyStatusCollector {
 		Check check = new Check(); 
 		try {
 			is = f.newInputChannel();
-			ByteBuffer fb = ByteBuffer.allocate(min(1 + data.length * 2 /*to fit couple of lines appended; never zero*/, 8192));
+//			ByteBuffer fb = ByteBuffer.allocate(min(1 + data.length * 2 /*to fit couple of lines appended; never zero*/, 8192));
+			ByteBuffer fb = ByteBuffer.allocate(8192); // FIXME temp fix to ensure big enough buffer for KeywordFilter
 			FilterByteChannel filters = new FilterByteChannel(check, repo.getFiltersFromWorkingDirToRepo(p));
 			Preview preview = Adaptable.Factory.getAdapter(filters, Preview.class, null);
 			if (preview != null) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 TMate Software Ltd
+ * Copyright (c) 2011-2013 TMate Software Ltd
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -84,11 +84,15 @@ public class KeywordFilter implements Filter {
 	 * start with them  
 	 */
 	public ByteBuffer filter(ByteBuffer src) {
-		if (src.capacity() < minBufferLen) {
+		int keywordStart = indexOf(src, '$', src.position(), false);
+		if (keywordStart != -1 && src.capacity() < minBufferLen) {
+			// FIXME this check is unlucky when small files are read for status 'areTheSame' check - small buffer is allocated.
+			// the check for keywordStart('$') is a temp solution to minimize the chances to get this exception.
+			// Complete solution requires complete rewriting of this method to respect cases when keywords are split between buffers.
+			// With 'honest' partial kw handling, need for this check would be gone.
 			throw new IllegalStateException(String.format("Need buffer of at least %d bytes to ensure filter won't hang", minBufferLen));
 		}
 		ByteBuffer rv = null;
-		int keywordStart = -1;
 		int x = src.position();
 		int copyFrom = x; // needs to be updated each time we copy a slice, but not each time we modify source index (x)
 		while (x < src.limit()) {
