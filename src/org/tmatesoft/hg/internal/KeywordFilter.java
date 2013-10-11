@@ -21,6 +21,7 @@ import static org.tmatesoft.hg.util.LogFacility.Severity.Error;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Map;
 import java.util.TreeMap;
 
 import org.tmatesoft.hg.core.Nodeid;
@@ -36,13 +37,12 @@ import org.tmatesoft.hg.util.Path;
  * @author TMate Software Ltd.
  */
 public class KeywordFilter implements Filter {
-	// present implementation is stateless, however, filter use pattern shall not assume that. In fact, Factory may us that 
 	private final HgRepository repo;
 	private final boolean isExpanding;
-	private final TreeMap<String,String> keywords;
-	private final int minBufferLen;
+	private final Map<String,String> keywords;
 	private final Path path;
 	private RawChangeset latestFileCset;
+	private final ByteVector unprocessedBuffer;
 
 	/**
 	 * 
@@ -50,31 +50,12 @@ public class KeywordFilter implements Filter {
 	 * @param path 
 	 * @param expand <code>true</code> to expand keywords, <code>false</code> to shrink
 	 */
-	private KeywordFilter(HgRepository hgRepo, Path p, boolean expand) {
+	private KeywordFilter(HgRepository hgRepo, Path p, Map<String, String> kw, boolean expand) {
 		repo = hgRepo;
 		path = p;
 		isExpanding = expand;
-		keywords = new TreeMap<String,String>();
-		keywords.put("Id", "Id");
-		keywords.put("Revision", "Revision");
-		keywords.put("Author", "Author");
-		keywords.put("Date", "Date");
-		keywords.put("LastChangedRevision", "LastChangedRevision");
-		keywords.put("LastChangedBy", "LastChangedBy");
-		keywords.put("LastChangedDate", "LastChangedDate");
-		keywords.put("Source", "Source");
-		keywords.put("Header", "Header");
-
-		int l = 0;
-		for (String s : keywords.keySet()) {
-			if (s.length() > l) {
-				l = s.length();
-			}
-		}
-		// TODO post-1.0 later may implement #filter() not to read full kw value (just "$kw:"). However, limit of maxLen + 2 would keep valid.
-		// for buffers less then minBufferLen, there are chances #filter() implementation would never end
-		// (i.e. for input "$LongestKey"$
-		minBufferLen = l + 2 + (isExpanding ? 0 : 120 /*any reasonable constant for max possible kw value length*/);
+		keywords = kw;
+		unprocessedBuffer = expand ? new ByteVector(0, 0) :  new ByteVector(120, 50);
 	}
 
 	/**
@@ -84,151 +65,150 @@ public class KeywordFilter implements Filter {
 	 * start with them  
 	 */
 	public ByteBuffer filter(ByteBuffer src) {
-		int keywordStart = indexOf(src, '$', src.position(), false);
-		if (keywordStart != -1 && src.capacity() < minBufferLen) {
-			// FIXME this check is unlucky when small files are read for status 'areTheSame' check - small buffer is allocated.
-			// the check for keywordStart('$') is a temp solution to minimize the chances to get this exception.
-			// Complete solution requires complete rewriting of this method to respect cases when keywords are split between buffers.
-			// With 'honest' partial kw handling, need for this check would be gone.
-			throw new IllegalStateException(String.format("Need buffer of at least %d bytes to ensure filter won't hang", minBufferLen));
-		}
-		ByteBuffer rv = null;
-		int x = src.position();
-		int copyFrom = x; // needs to be updated each time we copy a slice, but not each time we modify source index (x)
-		while (x < src.limit()) {
-			if (keywordStart == -1) {
-				int i = indexOf(src, '$', x, false);
-				if (i == -1) {
-					if (rv == null) {
-						return src;
-					} else {
-						copySlice(src, copyFrom, src.limit(), rv);
-						rv.flip();
-						src.position(src.limit());
-						return rv;
+		// when unprocessedBuffer is empty, we are looking for first $ in the input,
+		// when we've already got anything unprocessed, newline is of interest, too
+		int kwBreak = indexOf(src, '$', src.position(), !unprocessedBuffer.isEmpty());
+		ByteBuffer outBuffer = null;
+		while (kwBreak != -1) {
+			if (unprocessedBuffer.isEmpty()) {
+				// both expand and collapse cases
+				assert src.get(kwBreak) == '$';
+				
+				int end = indexOf(src, '$', kwBreak+1, true);
+				if (end == -1) {
+					for (int i = kwBreak; i < src.limit(); i++) {
+						unprocessedBuffer.add(src.get(i));
 					}
-				}
-				keywordStart = i;
-				// fall-through
-			}
-			if (keywordStart >= 0) {
-				int i = indexOf(src, '$', keywordStart+1, true);
-				if (i == -1) {
-					// end of buffer reached
-					if (rv == null) {
-						if (keywordStart == x) {
-							// TODO post-1.0 in fact, x might be equal to keywordStart and to src.position() here ('$' is first character in the buffer, 
-							// and there are no other '$' not eols till the end of the buffer). This would lead to deadlock (filter won't consume any
-							// bytes). To prevent this, either shall copy bytes [keywordStart..buffer.limit()) to local buffer and use it on the next invocation,
-							// or add lookup of the keywords right after first '$' is found (do not wait for closing '$'). For now, large enough src buffer would be sufficient
-							// not to run into such situation
-							throw new IllegalStateException("Try src buffer of a greater size");
+					src.limit(kwBreak);
+					kwBreak = -1;
+					// src up to kwBreak is left and returned either with outBuffer or alone 
+				} else if (src.get(end) == '$') {
+					StringBuilder sb = new StringBuilder(end - kwBreak);
+					for (int i = kwBreak+1; i < end; i++) {
+						if (src.get(i) == ':' || src.get(i) == ' ') {
+							break;
 						}
-						rv = ByteBuffer.allocate(keywordStart - copyFrom);
+						sb.append((char) src.get(i));
 					}
-					// copy all from source till latest possible kw start 
-					copySlice(src, copyFrom, keywordStart, rv);
-					rv.flip();
-					// and tell caller we've consumed only to the potential kw start
-					src.position(keywordStart);
-					return rv;
-				} else if (src.get(i) == '$') {
-					// end of keyword, or start of a new one.
-					String keyword;
-					if ((keyword = matchKeyword(src, keywordStart, i)) != null) {
-						if (rv == null) {
-							// src.remaining(), not .capacity because src is not read, and remaining represents 
-							// actual bytes count, while capacity - potential.
-							// Factor of 4 is pure guess and a HACK, need to be fixed with re-expanding buffer on demand
-							rv = ByteBuffer.allocate(isExpanding ? src.remaining() * 4 : src.remaining());
-						}
-						copySlice(src, copyFrom, keywordStart+1, rv);
-						rv.put(keyword.getBytes());
+					final String keyword = sb.toString();
+					if (knownKeyword(keyword)) {
+						// copy src up to kw, including starting $keyword
+						outBuffer = append(outBuffer, src, kwBreak - src.position() + 1+keyword.length());
+						// replace kwStart..end with new content
+						outBuffer = ensureCapacityFor(outBuffer, (isExpanding ? 200 : 1));
 						if (isExpanding) {
-							rv.put((byte) ':');
-							rv.put((byte) ' ');
-							expandKeywordValue(keyword, rv);
-							rv.put((byte) ' ');
+							outBuffer.put((byte) ':');
+							outBuffer.put((byte) ' ');
+							outBuffer = expandKeywordValue(keyword, outBuffer);
+							outBuffer.put((byte) ' ');
 						}
-						rv.put((byte) '$');
-						keywordStart = -1;
-						x = i+1;
-						copyFrom = x;
-						continue;
+						outBuffer.put((byte) '$');
+						// src is consumed up to end
+						src.position(end+1);
+						kwBreak = indexOf(src, '$', end+1, false);
 					} else {
-						if (rv != null) {
-							// we've already did some substitution, thus need to copy bytes we've scanned. 
-							copySlice(src, x, i, rv);
-							copyFrom = i;
-						} // no else in attempt to avoid rv creation if no real kw would be found  
-						keywordStart = i;
-						x = i; // '$' at i wasn't consumed, hence x points to i, not i+1. This is to avoid problems with case: "sdfsd $ asdfs $Id$ sdf"
-						continue;
+						// no (or unknown) keyword, try with '$' at src[end]
+						kwBreak = end;
 					}
 				} else {
-					assert src.get(i) == '\n' || src.get(i) == '\r';
-					// line break
-					if (rv != null) {
-						copySlice(src, x, i+1, rv);
-						copyFrom = i+1;
-					}
-					x = i+1;
-					keywordStart = -1; // Wasn't keyword, really
-					continue; // try once again
+					// newline, ignore keyword start
+					kwBreak = indexOf(src, '$', end+1, false);
 				}
+			} else {
+				// we've got smth unprocessed, and we've matched either $ or NL
+				// the only chance to get here is when src is in the very start
+				if (src.get(kwBreak) == '$') {
+					// closed tag
+					for (int i = src.position(); i <= kwBreak; i++) {
+						// consume src: going to handle its [position*()..kwBreak] as part of unprocessedBuffer
+						unprocessedBuffer.add(src.get());   
+					}
+					StringBuilder sb = new StringBuilder(unprocessedBuffer.size());
+					assert unprocessedBuffer.get(0) == '$';
+					for (int i = 1; i < unprocessedBuffer.size(); i++) {
+						char ch = (char) unprocessedBuffer.get(i);
+						if (ch == ':' || ch == ' ') {
+							break;
+						}
+						sb.append(ch);
+					}
+					final String keyword = sb.toString();
+					if (knownKeyword(keyword)) {
+						outBuffer = ensureCapacityFor(outBuffer, keyword.length() + (isExpanding ? 200 : 2));
+						outBuffer.put((byte) '$');
+						outBuffer.put(keyword.getBytes());
+						if (isExpanding) {
+							outBuffer.put((byte) ':');
+							outBuffer.put((byte) ' ');
+							outBuffer = expandKeywordValue(keyword, outBuffer);
+							outBuffer.put((byte) ' ');
+						}
+						outBuffer.put((byte) '$');
+					} else {
+						outBuffer = append(outBuffer, unprocessedBuffer.toByteArray());
+					}
+					// src part is consumed already, do nothing here, look for next possible kw
+					kwBreak = indexOf(src, '$', kwBreak+1, false);
+				} else {
+					// newline => tag without close
+					outBuffer = append(outBuffer, unprocessedBuffer.toByteArray());
+					kwBreak = indexOf(src, '$', kwBreak+1, false);
+				}
+				unprocessedBuffer.clear();
 			}
+		} while (kwBreak != -1);
+		if (outBuffer == null) {
+			return src;
 		}
-		if (keywordStart != -1) {
-			if (rv == null) {
-				// no expansion happened yet, and we have potential kw start
-				rv = ByteBuffer.allocate(keywordStart - src.position());
-				copySlice(src, src.position(), keywordStart, rv);
+		outBuffer = ensureCapacityFor(outBuffer, src.remaining());
+		outBuffer.put(src);
+		outBuffer.flip();
+		return outBuffer;
+	}
+	private boolean knownKeyword(String kw) {
+		return keywords.containsKey(kw);
+	}
+
+	private static ByteBuffer append(ByteBuffer out, byte[] data) {
+		out = ensureCapacityFor(out, data.length);
+		out.put(data);
+		return out;
+	}
+	private static ByteBuffer append(ByteBuffer out, ByteBuffer in, int count) {
+		out = ensureCapacityFor(out, count);
+		while (count-- > 0) {
+			out.put(in.get());
+		}
+		return out;
+	}
+	private static ByteBuffer ensureCapacityFor(ByteBuffer out, int exansion) {
+		if (out == null || out.remaining() < exansion) {
+			ByteBuffer newOut = ByteBuffer.allocate(out == null ? exansion*2 : out.capacity() + exansion);
+			if (out != null) {
+				out.flip();
+				newOut.put(out);
 			}
-			src.position(keywordStart);
+			return newOut;
 		}
-		if (rv != null) {
-			rv.flip();
-			return rv;
-		}
-		return src;
+		return out;
 	}
 	
-	/**
-	 * @param keyword
-	 * @param rv
-	 */
-	private void expandKeywordValue(String keyword, ByteBuffer rv) {
+	private ByteBuffer expandKeywordValue(String keyword, ByteBuffer rv) {
+		byte[] toInject;
 		if ("Id".equals(keyword)) {
-			rv.put(identityString().getBytes());
+			toInject = identityString().getBytes();
 		} else if ("Revision".equals(keyword)) {
-			rv.put(revision().getBytes());
+			toInject = revision().getBytes();
 		} else if ("Author".equals(keyword)) {
-			rv.put(username().getBytes());
+			toInject = username().getBytes();
 		} else if ("Date".equals(keyword)) {
-			rv.put(date().getBytes());
+			toInject = date().getBytes();
 		} else {
 			throw new IllegalStateException(String.format("Keyword %s is not yet supported", keyword));
 		}
-	}
-
-	private String matchKeyword(ByteBuffer src, int kwStart, int kwEnd) {
-		assert kwEnd - kwStart - 1 > 0;
-		assert src.get(kwStart) == src.get(kwEnd) && src.get(kwEnd) == '$';
-		char[] chars = new char[kwEnd - kwStart - 1];
-		int i;
-		for (i = 0; i < chars.length; i++) {
-			char c = (char) src.get(kwStart + 1 + i);
-			if (c == ':') {
-				break;
-			}
-			chars[i] = c;
-		}
-		String kw = new String(chars, 0, i);
-//		XXX may use subMap to look up keywords based on few available characters (not waiting till closing $)
-//		System.out.println(keywords.subMap("I", "J"));
-//		System.out.println(keywords.subMap("A", "B"));
-//		System.out.println(keywords.subMap("Au", "B"));
-		return keywords.get(kw);
+		rv = ensureCapacityFor(rv, toInject.length);
+		rv.put(toInject);
+		return rv;
 	}
 	
 	// copies part of the src buffer, [from..to). doesn't modify src position
@@ -306,9 +286,22 @@ public class KeywordFilter implements Filter {
 	}
 
 	public static class Factory implements Filter.Factory {
-		
+		private final Map<String,String> keywords;
 		private HgRepository repo;
 		private Path.Matcher matcher;
+		
+		public Factory() {
+			keywords = new TreeMap<String,String>();
+			keywords.put("Id", "Id");
+			keywords.put("Revision", "Revision");
+			keywords.put("Author", "Author");
+			keywords.put("Date", "Date");
+			keywords.put("LastChangedRevision", "LastChangedRevision");
+			keywords.put("LastChangedBy", "LastChangedBy");
+			keywords.put("LastChangedDate", "LastChangedDate");
+			keywords.put("Source", "Source");
+			keywords.put("Header", "Header");
+		}
 
 		public void initialize(HgRepository hgRepo) {
 			repo = hgRepo;
@@ -324,7 +317,7 @@ public class KeywordFilter implements Filter {
 
 		public Filter create(Path path, Options opts) {
 			if (matcher.accept(path)) {
-				return new KeywordFilter(repo, path, opts.getDirection() == Filter.Direction.FromRepo);
+				return new KeywordFilter(repo, path, keywords, opts.getDirection() == Filter.Direction.FromRepo);
 			}
 			return null;
 		}

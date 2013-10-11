@@ -34,7 +34,8 @@ public enum HgRepositoryFiles {
 	UndoBranch(Home.Repo, "undo.branch"), UndoDirstate(Home.Repo, "undo.dirstate"),
 	Phaseroots(Home.Store, "phaseroots"), FNCache(Home.Store, "fncache"),
 	WorkingCopyLock(Home.Repo, "wlock"), StoreLock(Home.Store, "lock"),
-	MergeState(Home.Repo, "merge/state");
+	MergeState(Home.Repo, "merge/state"),
+	RepoConfig(Home.Repo, "hgrc");
 
 	/**
 	 * Possible file locations

@@ -409,7 +409,7 @@ public final class Internals implements SessionContext.Source {
 		ConfigFile configFile = readConfiguration(repo.getSessionContext());
 		// last one, overrides anything else
 		// <repo>/.hg/hgrc
-		configFile.addLocation(getFileFromRepoDir("hgrc"));
+		configFile.addLocation(getRepositoryFile(HgRepositoryFiles.RepoConfig));
 		return configFile;
 	}
 

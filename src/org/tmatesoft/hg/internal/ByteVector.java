@@ -19,7 +19,7 @@ package org.tmatesoft.hg.internal;
 import java.io.ByteArrayOutputStream;
 
 /**
- * Alternative to {@link ByteArrayOutputStream}, with extra operation that prevent extra byte[] instances
+ * Alternative to {@link ByteArrayOutputStream}, with extra operation that prevent superfluous byte[] instances
  * 
  * @author Artem Tikhomirov
  * @author TMate Software Ltd.
@@ -42,6 +42,26 @@ public class ByteVector {
 			data = newData;
 		}
 		data[count++] = (byte) b;
+	}
+
+	public int indexOf(int b) {
+		for (int i = 0; i < count; i++) {
+			if (data[i] == b) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	public byte get(int i) {
+		if (i < 0 || i >= count) {
+			throw new IllegalArgumentException(String.valueOf(i));
+		}
+		return data[i];
+	}
+
+	public boolean isEmpty() {
+		return count == 0;
 	}
 
 	public int size() {
@@ -78,6 +98,18 @@ public class ByteVector {
 	public byte[] toByteArray() {
 		byte[] rv = new byte[count];
 		copyTo(rv);
+		return rv;
+	}
+
+	public byte[] toByteArray(int from, int to) {
+		if (from > to) {
+			throw new IllegalArgumentException();
+		}
+		if (to > count) {
+			throw new IllegalArgumentException();
+		}
+		byte[] rv = new byte[to-from];
+		System.arraycopy(data, from, rv, 0, rv.length);
 		return rv;
 	}
 }
