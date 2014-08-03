@@ -68,6 +68,7 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 
 	RegularFileStats(SessionContext ctx) {
 		sessionContext = ctx;
+		final Pattern pLink, pExec;
 		if (Internals.runningOnWindows()) {
 			// XXX this implementation is not yet tested against any Windows repository, 
 			// only against sample dir listings. As long as Mercurial doesn't handle Windows
@@ -75,21 +76,27 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 			command = Arrays.asList("cmd", "/c", "dir");
 			// Windows patterns need to work against full directory listing (I didn't find a way 
 			// to list single file with its attributes like SYMLINK) 
-			Pattern pLink = Pattern.compile("^\\S+.*\\s+<SYMLINK>\\s+(\\S.*)\\s+\\[(.+)\\]$", Pattern.MULTILINE);
-			Pattern pExec = Pattern.compile("^\\S+.*\\s+\\d+\\s+(\\S.*\\.exe)$", Pattern.MULTILINE);
-			linkMatcher = pLink.matcher("");
-			execMatcher = pExec.matcher("");
+			pLink = Pattern.compile("^\\S+.*\\s+<SYMLINK>\\s+(\\S.*)\\s+\\[(.+)\\]$", Pattern.MULTILINE);
+			pExec = Pattern.compile("^\\S+.*\\s+\\d+\\s+(\\S.*\\.exe)$", Pattern.MULTILINE);
+		} else if (Internals.runningOnMac()) {
+			command = Arrays.asList("/bin/ls", "-lnoT");
+			// -n to present userid and group as digits
+			// -o don't need group
+			// -T complete time in standard format (used as boundary in the pattern)
+			// Perhaps, shall use -B for octal non-printable characters. Shall implement unescapeFilename, below, then.
+			pLink = Pattern.compile("^lrwxr.xr.x\\s.*\\s\\d\\d:\\d\\d:\\d\\d \\d\\d\\d\\d (.+) -> (.+)$", Pattern.MULTILINE);
+			pExec = Pattern.compile("^-..[sx]..[sx]..[sx]\\s.*\\s\\d\\d:\\d\\d:\\d\\d \\d\\d\\d\\d (.+)$", Pattern.MULTILINE);
 		} else {
 			command = Arrays.asList("/bin/ls", "-l", "-Q"); // -Q is essential to get quoted name - the only way to
 			// tell exact file name (which may start or end with spaces.
-			Pattern pLink = Pattern.compile("^lrwxrwxrwx\\s.*\\s\"(.*)\"\\s+->\\s+\"(.*)\"$", Pattern.MULTILINE);
+			pLink = Pattern.compile("^lrwxrwxrwx\\s.*\\s\"(.*)\"\\s+->\\s+\"(.*)\"$", Pattern.MULTILINE);
 			// pLink: group(1) is full name if single file listing (ls -l /usr/bin/java) and short name if directory listing (ls -l /usr/bin)
 			//        group(2) is link target
-			Pattern pExec = Pattern.compile("^-..[sx]..[sx]..[sx]\\s.*\\s\"(.+)\"$", Pattern.MULTILINE);
+			pExec = Pattern.compile("^-..[sx]..[sx]..[sx]\\s.*\\s\"(.+)\"$", Pattern.MULTILINE);
 			// pExec: group(1) is name of executable file
-			linkMatcher = pLink.matcher("");
-			execMatcher = pExec.matcher("");
 		}
+		linkMatcher = pLink.matcher("");
+		execMatcher = pExec.matcher("");
 		execHelper = new ProcessExecHelper();
 	}
 
@@ -119,7 +126,7 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 				if (execMatcher.reset(result).find()) {
 					execs = new HashSet<String>();
 					do {
-						execs.add(execMatcher.group(1));
+						execs.add(unescapeFilename(execMatcher.group(1)));
 					} while (execMatcher.find());
 				} else {
 					execs = Collections.emptySet(); // indicate we tried and found nothing
@@ -127,7 +134,7 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 				if (linkMatcher.reset(result).find()) {
 					links = new HashMap<String, String>();
 					do {
-						links.put(linkMatcher.group(1), linkMatcher.group(2));
+						links.put(unescapeFilename(linkMatcher.group(1)), unescapeFilename(linkMatcher.group(2)));
 					} while (linkMatcher.find());
 				} else {
 					links = Collections.emptyMap();
@@ -150,7 +157,7 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 			sessionContext.getLog().dump(getClass(), Warn, ex, String.format("Failed to detect flags for %s", f));
 			// IGNORE, keep isExec and isSymlink false
 		}
-}
+	}
 
 	public boolean isExecutable() {
 		return isExec;
@@ -165,5 +172,10 @@ import org.tmatesoft.hg.internal.ProcessExecHelper;
 			return symlinkValue;
 		}
 		throw new UnsupportedOperationException();
+	}
+
+	// FIXME nop at the moment, but need to implement if use escape code for non-printable characters
+	private static String unescapeFilename(String cs) {
+		return cs;	
 	}
 }

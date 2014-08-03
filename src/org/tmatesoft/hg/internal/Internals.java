@@ -306,6 +306,9 @@ public final class Internals implements SessionContext.Source {
 	public static boolean runningOnWindows() {
 		return System.getProperty("os.name").indexOf("Windows") != -1;
 	}
+	public static boolean runningOnMac() {
+		return System.getProperty("os.name").indexOf("Mac") != -1;
+	}
 	
 	/**
 	 * @param fsHint optional hint pointing to filesystem of interest (generally, it's possible to mount 

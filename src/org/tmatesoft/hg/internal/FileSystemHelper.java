@@ -46,6 +46,10 @@ public class FileSystemHelper {
 			linkCmd = Arrays.asList("mklink", "%1", "%2");
 			chmodCmd = Collections.emptyList();
 			statCmd = Collections.emptyList();
+		} else if (Internals.runningOnMac()) {
+			linkCmd = Arrays.asList("/bin/ln", "-s", "%2", "%1");
+			chmodCmd = Arrays.asList("/bin/chmod", "+x", "%1");
+			statCmd = Arrays.asList("stat", "-f", "%p", "%1");
 		} else {
 			linkCmd = Arrays.asList("/bin/ln", "-s", "%2", "%1");
 			chmodCmd = Arrays.asList("/bin/chmod", "+x", "%1");
