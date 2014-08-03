@@ -155,6 +155,7 @@
 		</javac>
 		<jar destfile="${hg4j.jar}">
 			<fileset dir="bin/">
+				<include name="org/tmatesoft/hg/auth/**" />
 				<include name="org/tmatesoft/hg/core/**" />
 				<include name="org/tmatesoft/hg/util/**" />
 				<include name="org/tmatesoft/hg/repo/**" />
